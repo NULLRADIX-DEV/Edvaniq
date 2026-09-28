@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Edvaniq/Edvaniq.Shared/Edvaniq.Shared.csproj" />
+  <Project Path="Edvaniq/Edvaniq.Web/Edvaniq.Web.csproj" />
+  <Project Path="Edvaniq/Edvaniq/Edvaniq.csproj" />
+</Solution>
