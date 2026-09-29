@@ -1,0 +1,44 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <!-- ASP.NET Core / Blazor -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.12" />
+  </ItemGroup>
+
+  <!-- MAUI -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="$(MauiVersion)" />
+  </ItemGroup>
+
+  <!-- Microsoft.Extensions -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.8.0" />
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.8.0" />
+  </ItemGroup>
+
+  <!-- Aspire / OpenTelemetry -->
+  <ItemGroup>
+    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.5.4" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
+  </ItemGroup>
+
+  <!-- Testing -->
+  <ItemGroup>
+    <PackageVersion Include="xunit.v3.mtp-v2" Version="4.0.1" />
+  </ItemGroup>
+
+</Project>

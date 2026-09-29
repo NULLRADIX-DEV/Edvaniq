@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Edvaniq.Client.Core\Edvaniq.Client.Core.csproj" />
+    <ProjectReference Include="..\Edvaniq.Client.DesignSystem\Edvaniq.Client.DesignSystem.csproj" />
+  </ItemGroup>
+
+</Project>

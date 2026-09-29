@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Edvaniq.Services.LearningEngine.Domain\Edvaniq.Services.LearningEngine.Domain.csproj" />
+    <ProjectReference Include="..\Edvaniq.Services.LearningEngine.Contracts\Edvaniq.Services.LearningEngine.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Edvaniq.BuildingBlocks.Application\Edvaniq.BuildingBlocks.Application.csproj" />
+    <ProjectReference Include="..\..\Identity\Edvaniq.Services.Identity.Contracts\Edvaniq.Services.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\..\Planning\Edvaniq.Services.Planning.Contracts\Edvaniq.Services.Planning.Contracts.csproj" />
+    <ProjectReference Include="..\..\Knowledge\Edvaniq.Services.Knowledge.Contracts\Edvaniq.Services.Knowledge.Contracts.csproj" />
+    <ProjectReference Include="..\..\Assessment\Edvaniq.Services.Assessment.Contracts\Edvaniq.Services.Assessment.Contracts.csproj" />
+    <ProjectReference Include="..\..\Flashcards\Edvaniq.Services.Flashcards.Contracts\Edvaniq.Services.Flashcards.Contracts.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

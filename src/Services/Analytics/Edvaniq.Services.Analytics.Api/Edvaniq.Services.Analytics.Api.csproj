@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Edvaniq.Services.Analytics.Application\Edvaniq.Services.Analytics.Application.csproj" />
+    <ProjectReference Include="..\Edvaniq.Services.Analytics.Infrastructure\Edvaniq.Services.Analytics.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Edvaniq.BuildingBlocks.Web\Edvaniq.BuildingBlocks.Web.csproj" />
+    <ProjectReference Include="..\..\..\Aspire\Edvaniq.ServiceDefaults\Edvaniq.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

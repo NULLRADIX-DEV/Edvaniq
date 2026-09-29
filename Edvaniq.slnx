@@ -1,5 +1,160 @@
 <Solution>
-  <Project Path="Edvaniq/Edvaniq.Shared/Edvaniq.Shared.csproj" />
-  <Project Path="Edvaniq/Edvaniq.Web/Edvaniq.Web.csproj" />
-  <Project Path="Edvaniq/Edvaniq/Edvaniq.csproj" />
+  <Folder Name="/src/" />
+  <Folder Name="/src/Aspire/">
+    <Project Path="src/Aspire/Edvaniq.AppHost/Edvaniq.AppHost.csproj" />
+    <Project Path="src/Aspire/Edvaniq.ServiceDefaults/Edvaniq.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/src/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/Edvaniq.BuildingBlocks.AI/Edvaniq.BuildingBlocks.AI.csproj" />
+    <Project Path="src/BuildingBlocks/Edvaniq.BuildingBlocks.Application/Edvaniq.BuildingBlocks.Application.csproj" />
+    <Project Path="src/BuildingBlocks/Edvaniq.BuildingBlocks.Contracts/Edvaniq.BuildingBlocks.Contracts.csproj" />
+    <Project Path="src/BuildingBlocks/Edvaniq.BuildingBlocks.Domain/Edvaniq.BuildingBlocks.Domain.csproj" />
+    <Project Path="src/BuildingBlocks/Edvaniq.BuildingBlocks.Infrastructure/Edvaniq.BuildingBlocks.Infrastructure.csproj" />
+    <Project Path="src/BuildingBlocks/Edvaniq.BuildingBlocks.Messaging/Edvaniq.BuildingBlocks.Messaging.csproj" />
+    <Project Path="src/BuildingBlocks/Edvaniq.BuildingBlocks.Web/Edvaniq.BuildingBlocks.Web.csproj" />
+  </Folder>
+  <Folder Name="/src/Clients/">
+    <Project Path="src/Clients/Edvaniq.App/Edvaniq.App.csproj" />
+    <Project Path="src/Clients/Edvaniq.Client.Core/Edvaniq.Client.Core.csproj" />
+    <Project Path="src/Clients/Edvaniq.Client.DesignSystem/Edvaniq.Client.DesignSystem.csproj" />
+    <Project Path="src/Clients/Edvaniq.Client.UI/Edvaniq.Client.UI.csproj" />
+    <Project Path="src/Clients/Edvaniq.Web.Client/Edvaniq.Web.Client.csproj" />
+    <Project Path="src/Clients/Edvaniq.Web/Edvaniq.Web.csproj" />
+  </Folder>
+  <Folder Name="/src/Gateway/">
+    <Project Path="src/Gateway/Edvaniq.Gateway/Edvaniq.Gateway.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/" />
+  <Folder Name="/src/Services/Analytics/">
+    <Project Path="src/Services/Analytics/Edvaniq.Services.Analytics.Api/Edvaniq.Services.Analytics.Api.csproj" />
+    <Project Path="src/Services/Analytics/Edvaniq.Services.Analytics.Application/Edvaniq.Services.Analytics.Application.csproj" />
+    <Project Path="src/Services/Analytics/Edvaniq.Services.Analytics.Contracts/Edvaniq.Services.Analytics.Contracts.csproj" />
+    <Project Path="src/Services/Analytics/Edvaniq.Services.Analytics.Domain/Edvaniq.Services.Analytics.Domain.csproj" />
+    <Project Path="src/Services/Analytics/Edvaniq.Services.Analytics.Infrastructure/Edvaniq.Services.Analytics.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Assessment/">
+    <Project Path="src/Services/Assessment/Edvaniq.Services.Assessment.Api/Edvaniq.Services.Assessment.Api.csproj" />
+    <Project Path="src/Services/Assessment/Edvaniq.Services.Assessment.Application/Edvaniq.Services.Assessment.Application.csproj" />
+    <Project Path="src/Services/Assessment/Edvaniq.Services.Assessment.Contracts/Edvaniq.Services.Assessment.Contracts.csproj" />
+    <Project Path="src/Services/Assessment/Edvaniq.Services.Assessment.Domain/Edvaniq.Services.Assessment.Domain.csproj" />
+    <Project Path="src/Services/Assessment/Edvaniq.Services.Assessment.Infrastructure/Edvaniq.Services.Assessment.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Content/">
+    <Project Path="src/Services/Content/Edvaniq.Services.Content.Api/Edvaniq.Services.Content.Api.csproj" />
+    <Project Path="src/Services/Content/Edvaniq.Services.Content.Application/Edvaniq.Services.Content.Application.csproj" />
+    <Project Path="src/Services/Content/Edvaniq.Services.Content.Contracts/Edvaniq.Services.Content.Contracts.csproj" />
+    <Project Path="src/Services/Content/Edvaniq.Services.Content.Domain/Edvaniq.Services.Content.Domain.csproj" />
+    <Project Path="src/Services/Content/Edvaniq.Services.Content.Infrastructure/Edvaniq.Services.Content.Infrastructure.csproj" />
+    <Project Path="src/Services/Content/Edvaniq.Services.Content.Worker/Edvaniq.Services.Content.Worker.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Flashcards/">
+    <Project Path="src/Services/Flashcards/Edvaniq.Services.Flashcards.Api/Edvaniq.Services.Flashcards.Api.csproj" />
+    <Project Path="src/Services/Flashcards/Edvaniq.Services.Flashcards.Application/Edvaniq.Services.Flashcards.Application.csproj" />
+    <Project Path="src/Services/Flashcards/Edvaniq.Services.Flashcards.Contracts/Edvaniq.Services.Flashcards.Contracts.csproj" />
+    <Project Path="src/Services/Flashcards/Edvaniq.Services.Flashcards.Domain/Edvaniq.Services.Flashcards.Domain.csproj" />
+    <Project Path="src/Services/Flashcards/Edvaniq.Services.Flashcards.Infrastructure/Edvaniq.Services.Flashcards.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Gamification/">
+    <Project Path="src/Services/Gamification/Edvaniq.Services.Gamification.Api/Edvaniq.Services.Gamification.Api.csproj" />
+    <Project Path="src/Services/Gamification/Edvaniq.Services.Gamification.Application/Edvaniq.Services.Gamification.Application.csproj" />
+    <Project Path="src/Services/Gamification/Edvaniq.Services.Gamification.Contracts/Edvaniq.Services.Gamification.Contracts.csproj" />
+    <Project Path="src/Services/Gamification/Edvaniq.Services.Gamification.Domain/Edvaniq.Services.Gamification.Domain.csproj" />
+    <Project Path="src/Services/Gamification/Edvaniq.Services.Gamification.Infrastructure/Edvaniq.Services.Gamification.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Identity/">
+    <Project Path="src/Services/Identity/Edvaniq.Services.Identity.Api/Edvaniq.Services.Identity.Api.csproj" />
+    <Project Path="src/Services/Identity/Edvaniq.Services.Identity.Application/Edvaniq.Services.Identity.Application.csproj" />
+    <Project Path="src/Services/Identity/Edvaniq.Services.Identity.Contracts/Edvaniq.Services.Identity.Contracts.csproj" />
+    <Project Path="src/Services/Identity/Edvaniq.Services.Identity.Domain/Edvaniq.Services.Identity.Domain.csproj" />
+    <Project Path="src/Services/Identity/Edvaniq.Services.Identity.Infrastructure/Edvaniq.Services.Identity.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Knowledge/">
+    <Project Path="src/Services/Knowledge/Edvaniq.Services.Knowledge.Api/Edvaniq.Services.Knowledge.Api.csproj" />
+    <Project Path="src/Services/Knowledge/Edvaniq.Services.Knowledge.Application/Edvaniq.Services.Knowledge.Application.csproj" />
+    <Project Path="src/Services/Knowledge/Edvaniq.Services.Knowledge.Contracts/Edvaniq.Services.Knowledge.Contracts.csproj" />
+    <Project Path="src/Services/Knowledge/Edvaniq.Services.Knowledge.Domain/Edvaniq.Services.Knowledge.Domain.csproj" />
+    <Project Path="src/Services/Knowledge/Edvaniq.Services.Knowledge.Infrastructure/Edvaniq.Services.Knowledge.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/LearningEngine/">
+    <Project Path="src/Services/LearningEngine/Edvaniq.Services.LearningEngine.Api/Edvaniq.Services.LearningEngine.Api.csproj" />
+    <Project Path="src/Services/LearningEngine/Edvaniq.Services.LearningEngine.Application/Edvaniq.Services.LearningEngine.Application.csproj" />
+    <Project Path="src/Services/LearningEngine/Edvaniq.Services.LearningEngine.Contracts/Edvaniq.Services.LearningEngine.Contracts.csproj" />
+    <Project Path="src/Services/LearningEngine/Edvaniq.Services.LearningEngine.Domain/Edvaniq.Services.LearningEngine.Domain.csproj" />
+    <Project Path="src/Services/LearningEngine/Edvaniq.Services.LearningEngine.Infrastructure/Edvaniq.Services.LearningEngine.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Notifications/">
+    <Project Path="src/Services/Notifications/Edvaniq.Services.Notifications.Api/Edvaniq.Services.Notifications.Api.csproj" />
+    <Project Path="src/Services/Notifications/Edvaniq.Services.Notifications.Application/Edvaniq.Services.Notifications.Application.csproj" />
+    <Project Path="src/Services/Notifications/Edvaniq.Services.Notifications.Contracts/Edvaniq.Services.Notifications.Contracts.csproj" />
+    <Project Path="src/Services/Notifications/Edvaniq.Services.Notifications.Domain/Edvaniq.Services.Notifications.Domain.csproj" />
+    <Project Path="src/Services/Notifications/Edvaniq.Services.Notifications.Infrastructure/Edvaniq.Services.Notifications.Infrastructure.csproj" />
+    <Project Path="src/Services/Notifications/Edvaniq.Services.Notifications.Worker/Edvaniq.Services.Notifications.Worker.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Planning/">
+    <Project Path="src/Services/Planning/Edvaniq.Services.Planning.Api/Edvaniq.Services.Planning.Api.csproj" />
+    <Project Path="src/Services/Planning/Edvaniq.Services.Planning.Application/Edvaniq.Services.Planning.Application.csproj" />
+    <Project Path="src/Services/Planning/Edvaniq.Services.Planning.Contracts/Edvaniq.Services.Planning.Contracts.csproj" />
+    <Project Path="src/Services/Planning/Edvaniq.Services.Planning.Domain/Edvaniq.Services.Planning.Domain.csproj" />
+    <Project Path="src/Services/Planning/Edvaniq.Services.Planning.Infrastructure/Edvaniq.Services.Planning.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Tutor/">
+    <Project Path="src/Services/Tutor/Edvaniq.Services.Tutor.Api/Edvaniq.Services.Tutor.Api.csproj" />
+    <Project Path="src/Services/Tutor/Edvaniq.Services.Tutor.Application/Edvaniq.Services.Tutor.Application.csproj" />
+    <Project Path="src/Services/Tutor/Edvaniq.Services.Tutor.Contracts/Edvaniq.Services.Tutor.Contracts.csproj" />
+    <Project Path="src/Services/Tutor/Edvaniq.Services.Tutor.Domain/Edvaniq.Services.Tutor.Domain.csproj" />
+    <Project Path="src/Services/Tutor/Edvaniq.Services.Tutor.Infrastructure/Edvaniq.Services.Tutor.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Edvaniq.ArchitectureTests/Edvaniq.ArchitectureTests.csproj" />
+    <Project Path="tests/Edvaniq.EndToEndTests/Edvaniq.EndToEndTests.csproj" />
+    <Project Path="tests/Edvaniq.Testing/Edvaniq.Testing.csproj" />
+  </Folder>
+  <Folder Name="/tests/Clients/">
+    <Project Path="tests/Clients/Edvaniq.Client.UnitTests/Edvaniq.Client.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Services/" />
+  <Folder Name="/tests/Services/Analytics/">
+    <Project Path="tests/Services/Analytics/Edvaniq.Services.Analytics.IntegrationTests/Edvaniq.Services.Analytics.IntegrationTests.csproj" />
+    <Project Path="tests/Services/Analytics/Edvaniq.Services.Analytics.UnitTests/Edvaniq.Services.Analytics.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Services/Assessment/">
+    <Project Path="tests/Services/Assessment/Edvaniq.Services.Assessment.IntegrationTests/Edvaniq.Services.Assessment.IntegrationTests.csproj" />
+    <Project Path="tests/Services/Assessment/Edvaniq.Services.Assessment.UnitTests/Edvaniq.Services.Assessment.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Services/Content/">
+    <Project Path="tests/Services/Content/Edvaniq.Services.Content.IntegrationTests/Edvaniq.Services.Content.IntegrationTests.csproj" />
+    <Project Path="tests/Services/Content/Edvaniq.Services.Content.UnitTests/Edvaniq.Services.Content.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Services/Flashcards/">
+    <Project Path="tests/Services/Flashcards/Edvaniq.Services.Flashcards.IntegrationTests/Edvaniq.Services.Flashcards.IntegrationTests.csproj" />
+    <Project Path="tests/Services/Flashcards/Edvaniq.Services.Flashcards.UnitTests/Edvaniq.Services.Flashcards.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Services/Gamification/">
+    <Project Path="tests/Services/Gamification/Edvaniq.Services.Gamification.IntegrationTests/Edvaniq.Services.Gamification.IntegrationTests.csproj" />
+    <Project Path="tests/Services/Gamification/Edvaniq.Services.Gamification.UnitTests/Edvaniq.Services.Gamification.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Services/Identity/">
+    <Project Path="tests/Services/Identity/Edvaniq.Services.Identity.IntegrationTests/Edvaniq.Services.Identity.IntegrationTests.csproj" />
+    <Project Path="tests/Services/Identity/Edvaniq.Services.Identity.UnitTests/Edvaniq.Services.Identity.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Services/Knowledge/">
+    <Project Path="tests/Services/Knowledge/Edvaniq.Services.Knowledge.IntegrationTests/Edvaniq.Services.Knowledge.IntegrationTests.csproj" />
+    <Project Path="tests/Services/Knowledge/Edvaniq.Services.Knowledge.UnitTests/Edvaniq.Services.Knowledge.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Services/LearningEngine/">
+    <Project Path="tests/Services/LearningEngine/Edvaniq.Services.LearningEngine.IntegrationTests/Edvaniq.Services.LearningEngine.IntegrationTests.csproj" />
+    <Project Path="tests/Services/LearningEngine/Edvaniq.Services.LearningEngine.UnitTests/Edvaniq.Services.LearningEngine.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Services/Notifications/">
+    <Project Path="tests/Services/Notifications/Edvaniq.Services.Notifications.IntegrationTests/Edvaniq.Services.Notifications.IntegrationTests.csproj" />
+    <Project Path="tests/Services/Notifications/Edvaniq.Services.Notifications.UnitTests/Edvaniq.Services.Notifications.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Services/Planning/">
+    <Project Path="tests/Services/Planning/Edvaniq.Services.Planning.IntegrationTests/Edvaniq.Services.Planning.IntegrationTests.csproj" />
+    <Project Path="tests/Services/Planning/Edvaniq.Services.Planning.UnitTests/Edvaniq.Services.Planning.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Services/Tutor/">
+    <Project Path="tests/Services/Tutor/Edvaniq.Services.Tutor.IntegrationTests/Edvaniq.Services.Tutor.IntegrationTests.csproj" />
+    <Project Path="tests/Services/Tutor/Edvaniq.Services.Tutor.UnitTests/Edvaniq.Services.Tutor.UnitTests.csproj" />
+  </Folder>
 </Solution>

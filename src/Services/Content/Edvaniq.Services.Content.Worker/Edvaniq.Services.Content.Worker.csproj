@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <UserSecretsId>dotnet-Edvaniq.Services.Content.Worker-043a8612-c331-4260-8d40-6bebf9d80637</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Edvaniq.Services.Content.Application\Edvaniq.Services.Content.Application.csproj" />
+    <ProjectReference Include="..\Edvaniq.Services.Content.Infrastructure\Edvaniq.Services.Content.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\Aspire\Edvaniq.ServiceDefaults\Edvaniq.ServiceDefaults.csproj" />
+  </ItemGroup>
+</Project>

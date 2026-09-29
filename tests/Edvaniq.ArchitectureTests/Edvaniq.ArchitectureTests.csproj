@@ -1,0 +1,88 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3.mtp-v2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Services\Analytics\Edvaniq.Services.Analytics.Api\Edvaniq.Services.Analytics.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\Analytics\Edvaniq.Services.Analytics.Application\Edvaniq.Services.Analytics.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\Analytics\Edvaniq.Services.Analytics.Contracts\Edvaniq.Services.Analytics.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Services\Analytics\Edvaniq.Services.Analytics.Domain\Edvaniq.Services.Analytics.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\Analytics\Edvaniq.Services.Analytics.Infrastructure\Edvaniq.Services.Analytics.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Services\Assessment\Edvaniq.Services.Assessment.Api\Edvaniq.Services.Assessment.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\Assessment\Edvaniq.Services.Assessment.Application\Edvaniq.Services.Assessment.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\Assessment\Edvaniq.Services.Assessment.Contracts\Edvaniq.Services.Assessment.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Services\Assessment\Edvaniq.Services.Assessment.Domain\Edvaniq.Services.Assessment.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\Assessment\Edvaniq.Services.Assessment.Infrastructure\Edvaniq.Services.Assessment.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Services\Content\Edvaniq.Services.Content.Api\Edvaniq.Services.Content.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\Content\Edvaniq.Services.Content.Application\Edvaniq.Services.Content.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\Content\Edvaniq.Services.Content.Contracts\Edvaniq.Services.Content.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Services\Content\Edvaniq.Services.Content.Domain\Edvaniq.Services.Content.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\Content\Edvaniq.Services.Content.Infrastructure\Edvaniq.Services.Content.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Services\Content\Edvaniq.Services.Content.Worker\Edvaniq.Services.Content.Worker.csproj" />
+    <ProjectReference Include="..\..\src\Services\Flashcards\Edvaniq.Services.Flashcards.Api\Edvaniq.Services.Flashcards.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\Flashcards\Edvaniq.Services.Flashcards.Application\Edvaniq.Services.Flashcards.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\Flashcards\Edvaniq.Services.Flashcards.Contracts\Edvaniq.Services.Flashcards.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Services\Flashcards\Edvaniq.Services.Flashcards.Domain\Edvaniq.Services.Flashcards.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\Flashcards\Edvaniq.Services.Flashcards.Infrastructure\Edvaniq.Services.Flashcards.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Services\Gamification\Edvaniq.Services.Gamification.Api\Edvaniq.Services.Gamification.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\Gamification\Edvaniq.Services.Gamification.Application\Edvaniq.Services.Gamification.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\Gamification\Edvaniq.Services.Gamification.Contracts\Edvaniq.Services.Gamification.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Services\Gamification\Edvaniq.Services.Gamification.Domain\Edvaniq.Services.Gamification.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\Gamification\Edvaniq.Services.Gamification.Infrastructure\Edvaniq.Services.Gamification.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Services\Identity\Edvaniq.Services.Identity.Api\Edvaniq.Services.Identity.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\Identity\Edvaniq.Services.Identity.Application\Edvaniq.Services.Identity.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\Identity\Edvaniq.Services.Identity.Contracts\Edvaniq.Services.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Services\Identity\Edvaniq.Services.Identity.Domain\Edvaniq.Services.Identity.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\Identity\Edvaniq.Services.Identity.Infrastructure\Edvaniq.Services.Identity.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Services\Knowledge\Edvaniq.Services.Knowledge.Api\Edvaniq.Services.Knowledge.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\Knowledge\Edvaniq.Services.Knowledge.Application\Edvaniq.Services.Knowledge.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\Knowledge\Edvaniq.Services.Knowledge.Contracts\Edvaniq.Services.Knowledge.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Services\Knowledge\Edvaniq.Services.Knowledge.Domain\Edvaniq.Services.Knowledge.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\Knowledge\Edvaniq.Services.Knowledge.Infrastructure\Edvaniq.Services.Knowledge.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Services\LearningEngine\Edvaniq.Services.LearningEngine.Api\Edvaniq.Services.LearningEngine.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\LearningEngine\Edvaniq.Services.LearningEngine.Application\Edvaniq.Services.LearningEngine.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\LearningEngine\Edvaniq.Services.LearningEngine.Contracts\Edvaniq.Services.LearningEngine.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Services\LearningEngine\Edvaniq.Services.LearningEngine.Domain\Edvaniq.Services.LearningEngine.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\LearningEngine\Edvaniq.Services.LearningEngine.Infrastructure\Edvaniq.Services.LearningEngine.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Services\Notifications\Edvaniq.Services.Notifications.Api\Edvaniq.Services.Notifications.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\Notifications\Edvaniq.Services.Notifications.Application\Edvaniq.Services.Notifications.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\Notifications\Edvaniq.Services.Notifications.Contracts\Edvaniq.Services.Notifications.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Services\Notifications\Edvaniq.Services.Notifications.Domain\Edvaniq.Services.Notifications.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\Notifications\Edvaniq.Services.Notifications.Infrastructure\Edvaniq.Services.Notifications.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Services\Notifications\Edvaniq.Services.Notifications.Worker\Edvaniq.Services.Notifications.Worker.csproj" />
+    <ProjectReference Include="..\..\src\Services\Planning\Edvaniq.Services.Planning.Api\Edvaniq.Services.Planning.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\Planning\Edvaniq.Services.Planning.Application\Edvaniq.Services.Planning.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\Planning\Edvaniq.Services.Planning.Contracts\Edvaniq.Services.Planning.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Services\Planning\Edvaniq.Services.Planning.Domain\Edvaniq.Services.Planning.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\Planning\Edvaniq.Services.Planning.Infrastructure\Edvaniq.Services.Planning.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Services\Tutor\Edvaniq.Services.Tutor.Api\Edvaniq.Services.Tutor.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\Tutor\Edvaniq.Services.Tutor.Application\Edvaniq.Services.Tutor.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\Tutor\Edvaniq.Services.Tutor.Contracts\Edvaniq.Services.Tutor.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Services\Tutor\Edvaniq.Services.Tutor.Domain\Edvaniq.Services.Tutor.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\Tutor\Edvaniq.Services.Tutor.Infrastructure\Edvaniq.Services.Tutor.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Edvaniq.BuildingBlocks.AI\Edvaniq.BuildingBlocks.AI.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Edvaniq.BuildingBlocks.Application\Edvaniq.BuildingBlocks.Application.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Edvaniq.BuildingBlocks.Contracts\Edvaniq.BuildingBlocks.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Edvaniq.BuildingBlocks.Domain\Edvaniq.BuildingBlocks.Domain.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Edvaniq.BuildingBlocks.Infrastructure\Edvaniq.BuildingBlocks.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Edvaniq.BuildingBlocks.Messaging\Edvaniq.BuildingBlocks.Messaging.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\Edvaniq.BuildingBlocks.Web\Edvaniq.BuildingBlocks.Web.csproj" />
+  </ItemGroup>
+
+</Project>
