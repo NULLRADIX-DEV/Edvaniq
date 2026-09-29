@@ -62,3 +62,45 @@ Ergebnis:
 
 ## Projektdokumentation
 `../EdvaniqDoc/Projektdokumentation.md` richtet sich nach dem Projekt, nicht umgekehrt. Anforderungen und Scope kommen aus `../EdvaniqDoc/Edvaniq.md` und der Roadmap.
+
+## Roadmap, Issues und Board
+
+- **Roadmap:** `../EdvaniqDoc/Roadmap.md` enthält Analyse, MVP-Bewertung, Schätzung, Kosten, Meilensteine und alle Issues. Einzelbefunde der Analyse stehen in `Roadmap-Befunde.md`. Einzige Quelle der Issues ist `../EdvaniqDoc/roadmap-issues.json`. `MF001…` verweist auf die Master-Featureliste (Roadmap.md, Kapitel 3.6).
+- **GitHub:**
+  - Meilensteine: 8 in `NULLRADIX-DEV/Edvaniq`. M0 Fundament, M1 Walking Skeleton, M2 Konto/Material/KI-Themen, M3 Kern-Lernfluss, M4 Karten & Wiederholung, M5 Vollständigkeit, M6 Pilot. M6 schließt den MVP-Kern ab. M7 ist das optionale MVP-Plus.
+  - Issues: 113 Epics (Issue-Typ `Epic`), darunter die Aufgaben als Sub-Issues (Typ `Feature` oder `Task`). Abhängigkeiten sind als native „blocked by“-Links gesetzt.
+  - Board: https://github.com/orgs/NULLRADIX-DEV/projects/2 mit Auto-add und den Views Kanban, Meilensteine, Schul-Prototyp, Epics, Meine Aufgaben.
+- **Labels:**
+  - `area:<service>`: genau eines je Issue
+  - `size:S|M|L`: menschliche Zeit ≤ 0,5 h / 0,5–2 h / > 2 h
+  - `prio:must|should|could`
+  - Querschnitt: `ai`, `security`, `legal`, `ux`, `test`, `docs`, `spike`
+  - `schul-prototyp`: Demo-Pfad für die Abgabe, wird zuerst erledigt
+  - `vor-echten-nutzern`: Pflicht, bevor externe Nutzer dazukommen
+- **Issue-Aufbau:** Ziel · Akzeptanzkriterien · Abhängigkeiten · Bezug (MF, Epic, Meilenstein) · Nicht enthalten. Den versteckten Marker `<!-- edvaniq:M2-017 -->` im Body nie entfernen, darüber arbeitet das Push-Skript idempotent.
+- **Issues beschreiben nur WAS, nie WIE.** Übernimmt Claude ein Issue:
+  1. „Blocked by“ prüfen.
+  2. Das Wie vorschlagen und besprechen.
+  3. Erst nach Zustimmung umsetzen.
+  4. Die Akzeptanzkriterien sind die Abnahme.
+- **Neue Issues** folgen demselben Format und Labels. Arbeit außerhalb des MVP kommt nach Roadmap.md „Nach dem MVP“.
+- **Push/Sync:** `../EdvaniqDoc/tools/push-roadmap.ps1` mit den Phasen `preflight|project|labels|milestones|issues|deps|verify` und dem Schalter `-DryRun`. Das Mapping liegt in `tools/push-map.jsonl`. GitHub CLI: `C:\Program Files\GitHub CLI\gh.exe`. GitHub erlaubt nur ca. 500 inhaltserzeugende Requests pro Stunde, also drosseln.
+
+## MVP-Rahmen (Entscheidungen)
+
+- **Team:** 2 erfahrene Entwickler, je 8–10 h/Woche. Claude setzt den Großteil um, gemessen 22× schneller. Die Entwickler steuern, reviewen und testen.
+- **Termine:** Die Schul-Abgabe (Blockwoche 7, vor Ostern 2027) braucht nur einen lauffähigen Prototyp auf dem VPS (Label `schul-prototyp`). Der Großteil der App entsteht danach. Der MVP-Kern ist realistisch Okt–Dez 2027 fertig.
+- **Services im MVP:**
+  - Produktiv: Identity, Planning, Content (+ Worker), Knowledge, Assessment, LearningEngine, Flashcards (ab M4), Gateway und Web.
+  - Nur Skelett, ohne Deployment: Analytics und Notifications.
+  - Erst mit dem MVP-Plus: Gamification und Tutor.
+- **Clients:** Web zuerst (responsive), nur online. Die MAUI-App bleibt kompilierbar, eine Android-Test-APK kommt erst im Plus.
+- **Keine Vektor-DB im MVP:** Statt RAG werden Abschnitte Themen zugeordnet.
+- **Offene Technikfragen** laufen als `spike`-Issues, z. B. Outbox für MySQL, Broker-Bibliothek mit freier Lizenz, KI-Anbieter. Technikvorschläge in Roadmap.md sind nicht verbindlich.
+- **Datenschutz:** Viele Nutzer sind minderjährig. Datenschutz- und Jugendschutz-Issues (`legal`, `vor-echten-nutzern`) werden nie gestrichen.
+
+## Arbeitsweise mit Claude
+
+- Schätzungen immer in menschlicher Zeit: Faktor 22 auf die Umsetzung, Aufschlag nur für extern gebundene Arbeit (Anbieter, Verträge, Recht, VPS, Gerätetests). Nie mit „Entwickler + KI-Assistent“ rechnen.
+- Agenten und Workflows: Erzeugende Agents laufen auf Sonnet, Kontrolle und Review auf Opus. Prompts schlank halten und Daten aus Dateien lesen lassen, damit die Token-Kosten niedrig bleiben.
+- Nicht ohne Auftrag committen.
