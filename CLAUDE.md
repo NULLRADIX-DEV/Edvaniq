@@ -44,6 +44,7 @@ dotnet format                                    # Codestil nach .editorconfig
 - Vor dem Bauen den laufenden AppHost stoppen, sonst sind DLLs gesperrt (MSB3027/MSB3021).
 - Ohne Docker Desktop hängen alle Services beim `WaitFor` auf die Datenbank.
 - Kommt das Aspire-Dashboard nicht an den Resource Service ran, liegt es an den Dev-Zertifikaten: `dotnet dev-certs https --clean` und danach `dotnet dev-certs https --trust`.
+- Dockerfiles für Blazor: `dotnet restore` nicht vorab nur mit der `.csproj` ausführen. Sonst lässt das Web-SDK `_framework/blazor.web.js` weg, die UI ist tot, und der Health-Check bleibt trotzdem grün. Im Build prüfen, ob die Datei im Publish-Output liegt. Bei NOOSE ist genau das passiert.
 
 ## Probleme und Herausforderungen loggen
 Trifft Claude bei Planung oder Entwicklung auf ein Problem oder eine Herausforderung, kommt ein kurzer Eintrag ans Ende von `../EdvaniqDoc/notes.md`, Kapitel „Probleme und Herausforderungen“. Stil: knappe, lockere Notizen. Format:
@@ -102,15 +103,25 @@ Ergebnis:
 ## Server (Betrieb)
 
 - **Server:** Contabo-VPS `62.169.28.155` (Ubuntu 24.04, 6 vCPU, 12 GB RAM, 4 GB Swap). SSH nur per Schlüssel als `root`. Gehärtet mit ufw (22/80/443), fail2ban und unattended-upgrades.
-- **Geteilt mit:**
-  - NOOSE: systemd-Dienste `noose` auf Port 5000 und `noose-demo` auf Port 5001, dazu MariaDB 10.11
-  - NULLRADIX: statisch unter `/var/www/nullradix`
+- **Docker CE + Compose** aus dem offiziellen Repo, Updates über unattended-upgrades. `/etc/docker/daemon.json`:
+  - `"ip": "127.0.0.1"`: Veröffentlichte Ports landen nur auf Loopback, weil Docker ufw umgeht. Nie `0.0.0.0` explizit veröffentlichen.
+  - Log-Driver `local` (20 MB × 5)
+  - `live-restore`
+- **Dashboard:** 1Panel (Monitoring, Konsole, Dateien, Container), nur über Tailscale erreichbar (ufw nur auf `tailscale0`, 1Panel-IP-Filter `100.64.0.0/10`, 2FA). Keine 1Panel-„Websites“ und kein OpenResty, denn 80/443 gehören dem nginx des Hosts. Ports nie über die 1Panel-Firewall öffnen.
+- **Geteilt mit** (alles als Container, Compose-Projekte unter `/opt/<name>`, Images privat in GHCR, gebaut per GitHub Action; der Server ist per `docker login ghcr.io` mit einem `read:packages`-PAT angemeldet):
+  - NOOSE (`/opt/noose`):
+    - `noose` auf 127.0.0.1:5000, `noose-demo` auf 127.0.0.1:5001
+    - MariaDB 10.11 als `noose-db` auf 127.0.0.1:3306
+    - alle im Host-Netz
+    - Backup über `/opt/noose/backup.sh`, täglich um 04:15, nach `/root/backups`
+  - NULLRADIX (`/opt/nullradix`): nginx-Container auf 127.0.0.1:8080
 - **nginx** ist der gemeinsame Reverse-Proxy mit Let's Encrypt (certbot-Timer). `edvaniq.nullradix.de` zeigt bereits per A-Record auf den Server.
 - **Edvaniq darf NOOSE nie beeinträchtigen:**
-  - eigene MySQL als Container, nicht die MariaDB von NOOSE
+  - eigene MySQL als Container, nicht die MariaDB von NOOSE; kein Port 3306, denn den belegt `noose-db`
   - Speicherlimit für jeden Container
   - eigene Backups
-  - Deploys fassen keine NOOSE-Dateien und keine NOOSE-Dienste an
+  - Deploys fassen keine NOOSE-Dateien und keine NOOSE-Dienste an, auch nicht `/opt/noose` oder die NOOSE-Container
+  - Edvaniq kommt nach `/opt/edvaniq`, mit eigenem Compose-Projekt und eigenem Docker-Netz
 
 ## Arbeitsweise mit Claude
 
