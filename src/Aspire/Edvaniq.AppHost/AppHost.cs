@@ -1,21 +1,40 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Services
-var identityApi = builder.AddProject<Projects.Edvaniq_Services_Identity_Api>("identity-api");
-var planningApi = builder.AddProject<Projects.Edvaniq_Services_Planning_Api>("planning-api");
-var contentApi = builder.AddProject<Projects.Edvaniq_Services_Content_Api>("content-api");
-var knowledgeApi = builder.AddProject<Projects.Edvaniq_Services_Knowledge_Api>("knowledge-api");
-var assessmentApi = builder.AddProject<Projects.Edvaniq_Services_Assessment_Api>("assessment-api");
-var flashcardsApi = builder.AddProject<Projects.Edvaniq_Services_Flashcards_Api>("flashcards-api");
-var learningEngineApi = builder.AddProject<Projects.Edvaniq_Services_LearningEngine_Api>("learningengine-api");
-var tutorApi = builder.AddProject<Projects.Edvaniq_Services_Tutor_Api>("tutor-api");
-var gamificationApi = builder.AddProject<Projects.Edvaniq_Services_Gamification_Api>("gamification-api");
-var analyticsApi = builder.AddProject<Projects.Edvaniq_Services_Analytics_Api>("analytics-api");
-var notificationsApi = builder.AddProject<Projects.Edvaniq_Services_Notifications_Api>("notifications-api");
+// Database server
+var mysql = builder.AddMySql("mysql")
+    .WithDataVolume()
+    .WithLifetime(ContainerLifetime.Persistent)
+    .WithPhpMyAdmin();
 
-// Workers
-builder.AddProject<Projects.Edvaniq_Services_Content_Worker>("content-worker");
-builder.AddProject<Projects.Edvaniq_Services_Notifications_Worker>("notifications-worker");
+// Databases (one per service)
+var identityDb = mysql.AddDatabase("identitydb");
+var planningDb = mysql.AddDatabase("planningdb");
+var contentDb = mysql.AddDatabase("contentdb");
+var knowledgeDb = mysql.AddDatabase("knowledgedb");
+var assessmentDb = mysql.AddDatabase("assessmentdb");
+var flashcardsDb = mysql.AddDatabase("flashcardsdb");
+var learningEngineDb = mysql.AddDatabase("learningenginedb");
+var tutorDb = mysql.AddDatabase("tutordb");
+var gamificationDb = mysql.AddDatabase("gamificationdb");
+var analyticsDb = mysql.AddDatabase("analyticsdb");
+var notificationsDb = mysql.AddDatabase("notificationsdb");
+
+// Services
+var identityApi = AddService<Projects.Edvaniq_Services_Identity_Api>("identity-api", identityDb);
+var planningApi = AddService<Projects.Edvaniq_Services_Planning_Api>("planning-api", planningDb);
+var contentApi = AddService<Projects.Edvaniq_Services_Content_Api>("content-api", contentDb);
+var knowledgeApi = AddService<Projects.Edvaniq_Services_Knowledge_Api>("knowledge-api", knowledgeDb);
+var assessmentApi = AddService<Projects.Edvaniq_Services_Assessment_Api>("assessment-api", assessmentDb);
+var flashcardsApi = AddService<Projects.Edvaniq_Services_Flashcards_Api>("flashcards-api", flashcardsDb);
+var learningEngineApi = AddService<Projects.Edvaniq_Services_LearningEngine_Api>("learningengine-api", learningEngineDb);
+var tutorApi = AddService<Projects.Edvaniq_Services_Tutor_Api>("tutor-api", tutorDb);
+var gamificationApi = AddService<Projects.Edvaniq_Services_Gamification_Api>("gamification-api", gamificationDb);
+var analyticsApi = AddService<Projects.Edvaniq_Services_Analytics_Api>("analytics-api", analyticsDb);
+var notificationsApi = AddService<Projects.Edvaniq_Services_Notifications_Api>("notifications-api", notificationsDb);
+
+// Workers (share the database of their service)
+AddService<Projects.Edvaniq_Services_Content_Worker>("content-worker", contentDb);
+AddService<Projects.Edvaniq_Services_Notifications_Worker>("notifications-worker", notificationsDb);
 
 // Gateway
 var gateway = builder.AddProject<Projects.Edvaniq_Gateway>("gateway")
@@ -38,3 +57,9 @@ builder.AddProject<Projects.Edvaniq_Web>("web")
     .WithReference(gateway);
 
 builder.Build().Run();
+
+IResourceBuilder<ProjectResource> AddService<TProject>(string name, IResourceBuilder<MySqlDatabaseResource> database)
+    where TProject : IProjectMetadata, new() =>
+    builder.AddProject<TProject>(name)
+        .WithReference(database)
+        .WaitFor(database);

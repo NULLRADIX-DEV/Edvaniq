@@ -79,13 +79,22 @@ Edvaniq.App (MAUI Blazor Hybrid) ───────────────�
 
 Seiten und Features werden **einmal** in `Client.UI` gebaut und laufen im Browser und in der App.
 
+## Datenbank
+
+- **MySQL**, ein Server, **eine Datenbank pro Service** (`identitydb`, `planningdb`, …). Worker nutzen die DB ihres Service.
+- Lokal startet Aspire MySQL als Container (persistentes Volume) inkl. phpMyAdmin. Datenbanken werden automatisch angelegt.
+- Services erhalten den Connection String per Aspire als `ConnectionStrings:<service>db`.
+- EF-Core-Provider: `MySql.EntityFrameworkCore` (Oracle) unterstützt EF Core 10. `Pomelo.EntityFrameworkCore.MySql` ist aktuell nur bis EF Core 9 verfügbar.
+
 ## Starten
+
+Voraussetzung: Docker Desktop (für den MySQL-Container).
 
 ```
 dotnet run --project src/Aspire/Edvaniq.AppHost
 ```
 
-Öffnet das Aspire-Dashboard mit allen Services, Workern, Gateway und Web.
+Öffnet das Aspire-Dashboard mit MySQL, allen Services, Workern, Gateway und Web.
 
 ## Neuen Service anlegen
 

@@ -28,6 +28,7 @@
 
   <!-- Aspire / OpenTelemetry -->
   <ItemGroup>
+    <PackageVersion Include="Aspire.Hosting.MySql" Version="13.5.4" />
     <PackageVersion Include="Aspire.Hosting.Testing" Version="13.5.4" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
