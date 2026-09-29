@@ -99,6 +99,19 @@ Ergebnis:
 - **Offene Technikfragen** laufen als `spike`-Issues, z. B. Outbox für MySQL, Broker-Bibliothek mit freier Lizenz, KI-Anbieter. Technikvorschläge in Roadmap.md sind nicht verbindlich.
 - **Datenschutz:** Viele Nutzer sind minderjährig. Datenschutz- und Jugendschutz-Issues (`legal`, `vor-echten-nutzern`) werden nie gestrichen.
 
+## Server (Betrieb)
+
+- **Server:** Contabo-VPS `62.169.28.155` (Ubuntu 24.04, 6 vCPU, 12 GB RAM, 4 GB Swap). SSH nur per Schlüssel als `root`. Gehärtet mit ufw (22/80/443), fail2ban und unattended-upgrades.
+- **Geteilt mit:**
+  - NOOSE: systemd-Dienste `noose` auf Port 5000 und `noose-demo` auf Port 5001, dazu MariaDB 10.11
+  - NULLRADIX: statisch unter `/var/www/nullradix`
+- **nginx** ist der gemeinsame Reverse-Proxy mit Let's Encrypt (certbot-Timer). `edvaniq.nullradix.de` zeigt bereits per A-Record auf den Server.
+- **Edvaniq darf NOOSE nie beeinträchtigen:**
+  - eigene MySQL als Container, nicht die MariaDB von NOOSE
+  - Speicherlimit für jeden Container
+  - eigene Backups
+  - Deploys fassen keine NOOSE-Dateien und keine NOOSE-Dienste an
+
 ## Arbeitsweise mit Claude
 
 - Schätzungen immer in menschlicher Zeit: Faktor 22 auf die Umsetzung, Aufschlag nur für extern gebundene Arbeit (Anbieter, Verträge, Recht, VPS, Gerätetests). Nie mit „Entwickler + KI-Assistent“ rechnen.
