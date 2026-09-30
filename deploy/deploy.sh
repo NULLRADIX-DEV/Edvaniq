@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Rolls out all processes of one commit: deploy.sh <commit>
-# Runs on the VPS as the deploy user against its rootless Docker, from releases/<commit>/ in the deploy directory.
+# Runs on the VPS as the deploy user against the server's Docker, from releases/<commit>/ in the deploy directory.
+# That Docker also runs other apps: only touch the edvaniq project and its images.
 # Everything is checked before the switch. If the switch fails, the previous release is started again,
 # so the running state is never partly old and partly new (docs/deploy.md).
 # The output ends up in the public Actions log: never print paths, hosts or users.
@@ -17,11 +18,6 @@ sha=${1:-}
 release_dir=$(dirname "$(readlink -f "$0")")
 base=$(dirname "$(dirname "$release_dir")")
 [[ $release_dir == "$base/releases/$sha" ]] || fail "deploy.sh must run from releases/$sha"
-
-rootless_socket="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/docker.sock"
-if [[ -z ${DOCKER_HOST:-} && -S $rootless_socket ]]; then
-  export DOCKER_HOST="unix://$rootless_socket"
-fi
 
 exec 9> "$base/deploy.lock"
 flock --nonblock 9 || fail "another deploy is running"
@@ -74,7 +70,6 @@ prune() {
       docker image rm "$image" > /dev/null
     fi
   done < <(docker image ls --format '{{.Repository}}:{{.Tag}}' --filter 'reference=ghcr.io/nullradix-dev/edvaniq/*')
-  docker image prune --force > /dev/null
 }
 
 # Checks before the switch. Up to here the running state stays as it is.

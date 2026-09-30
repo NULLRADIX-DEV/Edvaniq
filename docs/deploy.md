@@ -11,7 +11,7 @@ Voraussetzung: Der Job „Container images“ hat für diesen Commit auf `main` 
 
 ## Ablauf
 
-Der Workflow prüft, dass der Commit auf `main` liegt, und schickt `deploy/` aus genau diesem Commit per SSH an den Server. Der CI-Schlüssel darf dort nur `deploy/receive.sh` ausführen, und das kennt nur Deploy und Rollback. Danach läuft `deploy/deploy.sh` im rootless Docker des Deploy-Benutzers:
+Der Workflow prüft, dass der Commit auf `main` liegt, und schickt `deploy/` aus genau diesem Commit per SSH an den Server. Der CI-Schlüssel darf dort nur `deploy/receive.sh` ausführen, und das kennt nur Deploy und Rollback. Danach läuft `deploy/deploy.sh` als Deploy-Benutzer im Docker des Servers:
 
 1. **Prüfen:**
    - `.env` ist vorhanden und nur für den Deploy-Benutzer lesbar.
@@ -26,6 +26,8 @@ Der Workflow prüft, dass der Commit auf `main` liegt, und schickt `deploy/` aus
 Scheitert Schritt 2 oder 3, startet das Skript den vorherigen Stand wieder. Beim ersten Deploy gibt es keinen, dann fährt das Skript alles herunter. So laufen nie alte und neue Prozesse gemischt.
 
 Der Server behält die Releases und Images des aktuellen und des vorherigen Commits. Ältere räumt der Deploy weg.
+
+Den Docker teilt sich Edvaniq mit anderen Apps auf dem Server. Der Deploy fasst deshalb nur das Compose-Projekt `edvaniq` und die Edvaniq-Images an. Jeder Container hat ein eigenes Speicherlimit, und zusammen laufen alle in einer cgroup mit Obergrenze (`cgroup_parent` in `deploy/compose.yml`). So kann Edvaniq die anderen Apps nie verdrängen.
 
 ## Rollback
 
