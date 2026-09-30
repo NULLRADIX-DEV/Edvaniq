@@ -33,6 +33,20 @@ Scheitert Schritt 2 oder 3, startet der Server den vorherigen Stand wieder. Beim
 
 Der Server behält die Releases und Images des aktuellen und des vorherigen Commits, ältere räumt der Deploy weg. Sobald Edvaniq eine Datenbank hat, sichert der Server sie vor jedem Umschalten.
 
+## Speicher
+
+Jeder Container hat eine eigene Speichergrenze und keinen Swap (`mem_limit` und `memswap_limit` in `deploy/compose.yml`):
+
+| Prozesse | Grenze |
+|---|---|
+| alle, die im MVP produktiv werden (Identity, Planning, Content mit Worker, Knowledge, Assessment, Flashcards, LearningEngine, Gateway, Web) | 256 MB |
+| die im MVP nur Skelett bleiben (Analytics, Notifications mit Worker, Gamification, Tutor), Anker `*skeleton` | 128 MB |
+
+- **Summe:** 10 × 256 + 5 × 128 = 3200 MB. Das liegt deutlich unter der Obergrenze der App auf dem Server (4 GB ohne Swap). Die Reserve braucht Docker selbst.
+- **Überschreitung:** Braucht ein Container mehr als seine Grenze, beendet der Kernel nur diesen Container, und Docker startet ihn neu (`restart: unless-stopped`). Die anderen Prozesse laufen weiter.
+- **.NET kennt die Grenze:** Es begrenzt seinen Heap auf 75 % der Container-Grenze. Jeder Prozess schreibt beim Start `GC memory limit: <n> MiB` ins Log, bei 256 MB sind das 192 MiB.
+- **Anheben:** Braucht ein Prozess mehr, wird seine Grenze im Dienst überschrieben. Die Summe muss unter der Obergrenze der App bleiben.
+
 ## Rollback
 
 Für den Fall, dass der neue Stand zwar läuft, aber fachlich kaputt ist. Scheitert der Deploy selbst, braucht es keinen Rollback, denn dann stellt der Server den vorherigen Stand schon von selbst wieder her.
@@ -56,7 +70,7 @@ Grenzen:
 
 ## Neuer Prozess
 
-Er braucht einen Eintrag in `AppHost.cs` und einen Dienst mit dem Anker `*app` in `deploy/compose.yml`. Stimmen die beiden Listen nicht überein, schlägt der Job „Container images“ fehl.
+Er braucht einen Eintrag in `AppHost.cs` und einen Dienst mit dem Anker `*app` in `deploy/compose.yml`, oder `*skeleton`, solange er im MVP nur Skelett ist. Stimmen die beiden Listen nicht überein, schlägt der Job „Container images“ fehl.
 
 ## Secrets
 

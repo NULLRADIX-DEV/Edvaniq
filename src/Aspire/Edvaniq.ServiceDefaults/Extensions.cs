@@ -1,3 +1,4 @@
+using Edvaniq.ServiceDefaults;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,6 +26,8 @@ public static class Extensions
         builder.AddDefaultHealthChecks();
 
         builder.Services.AddServiceDiscovery();
+
+        builder.Services.AddHostedService<MemoryLimitLogger>();
 
         builder.Services.ConfigureHttpClientDefaults(http =>
         {
