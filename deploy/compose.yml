@@ -10,6 +10,8 @@ x-app: &app
       required: true
   # Provisional limit so Edvaniq can never starve the other apps on the VPS; tuned in #160.
   mem_limit: 256m
+  # All containers share one systemd slice, which caps Edvaniq as a whole (EdvaniqDoc/Betrieb.md).
+  cgroup_parent: edvaniq.slice
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
 

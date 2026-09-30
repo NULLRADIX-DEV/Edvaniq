@@ -35,7 +35,8 @@ jobs:
         if: ${{ inputs.rollback && inputs.commit != '' }}
         run: |
           echo "::error::Either a commit or rollback, not both"; exit 1
-      - uses: actions/checkout@v7
+      # Pinned to a commit: this job holds the deploy key.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       # Images only exist for commits on main; deploy.sh refuses a commit whose images are missing.
