@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Scripts and compose files run on Linux, where CRLF breaks bash ("set: pipefail: invalid option name").
+*.sh text eol=lf
+deploy/** text eol=lf

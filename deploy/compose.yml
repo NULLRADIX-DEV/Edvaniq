@@ -1,0 +1,61 @@
+# All processes of one commit. deploy.sh sets EDVANIQ_TAG=sha-<commit> and rolls them out together.
+# Every service here needs its entry in AppHost.cs; the CI job "Container images" checks both lists match.
+name: edvaniq
+
+x-app: &app
+  restart: unless-stopped
+  # Secrets only come from the .env on the server (docs/secrets.md).
+  env_file:
+    - path: .env
+      required: true
+  # Provisional limit so Edvaniq can never starve the other apps on the VPS; tuned in #160.
+  mem_limit: 256m
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+
+services:
+  identity-api:
+    <<: *app
+    image: ghcr.io/nullradix-dev/edvaniq/identity-api:${EDVANIQ_TAG:?}
+  planning-api:
+    <<: *app
+    image: ghcr.io/nullradix-dev/edvaniq/planning-api:${EDVANIQ_TAG:?}
+  content-api:
+    <<: *app
+    image: ghcr.io/nullradix-dev/edvaniq/content-api:${EDVANIQ_TAG:?}
+  knowledge-api:
+    <<: *app
+    image: ghcr.io/nullradix-dev/edvaniq/knowledge-api:${EDVANIQ_TAG:?}
+  assessment-api:
+    <<: *app
+    image: ghcr.io/nullradix-dev/edvaniq/assessment-api:${EDVANIQ_TAG:?}
+  flashcards-api:
+    <<: *app
+    image: ghcr.io/nullradix-dev/edvaniq/flashcards-api:${EDVANIQ_TAG:?}
+  learningengine-api:
+    <<: *app
+    image: ghcr.io/nullradix-dev/edvaniq/learningengine-api:${EDVANIQ_TAG:?}
+  tutor-api:
+    <<: *app
+    image: ghcr.io/nullradix-dev/edvaniq/tutor-api:${EDVANIQ_TAG:?}
+  gamification-api:
+    <<: *app
+    image: ghcr.io/nullradix-dev/edvaniq/gamification-api:${EDVANIQ_TAG:?}
+  analytics-api:
+    <<: *app
+    image: ghcr.io/nullradix-dev/edvaniq/analytics-api:${EDVANIQ_TAG:?}
+  notifications-api:
+    <<: *app
+    image: ghcr.io/nullradix-dev/edvaniq/notifications-api:${EDVANIQ_TAG:?}
+  content-worker:
+    <<: *app
+    image: ghcr.io/nullradix-dev/edvaniq/content-worker:${EDVANIQ_TAG:?}
+  notifications-worker:
+    <<: *app
+    image: ghcr.io/nullradix-dev/edvaniq/notifications-worker:${EDVANIQ_TAG:?}
+  gateway:
+    <<: *app
+    image: ghcr.io/nullradix-dev/edvaniq/gateway:${EDVANIQ_TAG:?}
+  web:
+    <<: *app
+    image: ghcr.io/nullradix-dev/edvaniq/web:${EDVANIQ_TAG:?}

@@ -1,0 +1,58 @@
+name: Deploy
+
+# Rolls out all processes of one commit on main to the VPS (docs/deploy.md).
+# Starting this workflow by hand is the approval; there is no automatic rollout yet.
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Commit on main (empty = latest main)
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # Images only exist for commits on main; deploy.sh refuses a commit whose images are missing.
+      - name: Resolve commit
+        env:
+          COMMIT: ${{ inputs.commit }}
+        run: |
+          if [ -n "$COMMIT" ] && ! [[ $COMMIT =~ ^[0-9a-f]{7,40}$ ]]; then
+            echo "::error::'$COMMIT' is not a commit hash"; exit 1
+          fi
+          sha=$(git rev-parse --verify --quiet "${COMMIT:-origin/main}^{commit}") || { echo "::error::Unknown commit $COMMIT"; exit 1; }
+          git merge-base --is-ancestor "$sha" origin/main || { echo "::error::$sha is not on main"; exit 1; }
+          git cat-file -e "$sha:deploy/deploy.sh" 2> /dev/null || { echo "::error::$sha has no deploy folder yet"; exit 1; }
+          echo "SHA=$sha" >> "$GITHUB_ENV"
+      # The key may only run the receive command on the server (forced command in authorized_keys).
+      - name: Deploy
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_TARGET: ${{ secrets.DEPLOY_TARGET }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          git archive "$SHA" deploy \
+            | ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_TARGET" "deploy $SHA"
+          echo "### Deployed \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
