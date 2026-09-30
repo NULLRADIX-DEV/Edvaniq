@@ -73,3 +73,81 @@ jobs:
       # Scans every commit, not only the current tree.
       - name: Scan git history
         run: ./gitleaks git --no-banner --redact --exit-code 1 .
+
+  # Builds one image per process. PR images stay on the runner; only main pushes to GHCR.
+  images:
+    name: Container images
+    needs: [build-test, secret-scan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io
+      TAG: sha-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      # The AppHost is the list of processes, so a new process needs no extra entry here.
+      - name: Find processes
+        run: |
+          mapfile -t names < <(grep -oE 'Projects\.Edvaniq_[A-Za-z0-9_]+' src/Aspire/Edvaniq.AppHost/AppHost.cs | sort -u | sed 's/^Projects\.//; s/_/./g')
+          [ "${#names[@]}" -gt 0 ] || { echo "::error::No processes found in AppHost.cs"; exit 1; }
+          for name in "${names[@]}"; do
+            mapfile -t files < <(git ls-files "*/$name.csproj")
+            [ "${#files[@]}" -eq 1 ] || { echo "::error::Expected one project file for $name, found ${#files[@]}"; exit 1; }
+            echo "${files[0]}" >> projects.txt
+          done
+          cat projects.txt
+
+      # Image names come from ContainerRepository in Directory.Build.props.
+      - name: Build images
+        run: |
+          mapfile -t projects < projects.txt
+          for project in "${projects[@]}"; do
+            dotnet publish "$project" -c Release --os linux --arch x64 -t:PublishContainer -p:ContainerImageTag="$TAG"
+          done
+
+      - name: Check images
+        run: |
+          mapfile -t images < <(docker image ls --format '{{.Repository}}:{{.Tag}}' --filter "reference=nullradix-dev/edvaniq/*:$TAG" | sort)
+          expected=$(wc -l < projects.txt)
+          [ "${#images[@]}" -eq "$expected" ] || { echo "::error::Expected $expected images, found ${#images[@]}"; exit 1; }
+          for image in "${images[@]}"; do
+            revision=$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")
+            [ "$revision" = "$GITHUB_SHA" ] || { echo "::error::$image has revision '$revision', expected $GITHUB_SHA"; exit 1; }
+          done
+          # Without blazor.web.js the UI is dead while the health check stays green.
+          docker run --rm --entrypoint test "nullradix-dev/edvaniq/web:$TAG" -f /app/wwwroot/_framework/blazor.web.js \
+            || { echo "::error::blazor.web.js is missing in the web image"; exit 1; }
+          printf '%s\n' "${images[@]}" > images.txt
+          cat images.txt
+
+      # Runs only after every image was built and checked, so a failed build pushes nothing.
+      - name: Push images
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" -u "$GITHUB_ACTOR" --password-stdin
+          mapfile -t images < images.txt
+          for image in "${images[@]}"; do
+            docker tag "$image" "$REGISTRY/$image"
+            docker push --quiet "$REGISTRY/$image"
+          done
+          docker logout "$REGISTRY"
+          {
+            echo "### Pushed ${#images[@]} images"
+            for image in "${images[@]}"; do echo "- \`$REGISTRY/$image\`"; done
+          } >> "$GITHUB_STEP_SUMMARY"
