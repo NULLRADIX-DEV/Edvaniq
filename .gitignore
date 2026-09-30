@@ -399,3 +399,11 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Secrets (see docs/secrets.md)
+.env
+.env.*
+!.env.example
+secrets/
+*.key
+*.pem

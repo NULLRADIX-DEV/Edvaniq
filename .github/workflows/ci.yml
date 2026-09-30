@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  TESTINGPLATFORM_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-test:
+    name: Build & test backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      # The MAUI app needs workloads the runner doesn't have. It stays buildable locally.
+      - name: Remove app project from solution
+        run: dotnet sln Edvaniq.slnx remove src/Clients/Edvaniq.App/Edvaniq.App.csproj
+
+      - name: Restore
+        run: dotnet restore Edvaniq.slnx
+
+      - name: Build
+        run: dotnet build Edvaniq.slnx -c Release --no-restore
+
+      # Exit code 8 means a test project has no tests yet, not that tests failed.
+      - name: Test
+        run: dotnet test --solution Edvaniq.slnx -c Release --no-build -- --ignore-exit-code 8
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          file="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${file}"
+          echo "${GITLEAKS_SHA256}  ${file}" | sha256sum -c -
+          tar -xzf "${file}" gitleaks
+
+      # Scans every commit, not only the current tree.
+      - name: Scan git history
+        run: ./gitleaks git --no-banner --redact --exit-code 1 .
