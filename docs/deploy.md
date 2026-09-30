@@ -1,6 +1,6 @@
 # Edvaniq – Deploy
 
-Ein Deploy bringt alle Prozesse eines Commits auf `main` gemeinsam auf den VPS. Er startet nur von Hand, das ist die Freigabe. Automatisch rollt noch nichts aus.
+Ein Deploy bringt alle Prozesse eines Commits auf `main` gemeinsam auf den VPS. Er startet nur von Hand, das ist die Freigabe. Automatisch rollt noch nichts aus. Derselbe Workflow kann auch auf den vorherigen Stand zurückgehen ([Rollback](#rollback)).
 
 ## Ausrollen
 
@@ -11,12 +11,12 @@ Voraussetzung: Der Job „Container images“ hat für diesen Commit auf `main` 
 
 ## Ablauf
 
-Der Workflow prüft, dass der Commit auf `main` liegt, und schickt `deploy/` aus genau diesem Commit per SSH an den Server. Der CI-Schlüssel darf dort nur dieses eine Kommando ausführen (`deploy/receive.sh`). Danach läuft `deploy/deploy.sh` im rootless Docker des Deploy-Benutzers:
+Der Workflow prüft, dass der Commit auf `main` liegt, und schickt `deploy/` aus genau diesem Commit per SSH an den Server. Der CI-Schlüssel darf dort nur `deploy/receive.sh` ausführen, und das kennt nur Deploy und Rollback. Danach läuft `deploy/deploy.sh` im rootless Docker des Deploy-Benutzers:
 
 1. **Prüfen:**
    - `.env` ist vorhanden und nur für den Deploy-Benutzer lesbar.
    - Die Compose-Datei ist gültig.
-   - Alle Images des Commits sind gezogen.
+   - Alle Images des Commits liegen auf dem Server. Fehlende werden gezogen.
    - Jedes Image trägt den Commit im Label `org.opencontainers.image.revision`.
 
    Scheitert hier etwas, bleibt der laufende Stand unverändert.
@@ -26,6 +26,27 @@ Der Workflow prüft, dass der Commit auf `main` liegt, und schickt `deploy/` aus
 Scheitert Schritt 2 oder 3, startet das Skript den vorherigen Stand wieder. Beim ersten Deploy gibt es keinen, dann fährt das Skript alles herunter. So laufen nie alte und neue Prozesse gemischt.
 
 Der Server behält die Releases und Images des aktuellen und des vorherigen Commits. Ältere räumt der Deploy weg.
+
+## Rollback
+
+Für den Fall, dass der neue Stand zwar läuft, aber fachlich kaputt ist. Scheitert der Deploy selbst, braucht es keinen Rollback, denn dann stellt das Skript den vorherigen Stand schon von selbst wieder her.
+
+1. Actions → „Deploy“ → „Run workflow“
+2. „rollback“ anhaken und „commit“ leer lassen
+3. Der Lauf ist nach 1–2 Minuten grün. In der Zusammenfassung steht der Commit, der jetzt läuft.
+
+Der Server startet den vorherigen Stand mit dessen eigenem `deploy.sh`, es gelten also dieselben Prüfungen wie beim Deploy. Scheitert der Rollback, läuft der aktuelle Stand weiter. Die Images des vorherigen Stands liegen noch auf dem Server, deshalb braucht der Rollback die Registry nicht.
+
+Danach:
+
+- Der fehlerhafte Stand ist jetzt der vorherige. Ein zweiter Rollback ginge also wieder nach vorn.
+- Ein Deploy ohne Commit rollt den aktuellen Stand von `main` aus, also wieder den fehlerhaften. Erst deployen, wenn der Fix auf `main` ist.
+- Zu einem älteren Stand als dem vorherigen geht es mit einem normalen Deploy, den Commit trägt man ins Feld „commit“ ein. Die Images kommen dann aus der Registry.
+
+Grenzen:
+
+- Ein Rollback macht Datenmigrationen nicht rückgängig.
+- Ist GitHub nicht erreichbar, steht der Notfallweg in `EdvaniqDoc/Betrieb.md`.
 
 ## Neuer Prozess
 
