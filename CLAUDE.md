@@ -107,15 +107,17 @@ Ergebnis:
   - `"ip": "127.0.0.1"`: Veröffentlichte Ports landen nur auf Loopback, weil Docker ufw umgeht. Nie `0.0.0.0` explizit veröffentlichen.
   - Log-Driver `local` (20 MB × 5)
   - `live-restore`
-- **Dashboard:** 1Panel (Monitoring, Konsole, Dateien, Container), nur über Tailscale erreichbar (ufw nur auf `tailscale0`, 1Panel-IP-Filter `100.64.0.0/10`, 2FA). Keine 1Panel-„Websites“ und kein OpenResty, denn 80/443 gehören dem nginx des Hosts. Ports nie über die 1Panel-Firewall öffnen.
+- **Dashboard:** 1Panel (Monitoring, Konsole, Dateien, Container), nur über Tailscale erreichbar (ufw nur auf `tailscale0`, 1Panel-IP-Filter `100.64.0.0/10`, 2FA). Keine 1Panel-„Websites“ und kein OpenResty, denn 80/443 gehören dem nginx des Hosts. Ports nie über die 1Panel-Firewall öffnen. 1Panel legt beim Start selbst eine öffentliche ufw-Regel für seinen Port an. Deshalb verwirft eine Regel in `/etc/ufw/before.rules` und `before6.rules` den Port 32085 außer auf `tailscale0`, und die greift vor allen ufw-Regeln.
+- **Neustart:** 1Panel-Cronjobs „Neustart bei Bedarf“ (täglich, nur wenn `/var/run/reboot-required` existiert) und ein geplanter Neustart jeden Montag. Nach einem Neustart kommt alles von selbst wieder hoch (getestet am 30.09.). `noose` und `noose-demo` scheitern dabei einmal an der noch nicht bereiten DB und starten automatisch neu.
 - **Geteilt mit** (alles als Container, Compose-Projekte unter `/opt/<name>`, Images privat in GHCR, gebaut per GitHub Action; der Server ist per `docker login ghcr.io` mit einem `read:packages`-PAT angemeldet):
   - NOOSE (`/opt/noose`):
     - `noose` auf 127.0.0.1:5000, `noose-demo` auf 127.0.0.1:5001
     - MariaDB 10.11 als `noose-db` auf 127.0.0.1:3306
     - alle im Host-Netz
-    - Backup über `/opt/noose/backup.sh`, täglich um 04:15, nach `/root/backups`
+    - Backup über 1Panel-Cronjobs („Backup database“ auf dem Remote-Eintrag `noose_mariadb`): Prod um 04:30 (30 Kopien), Demo um 04:45 (7 Kopien), nach `/opt/1panel/backup/database/mariadb/`. `/opt/noose/backup.sh` bleibt als manuelle Reserve.
+    - Achtung: In 1Panel löscht „Delete“ bei einer Datenbank die echte DB auf dem Server. Das ist am 30.09. passiert, die Wiederherstellung kam aus dem Backup.
   - NULLRADIX (`/opt/nullradix`): nginx-Container auf 127.0.0.1:8080
-- **nginx** ist der gemeinsame Reverse-Proxy mit Let's Encrypt (certbot-Timer). `edvaniq.nullradix.de` zeigt bereits per A-Record auf den Server.
+- **nginx** ist der gemeinsame Reverse-Proxy mit Let's Encrypt (certbot-Timer). `edvaniq.nullradix.de` zeigt per A-Record auf den Server (kein AAAA). Die nginx-Site `edvaniq` hat ein Let's-Encrypt-Zertifikat und leitet HTTP auf HTTPS um. Solange die App fehlt, liefert sie eine Platzhalterseite aus `/var/www/edvaniq` (`noindex`). Später proxyt die Site auf das Gateway.
 - **Edvaniq darf NOOSE nie beeinträchtigen:**
   - eigene MySQL als Container, nicht die MariaDB von NOOSE; kein Port 3306, denn den belegt `noose-db`
   - Speicherlimit für jeden Container
