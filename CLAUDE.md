@@ -124,6 +124,11 @@ Ergebnis:
   - eigene Backups
   - Deploys fassen keine NOOSE-Dateien und keine NOOSE-Dienste an, auch nicht `/opt/noose` oder die NOOSE-Container
   - Edvaniq kommt nach `/opt/edvaniq`, mit eigenem Compose-Projekt und eigenem Docker-Netz
+- **Deploy-Benutzer `deploy`** (uid 1001):
+  - Anmeldung nur per SSH-Schlüssel, Passwort gesperrt
+  - nicht in `sudo` und nicht in `docker`, denn Zugriff auf den Docker-Socket wäre gleichbedeutend mit Root
+  - ihm gehört `/opt/edvaniq`; `/opt/noose` und `/opt/nullradix` stehen auf `750 root` und sind für ihn gesperrt
+  - Wie er Container startet, ohne Root zu sein, wird beim Deploy-Issue festgelegt.
 
 ## Arbeitsweise mit Claude
 
