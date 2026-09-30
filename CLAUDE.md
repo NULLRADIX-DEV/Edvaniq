@@ -37,6 +37,8 @@ dotnet format                                    # Codestil nach .editorconfig
 - Paketversionen stehen nur in `Directory.Packages.props`. In den csproj-Dateien `PackageReference` immer ohne `Version` angeben.
 - EF-Core-Provider ist `MySql.EntityFrameworkCore` (Oracle). Nicht Pomelo, das kann nur EF Core 9.
 - Connection Strings bekommt ein Service von Aspire unter `ConnectionStrings:<service>db`.
+- Secrets nur in der Betriebsumgebung, nie in Repo, Client oder Log. Regeln stehen in `docs/secrets.md`. Die CI scannt die Git-History mit gitleaks.
+- CI: `.github/workflows/ci.yml` läuft auf `ubuntu-24.04` ohne MAUI-Workload. Das App-Projekt nimmt die CI vor dem Build aus der Solution.
 - Neuer Service: Ordner mit den 5 Projekten und Tests unter `tests/Services/<Name>/` anlegen. Dann in `AppHost.cs` eintragen (`AddDatabase`, `AddService`, Gateway-`WithReference`), die Referenzen in `Edvaniq.ArchitectureTests` ergänzen und alles in `Edvaniq.slnx` aufnehmen.
 
 ## Stolperfallen
