@@ -23,6 +23,7 @@ Services bekommen Secrets nur über Konfiguration (Umgebungsvariablen), z. B. `C
 ## Prüfung
 
 - Die CI (Job `secret-scan`) prüft bei jedem PR und jedem Push auf `main` die komplette Git-History mit [gitleaks](https://github.com/gitleaks/gitleaks). Ein Fund macht die CI rot.
+- GitHub Secret Scanning mit Push Protection ist aktiv. Pushes mit erkannten Secrets lehnt GitHub schon beim Push ab.
 - Lokal vor dem Push: `gitleaks git --redact .`
 - Client-Stichprobe: `dotnet publish src/Clients/Edvaniq.Web -c Release -o out`, danach `gitleaks dir --redact out`.
 - Startlogs: Service mit einem Canary-Wert starten, z. B. `ConnectionStrings__planningdb="...;Password=CANARY_123"`, und die Logs nach `CANARY` durchsuchen.

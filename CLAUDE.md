@@ -39,6 +39,8 @@ dotnet format                                    # Codestil nach .editorconfig
 - Connection Strings bekommt ein Service von Aspire unter `ConnectionStrings:<service>db`.
 - Secrets nur in der Betriebsumgebung, nie in Repo, Client oder Log. Regeln stehen in `docs/secrets.md`. Die CI scannt die Git-History mit gitleaks.
 - CI: `.github/workflows/ci.yml` läuft auf `ubuntu-24.04` ohne MAUI-Workload. Das App-Projekt nimmt die CI vor dem Build aus der Solution.
+- Auf `main` nur per Pull Request mit grüner CI. Direkte Pushes sind gesperrt, die Regeln stehen in `docs/branch-protection.md`. Wer einen CI-Job umbenennt, muss die Pflicht-Checks im Ruleset `main-protect` nachziehen.
+- Das Repo ist öffentlich. Betriebsdetails wie IPs, Ports, Serverpfade und Benutzer kommen nie hierher, sondern nach `../EdvaniqDoc/Betrieb.md`.
 - Neuer Service: Ordner mit den 5 Projekten und Tests unter `tests/Services/<Name>/` anlegen. Dann in `AppHost.cs` eintragen (`AddDatabase`, `AddService`, Gateway-`WithReference`), die Referenzen in `Edvaniq.ArchitectureTests` ergänzen und alles in `Edvaniq.slnx` aufnehmen.
 
 ## Stolperfallen
@@ -104,33 +106,9 @@ Ergebnis:
 
 ## Server (Betrieb)
 
-- **Server:** Contabo-VPS `62.169.28.155` (Ubuntu 24.04, 6 vCPU, 12 GB RAM, 4 GB Swap). SSH nur per Schlüssel als `root`. Gehärtet mit ufw (22/80/443), fail2ban und unattended-upgrades.
-- **Docker CE + Compose** aus dem offiziellen Repo, Updates über unattended-upgrades. `/etc/docker/daemon.json`:
-  - `"ip": "127.0.0.1"`: Veröffentlichte Ports landen nur auf Loopback, weil Docker ufw umgeht. Nie `0.0.0.0` explizit veröffentlichen.
-  - Log-Driver `local` (20 MB × 5)
-  - `live-restore`
-- **Dashboard:** 1Panel (Monitoring, Konsole, Dateien, Container), nur über Tailscale erreichbar (ufw nur auf `tailscale0`, 1Panel-IP-Filter `100.64.0.0/10`, 2FA). Keine 1Panel-„Websites“ und kein OpenResty, denn 80/443 gehören dem nginx des Hosts. Ports nie über die 1Panel-Firewall öffnen. 1Panel legt beim Start selbst eine öffentliche ufw-Regel für seinen Port an. Deshalb verwirft eine Regel in `/etc/ufw/before.rules` und `before6.rules` den Port 32085 außer auf `tailscale0`, und die greift vor allen ufw-Regeln.
-- **Neustart:** 1Panel-Cronjobs „Neustart bei Bedarf“ (täglich, nur wenn `/var/run/reboot-required` existiert) und ein geplanter Neustart jeden Montag. Nach einem Neustart kommt alles von selbst wieder hoch (getestet am 30.09.). `noose` und `noose-demo` scheitern dabei einmal an der noch nicht bereiten DB und starten automatisch neu.
-- **Geteilt mit** (alles als Container, Compose-Projekte unter `/opt/<name>`, Images privat in GHCR, gebaut per GitHub Action; der Server ist per `docker login ghcr.io` mit einem `read:packages`-PAT angemeldet):
-  - NOOSE (`/opt/noose`):
-    - `noose` auf 127.0.0.1:5000, `noose-demo` auf 127.0.0.1:5001
-    - MariaDB 10.11 als `noose-db` auf 127.0.0.1:3306
-    - alle im Host-Netz
-    - Backup über 1Panel-Cronjobs („Backup database“ auf dem Remote-Eintrag `noose_mariadb`): Prod um 04:30 (30 Kopien), Demo um 04:45 (7 Kopien), nach `/opt/1panel/backup/database/mariadb/`. `/opt/noose/backup.sh` bleibt als manuelle Reserve.
-    - Achtung: In 1Panel löscht „Delete“ bei einer Datenbank die echte DB auf dem Server. Das ist am 30.09. passiert, die Wiederherstellung kam aus dem Backup.
-  - NULLRADIX (`/opt/nullradix`): nginx-Container auf 127.0.0.1:8080
-- **nginx** ist der gemeinsame Reverse-Proxy mit Let's Encrypt (certbot-Timer). `edvaniq.nullradix.de` zeigt per A-Record auf den Server (kein AAAA). Die nginx-Site `edvaniq` hat ein Let's-Encrypt-Zertifikat und leitet HTTP auf HTTPS um. Solange die App fehlt, liefert sie eine Platzhalterseite aus `/var/www/edvaniq` (`noindex`). Später proxyt die Site auf das Gateway.
-- **Edvaniq darf NOOSE nie beeinträchtigen:**
-  - eigene MySQL als Container, nicht die MariaDB von NOOSE; kein Port 3306, denn den belegt `noose-db`
-  - Speicherlimit für jeden Container
-  - eigene Backups
-  - Deploys fassen keine NOOSE-Dateien und keine NOOSE-Dienste an, auch nicht `/opt/noose` oder die NOOSE-Container
-  - Edvaniq kommt nach `/opt/edvaniq`, mit eigenem Compose-Projekt und eigenem Docker-Netz
-- **Deploy-Benutzer `deploy`** (uid 1001):
-  - Anmeldung nur per SSH-Schlüssel, Passwort gesperrt
-  - nicht in `sudo` und nicht in `docker`, denn Zugriff auf den Docker-Socket wäre gleichbedeutend mit Root
-  - ihm gehört `/opt/edvaniq`; `/opt/noose` und `/opt/nullradix` stehen auf `750 root` und sind für ihn gesperrt
-  - Wie er Container startet, ohne Root zu sein, wird beim Deploy-Issue festgelegt.
+Die Server-Details (VPS, Docker, 1Panel, nginx, NOOSE, Deploy-Benutzer) stehen im privaten Nachbar-Repo, weil dieses Repo öffentlich ist. Neue Betriebsdetails wie IPs, Ports, Pfade, Benutzer und Zeitpläne nur dort eintragen, nie in dieses Repo.
+
+@../EdvaniqDoc/Betrieb.md
 
 ## Arbeitsweise mit Claude
 
