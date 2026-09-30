@@ -1,63 +1,61 @@
-# All processes of one commit. deploy.sh sets EDVANIQ_TAG=sha-<commit> and rolls them out together.
+# All processes of one commit, rolled out together by the Deploy workflow through the server platform, where Edvaniq
+# runs as its own app (own user, rootless Docker, memory cap). The server sets APP_COMMIT and checks the file first.
 # Every service here needs its entry in AppHost.cs; the CI job "Container images" checks both lists match.
-name: edvaniq
 
 x-app: &app
   restart: unless-stopped
-  # Secrets only come from the .env on the server (docs/secrets.md).
+  # Secrets only come from app.env on the server (docs/secrets.md).
   env_file:
-    - path: .env
+    - path: app.env
       required: true
   # Provisional limit so Edvaniq can never starve the other apps on the VPS; tuned in #160.
   mem_limit: 256m
-  # All containers share one systemd slice, which caps Edvaniq as a whole (EdvaniqDoc/Betrieb.md).
-  cgroup_parent: edvaniq.slice
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
 
 services:
   identity-api:
     <<: *app
-    image: ghcr.io/nullradix-dev/edvaniq/identity-api:${EDVANIQ_TAG:?}
+    image: ghcr.io/nullradix-dev/edvaniq/identity-api:sha-${APP_COMMIT:?}
   planning-api:
     <<: *app
-    image: ghcr.io/nullradix-dev/edvaniq/planning-api:${EDVANIQ_TAG:?}
+    image: ghcr.io/nullradix-dev/edvaniq/planning-api:sha-${APP_COMMIT:?}
   content-api:
     <<: *app
-    image: ghcr.io/nullradix-dev/edvaniq/content-api:${EDVANIQ_TAG:?}
+    image: ghcr.io/nullradix-dev/edvaniq/content-api:sha-${APP_COMMIT:?}
   knowledge-api:
     <<: *app
-    image: ghcr.io/nullradix-dev/edvaniq/knowledge-api:${EDVANIQ_TAG:?}
+    image: ghcr.io/nullradix-dev/edvaniq/knowledge-api:sha-${APP_COMMIT:?}
   assessment-api:
     <<: *app
-    image: ghcr.io/nullradix-dev/edvaniq/assessment-api:${EDVANIQ_TAG:?}
+    image: ghcr.io/nullradix-dev/edvaniq/assessment-api:sha-${APP_COMMIT:?}
   flashcards-api:
     <<: *app
-    image: ghcr.io/nullradix-dev/edvaniq/flashcards-api:${EDVANIQ_TAG:?}
+    image: ghcr.io/nullradix-dev/edvaniq/flashcards-api:sha-${APP_COMMIT:?}
   learningengine-api:
     <<: *app
-    image: ghcr.io/nullradix-dev/edvaniq/learningengine-api:${EDVANIQ_TAG:?}
+    image: ghcr.io/nullradix-dev/edvaniq/learningengine-api:sha-${APP_COMMIT:?}
   tutor-api:
     <<: *app
-    image: ghcr.io/nullradix-dev/edvaniq/tutor-api:${EDVANIQ_TAG:?}
+    image: ghcr.io/nullradix-dev/edvaniq/tutor-api:sha-${APP_COMMIT:?}
   gamification-api:
     <<: *app
-    image: ghcr.io/nullradix-dev/edvaniq/gamification-api:${EDVANIQ_TAG:?}
+    image: ghcr.io/nullradix-dev/edvaniq/gamification-api:sha-${APP_COMMIT:?}
   analytics-api:
     <<: *app
-    image: ghcr.io/nullradix-dev/edvaniq/analytics-api:${EDVANIQ_TAG:?}
+    image: ghcr.io/nullradix-dev/edvaniq/analytics-api:sha-${APP_COMMIT:?}
   notifications-api:
     <<: *app
-    image: ghcr.io/nullradix-dev/edvaniq/notifications-api:${EDVANIQ_TAG:?}
+    image: ghcr.io/nullradix-dev/edvaniq/notifications-api:sha-${APP_COMMIT:?}
   content-worker:
     <<: *app
-    image: ghcr.io/nullradix-dev/edvaniq/content-worker:${EDVANIQ_TAG:?}
+    image: ghcr.io/nullradix-dev/edvaniq/content-worker:sha-${APP_COMMIT:?}
   notifications-worker:
     <<: *app
-    image: ghcr.io/nullradix-dev/edvaniq/notifications-worker:${EDVANIQ_TAG:?}
+    image: ghcr.io/nullradix-dev/edvaniq/notifications-worker:sha-${APP_COMMIT:?}
   gateway:
     <<: *app
-    image: ghcr.io/nullradix-dev/edvaniq/gateway:${EDVANIQ_TAG:?}
+    image: ghcr.io/nullradix-dev/edvaniq/gateway:sha-${APP_COMMIT:?}
   web:
     <<: *app
-    image: ghcr.io/nullradix-dev/edvaniq/web:${EDVANIQ_TAG:?}
+    image: ghcr.io/nullradix-dev/edvaniq/web:sha-${APP_COMMIT:?}
