@@ -82,8 +82,9 @@ prune() {
 [[ $(stat -c %a "$base/.env") == 600 ]] || fail ".env must have mode 600, nothing changed"
 compose "$sha" config --quiet || fail "compose.yml is invalid, nothing changed"
 
+# Only missing images are pulled, so a rollback to the previous release works without the registry.
 echo "Pulling images of $sha"
-compose "$sha" --progress quiet pull || fail "not all images of $sha are available, nothing changed"
+compose "$sha" --progress quiet pull --policy missing || fail "not all images of $sha are available, nothing changed"
 while read -r image; do
   revision=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")
   [[ $revision == "$sha" ]] || fail "$image has revision ${revision:-none}, nothing changed"
@@ -100,6 +101,10 @@ if switch_to "$sha"; then
   mv "$base/current.new" "$base/current"
   prune || echo "Cleanup of old releases failed, the deploy itself succeeded" >&2
   echo "Deployed $sha"
+  previous=$(cat "$base/previous" 2> /dev/null || true)
+  if [[ -n $previous ]]; then
+    echo "Previous release: $previous"
+  fi
   exit 0
 fi
 
