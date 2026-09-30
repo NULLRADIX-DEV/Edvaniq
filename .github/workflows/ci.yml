@@ -133,6 +133,11 @@ jobs:
             || { echo "::error::blazor.web.js is missing in the web image"; exit 1; }
           printf '%s\n' "${images[@]}" > images.txt
           cat images.txt
+          # The deploy rolls out deploy/compose.yml, so it must list exactly these images.
+          touch "$RUNNER_TEMP/.env"
+          EDVANIQ_TAG="$TAG" docker compose -f deploy/compose.yml --project-directory "$RUNNER_TEMP" config --images | sort > composed.txt
+          sed "s|^|$REGISTRY/|" images.txt | diff - composed.txt \
+            || { echo "::error::deploy/compose.yml does not match the processes in AppHost.cs (< missing, > extra)"; exit 1; }
 
       # Runs only after every image was built and checked, so a failed build pushes nothing.
       - name: Push images
