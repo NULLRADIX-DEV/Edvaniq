@@ -8,10 +8,18 @@ x-app: &app
   env_file:
     - path: app.env
       required: true
-  # Provisional limit so Edvaniq can never starve the other apps on the VPS; tuned in #160.
+  # Own memory limit and no swap: a container that runs out is killed and restarted alone. All limits together
+  # (10 x 256m + 5 x 128m) stay well below the app's memory cap on the server, which also has to hold Docker itself.
   mem_limit: 256m
+  memswap_limit: 256m
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
+
+# Processes that stay a skeleton in the MVP need less.
+x-skeleton: &skeleton
+  <<: *app
+  mem_limit: 128m
+  memswap_limit: 128m
 
 services:
   identity-api:
@@ -36,22 +44,22 @@ services:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/learningengine-api:sha-${APP_COMMIT:?}
   tutor-api:
-    <<: *app
+    <<: *skeleton
     image: ghcr.io/nullradix-dev/edvaniq/tutor-api:sha-${APP_COMMIT:?}
   gamification-api:
-    <<: *app
+    <<: *skeleton
     image: ghcr.io/nullradix-dev/edvaniq/gamification-api:sha-${APP_COMMIT:?}
   analytics-api:
-    <<: *app
+    <<: *skeleton
     image: ghcr.io/nullradix-dev/edvaniq/analytics-api:sha-${APP_COMMIT:?}
   notifications-api:
-    <<: *app
+    <<: *skeleton
     image: ghcr.io/nullradix-dev/edvaniq/notifications-api:sha-${APP_COMMIT:?}
   content-worker:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/content-worker:sha-${APP_COMMIT:?}
   notifications-worker:
-    <<: *app
+    <<: *skeleton
     image: ghcr.io/nullradix-dev/edvaniq/notifications-worker:sha-${APP_COMMIT:?}
   gateway:
     <<: *app
