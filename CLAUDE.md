@@ -39,6 +39,7 @@ dotnet format                                    # Codestil nach .editorconfig
 - Connection Strings bekommt ein Service von Aspire unter `ConnectionStrings:<service>db`.
 - Secrets nur in der Betriebsumgebung, nie in Repo, Client oder Log. Regeln stehen in `docs/secrets.md`. Die CI scannt die Git-History mit gitleaks.
 - CI: `.github/workflows/ci.yml` läuft auf `ubuntu-24.04` ohne MAUI-Workload. Das App-Projekt nimmt die CI vor dem Build aus der Solution.
+- Container-Images: Die CI baut für jeden Prozess im AppHost ein Image `ghcr.io/nullradix-dev/edvaniq/<resource>:sha-<commit>` mit dem SDK (`-t:PublishContainer`, keine Dockerfiles). Den Namen setzt `Directory.Build.props` aus dem Projektnamen. Gepusht wird nur auf `main` nach grüner CI, PR-Images bleiben im Runner. Ein neuer Prozess braucht dafür nur seinen Eintrag in `AppHost.cs`.
 - Auf `main` nur per Pull Request mit grüner CI. Direkte Pushes sind gesperrt, die Regeln stehen in `docs/branch-protection.md`. Wer einen CI-Job umbenennt, muss die Pflicht-Checks im Ruleset `main-protect` nachziehen.
 - Das Repo ist öffentlich. Betriebsdetails wie IPs, Ports, Serverpfade und Benutzer kommen nie hierher, sondern nach `../EdvaniqDoc/Betrieb.md`.
 - Neuer Service: Ordner mit den 5 Projekten und Tests unter `tests/Services/<Name>/` anlegen. Dann in `AppHost.cs` eintragen (`AddDatabase`, `AddService`, Gateway-`WithReference`), die Referenzen in `Edvaniq.ArchitectureTests` ergänzen und alles in `Edvaniq.slnx` aufnehmen.

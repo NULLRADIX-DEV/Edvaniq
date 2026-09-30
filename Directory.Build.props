@@ -14,4 +14,11 @@
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
+  <!-- Container image name = Aspire resource name, e.g. Edvaniq.Services.Identity.Api -> nullradix-dev/edvaniq/identity-api.
+       PublishRepositoryUrl adds the commit (org.opencontainers.image.revision) and repo URL as image labels. -->
+  <PropertyGroup>
+    <ContainerRepository>nullradix-dev/edvaniq/$(MSBuildProjectName.Replace('Edvaniq.Services.', '').Replace('Edvaniq.', '').Replace('.', '-').ToLowerInvariant())</ContainerRepository>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+  </PropertyGroup>
+
 </Project>

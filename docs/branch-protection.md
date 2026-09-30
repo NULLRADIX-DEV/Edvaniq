@@ -4,13 +4,13 @@
 
 | Ruleset | Regeln | Ausnahme |
 |---|---|---|
-| `main-protect` | Änderungen nur per Pull Request. Die Pflicht-Checks „Build & test backend“ und „Secret scan“ müssen grün sein. Der Branch muss vor dem Merge auf dem Stand von `main` sein. Kein Force-Push, Löschen gesperrt. | keine, auch nicht für Admins |
+| `main-protect` | Änderungen nur per Pull Request. Die Pflicht-Checks „Build & test backend“, „Secret scan“ und „Container images“ müssen grün sein. Der Branch muss vor dem Merge auf dem Stand von `main` sein. Kein Force-Push, Löschen gesperrt. | keine, auch nicht für Admins |
 | `main-review` | 1 Approval. Neue Commits machen alte Approvals ungültig. | Repo-Admins dürfen beim Merge eines PR auf das Review verzichten (Übergang, siehe unten) |
 
 ## Ablauf
 
 1. Branch von `main` anlegen, Pull Request gegen `main` öffnen.
-2. Die CI baut, testet (alle Testprojekte, auch die Architekturtests) und prüft auf Secrets.
+2. Die CI baut, testet (alle Testprojekte, auch die Architekturtests), prüft auf Secrets und baut die Container-Images. Gepusht werden die Images erst nach dem Merge auf `main`.
 3. Der andere Entwickler reviewt und approvt.
 4. Mergen. Ist `main` inzwischen weiter, vorher „Update branch“, damit die CI den echten Merge-Stand prüft.
 
