@@ -1,12 +1,21 @@
 name: Deploy
 
-# Rolls out all processes of one commit on main to the VPS, or rolls back to the previous release (docs/deploy.md).
-# Starting this workflow by hand is the approval; there is no automatic rollout yet.
+# Template: NULLRADIX-DEV/platform/templates/deploy.yml. Every app repo carries an identical copy, change the template first.
+# Rolls out the compose.yml of one commit on the default branch to the app's server, or rolls back to the
+# previous release. Starting this workflow by hand is the approval.
+# One environment per app: production for most repos, a repo with more apps adds one each (e.g. demo).
+# Secrets: DEPLOY_SSH_KEY (key that may only run receive), DEPLOY_TARGET (<app>@<server>), DEPLOY_KNOWN_HOSTS.
+# Variable DEPLOY_DIR: folder of the compose.yml, default deploy.
+# Public repos keep them in the environment (default branch only), private repos as repository secrets and variables.
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: App to deploy, as environment of this repo
+        required: false
+        default: production
       commit:
-        description: Commit on main (empty = latest main)
+        description: Commit on the default branch (empty = latest)
         required: false
         default: ''
       rollback:
@@ -18,15 +27,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy
+  group: deploy-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
   deploy:
-    name: Deploy to VPS
+    name: Deploy to server
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    environment: production
+    environment: ${{ inputs.environment }}
+    env:
+      DEPLOY_DIR: ${{ vars.DEPLOY_DIR || 'deploy' }}
     defaults:
       run:
         shell: bash
@@ -39,21 +50,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      # Images only exist for commits on main; deploy.sh refuses a commit whose images are missing.
+      # Images only exist for commits on the default branch; the server refuses a commit whose images are missing.
       - name: Resolve commit
         if: ${{ !inputs.rollback }}
         env:
           COMMIT: ${{ inputs.commit }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           if [ -n "$COMMIT" ] && ! [[ $COMMIT =~ ^[0-9a-f]{7,40}$ ]]; then
             echo "::error::'$COMMIT' is not a commit hash"; exit 1
           fi
-          sha=$(git rev-parse --verify --quiet "${COMMIT:-origin/main}^{commit}") || { echo "::error::Unknown commit $COMMIT"; exit 1; }
-          git merge-base --is-ancestor "$sha" origin/main || { echo "::error::$sha is not on main"; exit 1; }
-          git cat-file -e "$sha:deploy/deploy.sh" 2> /dev/null || { echo "::error::$sha has no deploy folder yet"; exit 1; }
+          sha=$(git rev-parse --verify --quiet "${COMMIT:-origin/$DEFAULT_BRANCH}^{commit}") || { echo "::error::Unknown commit $COMMIT"; exit 1; }
+          git merge-base --is-ancestor "$sha" "origin/$DEFAULT_BRANCH" || { echo "::error::$sha is not on $DEFAULT_BRANCH"; exit 1; }
+          git cat-file -e "$sha:$DEPLOY_DIR/compose.yml" 2> /dev/null || { echo "::error::$sha has no $DEPLOY_DIR/compose.yml"; exit 1; }
           echo "SHA=$sha" >> "$GITHUB_ENV"
-      # The key may only run the receive command on the server (forced command in authorized_keys).
-      # A rollback sends nothing: the server keeps the previous release and chooses it itself.
+      # The key may only run the receive command on the server (forced command, platform README).
+      # A deploy sends only the compose.yml; a rollback sends nothing, the server keeps the previous release.
       - name: Deploy
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -71,7 +83,7 @@ jobs:
           if [ "$ROLLBACK" = true ]; then
             remote rollback < /dev/null
           else
-            git archive "$SHA" deploy | remote "deploy $SHA"
+            git archive --format=tar "$SHA:$DEPLOY_DIR" compose.yml | remote "deploy $SHA"
           fi | tee "$RUNNER_TEMP/deploy.log"
           deployed=$(sed -n 's/^Deployed //p' "$RUNNER_TEMP/deploy.log")
           previous=$(sed -n 's/^Previous release: //p' "$RUNNER_TEMP/deploy.log")

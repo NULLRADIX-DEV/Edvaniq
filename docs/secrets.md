@@ -8,7 +8,7 @@ Secrets sind Passwörter, Connection Strings mit Passwort, Tokens, API-Schlüsse
 |---|---|
 | Lokal | Aspire verwaltet die Passwörter seiner Container selbst. Eigene Werte kommen per `dotnet user-secrets` an das jeweilige Projekt. |
 | CI | GitHub-Secrets des Repos. Für GHCR reicht das automatische `GITHUB_TOKEN`. SSH-Schlüssel, Ziel und Host-Schlüssel für den Deploy liegen im Environment `production`, das nur `main` nutzen darf. |
-| VPS | Datei `.env` im Deploy-Verzeichnis, nur für den Deploy-Benutzer lesbar (Modus `600`). Compose liest sie per `env_file`, ohne sie bricht der Deploy ab. Pfad und Benutzer stehen in `EdvaniqDoc/Betrieb.md`. |
+| VPS | Datei `app.env` im Verzeichnis der App auf dem Server, nur für den App-Benutzer lesbar (Modus `600`). Die Container lesen sie per `env_file`, ohne sie bricht der Deploy ab. Pfad und Benutzer stehen in `EdvaniqDoc/Betrieb.md`. |
 
 Services bekommen Secrets nur über Konfiguration (Umgebungsvariablen), z. B. `ConnectionStrings__planningdb`. Im Code steht nie ein Secret, auch kein Default.
 
