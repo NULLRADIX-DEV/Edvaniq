@@ -17,6 +17,7 @@ Services bekommen Secrets nur über Konfiguration (Umgebungsvariablen), z. B. `C
 - `appsettings*.json` im Repo enthalten keine Secrets, auch keine Beispielpasswörter. Vorlagen wie `.env.example` enthalten nur Platzhalter.
 - `.env`, `.env.*`, `secrets/`, `*.pfx`, `*.key` und `*.pem` stehen in `.gitignore`.
 - Alles unter `src/Clients/**/wwwroot` und alles in `Edvaniq.Web.Client` wird an den Browser ausgeliefert. Dort stehen nur öffentliche Werte, z. B. die Gateway-URL.
+- Die Container-Images in GHCR sind öffentlich. Kein Secret per `ContainerEnvironmentVariable`, `appsettings*.json` oder als Datei ins Image. Secrets kommen erst beim Start aus der Betriebsumgebung dazu.
 - Keine Konfiguration, keine Connection Strings und keine Header mit Tokens loggen. `EnableSensitiveDataLogging` in EF Core nur in Development.
 - Ist ein Secret doch einmal committet, gilt es als verbrannt: Wert beim Anbieter bzw. in der DB sofort wechseln. Nur aus der History löschen reicht nicht.
 
