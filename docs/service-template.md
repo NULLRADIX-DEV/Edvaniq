@@ -74,9 +74,9 @@ Außerhalb von Development antworten beide nur auf dem internen Port 8081 ([depl
 
 ## Datenbank und Migrationen
 
-- **Eigene DB, eigener Benutzer:** Jeder Service hat die Datenbank `<name>db` und den Benutzer `<name>`, der nur auf sie darf. Lokal legt der AppHost beides an (`AddServiceDatabase`), das Passwort erzeugt er einmal und legt es in seinen User Secrets ab. Der Service bekommt `ConnectionStrings:<name>db` mit diesem Benutzer, nie mit root. Auf dem Server kommen DB und Benutzer mit der ersten Service-DB dort.
+- **Eigene DB, eigener Benutzer:** Jeder Service hat die Datenbank `<name>db` und den Benutzer `<name>`, der nur auf sie darf. Lokal legt der AppHost beides an (`AddServiceDatabase`), das Passwort erzeugt er einmal und legt es in seinen User Secrets ab. Der Service bekommt `ConnectionStrings:<name>db` mit diesem Benutzer, nie mit root. Auf dem Server legt ein Werkzeug der Plattform beides an und schreibt den Connection String nach `<name>.env` ([Deploy](deploy.md#datenbank)).
 - **Schema nur per Migration:** EF Core mit `MySql.EntityFrameworkCore`, die Migrationen liegen in `Infrastructure/Migrations`. Nach der leeren Migration `Initial` enthält die DB nur die Tabelle `__EFMigrationsHistory`.
-- **Migrieren ist ein eigener Schritt:** `dotnet Edvaniq.Services.<Name>.Api.dll migrate` spielt alle fehlenden Migrationen ein und endet mit Exit-Code 0, bei einem Fehler mit 1. Ein zweiter Lauf findet nichts zu tun und endet auch mit 0. Ein normaler Start migriert nie. Lokal übernimmt das die Ressource `<name>-migrate`, die API startet erst, wenn sie fertig ist.
+- **Migrieren ist ein eigener Schritt:** `dotnet Edvaniq.Services.<Name>.Api.dll migrate` spielt alle fehlenden Migrationen ein und endet mit Exit-Code 0, bei einem Fehler mit 1. Ein zweiter Lauf findet nichts zu tun und endet auch mit 0. Ein normaler Start migriert nie. Lokal übernimmt das die Ressource `<name>-migrate`, die API startet erst, wenn sie fertig ist. Auf dem Server ist es der Dienst `<name>-migrate` im Profil `migrate`. Er läuft nach der Sicherung und vor dem Umschalten ([Deploy](deploy.md#migrationen)).
 - **Neue Migration:** Modell in `<Name>DbContext` ändern, dann `dotnet ef migrations add <Migration> --project …Infrastructure` (siehe [Befehle](#befehle)). Das braucht keine Datenbank. Der Test `Migrations_MatchTheModel` schlägt fehl, wenn das Modell ohne Migration geändert wurde.
 - **Grenze:** MySQL rollt DDL nicht zurück. Bricht eine Migration mittendrin ab, bleibt sie halb angewendet, und nur die Sicherung vor der Migration hilft. Deshalb Migrationen klein halten.
 
@@ -149,7 +149,35 @@ Ein neuer Service ersetzt das Beispiel durch seine erste echte Entity:
        .WaitForCompletion(<name>Migrate);
    ```
 
-3. `deploy/compose.yml`: Dienst `<name>-api`. Er braucht `Authentication__Schemes__Bearer__ValidIssuer` und `__Authority` aus der Umgebung, sonst startet er nicht. AppHost und Compose gehören zusammen, die CI prüft, dass die Listen passen. Erst eintragen, wenn die Datenbank des Service auf dem Server bereitsteht: Ohne DB wird der Container nie healthy, und der Deploy scheitert.
+3. `deploy/compose.yml`: ein Anker `x-<name>` mit `<name>.env` und dem Warten auf `db`, darauf der Dienst `<name>-api` und der Migrationsschritt `<name>-migrate`. Vorbild ist Planning:
+
+   ```yaml
+   x-<name>: &<name>
+     <<: *app
+     env_file:              # ersetzt die Liste aus x-app, deshalb steht app.env noch einmal da
+       - path: app.env
+         required: true
+       - path: <name>.env
+         required: true
+     depends_on:
+       db:
+         condition: service_healthy
+
+   services:
+     <name>-api:
+       <<: *<name>
+       image: ghcr.io/nullradix-dev/edvaniq/<name>-api:sha-${APP_COMMIT:?}
+     <name>-migrate:
+       <<: *<name>
+       image: ghcr.io/nullradix-dev/edvaniq/<name>-api:sha-${APP_COMMIT:?}
+       command: ["migrate"]
+       profiles: [migrate]
+       restart: "no"
+       healthcheck:
+         disable: true
+   ```
+
+   Den Aussteller der Tokens (`Authentication__Schemes__Bearer__ValidIssuer`) setzt `x-app` für alle, ohne ihn startet ein Service aus der Vorlage nicht. AppHost und Compose gehören zusammen, die CI prüft beide Listen, auch die Migrationsschritte. Erst eintragen, wenn die Datenbank des Service auf dem Server angelegt ist: Ohne `<name>.env` bricht der Deploy vor dem Umschalten ab.
 
 ## Gerüst ersetzen
 
@@ -158,7 +186,7 @@ Die übrigen Services stammen noch aus dem ersten Skelett: fünf leere Projekte,
 1. Die sieben Projekte aus `Edvaniq.slnx` austragen (`dotnet sln Edvaniq.slnx remove …`) und beide Ordner ganz löschen, auch `bin/` und `obj/`. Sonst bricht `dotnet new` ab, weil es Dateien überschreiben müsste.
 2. Erzeugen wie oben. Die Pfade bleiben gleich, die Verweise anderer Services auf `.Contracts` und die Referenzen in `Edvaniq.ArchitectureTests` stimmen also weiter.
 3. In `AppHost.cs` den Migrationsschritt ergänzen und die Api mit `WaitForCompletion` darauf warten lassen. `AddServiceDatabase` und `AddService` stehen schon da.
-4. Der Dienst steht schon in `deploy/compose.yml`. Auf dem Server startet er aber erst, wenn dort seine Datenbank und der Token-Aussteller bereitstehen. Bis dahin scheitert ein Deploy, und der vorherige Stand läuft weiter.
+4. Auf dem Server die Datenbank des Service anlegen (`EdvaniqDoc/Betrieb.md`). Erst danach in `deploy/compose.yml` den Dienst `<name>-api` auf den eigenen Anker umstellen und den Migrationsschritt ergänzen, wie in „Danach von Hand“ Schritt 3. Planning ist in #126 so dazugekommen.
 
 ## Vorlage ändern
 

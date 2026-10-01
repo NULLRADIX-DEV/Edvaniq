@@ -144,11 +144,17 @@ jobs:
             || { echo "::error::blazor.web.js is missing in the web image"; exit 1; }
           printf '%s\n' "${images[@]}" > images.txt
           cat images.txt
-          # The deploy rolls out deploy/compose.yml, so it must list exactly these images.
-          touch "$RUNNER_TEMP/app.env"
-          APP_COMMIT="$GITHUB_SHA" docker compose -f deploy/compose.yml --project-directory "$RUNNER_TEMP" config --images | sort > composed.txt
+          # The deploy rolls out deploy/compose.yml, so it must list exactly these images. Images from elsewhere, like
+          # the database, are no processes of the AppHost. Env files and secrets exist only on the server.
+          compose() { APP_COMMIT="$GITHUB_SHA" MYSQL_ROOT_PASSWORD=unused docker compose -f deploy/compose.yml --project-directory "$RUNNER_TEMP" "$@"; }
+          compose config --no-env-resolution --images | grep "^$REGISTRY/nullradix-dev/" | sort > composed.txt
           sed "s|^|$REGISTRY/|" images.txt | diff - composed.txt \
             || { echo "::error::deploy/compose.yml does not match the processes in AppHost.cs (< missing, > extra)"; exit 1; }
+          # Every migration step of the AppHost runs on the server as a service of the profile migrate with the same name.
+          grep -oE 'AddMigration<[^>]+>\("[a-z0-9-]+"' src/Aspire/Edvaniq.AppHost/AppHost.cs | grep -oE '"[a-z0-9-]+"' | tr -d '"' | sort > migrations.txt
+          comm -13 <(compose config --no-env-resolution --services | sort) <(compose --profile migrate config --no-env-resolution --services | sort) \
+            | diff migrations.txt - \
+            || { echo "::error::The migration steps in deploy/compose.yml do not match AddMigration in AppHost.cs (< missing, > extra)"; exit 1; }
 
       # Runs only after every image was built and checked, so a failed build pushes nothing.
       - name: Push images

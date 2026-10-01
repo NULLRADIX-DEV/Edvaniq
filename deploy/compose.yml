@@ -1,15 +1,19 @@
 # All processes of one commit, rolled out together by the Deploy workflow through the server platform, where Edvaniq
 # runs as its own app (own user, rootless Docker, memory cap). The server sets APP_COMMIT and checks the file first.
 # Every service here needs its entry in AppHost.cs; the CI job "Container images" checks both lists match.
+# Before the switch the server dumps the database and runs every service of the profile migrate to completion. If one
+# fails, nothing is switched (docs/deploy.md).
 
 x-app: &app
   restart: unless-stopped
-  # Secrets only come from app.env on the server (docs/secrets.md).
+  # Secrets only come from env files on the server (docs/secrets.md): app.env for every process, <service>.env with
+  # the connection string only for the processes of that service.
   env_file:
     - path: app.env
       required: true
   # Own memory limit and no swap: a container that runs out is killed and restarted alone. All limits together
-  # (10 x 256m + 5 x 128m) stay well below the app's memory cap on the server, which also has to hold Docker itself.
+  # (10 x 256m + 5 x 128m + 640m for MySQL) stay below the app's memory cap on the server, which also has to hold
+  # Docker itself.
   mem_limit: 256m
   memswap_limit: 256m
   cap_drop: [ALL]
@@ -18,6 +22,9 @@ x-app: &app
   # curl. The deploy waits until every container is healthy and restores the previous state if one is not.
   environment:
     ASPNETCORE_HTTP_PORTS: "8080;8081"
+    # Services from the template do not start without an issuer. Placeholder until the ping token (#158) brings the
+    # real issuer and its key; until then no token is accepted, health works without one.
+    Authentication__Schemes__Bearer__ValidIssuer: https://edvaniq.nullradix.de
   healthcheck:
     test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && head -n 1 <&3 | grep -q ' 200 '"]
     interval: 30s
@@ -32,13 +39,60 @@ x-skeleton: &skeleton
   mem_limit: 128m
   memswap_limit: 128m
 
+# Processes of a service with its own database: they also read its connection string (created on the server with
+# platform db-user) and wait for the database. A list replaces the one from x-app, so app.env is named again.
+x-planning: &planning
+  <<: *app
+  env_file:
+    - path: app.env
+      required: true
+    - path: planning.env
+      required: true
+  depends_on:
+    db:
+      condition: service_healthy
+
 services:
+  # One MySQL for all services, each with its own database and user. Root may only log in inside the container,
+  # for the dump before each deploy. No cap_drop: the image's entrypoint switches to the user mysql.
+  db:
+    image: mysql:9.7
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is missing in .env}
+      MYSQL_ROOT_HOST: localhost
+    volumes:
+      - ./db:/var/lib/mysql
+    labels:
+      platform.backup: mysql
+    # Until #161 slims MySQL down.
+    mem_limit: 640m
+    memswap_limit: 640m
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    stop_grace_period: 60s
+    # TCP answers only once the real server is up, not during the first initialisation.
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+      start_interval: 2s
   identity-api:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/identity-api:sha-${APP_COMMIT:?}
   planning-api:
-    <<: *app
+    <<: *planning
     image: ghcr.io/nullradix-dev/edvaniq/planning-api:sha-${APP_COMMIT:?}
+  # Migration step (profile migrate): runs once to completion before the switch, never with the other services.
+  planning-migrate:
+    <<: *planning
+    image: ghcr.io/nullradix-dev/edvaniq/planning-api:sha-${APP_COMMIT:?}
+    command: ["migrate"]
+    profiles: [migrate]
+    restart: "no"
+    healthcheck:
+      disable: true
   content-api:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/content-api:sha-${APP_COMMIT:?}
