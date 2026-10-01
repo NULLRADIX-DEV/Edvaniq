@@ -19,6 +19,10 @@ public static class Extensions
     private const string HealthEndpointPath = "/health";
     private const string AlivenessEndpointPath = "/alive";
 
+    // Kestrel listens on it next to the app port (ASPNETCORE_HTTP_PORTS in deploy/compose.yml). It is never published,
+    // so only the container itself and the app's own network reach it.
+    private const int InternalHealthPort = 8081;
+
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
         builder.ConfigureOpenTelemetry();
@@ -111,18 +115,28 @@ public static class Extensions
 
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
-        // Adding health checks endpoints to applications in non-development environments has security implications.
-        // See https://aka.ms/aspire/healthchecks for details before enabling these endpoints in non-development environments.
+        // Only health checks tagged with the "live" tag must pass for app to be considered alive
+        var alivenessOptions = new HealthCheckOptions
+        {
+            Predicate = r => r.Tags.Contains("live")
+        };
+
+        // Both endpoints keep the default response writer: it returns only Healthy, Degraded or Unhealthy, without check
+        // names or exceptions, so health reveals no details.
         if (app.Environment.IsDevelopment())
         {
             // All health checks must pass for app to be considered ready to accept traffic after starting
             app.MapHealthChecks(HealthEndpointPath);
 
-            // Only health checks tagged with the "live" tag must pass for app to be considered alive
-            app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
-            {
-                Predicate = r => r.Tags.Contains("live")
-            });
+            app.MapHealthChecks(AlivenessEndpointPath, alivenessOptions);
+        }
+        else
+        {
+            // Outside Development only on the internal port. UseHealthChecks matches the port the connection came in on,
+            // while RequireHost("*:8081") would trust the Host header, which a client can fake. On the app port both
+            // paths answer 404.
+            app.UseHealthChecks(HealthEndpointPath, InternalHealthPort);
+            app.UseHealthChecks(AlivenessEndpointPath, InternalHealthPort, alivenessOptions);
         }
 
         return app;

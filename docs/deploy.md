@@ -26,7 +26,7 @@ Der Workflow prüft, dass der Commit auf `main` liegt, und schickt nur `deploy/c
    - Jedes eigene Image trägt den Commit im Label `org.opencontainers.image.revision`.
 
    Scheitert hier etwas, bleibt der laufende Stand unverändert.
-2. **Umschalten:** `docker compose up` für alle Dienste aus `deploy/compose.yml`. Das Image-Tag `sha-<commit>` setzt der Server über `APP_COMMIT`.
+2. **Umschalten:** `docker compose up` für alle Dienste aus `deploy/compose.yml`. Das Image-Tag `sha-<commit>` setzt der Server über `APP_COMMIT`. Der Server wartet, bis jeder Container mit [Health-Check](#health) healthy ist.
 3. **Prüfen:** Nach 20 s laufen alle Container. Keiner ist neu gestartet, und alle kommen aus dem Commit.
 
 Scheitert Schritt 2 oder 3, startet der Server den vorherigen Stand wieder. Beim ersten Deploy gibt es keinen, dann fährt er alles herunter. So laufen nie alte und neue Prozesse gemischt.
@@ -46,6 +46,14 @@ Jeder Container hat eine eigene Speichergrenze und keinen Swap (`mem_limit` und 
 - **Überschreitung:** Braucht ein Container mehr als seine Grenze, beendet der Kernel nur diesen Container, und Docker startet ihn neu (`restart: unless-stopped`). Die anderen Prozesse laufen weiter.
 - **.NET kennt die Grenze:** Es begrenzt seinen Heap auf 75 % der Container-Grenze. Jeder Prozess schreibt beim Start `GC memory limit: <n> MiB` ins Log, bei 256 MB sind das 192 MiB.
 - **Anheben:** Braucht ein Prozess mehr, wird seine Grenze im Dienst überschrieben. Die Summe muss unter der Obergrenze der App bleiben.
+
+## Health
+
+- **Wo:** Jeder Prozess mit HTTP meldet `/health` (bereit) und `/alive` (lebendig). Außerhalb von Development antworten beide nur auf dem internen Port 8081. Der wird nie veröffentlicht, also erreicht ihn nur der Container selbst und das Netz der App. Auf dem App-Port 8080, an den später der Proxy weiterleitet, antworten beide Pfade mit 404.
+- **Kein Umweg über den Host-Header:** Geprüft wird der Port, auf dem die Verbindung ankommt. Ein gefälschter Header `Host: …:8081` auf Port 8080 bekommt also auch 404.
+- **Antwort:** Nur `Healthy`, `Degraded` oder `Unhealthy`, ohne Namen der Checks und ohne Fehlermeldungen.
+- **Docker:** fragt `/health` alle 30 s ab, in der Startphase alle 2 s (`healthcheck` in `deploy/compose.yml`). Das geht per bash, weil das Image kein curl hat. Der Deploy wartet, bis alle Container healthy sind. Wird einer nicht healthy, scheitert der Deploy, und der vorherige Stand läuft wieder.
+- **Worker:** haben kein HTTP und deshalb keinen Health-Check. Für sie gilt weiter, dass sie laufen und nicht neu gestartet sind.
 
 ## Rollback
 
@@ -70,7 +78,7 @@ Grenzen:
 
 ## Neuer Prozess
 
-Er braucht einen Eintrag in `AppHost.cs` und einen Dienst mit dem Anker `*app` in `deploy/compose.yml`, oder `*skeleton`, solange er im MVP nur Skelett ist. Stimmen die beiden Listen nicht überein, schlägt der Job „Container images“ fehl.
+Er braucht einen Eintrag in `AppHost.cs` und einen Dienst mit dem Anker `*app` in `deploy/compose.yml`, oder `*skeleton`, solange er im MVP nur Skelett ist. Ein Worker ohne HTTP bekommt dazu `healthcheck: disable: true`. Stimmen die beiden Listen nicht überein, schlägt der Job „Container images“ fehl.
 
 ## Secrets
 
