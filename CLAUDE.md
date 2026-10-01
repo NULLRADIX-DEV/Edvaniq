@@ -49,6 +49,7 @@ dotnet format                                    # Codestil nach .editorconfig
 
 - Vor dem Bauen den laufenden AppHost stoppen, sonst sind DLLs gesperrt (MSB3027/MSB3021).
 - Ohne Docker Desktop hängen alle Services beim `WaitFor` auf die Datenbank.
+- Nach einem Aspire-Update scheitert der erste `dotnet run` des AppHost mit „DNX could not restore or run aspire.cli@<Version>“. `dotnet run` startet den AppHost über die Aspire-CLI (`AspireUseCliBundle`) und lädt sie per `dotnet dnx`. MSBuild wartet darauf nur 120 s, der Download hat bei 13.6.0 gut 6 Minuten gedauert. Abhilfe: einmal `dotnet dnx --yes aspire.cli@<Version> -- --version` ohne Zeitgrenze ausführen, danach startet der AppHost normal.
 - Kommt das Aspire-Dashboard nicht an den Resource Service ran, liegt es an den Dev-Zertifikaten: `dotnet dev-certs https --clean` und danach `dotnet dev-certs https --trust`.
 - Dockerfiles für Blazor: `dotnet restore` nicht vorab nur mit der `.csproj` ausführen. Sonst lässt das Web-SDK `_framework/blazor.web.js` weg, die UI ist tot, und der Health-Check bleibt trotzdem grün. Im Build prüfen, ob die Datei im Publish-Output liegt. Bei NOOSE ist genau das passiert.
 
