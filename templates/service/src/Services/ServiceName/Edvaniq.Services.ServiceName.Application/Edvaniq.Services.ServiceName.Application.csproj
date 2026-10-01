@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Edvaniq.Services.ServiceName.Domain\Edvaniq.Services.ServiceName.Domain.csproj" />
+    <ProjectReference Include="..\Edvaniq.Services.ServiceName.Contracts\Edvaniq.Services.ServiceName.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Edvaniq.BuildingBlocks.Application\Edvaniq.BuildingBlocks.Application.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

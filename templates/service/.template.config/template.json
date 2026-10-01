@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Nullradix",
+  "classifications": [ "Edvaniq", "Service", "Web", "API" ],
+  "identity": "Edvaniq.Templates.Service",
+  "name": "Edvaniq service",
+  "description": "A service with its five projects, unit and integration tests, and health that tells alive apart from ready (including its own database). Run it in the repository root with -n <Name>.",
+  "shortName": "edvaniq-service",
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "sourceName": "ServiceName",
+  "preferNameDirectory": false,
+  "symbols": {
+    "httpPort": {
+      "type": "generated",
+      "generator": "port",
+      "parameters": { "low": 5100, "high": 5299 },
+      "replaces": "5999"
+    },
+    "httpsPort": {
+      "type": "generated",
+      "generator": "port",
+      "parameters": { "low": 7100, "high": 7299 },
+      "replaces": "7999"
+    }
+  },
+  "primaryOutputs": [
+    { "path": "src/Services/ServiceName/Edvaniq.Services.ServiceName.Api/Edvaniq.Services.ServiceName.Api.csproj" },
+    { "path": "src/Services/ServiceName/Edvaniq.Services.ServiceName.Application/Edvaniq.Services.ServiceName.Application.csproj" },
+    { "path": "src/Services/ServiceName/Edvaniq.Services.ServiceName.Contracts/Edvaniq.Services.ServiceName.Contracts.csproj" },
+    { "path": "src/Services/ServiceName/Edvaniq.Services.ServiceName.Domain/Edvaniq.Services.ServiceName.Domain.csproj" },
+    { "path": "src/Services/ServiceName/Edvaniq.Services.ServiceName.Infrastructure/Edvaniq.Services.ServiceName.Infrastructure.csproj" },
+    { "path": "tests/Services/ServiceName/Edvaniq.Services.ServiceName.IntegrationTests/Edvaniq.Services.ServiceName.IntegrationTests.csproj" },
+    { "path": "tests/Services/ServiceName/Edvaniq.Services.ServiceName.UnitTests/Edvaniq.Services.ServiceName.UnitTests.csproj" }
+  ],
+  "postActions": [
+    {
+      "description": "Adds the projects to Edvaniq.slnx.",
+      "manualInstructions": [ { "text": "Add the new projects with dotnet sln Edvaniq.slnx add." } ],
+      "actionId": "D396686C-DE0E-4DE6-906D-291CD29FC5DE",
+      "continueOnError": false
+    }
+  ]
+}

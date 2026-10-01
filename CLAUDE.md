@@ -30,7 +30,7 @@ dotnet format                                    # Codestil nach .editorconfig
 - **Clients:** Seiten werden einmal in `Client.UI` gebaut. Genutzt werden sie von `Edvaniq.Web.Client` (WASM, gehostet von `Edvaniq.Web`) und von `Edvaniq.App` (MAUI Blazor Hybrid). `Client.Core` spricht ausschließlich mit dem Gateway.
 - **BuildingBlocks** enthalten nur Technik, keine Fachbegriffe.
 - **Tests:** `UnitTests` referenzieren Domain und Application, `IntegrationTests` die Api des Service. `Edvaniq.EndToEndTests` startet den AppHost über `Aspire.Hosting.Testing`. `Edvaniq.ArchitectureTests` referenziert jedes Projekt, neue Projekte müssen dort ergänzt werden.
-- **Stand:** Die Architektur steht als Skelett. Services enthalten nur `AddServiceDefaults()` bzw. `MapDefaultEndpoints()`, im Gateway ist noch kein YARP, BuildingBlocks und Client-Bibliotheken sind leer, Tests gibt es noch keine.
+- **Stand:** Die Architektur steht als Skelett. Services enthalten nur `AddServiceDefaults()` bzw. `MapDefaultEndpoints()`, im Gateway ist noch kein YARP, Client-Bibliotheken sind leer. BuildingBlocks enthalten nur die DB-Prüfung für Health. Tests gibt es nur in der Service-Vorlage (`templates/service`).
 
 ## Konventionen
 
@@ -43,7 +43,7 @@ dotnet format                                    # Codestil nach .editorconfig
 - Deploy: Der Workflow „Deploy“ rollt alle Prozesse eines `main`-Commits per Compose auf den VPS aus (`deploy/compose.yml`). Dort läuft Edvaniq als eigene App der Server-Plattform, die Deploy-Logik liegt auf dem Server, der Workflow ist eine Kopie der gemeinsamen Vorlage. Er startet nur von Hand, das ist die Freigabe. Scheitert er, läuft der vorherige Stand weiter. Ein Rollback auf den vorherigen Stand geht über das Häkchen „rollback“ im selben Workflow. Ein neuer Prozess braucht seinen Eintrag in `AppHost.cs` und einen Dienst in `deploy/compose.yml`, die CI prüft, dass beide Listen passen. Details in `docs/deploy.md`.
 - Auf `main` nur per Pull Request mit grüner CI. Direkte Pushes sind gesperrt, die Regeln stehen in `docs/branch-protection.md`. Wer einen CI-Job umbenennt, muss die Pflicht-Checks im Ruleset `main-protect` nachziehen.
 - Das Repo ist öffentlich. Betriebsdetails wie IPs, Ports, Serverpfade und Benutzer kommen nie hierher, sondern nach `../EdvaniqDoc/Betrieb.md`.
-- Neuer Service: Ordner mit den 5 Projekten und Tests unter `tests/Services/<Name>/` anlegen. Dann in `AppHost.cs` eintragen (`AddDatabase`, `AddService`, Gateway-`WithReference`), die Referenzen in `Edvaniq.ArchitectureTests` ergänzen, API und Worker in `deploy/compose.yml` eintragen und alles in `Edvaniq.slnx` aufnehmen.
+- Neuer Service nur aus der Vorlage: im Repo-Root `dotnet new install ./templates/service --force`, dann `dotnet new edvaniq-service -n <Name>`. Das legt die 5 Projekte und die Tests an und trägt sie in `Edvaniq.slnx` ein. Danach von Hand die Referenzen in `Edvaniq.ArchitectureTests` ergänzen. `AppHost.cs` (`AddDatabase`, `AddService`, Gateway-`WithReference`) und `deploy/compose.yml` (API und Worker) kommen zusammen und erst, wenn die DB des Service auf dem Server steht: Ohne DB wird der Container nie healthy, und der Deploy scheitert. Details in `docs/architecture.md`.
 
 ## Stolperfallen
 

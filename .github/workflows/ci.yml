@@ -51,6 +51,17 @@ jobs:
       - name: Test
         run: dotnet test --solution Edvaniq.slnx -c Release --no-build -- --ignore-exit-code 8
 
+      # A service from the template must land in the solution, build and pass its own tests. It exists only on the runner.
+      - name: Check service template
+        run: |
+          dotnet new install ./templates/service --force
+          dotnet new edvaniq-service -n Sample
+          count=$(dotnet sln Edvaniq.slnx list | grep -c 'Edvaniq\.Services\.Sample\.' || true)
+          [ "$count" -eq 7 ] || { echo "::error::Expected 7 projects of the template service in Edvaniq.slnx, found $count"; exit 1; }
+          for project in UnitTests IntegrationTests; do
+            dotnet test --project "tests/Services/Sample/Edvaniq.Services.Sample.$project" -c Release -- --ignore-exit-code 8
+          done
+
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-24.04
