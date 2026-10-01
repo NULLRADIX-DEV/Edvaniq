@@ -1,5 +1,6 @@
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Web;
+using Edvaniq.Services.ServiceName.Api;
 using Edvaniq.Services.ServiceName.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -24,6 +25,7 @@ app.UseAuthorization();
 
 // Who the token says the caller is. Smoke test for the token check, ignores any user id in the request.
 app.MapGet("/me", (ICurrentUser user) => new { user.Id });
+app.MapExampleEndpoints();
 
 app.Run();
 

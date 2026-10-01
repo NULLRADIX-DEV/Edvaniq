@@ -1,3 +1,4 @@
+using Edvaniq.BuildingBlocks.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
@@ -7,7 +8,15 @@ namespace Edvaniq.Services.ServiceName.Infrastructure;
 public sealed class ServiceNameDbContextFactory : IDesignTimeDbContextFactory<ServiceNameDbContext>
 {
     public ServiceNameDbContext CreateDbContext(string[] args) =>
-        new(new DbContextOptionsBuilder<ServiceNameDbContext>()
-            .UseMySQL($"Server=localhost;Database={InfrastructureExtensions.DatabaseName}")
-            .Options);
+        new(
+            new DbContextOptionsBuilder<ServiceNameDbContext>()
+                .UseMySQL($"Server=localhost;Database={InfrastructureExtensions.DatabaseName}")
+                .Options,
+            new NoUser());
+
+    // dotnet ef builds the model but never queries user data.
+    private sealed class NoUser : ICurrentUser
+    {
+        public string Id => throw new InvalidOperationException("There is no user at design time.");
+    }
 }

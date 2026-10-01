@@ -12,7 +12,8 @@ using Microsoft.Extensions.Options;
 namespace Edvaniq.Services.ServiceName.IntegrationTests;
 
 // The service starts and tells alive (/alive) apart from ready (/health), which also needs its own database.
-public sealed class HealthTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+public sealed class HealthTests(WebApplicationFactory<Program> factory, ServiceFactory service)
+    : IClassFixture<WebApplicationFactory<Program>>, IClassFixture<ServiceFactory>
 {
     // Nothing listens on port 1, so the connection is refused at once.
     private const string UnreachableDatabase = "Server=127.0.0.1;Port=1;Database=servicenamedb;User ID=test";
@@ -23,6 +24,14 @@ public sealed class HealthTests(WebApplicationFactory<Program> factory) : IClass
         using var client = factory.CreateClient();
 
         await AssertHealthAsync(client, "/alive", HttpStatusCode.OK, "Healthy");
+    }
+
+    [Fact]
+    public async Task Health_WithDatabase_ReportsHealthy()
+    {
+        using var client = service.CreateClient();
+
+        await AssertHealthAsync(client, "/health", HttpStatusCode.OK, "Healthy");
     }
 
     [Fact]
@@ -63,14 +72,13 @@ public sealed class HealthTests(WebApplicationFactory<Program> factory) : IClass
     public async Task Health_OutsideDevelopment_AnswersWithoutToken()
     {
         // Outside Development health is middleware on the internal port, which the token check must not cover.
-        await using var service = new ServiceFactory().WithWebHostBuilder(builder => builder
+        await using var production = service.WithWebHostBuilder(builder => builder
             .UseEnvironment(Environments.Production)
             .ConfigureTestServices(services => services.AddSingleton<IStartupFilter, InternalPortFilter>()));
-        using var client = service.CreateClient();
+        using var client = production.CreateClient();
 
         await AssertHealthAsync(client, "/alive", HttpStatusCode.OK, "Healthy");
-        // Unhealthy because Production has no connection string here, but answered without a token.
-        await AssertHealthAsync(client, "/health", HttpStatusCode.ServiceUnavailable, "Unhealthy");
+        await AssertHealthAsync(client, "/health", HttpStatusCode.OK, "Healthy");
     }
 
     [Fact]
