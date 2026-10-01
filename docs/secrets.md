@@ -8,7 +8,7 @@ Secrets sind Passwörter, Connection Strings mit Passwort, Tokens, API-Schlüsse
 |---|---|
 | Lokal | Aspire verwaltet die Passwörter seiner Container selbst. Die Passwörter der DB-Benutzer je Service erzeugt der AppHost und legt sie in seinen User Secrets ab. Dev-Tokens von `dotnet user-jwts` legen ihren Signaturschlüssel in die User Secrets der Api, er gilt nur in Development. Eigene Werte kommen per `dotnet user-secrets` an das jeweilige Projekt. |
 | CI | GitHub-Secrets des Repos. Für GHCR reicht das automatische `GITHUB_TOKEN`. SSH-Schlüssel, Ziel und Host-Schlüssel für den Deploy liegen im Environment `production`, das nur `main` nutzen darf. |
-| VPS | Datei `app.env` im Verzeichnis der App auf dem Server, nur für den App-Benutzer lesbar (Modus `600`). Die Container lesen sie per `env_file`, ohne sie bricht der Deploy ab. Pfad und Benutzer stehen in `EdvaniqDoc/Betrieb.md`. |
+| VPS | Dateien im Verzeichnis der App auf dem Server, nur für den App-Benutzer lesbar (Modus `600`). `app.env` lesen alle Container. Den Connection String eines Service mit eigenem DB-Benutzer, z. B. `ConnectionStrings__planningdb`, enthält `<name>.env`, die nur die Prozesse dieses Service lesen. So kennt kein Container das Passwort einer fremden DB. Das Root-Passwort der DB steht in `.env` und geht nur an den Dienst `db`. Die Container lesen die Dateien per `env_file`, fehlt eine, bricht der Deploy vor dem Umschalten ab. Pfad und Benutzer stehen in `EdvaniqDoc/Betrieb.md`. |
 
 Services bekommen Secrets nur über Konfiguration (Umgebungsvariablen), z. B. `ConnectionStrings__planningdb`. Im Code steht nie ein Secret, auch kein Default.
 

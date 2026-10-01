@@ -26,12 +26,33 @@ Der Workflow prüft, dass der Commit auf `main` liegt, und schickt nur `deploy/c
    - Jedes eigene Image trägt den Commit im Label `org.opencontainers.image.revision`.
 
    Scheitert hier etwas, bleibt der laufende Stand unverändert.
-2. **Umschalten:** `docker compose up` für alle Dienste aus `deploy/compose.yml`. Das Image-Tag `sha-<commit>` setzt der Server über `APP_COMMIT`. Der Server wartet, bis jeder Container mit [Health-Check](#health) healthy ist.
-3. **Prüfen:** Nach 20 s laufen alle Container. Keiner ist neu gestartet, und alle kommen aus dem Commit.
+2. **Sichern:** Ein vollständiger Dump der laufenden Datenbank (Label `platform.backup: mysql` am Dienst `db`). Scheitert er, bleibt der laufende Stand unverändert.
+3. **Migrieren:** Jeder Dienst im Profil `migrate` läuft einmal bis zum Ende, etwa `planning-migrate` ([Migrationen](#migrationen)). Scheitert einer, bricht der Deploy ab, und die Services laufen weiter auf dem alten Stand.
+4. **Umschalten:** `docker compose up` für alle Dienste aus `deploy/compose.yml` außer den Migrationen. Das Image-Tag `sha-<commit>` setzt der Server über `APP_COMMIT`. Der Server wartet, bis jeder Container mit [Health-Check](#health) healthy ist.
+5. **Prüfen:** Nach 20 s laufen alle Container. Keiner ist neu gestartet, und alle kommen aus dem Commit.
 
-Scheitert Schritt 2 oder 3, startet der Server den vorherigen Stand wieder. Beim ersten Deploy gibt es keinen, dann fährt er alles herunter. So laufen nie alte und neue Prozesse gemischt.
+Scheitert Schritt 4 oder 5, startet der Server den vorherigen Stand wieder. Beim ersten Deploy gibt es keinen, dann fährt er alles herunter. So laufen nie alte und neue Prozesse gemischt.
 
-Der Server behält die Releases und Images des aktuellen und des vorherigen Commits, ältere räumt der Deploy weg. Sobald Edvaniq eine Datenbank hat, sichert der Server sie vor jedem Umschalten.
+Der Server behält die Releases und Images des aktuellen und des vorherigen Commits, ältere räumt der Deploy weg. Von den Dumps bleiben die 10 neuesten.
+
+## Migrationen
+
+Das Schema ändert sich nur in diesem Schritt, nie beim Start eines Service. Ein Migrationsschritt ist ein eigener Dienst in `deploy/compose.yml`, wie lokal die Ressource `<name>-migrate` im AppHost:
+
+- **Gleiches Image wie die API,** mit dem Befehl `migrate`. Er gehört zum Profil `migrate`, deshalb startet `compose up` ihn nie. Dazu `restart: "no"` und kein Health-Check.
+- **Vor dem Umschalten:** Der Server startet jeden Migrationsschritt nacheinander mit `docker compose run` und wartet auf das Ende. Läuft die Datenbank noch nicht, startet sie vorher.
+- **Im Actions-Log** stehen nur „Migrating with …“ und das Ergebnis. Die Ausgabe selbst bleibt auf dem Server, weil sie Hosts und Benutzer nennen kann (`EdvaniqDoc/Betrieb.md`).
+- **Scheitert eine Migration,** wird nicht umgeschaltet. Die Datenbank kann dann teilweise migriert sein, der Dump aus Schritt 2 ist von vorher.
+- **Wiederholbar:** Jeder Deploy und jeder Rollback führt die Migrationen seines Stands aus. EF Core wendet nur an, was fehlt. Ein älteres Image stuft die Datenbank nie herunter.
+- **Abwärtsverträglich:** Nach einem Fehlschlag oder Rollback läuft der alte Code gegen das neue Schema. Eine Spalte kommt also erst dazu, und die alte fällt erst in einem späteren Deploy weg.
+- Die CI prüft, dass jedes `AddMigration` im AppHost seinen Migrationsschritt in `deploy/compose.yml` hat.
+
+## Datenbank
+
+- **Ein MySQL-Dienst `db`** (`mysql:9.7`, wie lokal und in den Tests) für alle Services. Jeder hat seine eigene Datenbank `<name>db` und einen eigenen Benutzer `<name>`, der nur auf sie darf. Die Daten liegen auf dem Server im Verzeichnis der App.
+- **root** meldet sich nur im Container selbst an, für den Dump vor jedem Deploy. Aus dem Netz der App geht das nicht.
+- **Kein veröffentlichter Port:** Die Services erreichen die DB über den Dienstnamen `db`, von außen niemand.
+- **Datenbank eines neuen Service:** Auf dem Server legt ein Werkzeug der Plattform die DB und den Benutzer mit einem zufälligen Passwort an und schreibt den Connection String nach `<name>.env` (Befehl in `EdvaniqDoc/Betrieb.md`). Das muss vor dem ersten Deploy mit dem Service geschehen, sonst bricht der Deploy vor dem Umschalten ab.
 
 ## Speicher
 
@@ -42,7 +63,8 @@ Jeder Container hat eine eigene Speichergrenze und keinen Swap (`mem_limit` und 
 | alle, die im MVP produktiv werden (Identity, Planning, Content mit Worker, Knowledge, Assessment, Flashcards, LearningEngine, Gateway, Web) | 256 MB |
 | die im MVP nur Skelett bleiben (Analytics, Notifications mit Worker, Gamification, Tutor), Anker `*skeleton` | 128 MB |
 
-- **Summe:** 10 × 256 + 5 × 128 = 3200 MB. Das liegt deutlich unter der Obergrenze der App auf dem Server (4 GB ohne Swap). Die Reserve braucht Docker selbst.
+- **MySQL:** 640 MB, im Leerlauf gut 450 MB. #161 verkleinert das.
+- **Summe:** 10 × 256 + 5 × 128 + 640 = 3840 MB. Das liegt unter der Obergrenze der App auf dem Server (4 GB ohne Swap). Die Reserve braucht Docker selbst.
 - **Überschreitung:** Braucht ein Container mehr als seine Grenze, beendet der Kernel nur diesen Container, und Docker startet ihn neu (`restart: unless-stopped`). Die anderen Prozesse laufen weiter.
 - **.NET kennt die Grenze:** Es begrenzt seinen Heap auf 75 % der Container-Grenze. Jeder Prozess schreibt beim Start `GC memory limit: <n> MiB` ins Log, bei 256 MB sind das 192 MiB.
 - **Anheben:** Braucht ein Prozess mehr, wird seine Grenze im Dienst überschrieben. Die Summe muss unter der Obergrenze der App bleiben.
@@ -73,15 +95,17 @@ Danach:
 
 Grenzen:
 
-- Ein Rollback macht Datenmigrationen nicht rückgängig.
+- Ein Rollback macht Datenmigrationen nicht rückgängig. Dafür gibt es den Dump vor jedem Deploy, den Restore beschreibt `EdvaniqDoc/Betrieb.md`.
 - Ist GitHub nicht erreichbar, steht der Notfallweg in `EdvaniqDoc/Betrieb.md`.
 
 ## Neuer Prozess
 
 Er braucht einen Eintrag in `AppHost.cs` und einen Dienst mit dem Anker `*app` in `deploy/compose.yml`, oder `*skeleton`, solange er im MVP nur Skelett ist. Ein Worker ohne HTTP bekommt dazu `healthcheck: disable: true`. Stimmen die beiden Listen nicht überein, schlägt der Job „Container images“ fehl.
 
+Ein Service aus der Vorlage hat eine eigene Datenbank. Seine Prozesse bekommen deshalb einen eigenen Anker wie `x-planning`, der zusätzlich `<name>.env` liest und auf `db` wartet. Dazu kommt der Migrationsschritt `<name>-migrate`. Vorbild ist Planning, die Schritte stehen in der [Service-Vorlage](service-template.md#gerüst-ersetzen).
+
 ## Secrets
 
-- Die Container lesen Secrets nur aus `app.env` auf dem Server (`docs/secrets.md`). In `deploy/` steht kein Wert.
+- Die Container lesen Secrets nur aus Dateien auf dem Server (`docs/secrets.md`): `app.env` für alle, `<name>.env` mit dem Connection String nur für die Prozesse des Service. In `deploy/` steht kein Wert.
 - SSH-Schlüssel, Ziel und Host-Schlüssel für den Deploy liegen als Secrets im Environment `production`. Das Environment darf nur `main` nutzen.
 - Die Ausgabe des Deploys steht im öffentlichen Actions-Log. Deshalb gibt der Server keine Pfade, Hosts oder Benutzer aus.
