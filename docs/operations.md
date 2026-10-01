@@ -6,8 +6,8 @@ Das Repo ist öffentlich. Deshalb stehen hier Platzhalter, die konkreten Werte n
 
 | Platzhalter | Bedeutung |
 |---|---|
-| `<server>` | der VPS, per SSH |
-| `<tailnet>` | Adresse des Servers im Tailnet, für die Oberflächen |
+| `<server>` | der VPS, öffentlich erreichbar für die Deploys |
+| `<tailnet>` | Adresse des Servers im Tailnet, für die Oberflächen und für SSH als root |
 | `<app>` | Name von Edvaniq auf der Server-Plattform. Zugleich Linux-Benutzer, Compose-Projekt und Anfang der Containernamen (`<app>-planning-api-1`). |
 | `<app-dir>` | Verzeichnis der App auf dem Server |
 | `<kit>` | Verzeichnis mit den Skripten der Plattform |
@@ -18,15 +18,16 @@ Das Repo ist öffentlich. Deshalb stehen hier Platzhalter, die konkreten Werte n
 |---|---|---|
 | GitHub, Rolle „Write“ | Deploy, Rollback, Logs der Läufe | Einladung in die Org `NULLRADIX-DEV` durch den Admin |
 | Tailnet (Tailscale) | Portainer, phpMyAdmin, 1Panel | Einladung ins Tailnet durch den Admin. Die Oberflächen sind nur von dort erreichbar, nie über das Internet. |
-| SSH als root auf `<server>` | Zustand und Logs von Hand, Notfall-Rollback, DB-Benutzer, Restore | Eigenen Schlüssel erzeugen, den öffentlichen Teil dem Admin geben, der trägt ihn ein. Nur mit Schlüssel, ohne Passwort. |
+| SSH als root auf `<tailnet>` | Zustand und Logs von Hand, Notfall-Rollback, DB-Benutzer, Restore | Eigenen Schlüssel erzeugen, den öffentlichen Teil dem Admin geben, der trägt ihn ein. Nur mit Schlüssel, ohne Passwort, und nur aus dem Tailnet. |
 | 1Panel | Überwachung des Hosts, nächtliche Backups | Konto mit 2FA durch den Admin |
 
 ```
 ssh-keygen -t ed25519 -C "<dein-name>"     # danach ~/.ssh/id_ed25519.pub an den Admin
-ssh root@<server>
+ssh root@<tailnet>
 ```
 
-- Mehrere Fehlversuche bei SSH sperren die eigene IP eine Zeit lang. Über das Tailnet kommt man trotzdem immer auf den Server.
+- Root meldet sich nur aus dem Tailnet an. Über die öffentliche Adresse lehnt der Server root ab, dort sind nur die Deploys erreichbar.
+- Mehrere Fehlversuche bei SSH sperren die eigene IP eine Zeit lang. Das Tailnet sperrt der Server nie.
 - Die Apps selbst haben keine Shell. Ihr Deploy-Schlüssel darf nur Deploy und Rollback auslösen. Alle Arbeiten von Hand laufen als root über das Werkzeug `platform`.
 - Was der Admin für einen neuen Entwickler einrichtet, steht in `EdvaniqDoc/Betrieb.md`.
 

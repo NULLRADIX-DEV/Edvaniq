@@ -24,6 +24,8 @@ Services bekommen Secrets nur über Konfiguration (Umgebungsvariablen), z. B. `C
 ## Prüfung
 
 - Die CI (Job `secret-scan`) prüft bei jedem PR und jedem Push auf `main` die komplette Git-History mit [gitleaks](https://github.com/gitleaks/gitleaks). Ein Fund macht die CI rot.
+- `.gitleaks.toml` nimmt die Standardregeln und verbietet zusätzlich öffentliche IPv4-Adressen, denn Server-Adressen sind Betriebsdetails. Private Netze, Loopback und Doku-Adressen sind erlaubt.
+- `.gitleaksignore` listet alte Funde aus der History mit ihrem Fingerprint. Ein neuer Fund kommt dort nie hinein: Wert entfernen, ein Secret außerdem wechseln.
 - GitHub Secret Scanning mit Push Protection ist aktiv. Pushes mit erkannten Secrets lehnt GitHub schon beim Push ab.
 - Lokal vor dem Push: `gitleaks git --redact .`
 - Client-Stichprobe: `dotnet publish src/Clients/Edvaniq.Web -c Release -o out`, danach `gitleaks dir --redact out`.
