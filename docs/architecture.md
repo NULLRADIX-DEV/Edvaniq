@@ -100,19 +100,11 @@ dotnet run --project src/Aspire/Edvaniq.AppHost
 
 ## Neuen Service anlegen
 
-Neue Services entstehen aus der Vorlage in `templates/service/`. Im Repo-Root:
+Neue Services entstehen nur aus der Vorlage in `templates/service/`. Im Repo-Root:
 
 ```
 dotnet new install ./templates/service --force   # einmalig und nach jeder Änderung an der Vorlage
 dotnet new edvaniq-service -n <Name>
 ```
 
-- Das legt die fünf Projekte unter `src/Services/<Name>/` und UnitTests und IntegrationTests unter `tests/Services/<Name>/` an. Alle sieben Projekte trägt die Vorlage selbst in `Edvaniq.slnx` ein, damit baut und testet die CI sie mit.
-- `-n` ist Pflicht, sonst heißt der Service wie der aktuelle Ordner.
-- **Health:** `/alive` heißt lebendig und prüft nur, ob der Prozess antwortet. `/health` heißt bereit und prüft zusätzlich die eigene Datenbank (`ConnectionStrings:<name>db`). Fehlt der Connection String oder ist die DB nicht erreichbar, liefert `/health` 503 `Unhealthy`, `/alive` bleibt 200. Die IntegrationTests der Vorlage prüfen genau das.
-- Die CI erzeugt bei jedem Lauf einen Service `Sample` aus der Vorlage und lässt seine Tests laufen. So bleibt die Vorlage lauffähig.
-
-Danach von Hand:
-
-1. `Edvaniq.ArchitectureTests`: Referenzen auf die neuen Projekte.
-2. `AppHost.cs` (`AddDatabase("<name>db")`, `AddService<…>("<name>-api", db)`, `WithReference` im Gateway) und `deploy/compose.yml` (Dienst `<name>-api`). Beides gehört zusammen, die CI prüft, dass die Listen passen. Erst eintragen, wenn die Datenbank des Service auf dem Server bereitsteht: Ohne DB wird der Container nie healthy, und der Deploy scheitert.
+Was entsteht, wie Health „lebendig“ und „bereit“ unterscheidet, die Schritte von Hand danach und alle weiteren Befehle stehen in [service-template.md](service-template.md).
