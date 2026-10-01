@@ -1,6 +1,6 @@
 # Service-Vorlage
 
-Neue Services entstehen nur aus der Vorlage in `templates/service/` (`dotnet new`, Kurzname `edvaniq-service`). Sie bringt die fünf Projekte, die Testprojekte, Health, das „lebendig“ und „bereit“ unterscheidet, und eine eigene Datenbank mit Migrationen mit.
+Neue Services entstehen nur aus der Vorlage in `templates/service/` (`dotnet new`, Kurzname `edvaniq-service`). Sie bringt die fünf Projekte, die Testprojekte, die Token-Prüfung, Health, das „lebendig“ und „bereit“ unterscheidet, und eine eigene Datenbank mit Migrationen mit.
 
 ## Befehle
 
@@ -14,6 +14,7 @@ Alle im Repo-Root ausführen.
 | Service anlegen | `dotnet new edvaniq-service -n <Name>` |
 | Tests des Service | `dotnet test --project tests/Services/<Name>/Edvaniq.Services.<Name>.IntegrationTests` |
 | `dotnet ef` bereitstellen, einmalig je Klon | `dotnet tool restore` |
+| Dev-Token für den lokalen Test | `dotnet user-jwts create --project src/Services/<Name>/Edvaniq.Services.<Name>.Api --name <Nutzer> --audience edvaniq-api --output token` |
 | Migration anlegen, braucht keine DB | `dotnet ef migrations add <Migration> --project src/Services/<Name>/Edvaniq.Services.<Name>.Infrastructure` |
 | Vorlage entfernen | `dotnet new uninstall ./templates/service` |
 
@@ -23,7 +24,7 @@ Alle im Repo-Root ausführen.
 
 ```
 src/Services/<Name>/
-  Edvaniq.Services.<Name>.Api              Program.cs: AddServiceDefaults, AddInfrastructure, MapDefaultEndpoints, Befehl migrate
+  Edvaniq.Services.<Name>.Api              Program.cs: AddServiceDefaults, AddTokenValidation, AddInfrastructure, MapDefaultEndpoints, GET /me, Befehl migrate
   Edvaniq.Services.<Name>.Application
   Edvaniq.Services.<Name>.Contracts
   Edvaniq.Services.<Name>.Domain
@@ -31,7 +32,7 @@ src/Services/<Name>/
                                            <Name>DbContext.cs, Migrations/ mit der leeren Migration Initial
 tests/Services/<Name>/
   Edvaniq.Services.<Name>.UnitTests
-  Edvaniq.Services.<Name>.IntegrationTests HealthTests.cs, MigrationTests.cs
+  Edvaniq.Services.<Name>.IntegrationTests HealthTests.cs, MigrationTests.cs, TokenTests.cs, ServiceFactory.cs
 ```
 
 - Alle sieben Projekte stehen danach in `Edvaniq.slnx`, die CI baut und testet sie also mit.
@@ -52,6 +53,22 @@ tests/Services/<Name>/
 | kein Connection String | 200 `Healthy` | 503 `Unhealthy` |
 
 Außerhalb von Development antworten beide nur auf dem internen Port 8081 ([deploy.md](deploy.md#health)).
+
+## Token-Prüfung
+
+- **Jede Anfrage braucht ein gültiges Token** (JWT im Header `Authorization: Bearer …`). Ohne Token, mit falscher Signatur, falschem Issuer, falscher Audience oder abgelaufen antwortet der Service mit 401, ohne Nutzer (`sub`) mit 403. Das gilt per Fallback-Policy für jeden Endpunkt ohne eigene Regel, auch für neue. Nur `/health` und `/alive` brauchen kein Token.
+- **Nutzer nur aus dem Token:** `ICurrentUser.Id` (aus `BuildingBlocks.Application`) liest nur den Claim `sub` des geprüften Tokens. Eine Nutzer-ID in Query, Body oder Header zählt nie. `GET /me` zeigt, wer der Aufrufer laut Token ist.
+- **Vertrag** im Abschnitt `Authentication:Schemes:Bearer`, den `AddJwtBearer` selbst liest. Ein Service kennt nur ihn, nicht den Aussteller. Wer die Tokens ausstellt, kann sich ändern, ohne dass sich am Service etwas ändert.
+
+  | Schlüssel | Wert | woher |
+  |---|---|---|
+  | `ValidAudiences` | `edvaniq-api`, für alle Services gleich, weil das Gateway ein Token an alle weiterreicht | `appsettings.json` |
+  | `ValidIssuer` | der Issuer, lokal `dotnet-user-jwts` | lokal `appsettings.Development.json`, sonst die Umgebung |
+  | `Authority` | Adresse des Issuers, von der der Service die öffentlichen Schlüssel holt | die Umgebung |
+
+- **Ohne Issuer oder Audience startet der Service nicht.** Sonst würde .NET die fehlende Prüfung still überspringen und auch Tokens annehmen, die für eine andere App gedacht sind.
+- **Lokal testen:** Ein Dev-Token kommt von `dotnet user-jwts` (siehe [Befehle](#befehle)). Dessen Schlüssel liegt in den User Secrets der Api und gilt nur in Development.
+- **In den Tests** stellt `ServiceFactory` den Service auf die Tokens aus `Edvaniq.Testing/TestTokens` um, die mit einem Schlüssel nur für diesen Testlauf signiert sind.
 
 ## Datenbank und Migrationen
 
@@ -98,7 +115,7 @@ Außerhalb von Development antworten beide nur auf dem internen Port 8081 ([depl
        .WaitForCompletion(<name>Migration);
    ```
 
-3. `deploy/compose.yml`: Dienst `<name>-api`. AppHost und Compose gehören zusammen, die CI prüft, dass die Listen passen. Erst eintragen, wenn die Datenbank des Service auf dem Server bereitsteht: Ohne DB wird der Container nie healthy, und der Deploy scheitert.
+3. `deploy/compose.yml`: Dienst `<name>-api`. Er braucht `Authentication__Schemes__Bearer__ValidIssuer` und `__Authority` aus der Umgebung, sonst startet er nicht. AppHost und Compose gehören zusammen, die CI prüft, dass die Listen passen. Erst eintragen, wenn die Datenbank des Service auf dem Server bereitsteht: Ohne DB wird der Container nie healthy, und der Deploy scheitert.
 
 ## Vorlage ändern
 
@@ -126,5 +143,8 @@ Außerhalb von Development antworten beide nur auf dem internen Port 8081 ([depl
   - Außerhalb des Repos legt die Vorlage die Dateien an, findet aber keine `Edvaniq.slnx` und endet mit Exit-Code 105.
   - In einem Unterordner wie `src/` landet alles eine Ebene zu tief.
 - **Ohne `--force`** erzeugt `dotnet new` weiter den alten Stand der Vorlage. Ein installierter Ordner wird nur beim Installieren eingelesen.
+- **Health liefert 401:** In `Program.cs` müssen `UseAuthentication()` und `UseAuthorization()` von Hand *nach* `MapDefaultEndpoints()` stehen. Fehlen die Aufrufe, setzt ASP.NET Core beide vor die ganze Pipeline, und außerhalb von Development verlangt auch die Health-Middleware auf 8081 ein Token. Docker sieht den Container dann nie healthy. Der Test `Health_OutsideDevelopment_AnswersWithoutToken` deckt das ab.
+- **`sub` fehlt im Code:** Ohne `MapInboundClaims = false` benennt .NET `sub` in einen langen SOAP-Claim-Namen um, und jedes gültige Token bekommt 403. Steht in `AddTokenValidation`.
+- **Abgelaufenes Token gilt noch:** .NET duldet 5 Minuten Uhrabweichung (`ClockSkew`).
 - **`dotnet ef` fehlt:** Das Tool steht im Manifest `dotnet-tools.json` und kommt mit `dotnet tool restore`.
 - **DB-Prüfung und Migration nicht auf async umstellen:** `OpenAsync` von `MySql.Data` ignoriert Timeout und Abbruch, wenn die DB die Verbindung annimmt und nicht antwortet, und hängt ohne Ende. Deshalb nutzen die Prüfung das synchrone `Open()` und der Migrationsschritt das synchrone `Migrate()`. Der Test `Health_WithSilentDatabase_ReportsUnhealthyInTime` deckt die Prüfung ab.

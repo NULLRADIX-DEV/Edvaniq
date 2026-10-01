@@ -32,13 +32,14 @@ dotnet ef migrations add <Migration> --project src/Services/<Name>/Edvaniq.Servi
 - **Clients:** Seiten werden einmal in `Client.UI` gebaut. Genutzt werden sie von `Edvaniq.Web.Client` (WASM, gehostet von `Edvaniq.Web`) und von `Edvaniq.App` (MAUI Blazor Hybrid). `Client.Core` spricht ausschließlich mit dem Gateway.
 - **BuildingBlocks** enthalten nur Technik, keine Fachbegriffe.
 - **Tests:** `UnitTests` referenzieren Domain und Application, `IntegrationTests` die Api des Service. `Edvaniq.EndToEndTests` startet den AppHost über `Aspire.Hosting.Testing`. `Edvaniq.ArchitectureTests` referenziert jedes Projekt, neue Projekte müssen dort ergänzt werden.
-- **Stand:** Die Architektur steht als Skelett. Services enthalten nur `AddServiceDefaults()` bzw. `MapDefaultEndpoints()`, im Gateway ist noch kein YARP, Client-Bibliotheken sind leer. BuildingBlocks enthalten nur die DB-Prüfung für Health, die Registrierung des DbContext und den Migrationsschritt. Tests gibt es nur in der Service-Vorlage (`templates/service`).
+- **Stand:** Die Architektur steht als Skelett. Services enthalten nur `AddServiceDefaults()` bzw. `MapDefaultEndpoints()`, im Gateway ist noch kein YARP, Client-Bibliotheken sind leer. BuildingBlocks enthalten nur die DB-Prüfung für Health, die Registrierung des DbContext, den Migrationsschritt und die Token-Prüfung. Tests gibt es nur in der Service-Vorlage (`templates/service`).
 
 ## Konventionen
 
 - Paketversionen stehen nur in `Directory.Packages.props`. In den csproj-Dateien `PackageReference` immer ohne `Version` angeben.
 - EF-Core-Provider ist `MySql.EntityFrameworkCore` (Oracle). Nicht Pomelo, das kann nur EF Core 9.
 - Connection Strings bekommt ein Service von Aspire unter `ConnectionStrings:<service>db`, mit seinem eigenen DB-Benutzer, nie mit root.
+- Services aus der Vorlage prüfen jedes Token (`AddTokenValidation` in `BuildingBlocks.Web`, Fallback-Policy). Den Nutzer liefert nur `ICurrentUser` aus dem Claim `sub`, nie eine ID aus der Anfrage. Vertrag: `Authentication:Schemes:Bearer` mit `ValidIssuer`, `ValidAudiences` (`edvaniq-api`) und `Authority`. Ohne Issuer oder Audience startet der Service nicht. In `Program.cs` stehen `UseAuthentication()`/`UseAuthorization()` nach `MapDefaultEndpoints()`, sonst verlangt Health ein Token.
 - Das Schema ändert sich nur per EF-Core-Migration. Migriert wird mit `<Api>.dll migrate` als eigener Schritt, nie beim Start. Lokal ist das die Ressource `<name>-migrate`, auf die die API wartet.
 - Secrets nur in der Betriebsumgebung, nie in Repo, Client oder Log. Regeln stehen in `docs/secrets.md`. Die CI scannt die Git-History mit gitleaks.
 - CI: `.github/workflows/ci.yml` läuft auf `ubuntu-24.04` ohne MAUI-Workload. Das App-Projekt nimmt die CI vor dem Build aus der Solution.

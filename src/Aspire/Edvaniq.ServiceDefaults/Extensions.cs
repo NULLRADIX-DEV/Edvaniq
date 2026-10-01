@@ -122,19 +122,20 @@ public static class Extensions
         };
 
         // Both endpoints keep the default response writer: it returns only Healthy, Degraded or Unhealthy, without check
-        // names or exceptions, so health reveals no details.
+        // names or exceptions, so health reveals no details. Health never needs a token, Docker asks without one.
         if (app.Environment.IsDevelopment())
         {
             // All health checks must pass for app to be considered ready to accept traffic after starting
-            app.MapHealthChecks(HealthEndpointPath);
+            app.MapHealthChecks(HealthEndpointPath).AllowAnonymous();
 
-            app.MapHealthChecks(AlivenessEndpointPath, alivenessOptions);
+            app.MapHealthChecks(AlivenessEndpointPath, alivenessOptions).AllowAnonymous();
         }
         else
         {
             // Outside Development only on the internal port. UseHealthChecks matches the port the connection came in on,
             // while RequireHost("*:8081") would trust the Host header, which a client can fake. On the app port both
-            // paths answer 404.
+            // paths answer 404. As middleware they are no endpoints, so the service must call UseAuthentication and
+            // UseAuthorization after MapDefaultEndpoints, or the fallback policy rejects them too.
             app.UseHealthChecks(HealthEndpointPath, InternalHealthPort);
             app.UseHealthChecks(AlivenessEndpointPath, InternalHealthPort, alivenessOptions);
         }
