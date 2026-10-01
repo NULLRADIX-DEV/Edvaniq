@@ -9,12 +9,44 @@ Auf dem Server läuft Edvaniq als eigene App einer gemeinsamen Plattform:
 
 So kann Edvaniq keine andere App auf dem Server stören, und umgekehrt. Ausgerollt wird wie bei jeder App der Plattform: Der Workflow „Deploy“ ist eine Kopie der gemeinsamen Vorlage, die Deploy-Logik liegt auf dem Server.
 
+Für Deploy und Rollback reicht GitHub, Server-Zugang braucht es dafür nicht. Was auf dem Server zu sehen und zu tun ist (Logs, Datenbank, Backups, Notfall), steht in [Betrieb](operations.md).
+
+## Voraussetzungen
+
+- Mitglied der Org `NULLRADIX-DEV` mit mindestens der Rolle „Write“ im Repo. Nur dann gibt es in Actions den Knopf „Run workflow“.
+- Das Environment `production` erlaubt nur `main`. Ein Commit von einem anderen Branch lässt sich nicht ausrollen.
+
+## Vor dem Deploy
+
+1. Der PR ist auf `main` gemergt.
+2. **Auf die CI warten.** Nach dem Merge läuft „CI“ auf `main` noch einmal, etwa 5 Minuten. Erst ihr letzter Schritt pusht die Images. Unter Actions → „CI“ muss der Lauf für den Merge-Commit grün sein, in seiner Zusammenfassung steht „Pushed 15 images“. Wer früher startet, bekommt „not all images … are available“. Passiert ist dann nichts, also einfach nach der CI noch einmal starten.
+3. Neuer Service mit eigener Datenbank im Deploy? Dann muss seine DB auf dem Server schon angelegt sein ([Betrieb](operations.md#neue-service-datenbank)).
+
 ## Ausrollen
 
 1. Actions → „Deploy“ → „Run workflow“
-2. „environment“ bleibt `production`. Das Feld „commit“ leer lassen für den aktuellen Stand von `main`, oder einen älteren Commit von `main` eintragen.
+2. „environment“ bleibt `production`. Das Feld „commit“ leer lassen für den aktuellen Stand von `main`, oder einen älteren Commit von `main` eintragen (7 bis 40 Zeichen).
+3. „rollback“ nicht anhaken.
 
-Voraussetzung: Der Job „Container images“ hat für diesen Commit auf `main` die Images gepusht.
+Ein Lauf dauert 2–3 Minuten. Es läuft immer nur ein Deploy, ein zweiter wartet auf den ersten.
+
+## Nach dem Deploy
+
+- **Grün:** In der Zusammenfassung des Laufs steht „Deployed `<commit>`“ und das Rollback-Ziel, also der Stand davor.
+- **Im Log des Schritts „Deploy“** stehen die Schritte in dieser Reihenfolge:
+
+  ```
+  Pulling images of <commit>
+  Backed up the databases of db
+  Migrating with planning-migrate
+  planning-migrate finished
+  Switching to <commit>
+  Deployed <commit>
+  Previous release: <vorheriger commit>
+  ```
+
+- **Rot:** Die letzte Zeile beginnt mit „Deploy failed:“. Was sie bedeutet, steht unter [Fehlermeldungen](#fehlermeldungen). Steht dort „nothing changed“ oder „the services were not switched“, läuft der alte Stand unverändert weiter.
+- Wer Server-Zugang hat, sieht den Zustand der Container auch dort ([Betrieb](operations.md#zustand-ansehen)).
 
 ## Ablauf
 
@@ -95,8 +127,29 @@ Danach:
 
 Grenzen:
 
-- Ein Rollback macht Datenmigrationen nicht rückgängig. Dafür gibt es den Dump vor jedem Deploy, den Restore beschreibt `EdvaniqDoc/Betrieb.md`.
-- Ist GitHub nicht erreichbar, steht der Notfallweg in `EdvaniqDoc/Betrieb.md`.
+- Ein Rollback macht Datenmigrationen nicht rückgängig. Dafür gibt es den Dump vor jedem Deploy ([Restore](operations.md#restore)).
+- Ist GitHub nicht erreichbar, gibt es einen [Notfallweg](operations.md#notfall-rollback-ohne-github) direkt auf dem Server.
+
+## Fehlermeldungen
+
+Die letzte Zeile eines roten Laufs nennt den Grund. Bei allem mit „nothing changed“ oder „not switched“ läuft der alte Stand unverändert weiter.
+
+| Meldung | Bedeutung | Was tun |
+|---|---|---|
+| `Either a commit or rollback, not both` | „commit“ und „rollback“ sind beide gesetzt. | Eines davon leer lassen bzw. nicht anhaken. |
+| `'…' is not a commit hash`, `Unknown commit …` | Im Feld „commit“ steht kein gültiger Commit. | 7 bis 40 Zeichen des Hashs eintragen, oder leer lassen. |
+| `… is not on main` | Der Commit liegt auf keinem Stand von `main`. | Erst per PR nach `main` bringen. |
+| `not all images of … are available, nothing changed` | Die Images des Commits sind noch nicht in der Registry. | Warten, bis „CI“ auf `main` für diesen Commit grün ist ([Vor dem Deploy](#vor-dem-deploy)), dann neu starten. |
+| `… has revision …, nothing changed` | Ein Image gehört zu einem anderen Commit. | Nicht von Hand taggen. CI auf `main` für diesen Commit neu laufen lassen. |
+| `compose.yml is invalid or an env file is missing, nothing changed` | `deploy/compose.yml` ist ungültig, oder auf dem Server fehlt eine Env-Datei, meist `<name>.env` eines neuen Service. | Neuer Service: zuerst seine [DB anlegen](operations.md#neue-service-datenbank). Sonst `deploy/compose.yml` lokal mit `docker compose config` prüfen. |
+| `compose.yml breaks the platform rules, nothing changed` | Die Datei verletzt eine Regel der Plattform, etwa ein Port außerhalb des Bereichs, ein Host-Mount oder `cap_add`. | Änderung in `deploy/compose.yml` zurücknehmen. Die Regeln stehen unter [Ablauf](#ablauf), Schritt 1. |
+| `backup before deploy failed, nothing changed` | Der Dump der DB ging nicht. | Zustand von `db` auf dem Server prüfen ([Betrieb](operations.md#zustand-ansehen)). |
+| `<name>-migrate failed with exit code …`, danach `migration failed, the services were not switched` | Eine Migration ist gescheitert. Die DB kann teilweise migriert sein, die Services laufen auf dem alten Stand. | Ausgabe der Migration auf dem Server lesen ([Betrieb](operations.md#ausgabe-einer-migration)). Fix per PR, dann neu deployen. Notfalls den Dump von vorher einspielen ([Restore](operations.md#restore)). |
+| `Switch to … failed`, danach `… is running again` | Ein Container wurde nicht healthy oder ist neu gestartet. Der vorherige Stand läuft wieder. | Logs des Containers lesen ([Betrieb](operations.md#logs)). |
+| `restoring … failed too, check the containers` | Auch der vorherige Stand startet nicht. | Sofort auf dem Server nachsehen. Eher ein Problem der DB oder des Servers als des Codes. |
+| `no previous release to restore, nothing is running` | Der erste Deploy ist gescheitert, einen vorherigen Stand gibt es nicht. | Ursache beheben und neu deployen. |
+| `another deploy is running` | Ein anderer Deploy läuft gerade. | Warten, dann neu starten. |
+| `Rollback failed: no previous release to roll back to, nothing changed` | Es gibt noch keinen vorherigen Stand. | Einen älteren Commit normal deployen. |
 
 ## Neuer Prozess
 
