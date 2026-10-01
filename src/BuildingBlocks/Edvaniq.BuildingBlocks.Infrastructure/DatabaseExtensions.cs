@@ -12,9 +12,9 @@ public static partial class DatabaseExtensions
     // starts and reports not ready (MySqlHealthCheck).
     public static IServiceCollection AddMySqlDbContext<TContext>(this IServiceCollection services, string connectionName)
         where TContext : DbContext =>
-        services.AddDbContext<TContext>((provider, options) => options.UseMySQL(
+        services.AddDbContext<TContext>((provider, options) => options.UseMySQL(MySqlConnections.For(
             provider.GetRequiredService<IConfiguration>().GetConnectionString(connectionName)
-            ?? throw new InvalidOperationException($"Connection string '{connectionName}' is missing.")));
+            ?? throw new InvalidOperationException($"Connection string '{connectionName}' is missing.")).ConnectionString));
 
     // Applies all pending migrations and returns the exit code. A second run finds nothing to do. Like Run(), it
     // disposes the host at the end, so the last log lines get out.

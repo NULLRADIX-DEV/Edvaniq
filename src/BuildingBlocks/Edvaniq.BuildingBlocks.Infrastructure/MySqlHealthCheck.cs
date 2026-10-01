@@ -38,11 +38,9 @@ internal sealed class MySqlHealthCheck(IConfiguration configuration, string conn
 
     private static void Ping(string connectionString)
     {
-        var builder = new MySqlConnectionStringBuilder(connectionString)
-        {
-            ConnectionTimeout = StepTimeoutSeconds,
-            DefaultCommandTimeout = StepTimeoutSeconds,
-        };
+        var builder = MySqlConnections.For(connectionString);
+        builder.ConnectionTimeout = StepTimeoutSeconds;
+        builder.DefaultCommandTimeout = StepTimeoutSeconds;
 
         using var connection = new MySqlConnection(builder.ConnectionString);
         connection.Open();
