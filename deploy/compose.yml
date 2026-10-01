@@ -14,6 +14,17 @@ x-app: &app
   memswap_limit: 256m
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
+  # Health answers only on the internal port 8081 (ServiceDefaults), which is never published. The image has bash but no
+  # curl. The deploy waits until every container is healthy and restores the previous state if one is not.
+  environment:
+    ASPNETCORE_HTTP_PORTS: "8080;8081"
+  healthcheck:
+    test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && head -n 1 <&3 | grep -q ' 200 '"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 30s
+    start_interval: 2s
 
 # Processes that stay a skeleton in the MVP need less.
 x-skeleton: &skeleton
@@ -55,12 +66,17 @@ services:
   notifications-api:
     <<: *skeleton
     image: ghcr.io/nullradix-dev/edvaniq/notifications-api:sha-${APP_COMMIT:?}
+  # Workers have no HTTP, so no health check.
   content-worker:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/content-worker:sha-${APP_COMMIT:?}
+    healthcheck:
+      disable: true
   notifications-worker:
     <<: *skeleton
     image: ghcr.io/nullradix-dev/edvaniq/notifications-worker:sha-${APP_COMMIT:?}
+    healthcheck:
+      disable: true
   gateway:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/gateway:sha-${APP_COMMIT:?}
