@@ -38,7 +38,7 @@ tests/Services/<Name>/
 ```
 
 - Alle sieben Projekte stehen danach in `Edvaniq.slnx`, die CI baut und testet sie also mit.
-- Die Ports in `launchSettings.json` wählt die Vorlage je Service neu.
+- Die Ports in `launchSettings.json` wählt die Vorlage je Service per Zufall. Hat schon ein anderer Prozess denselben Port, wird der Test `Ports_AreUniqueAcrossProcesses` in `Edvaniq.ArchitectureTests` rot.
 
 ## Health
 
@@ -144,12 +144,21 @@ Ein neuer Service ersetzt das Beispiel durch seine erste echte Entity:
 
    ```csharp
    var <name>Db = mysql.AddServiceDatabase("<name>");
-   var <name>Migration = builder.AddMigration<Projects.Edvaniq_Services_<Name>_Api>("<name>-migrate", <name>Db);
+   var <name>Migrate = builder.AddMigration<Projects.Edvaniq_Services_<Name>_Api>("<name>-migrate", <name>Db);
    var <name>Api = AddService<Projects.Edvaniq_Services_<Name>_Api>("<name>-api", <name>Db)
-       .WaitForCompletion(<name>Migration);
+       .WaitForCompletion(<name>Migrate);
    ```
 
 3. `deploy/compose.yml`: Dienst `<name>-api`. Er braucht `Authentication__Schemes__Bearer__ValidIssuer` und `__Authority` aus der Umgebung, sonst startet er nicht. AppHost und Compose gehören zusammen, die CI prüft, dass die Listen passen. Erst eintragen, wenn die Datenbank des Service auf dem Server bereitsteht: Ohne DB wird der Container nie healthy, und der Deploy scheitert.
+
+## Gerüst ersetzen
+
+Die übrigen Services stammen noch aus dem ersten Skelett: fünf leere Projekte, ohne Datenbank und Tests. Planning ist in #125 so aus der Vorlage neu entstanden:
+
+1. Die sieben Projekte aus `Edvaniq.slnx` austragen (`dotnet sln Edvaniq.slnx remove …`) und beide Ordner ganz löschen, auch `bin/` und `obj/`. Sonst bricht `dotnet new` ab, weil es Dateien überschreiben müsste.
+2. Erzeugen wie oben. Die Pfade bleiben gleich, die Verweise anderer Services auf `.Contracts` und die Referenzen in `Edvaniq.ArchitectureTests` stimmen also weiter.
+3. In `AppHost.cs` den Migrationsschritt ergänzen und die Api mit `WaitForCompletion` darauf warten lassen. `AddServiceDatabase` und `AddService` stehen schon da.
+4. Der Dienst steht schon in `deploy/compose.yml`. Auf dem Server startet er aber erst, wenn dort seine Datenbank und der Token-Aussteller bereitstehen. Bis dahin scheitert ein Deploy, und der vorherige Stand läuft weiter.
 
 ## Vorlage ändern
 
@@ -177,6 +186,7 @@ Ein neuer Service ersetzt das Beispiel durch seine erste echte Entity:
   - Außerhalb des Repos legt die Vorlage die Dateien an, findet aber keine `Edvaniq.slnx` und endet mit Exit-Code 105.
   - In einem Unterordner wie `src/` landet alles eine Ebene zu tief.
 - **Ohne `--force`** erzeugt `dotnet new` weiter den alten Stand der Vorlage. Ein installierter Ordner wird nur beim Installieren eingelesen.
+- **`Ports_AreUniqueAcrossProcesses` rot:** Die Vorlage hat einen Port gezogen, den schon ein anderer Prozess hat, und im AppHost wollen beide auf ihm lauschen. Den neuen Service löschen und neu erzeugen, solange an ihm noch nichts geändert ist, sonst den Port in seiner `launchSettings.json` auf einen freien setzen.
 - **Health liefert 401:** In `Program.cs` müssen `UseAuthentication()` und `UseAuthorization()` von Hand *nach* `MapDefaultEndpoints()` stehen. Fehlen die Aufrufe, setzt ASP.NET Core beide vor die ganze Pipeline, und außerhalb von Development verlangt auch die Health-Middleware auf 8081 ein Token. Docker sieht den Container dann nie healthy. Der Test `Health_OutsideDevelopment_AnswersWithoutToken` deckt das ab.
 - **`sub` fehlt im Code:** Ohne `MapInboundClaims = false` benennt .NET `sub` in einen langen SOAP-Claim-Namen um, und jedes gültige Token bekommt 403. Steht in `AddTokenValidation`.
 - **Abgelaufenes Token gilt noch:** .NET duldet 5 Minuten Uhrabweichung (`ClockSkew`).

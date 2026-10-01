@@ -21,9 +21,13 @@ var gamificationDb = mysql.AddServiceDatabase("gamification");
 var analyticsDb = mysql.AddServiceDatabase("analytics");
 var notificationsDb = mysql.AddServiceDatabase("notifications");
 
+// Migrations (one step per service from the template, its API waits until it has finished)
+var planningMigrate = builder.AddMigration<Projects.Edvaniq_Services_Planning_Api>("planning-migrate", planningDb);
+
 // Services
 var identityApi = AddService<Projects.Edvaniq_Services_Identity_Api>("identity-api", identityDb);
-var planningApi = AddService<Projects.Edvaniq_Services_Planning_Api>("planning-api", planningDb);
+var planningApi = AddService<Projects.Edvaniq_Services_Planning_Api>("planning-api", planningDb)
+    .WaitForCompletion(planningMigrate);
 var contentApi = AddService<Projects.Edvaniq_Services_Content_Api>("content-api", contentDb);
 var knowledgeApi = AddService<Projects.Edvaniq_Services_Knowledge_Api>("knowledge-api", knowledgeDb);
 var assessmentApi = AddService<Projects.Edvaniq_Services_Assessment_Api>("assessment-api", assessmentDb);
