@@ -55,6 +55,7 @@ Abhängigkeiten zeigen immer nach innen: `Api → Infrastructure → Application
 4. Clients kennen kein Backend-Projekt. `Client.Core` spricht ausschließlich mit dem Gateway (API-Clients per OpenAPI generiert).
 5. BuildingBlocks enthalten nur technische Bausteine, keine Fachbegriffe.
 6. Paketversionen stehen ausschließlich in `Directory.Packages.props`.
+7. Jede Anfrage an einen Service braucht ein gültiges Token. Der Nutzer kommt nur aus dem Token (`sub`), nie aus der Anfrage ([service-template.md](service-template.md#token-prüfung)).
 
 ### Event-Konsum (wer hört auf wessen Contracts)
 

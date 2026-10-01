@@ -1,8 +1,13 @@
 using System.Net;
 using System.Net.Sockets;
 using Edvaniq.Services.ServiceName.Infrastructure;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace Edvaniq.Services.ServiceName.IntegrationTests;
 
@@ -54,6 +59,30 @@ public sealed class HealthTests(WebApplicationFactory<Program> factory) : IClass
         await AssertHealthAsync(client, "/health", HttpStatusCode.ServiceUnavailable, "Unhealthy");
     }
 
+    [Fact]
+    public async Task Health_OutsideDevelopment_AnswersWithoutToken()
+    {
+        // Outside Development health is middleware on the internal port, which the token check must not cover.
+        await using var service = new ServiceFactory().WithWebHostBuilder(builder => builder
+            .UseEnvironment(Environments.Production)
+            .ConfigureTestServices(services => services.AddSingleton<IStartupFilter, InternalPortFilter>()));
+        using var client = service.CreateClient();
+
+        await AssertHealthAsync(client, "/alive", HttpStatusCode.OK, "Healthy");
+        // Unhealthy because Production has no connection string here, but answered without a token.
+        await AssertHealthAsync(client, "/health", HttpStatusCode.ServiceUnavailable, "Unhealthy");
+    }
+
+    [Fact]
+    public void Start_WithoutIssuer_Fails()
+    {
+        // Outside Development the issuer comes only from the environment, here there is none.
+        using var service = factory.WithWebHostBuilder(builder => builder.UseEnvironment(Environments.Production));
+
+        var exception = Assert.ThrowsAny<OptionsValidationException>(() => service.CreateClient());
+        Assert.Contains("ValidIssuer", exception.Message);
+    }
+
     private WebApplicationFactory<Program> WithDatabase(string connectionString) =>
         factory.WithWebHostBuilder(builder =>
             builder.UseSetting($"ConnectionStrings:{InfrastructureExtensions.DatabaseName}", connectionString));
@@ -65,5 +94,19 @@ public sealed class HealthTests(WebApplicationFactory<Program> factory) : IClass
 
         Assert.Equal(status, response.StatusCode);
         Assert.Equal(body, await response.Content.ReadAsStringAsync(cancellationToken));
+    }
+
+    // The test server has no ports, so every request pretends to come in on the internal health port.
+    private sealed class InternalPortFilter : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use((context, nextMiddleware) =>
+            {
+                context.Connection.LocalPort = 8081;
+                return nextMiddleware(context);
+            });
+            next(app);
+        };
     }
 }
