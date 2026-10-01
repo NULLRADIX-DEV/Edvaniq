@@ -3,6 +3,7 @@ using System;
 using Edvaniq.Services.ServiceName.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Edvaniq.Services.ServiceName.Infrastructure.Migrations
 {
     [DbContext(typeof(ServiceNameDbContext))]
-    partial class ServiceNameDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261001103855_ExampleItems")]
+    partial class ExampleItems
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
