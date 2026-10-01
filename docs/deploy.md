@@ -51,7 +51,7 @@ Das Schema ändert sich nur in diesem Schritt, nie beim Start eines Service. Ein
 
 - **Ein MySQL-Dienst `db`** (`mysql:9.7`, wie lokal und in den Tests) für alle Services. Jeder hat seine eigene Datenbank `<name>db` und einen eigenen Benutzer `<name>`, der nur auf sie darf. Die Daten liegen auf dem Server im Verzeichnis der App.
 - **root** meldet sich nur im Container selbst an, für den Dump vor jedem Deploy. Aus dem Netz der App geht das nicht.
-- **Kein veröffentlichter Port:** Die Services erreichen die DB über den Dienstnamen `db`, von außen niemand.
+- **Port nur lokal auf dem Server:** Die Services erreichen die DB über den Dienstnamen `db`. Für die nächtlichen Backups und die Ansicht ist sie zusätzlich auf `127.0.0.1` des Servers veröffentlicht, nie öffentlich. Die Nummer steht nur auf dem Server (`DB_PORT`). Dort meldet sich ein Benutzer an, der nur lesen und sichern darf.
 - **Datenbank eines neuen Service:** Auf dem Server legt ein Werkzeug der Plattform die DB und den Benutzer mit einem zufälligen Passwort an und schreibt den Connection String nach `<name>.env` (Befehl in `EdvaniqDoc/Betrieb.md`). Das muss vor dem ersten Deploy mit dem Service geschehen, sonst bricht der Deploy vor dem Umschalten ab.
 
 ## Speicher
@@ -63,8 +63,8 @@ Jeder Container hat eine eigene Speichergrenze und keinen Swap (`mem_limit` und 
 | alle, die im MVP produktiv werden (Identity, Planning, Content mit Worker, Knowledge, Assessment, Flashcards, LearningEngine, Gateway, Web) | 256 MB |
 | die im MVP nur Skelett bleiben (Analytics, Notifications mit Worker, Gamification, Tutor), Anker `*skeleton` | 128 MB |
 
-- **MySQL:** 640 MB, im Leerlauf gut 450 MB. #161 verkleinert das.
-- **Summe:** 10 × 256 + 5 × 128 + 640 = 3840 MB. Das liegt unter der Obergrenze der App auf dem Server (4 GB ohne Swap). Die Reserve braucht Docker selbst.
+- **MySQL:** 1536 MB, davon 1 GB InnoDB-Cache (`--innodb-buffer-pool-size`). Der Rest bleibt für Verbindungen und Puffer.
+- **Summe:** 10 × 256 + 5 × 128 + 1536 = 4736 MB. Das liegt unter der Obergrenze der App auf dem Server (6 GB ohne Swap). Die Reserve braucht Docker selbst und ein Migrationsschritt, solange er läuft.
 - **Überschreitung:** Braucht ein Container mehr als seine Grenze, beendet der Kernel nur diesen Container, und Docker startet ihn neu (`restart: unless-stopped`). Die anderen Prozesse laufen weiter.
 - **.NET kennt die Grenze:** Es begrenzt seinen Heap auf 75 % der Container-Grenze. Jeder Prozess schreibt beim Start `GC memory limit: <n> MiB` ins Log, bei 256 MB sind das 192 MiB.
 - **Anheben:** Braucht ein Prozess mehr, wird seine Grenze im Dienst überschrieben. Die Summe muss unter der Obergrenze der App bleiben.
