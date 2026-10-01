@@ -118,6 +118,12 @@ Die Server-Details (VPS, Docker, 1Panel, nginx, NOOSE, Deploy-Benutzer) stehen i
 
 @../EdvaniqDoc/Betrieb.md
 
+## Claude-Memory
+
+Was Claude über Nutzer, Projekt und Arbeitsweise gelernt hat, liegt geräteübergreifend im privaten Nachbar-Repo unter `../EdvaniqDoc/claude-memory/`: eine Datei je Erkenntnis, die Übersicht mit den Regeln in `README.md`. Neue Erkenntnisse kommen dorthin, nicht in den lokalen Memory-Ordner von Claude. Danach EdvaniqDoc committen und pushen.
+
+@../EdvaniqDoc/claude-memory/README.md
+
 ## Arbeitsweise mit Claude
 
 - Schätzungen immer in menschlicher Zeit: Faktor 22 auf die Umsetzung, Aufschlag nur für extern gebundene Arbeit (Anbieter, Verträge, Recht, VPS, Gerätetests). Nie mit „Entwickler + KI-Assistent“ rechnen.
