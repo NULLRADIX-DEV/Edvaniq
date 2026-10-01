@@ -16,6 +16,8 @@ dotnet run --project src/Aspire/Edvaniq.AppHost  # startet MySQL-Container, alle
 dotnet test --project tests/Services/Identity/Edvaniq.Services.Identity.UnitTests            # ein Testprojekt
 dotnet test --project tests/Services/Identity/Edvaniq.Services.Identity.UnitTests --filter-method "*Name*"   # einzelner Test (auch --filter-class, --filter-namespace)
 dotnet format                                    # Codestil nach .editorconfig
+dotnet tool restore                              # dotnet ef aus dotnet-tools.json, einmalig je Klon
+dotnet ef migrations add <Migration> --project src/Services/<Name>/Edvaniq.Services.<Name>.Infrastructure   # neue Migration, braucht keine DB
 ```
 
 - Tests laufen auf Microsoft Testing Platform (in `global.json` festgelegt) mit xUnit v3. Exit-Code 8 heißt „keine Tests gelaufen“, nicht „fehlgeschlagen“.
@@ -23,27 +25,28 @@ dotnet format                                    # Codestil nach .editorconfig
 
 ## Architektur (Kurzfassung, Details in `docs/architecture.md`)
 
-- **Microservices mit .NET Aspire.** `src/Aspire/Edvaniq.AppHost/AppHost.cs` ist die zentrale Stelle, an der alles verdrahtet wird: ein MySQL-Container (persistentes Volume, phpMyAdmin), eine Datenbank pro Service (`identitydb`, `planningdb` …), Services als `<name>-api` mit `WithReference(db).WaitFor(db)`. Worker nutzen die DB ihres Service. Das Gateway referenziert alle APIs, `web` referenziert nur das Gateway.
+- **Microservices mit .NET Aspire.** `src/Aspire/Edvaniq.AppHost/AppHost.cs` ist die zentrale Stelle, an der alles verdrahtet wird: ein MySQL-Container (persistentes Volume, phpMyAdmin), eine Datenbank mit eigenem DB-Benutzer pro Service (`AddServiceDatabase`, in `ServiceDatabase.cs`: `identitydb` mit Benutzer `identity` …), Services als `<name>-api` mit `WithDatabase(db)`. Worker nutzen die DB ihres Service. Das Gateway referenziert alle APIs, `web` referenziert nur das Gateway.
 - **Ein Service = 5 Projekte** unter `src/Services/<Name>/`: `Domain` ← `Application` ← `Infrastructure` ← `Api`, dazu `Contracts` (Integration Events). Worker gibt es nur bei Content und Notifications. Von anderen Services darf nur `.Contracts` referenziert werden, niemals Domain, Application, Infrastructure oder Api.
 - **Kommunikation:** asynchron über Integration Events (Message Broker, noch nicht ausgewählt), synchron nur HTTP über Service Discovery. Kein Service liest eine fremde DB.
 - **ServiceDefaults** (`src/Aspire/Edvaniq.ServiceDefaults`) bindet jede App ein: OpenTelemetry, Health-Checks `/health` und `/alive` (außerhalb von Development nur auf dem internen Port 8081), Service Discovery, Standard-Resilience für HttpClient, ein Log der Speichergrenze beim Start.
 - **Clients:** Seiten werden einmal in `Client.UI` gebaut. Genutzt werden sie von `Edvaniq.Web.Client` (WASM, gehostet von `Edvaniq.Web`) und von `Edvaniq.App` (MAUI Blazor Hybrid). `Client.Core` spricht ausschließlich mit dem Gateway.
 - **BuildingBlocks** enthalten nur Technik, keine Fachbegriffe.
 - **Tests:** `UnitTests` referenzieren Domain und Application, `IntegrationTests` die Api des Service. `Edvaniq.EndToEndTests` startet den AppHost über `Aspire.Hosting.Testing`. `Edvaniq.ArchitectureTests` referenziert jedes Projekt, neue Projekte müssen dort ergänzt werden.
-- **Stand:** Die Architektur steht als Skelett. Services enthalten nur `AddServiceDefaults()` bzw. `MapDefaultEndpoints()`, im Gateway ist noch kein YARP, Client-Bibliotheken sind leer. BuildingBlocks enthalten nur die DB-Prüfung für Health. Tests gibt es nur in der Service-Vorlage (`templates/service`).
+- **Stand:** Die Architektur steht als Skelett. Services enthalten nur `AddServiceDefaults()` bzw. `MapDefaultEndpoints()`, im Gateway ist noch kein YARP, Client-Bibliotheken sind leer. BuildingBlocks enthalten nur die DB-Prüfung für Health, die Registrierung des DbContext und den Migrationsschritt. Tests gibt es nur in der Service-Vorlage (`templates/service`).
 
 ## Konventionen
 
 - Paketversionen stehen nur in `Directory.Packages.props`. In den csproj-Dateien `PackageReference` immer ohne `Version` angeben.
 - EF-Core-Provider ist `MySql.EntityFrameworkCore` (Oracle). Nicht Pomelo, das kann nur EF Core 9.
-- Connection Strings bekommt ein Service von Aspire unter `ConnectionStrings:<service>db`.
+- Connection Strings bekommt ein Service von Aspire unter `ConnectionStrings:<service>db`, mit seinem eigenen DB-Benutzer, nie mit root.
+- Das Schema ändert sich nur per EF-Core-Migration. Migriert wird mit `<Api>.dll migrate` als eigener Schritt, nie beim Start. Lokal ist das die Ressource `<name>-migrate`, auf die die API wartet.
 - Secrets nur in der Betriebsumgebung, nie in Repo, Client oder Log. Regeln stehen in `docs/secrets.md`. Die CI scannt die Git-History mit gitleaks.
 - CI: `.github/workflows/ci.yml` läuft auf `ubuntu-24.04` ohne MAUI-Workload. Das App-Projekt nimmt die CI vor dem Build aus der Solution.
 - Container-Images: Die CI baut für jeden Prozess im AppHost ein Image `ghcr.io/nullradix-dev/edvaniq/<resource>:sha-<commit>` mit dem SDK (`-t:PublishContainer`, keine Dockerfiles). Den Namen setzt `Directory.Build.props` aus dem Projektnamen. Gepusht wird nur auf `main` nach grüner CI, PR-Images bleiben im Runner. Die Images sind öffentlich wie das Repo, deshalb gehört nie ein Secret ins Image.
 - Deploy: Der Workflow „Deploy“ rollt alle Prozesse eines `main`-Commits per Compose auf den VPS aus (`deploy/compose.yml`). Dort läuft Edvaniq als eigene App der Server-Plattform, die Deploy-Logik liegt auf dem Server, der Workflow ist eine Kopie der gemeinsamen Vorlage. Er startet nur von Hand, das ist die Freigabe. Scheitert er, läuft der vorherige Stand weiter. Ein Rollback auf den vorherigen Stand geht über das Häkchen „rollback“ im selben Workflow. Ein neuer Prozess braucht seinen Eintrag in `AppHost.cs` und einen Dienst in `deploy/compose.yml`, die CI prüft, dass beide Listen passen. Details in `docs/deploy.md`.
 - Auf `main` nur per Pull Request mit grüner CI. Direkte Pushes sind gesperrt, die Regeln stehen in `docs/branch-protection.md`. Wer einen CI-Job umbenennt, muss die Pflicht-Checks im Ruleset `main-protect` nachziehen.
 - Das Repo ist öffentlich. Betriebsdetails wie IPs, Ports, Serverpfade und Benutzer kommen nie hierher, sondern nach `../EdvaniqDoc/Betrieb.md`.
-- Neuer Service nur aus der Vorlage: im Repo-Root `dotnet new install ./templates/service --force`, dann `dotnet new edvaniq-service -n <Name>`. Das legt die 5 Projekte und die Tests an und trägt sie in `Edvaniq.slnx` ein. Danach von Hand die Referenzen in `Edvaniq.ArchitectureTests` ergänzen. `AppHost.cs` (`AddDatabase`, `AddService`, Gateway-`WithReference`) und `deploy/compose.yml` (API und Worker) kommen zusammen und erst, wenn die DB des Service auf dem Server steht: Ohne DB wird der Container nie healthy, und der Deploy scheitert. Alle Befehle in `docs/service-template.md`.
+- Neuer Service nur aus der Vorlage: im Repo-Root `dotnet new install ./templates/service --force`, dann `dotnet new edvaniq-service -n <Name>`. Das legt die 5 Projekte und die Tests an und trägt sie in `Edvaniq.slnx` ein. Danach von Hand die Referenzen in `Edvaniq.ArchitectureTests` ergänzen. AppHost (`ProjectReference`, in `AppHost.cs` `AddServiceDatabase`, `AddMigration`, `AddService … .WaitForCompletion`, Gateway-`WithReference`) und `deploy/compose.yml` (API und Worker) kommen zusammen und erst, wenn die DB des Service auf dem Server steht: Ohne DB wird der Container nie healthy, und der Deploy scheitert. Alle Befehle in `docs/service-template.md`.
 
 ## Stolperfallen
 

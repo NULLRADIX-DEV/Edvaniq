@@ -6,7 +6,7 @@ Secrets sind Passwörter, Connection Strings mit Passwort, Tokens, API-Schlüsse
 
 | Umgebung | Ort |
 |---|---|
-| Lokal | Aspire verwaltet die Passwörter seiner Container selbst. Eigene Werte kommen per `dotnet user-secrets` an das jeweilige Projekt. |
+| Lokal | Aspire verwaltet die Passwörter seiner Container selbst. Die Passwörter der DB-Benutzer je Service erzeugt der AppHost und legt sie in seinen User Secrets ab. Eigene Werte kommen per `dotnet user-secrets` an das jeweilige Projekt. |
 | CI | GitHub-Secrets des Repos. Für GHCR reicht das automatische `GITHUB_TOKEN`. SSH-Schlüssel, Ziel und Host-Schlüssel für den Deploy liegen im Environment `production`, das nur `main` nutzen darf. |
 | VPS | Datei `app.env` im Verzeichnis der App auf dem Server, nur für den App-Benutzer lesbar (Modus `600`). Die Container lesen sie per `env_file`, ohne sie bricht der Deploy ab. Pfad und Benutzer stehen in `EdvaniqDoc/Betrieb.md`. |
 
