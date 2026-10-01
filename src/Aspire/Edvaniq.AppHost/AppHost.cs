@@ -1,3 +1,5 @@
+using Edvaniq.AppHost;
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Database server
@@ -6,18 +8,18 @@ var mysql = builder.AddMySql("mysql")
     .WithLifetime(ContainerLifetime.Persistent)
     .WithPhpMyAdmin();
 
-// Databases (one per service)
-var identityDb = mysql.AddDatabase("identitydb");
-var planningDb = mysql.AddDatabase("planningdb");
-var contentDb = mysql.AddDatabase("contentdb");
-var knowledgeDb = mysql.AddDatabase("knowledgedb");
-var assessmentDb = mysql.AddDatabase("assessmentdb");
-var flashcardsDb = mysql.AddDatabase("flashcardsdb");
-var learningEngineDb = mysql.AddDatabase("learningenginedb");
-var tutorDb = mysql.AddDatabase("tutordb");
-var gamificationDb = mysql.AddDatabase("gamificationdb");
-var analyticsDb = mysql.AddDatabase("analyticsdb");
-var notificationsDb = mysql.AddDatabase("notificationsdb");
+// Databases (one per service, each with its own user)
+var identityDb = mysql.AddServiceDatabase("identity");
+var planningDb = mysql.AddServiceDatabase("planning");
+var contentDb = mysql.AddServiceDatabase("content");
+var knowledgeDb = mysql.AddServiceDatabase("knowledge");
+var assessmentDb = mysql.AddServiceDatabase("assessment");
+var flashcardsDb = mysql.AddServiceDatabase("flashcards");
+var learningEngineDb = mysql.AddServiceDatabase("learningengine");
+var tutorDb = mysql.AddServiceDatabase("tutor");
+var gamificationDb = mysql.AddServiceDatabase("gamification");
+var analyticsDb = mysql.AddServiceDatabase("analytics");
+var notificationsDb = mysql.AddServiceDatabase("notifications");
 
 // Services
 var identityApi = AddService<Projects.Edvaniq_Services_Identity_Api>("identity-api", identityDb);
@@ -58,8 +60,7 @@ builder.AddProject<Projects.Edvaniq_Web>("web")
 
 builder.Build().Run();
 
-IResourceBuilder<ProjectResource> AddService<TProject>(string name, IResourceBuilder<MySqlDatabaseResource> database)
+IResourceBuilder<ProjectResource> AddService<TProject>(string name, ServiceDatabase database)
     where TProject : IProjectMetadata, new() =>
     builder.AddProject<TProject>(name)
-        .WithReference(database)
-        .WaitFor(database);
+        .WithDatabase(database);

@@ -4,7 +4,7 @@
   "classifications": [ "Edvaniq", "Service", "Web", "API" ],
   "identity": "Edvaniq.Templates.Service",
   "name": "Edvaniq service",
-  "description": "A service with its five projects, unit and integration tests, and health that tells alive apart from ready (including its own database). Run it in the repository root with -n <Name>.",
+  "description": "A service with its five projects, unit and integration tests, its own database with migrations, and health that tells alive apart from ready (including the database). Run it in the repository root with -n <Name>.",
   "shortName": "edvaniq-service",
   "tags": {
     "language": "C#",

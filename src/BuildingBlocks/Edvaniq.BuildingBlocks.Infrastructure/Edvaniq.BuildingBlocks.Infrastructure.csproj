@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
     <PackageReference Include="MySql.Data" />
+    <PackageReference Include="MySql.EntityFrameworkCore" />
   </ItemGroup>
 
   <PropertyGroup>

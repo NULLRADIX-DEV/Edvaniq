@@ -85,7 +85,8 @@ Seiten und Features werden **einmal** in `Client.UI` gebaut und laufen im Browse
 
 - **MySQL**, ein Server, **eine Datenbank pro Service** (`identitydb`, `planningdb`, …). Worker nutzen die DB ihres Service.
 - Lokal startet Aspire MySQL als Container (persistentes Volume) inkl. phpMyAdmin. Datenbanken werden automatisch angelegt.
-- Services erhalten den Connection String per Aspire als `ConnectionStrings:<service>db`.
+- Services erhalten den Connection String per Aspire als `ConnectionStrings:<service>db`, mit einem eigenen DB-Benutzer, der nur auf die eigene Datenbank darf (`AddServiceDatabase` im AppHost).
+- Das Schema ändert sich nur über EF-Core-Migrationen. Migrieren ist ein eigener Schritt (`<Api>.dll migrate`), nie Teil des Starts ([service-template.md](service-template.md#datenbank-und-migrationen)).
 - EF-Core-Provider: `MySql.EntityFrameworkCore` (Oracle) unterstützt EF Core 10. `Pomelo.EntityFrameworkCore.MySql` ist aktuell nur bis EF Core 9 verfügbar.
 
 ## Starten

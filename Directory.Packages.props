@@ -38,9 +38,13 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.17.0" />
   </ItemGroup>
 
-  <!-- Data: Oracle's driver, the same one MySql.EntityFrameworkCore uses -->
+  <!-- Data: Oracle's driver and EF Core provider. EF Core itself is pinned, so the provider and the tools use the same version. -->
   <ItemGroup>
     <PackageVersion Include="MySql.Data" Version="26.7.0" />
+    <PackageVersion Include="MySql.EntityFrameworkCore" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
   </ItemGroup>
 
   <!-- Testing -->
