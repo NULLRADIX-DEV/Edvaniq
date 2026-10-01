@@ -12,8 +12,8 @@ x-app: &app
     - path: app.env
       required: true
   # Own memory limit and no swap: a container that runs out is killed and restarted alone. All limits together
-  # (10 x 256m + 5 x 128m + 640m for MySQL) stay below the app's memory cap on the server, which also has to hold
-  # Docker itself.
+  # (10 x 256m + 5 x 128m + 1536m for MySQL) stay below the app's memory cap on the server, which also has to hold
+  # Docker itself and a migration while it runs.
   mem_limit: 256m
   memswap_limit: 256m
   cap_drop: [ALL]
@@ -57,16 +57,20 @@ services:
   # for the dump before each deploy. No cap_drop: the image's entrypoint switches to the user mysql.
   db:
     image: mysql:9.7
+    # Most of the memory goes to the InnoDB cache, the limit leaves room for connections and buffers.
+    command: ["--innodb-buffer-pool-size=1G"]
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is missing in .env}
       MYSQL_ROOT_HOST: localhost
     volumes:
       - ./db:/var/lib/mysql
+    # Only for the nightly backups and the view on the server, never public. The services reach it as db.
+    ports:
+      - "127.0.0.1:${DB_PORT:?DB_PORT is missing in .env}:3306"
     labels:
       platform.backup: mysql
-    # Until #161 slims MySQL down.
-    mem_limit: 640m
-    memswap_limit: 640m
+    mem_limit: 1536m
+    memswap_limit: 1536m
     security_opt: [no-new-privileges:true]
     restart: unless-stopped
     stop_grace_period: 60s

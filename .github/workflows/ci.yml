@@ -146,7 +146,7 @@ jobs:
           cat images.txt
           # The deploy rolls out deploy/compose.yml, so it must list exactly these images. Images from elsewhere, like
           # the database, are no processes of the AppHost. Env files and secrets exist only on the server.
-          compose() { APP_COMMIT="$GITHUB_SHA" MYSQL_ROOT_PASSWORD=unused docker compose -f deploy/compose.yml --project-directory "$RUNNER_TEMP" "$@"; }
+          compose() { APP_COMMIT="$GITHUB_SHA" MYSQL_ROOT_PASSWORD=unused DB_PORT=0 docker compose -f deploy/compose.yml --project-directory "$RUNNER_TEMP" "$@"; }
           compose config --no-env-resolution --images | grep "^$REGISTRY/nullradix-dev/" | sort > composed.txt
           sed "s|^|$REGISTRY/|" images.txt | diff - composed.txt \
             || { echo "::error::deploy/compose.yml does not match the processes in AppHost.cs (< missing, > extra)"; exit 1; }
