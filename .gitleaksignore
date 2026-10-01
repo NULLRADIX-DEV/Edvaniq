@@ -1,0 +1,5 @@
+# Findings in old commits that stay in the history on purpose (gitleaks fingerprint: commit:file:rule:line).
+# Never add a finding from a new commit here: remove the value instead and, for a secret, rotate it.
+af5d5a662525bef34ca0d5529f5708d742322638:CLAUDE.md:public-ipv4:110
+c7a56308739e415a0f62a64fb6f40e7bb844e7d0:CLAUDE.md:public-ipv4:110
+e65cdc2e092b8664564e07f92f00358c7c587cc3:CLAUDE.md:public-ipv4:104
