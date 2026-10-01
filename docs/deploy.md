@@ -49,7 +49,7 @@ Jeder Container hat eine eigene Speichergrenze und keinen Swap (`mem_limit` und 
 
 ## Health
 
-- **Wo:** Jeder Prozess mit HTTP meldet `/health` (bereit) und `/alive` (lebendig). Außerhalb von Development antworten beide nur auf dem internen Port 8081. Der wird nie veröffentlicht, also erreicht ihn nur der Container selbst und das Netz der App. Auf dem App-Port 8080, an den später der Proxy weiterleitet, antworten beide Pfade mit 404.
+- **Wo:** Jeder Prozess mit HTTP meldet `/health` (bereit) und `/alive` (lebendig). Services aus der Vorlage sind erst bereit, wenn sie ihre eigene Datenbank erreichen ([Neuen Service anlegen](architecture.md#neuen-service-anlegen)). Außerhalb von Development antworten beide nur auf dem internen Port 8081. Der wird nie veröffentlicht, also erreicht ihn nur der Container selbst und das Netz der App. Auf dem App-Port 8080, an den später der Proxy weiterleitet, antworten beide Pfade mit 404.
 - **Kein Umweg über den Host-Header:** Geprüft wird der Port, auf dem die Verbindung ankommt. Ein gefälschter Header `Host: …:8081` auf Port 8080 bekommt also auch 404.
 - **Antwort:** Nur `Healthy`, `Degraded` oder `Unhealthy`, ohne Namen der Checks und ohne Fehlermeldungen.
 - **Docker:** fragt `/health` alle 30 s ab, in der Startphase alle 2 s (`healthcheck` in `deploy/compose.yml`). Das geht per bash, weil das Image kein curl hat. Der Deploy wartet, bis alle Container healthy sind. Wird einer nicht healthy, scheitert der Deploy, und der vorherige Stand läuft wieder.
