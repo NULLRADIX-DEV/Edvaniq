@@ -25,19 +25,20 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
 
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
 
-      # The MAUI app needs workloads the runner doesn't have. It stays buildable locally.
       - name: Remove app project from solution
         run: dotnet sln Edvaniq.slnx remove src/Clients/Edvaniq.App/Edvaniq.App.csproj
 
@@ -47,11 +48,9 @@ jobs:
       - name: Build
         run: dotnet build Edvaniq.slnx -c Release --no-restore
 
-      # Exit code 8 means a test project has no tests yet, not that tests failed.
       - name: Test
         run: dotnet test --solution Edvaniq.slnx -c Release --no-build -- --ignore-exit-code 8
 
-      # A service from the template must land in the solution, build and pass its own tests. It exists only on the runner.
       - name: Check service template
         run: |
           dotnet new install ./templates/service --force
@@ -70,9 +69,10 @@ jobs:
       GITLEAKS_VERSION: 8.30.1
       GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install gitleaks
         run: |
@@ -81,11 +81,9 @@ jobs:
           echo "${GITLEAKS_SHA256}  ${file}" | sha256sum -c -
           tar -xzf "${file}" gitleaks
 
-      # Scans every commit, not only the current tree.
       - name: Scan git history
         run: ./gitleaks git --no-banner --redact --exit-code 1 .
 
-  # Builds one image per process. PR images stay on the runner; only main pushes to GHCR.
   images:
     name: Container images
     needs: [build-test, secret-scan]
@@ -97,20 +95,22 @@ jobs:
     env:
       REGISTRY: ghcr.io
       TAG: sha-${{ github.sha }}
+      GRYPE_IMAGE: anchore/grype:v0.119.0@sha256:8c2c9234a345577a6d321a4753aa3ee1276d8975c8452d2344a56b57733ecad3
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
 
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
 
-      # The AppHost is the list of processes, so a new process needs no extra entry here.
       - name: Find processes
         run: |
           mapfile -t names < <(grep -oE 'Projects\.Edvaniq_[A-Za-z0-9_]+' src/Aspire/Edvaniq.AppHost/AppHost.cs | sort -u | sed 's/^Projects\.//; s/_/./g')
@@ -122,7 +122,6 @@ jobs:
           done
           cat projects.txt
 
-      # Image names come from ContainerRepository in Directory.Build.props.
       - name: Build images
         run: |
           mapfile -t projects < projects.txt
@@ -139,24 +138,35 @@ jobs:
             revision=$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")
             [ "$revision" = "$GITHUB_SHA" ] || { echo "::error::$image has revision '$revision', expected $GITHUB_SHA"; exit 1; }
           done
-          # Without blazor.web.js the UI is dead while the health check stays green.
           docker run --rm --entrypoint test "nullradix-dev/edvaniq/web:$TAG" -f /app/wwwroot/_framework/blazor.web.js \
             || { echo "::error::blazor.web.js is missing in the web image"; exit 1; }
           printf '%s\n' "${images[@]}" > images.txt
           cat images.txt
-          # The deploy rolls out deploy/compose.yml, so it must list exactly these images. Images from elsewhere, like
-          # the database, are no processes of the AppHost. Env files and secrets exist only on the server.
           compose() { APP_COMMIT="$GITHUB_SHA" MYSQL_ROOT_PASSWORD=unused DB_PORT=0 docker compose -f deploy/compose.yml --project-directory "$RUNNER_TEMP" "$@"; }
           compose config --no-env-resolution --images | grep "^$REGISTRY/nullradix-dev/" | sort > composed.txt
           sed "s|^|$REGISTRY/|" images.txt | diff - composed.txt \
             || { echo "::error::deploy/compose.yml does not match the processes in AppHost.cs (< missing, > extra)"; exit 1; }
-          # Every migration step of the AppHost runs on the server as a service of the profile migrate with the same name.
           grep -oE 'AddMigration<[^>]+>\("[a-z0-9-]+"' src/Aspire/Edvaniq.AppHost/AppHost.cs | grep -oE '"[a-z0-9-]+"' | tr -d '"' | sort > migrations.txt
           comm -13 <(compose config --no-env-resolution --services | sort) <(compose --profile migrate config --no-env-resolution --services | sort) \
             | diff migrations.txt - \
             || { echo "::error::The migration steps in deploy/compose.yml do not match AddMigration in AppHost.cs (< missing, > extra)"; exit 1; }
 
-      # Runs only after every image was built and checked, so a failed build pushes nothing.
+      - name: Scan images
+        run: |
+          mkdir -p "$RUNNER_TEMP/scan" "$RUNNER_TEMP/grype-db"
+          docker pull --quiet "$GRYPE_IMAGE"
+          mapfile -t images < images.txt
+          failed=()
+          for image in "${images[@]}"; do
+            docker save "$image" -o "$RUNNER_TEMP/scan/image.tar"
+            echo "::group::$image"
+            docker run --rm -e GRYPE_DB_CACHE_DIR=/db -v "$RUNNER_TEMP/grype-db:/db" -v "$RUNNER_TEMP/scan:/scan:ro" "$GRYPE_IMAGE" \
+              docker-archive:/scan/image.tar --only-fixed --fail-on critical || failed+=("$image")
+            echo "::endgroup::"
+          done
+          rm -rf "$RUNNER_TEMP/scan"
+          [ "${#failed[@]}" -eq 0 ] || { echo "::error::Critical vulnerabilities with an available fix, or the scan failed: ${failed[*]}"; exit 1; }
+
       - name: Push images
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
