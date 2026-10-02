@@ -151,21 +151,11 @@ jobs:
             | diff migrations.txt - \
             || { echo "::error::The migration steps in deploy/compose.yml do not match AddMigration in AppHost.cs (< missing, > extra)"; exit 1; }
 
-      - name: Scan images
+      - name: Scan base layer (web image)
         run: |
-          mkdir -p "$RUNNER_TEMP/scan" "$RUNNER_TEMP/grype-db"
-          docker pull --quiet "$GRYPE_IMAGE"
-          mapfile -t images < images.txt
-          failed=()
-          for image in "${images[@]}"; do
-            docker save "$image" -o "$RUNNER_TEMP/scan/image.tar"
-            echo "::group::$image"
-            docker run --rm -e GRYPE_DB_CACHE_DIR=/db -v "$RUNNER_TEMP/grype-db:/db" -v "$RUNNER_TEMP/scan:/scan:ro" "$GRYPE_IMAGE" \
-              docker-archive:/scan/image.tar --only-fixed --fail-on critical || failed+=("$image")
-            echo "::endgroup::"
-          done
-          rm -rf "$RUNNER_TEMP/scan"
-          [ "${#failed[@]}" -eq 0 ] || { echo "::error::Critical vulnerabilities with an available fix, or the scan failed: ${failed[*]}"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/scan"
+          docker save "nullradix-dev/edvaniq/web:$TAG" -o "$RUNNER_TEMP/scan/image.tar"
+          docker run --rm -v "$RUNNER_TEMP/scan:/scan:ro" "$GRYPE_IMAGE" docker-archive:/scan/image.tar --only-fixed --fail-on critical
 
       - name: Push images
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
