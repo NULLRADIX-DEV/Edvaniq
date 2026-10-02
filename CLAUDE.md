@@ -114,7 +114,7 @@ Ergebnis:
 
 ## Server (Betrieb)
 
-Die Server-Details (VPS, Docker, 1Panel, nginx, NOOSE, Deploy-Benutzer) stehen im privaten Nachbar-Repo, weil dieses Repo öffentlich ist. Neue Betriebsdetails wie IPs, Ports, Pfade, Benutzer und Zeitpläne nur dort eintragen, nie in dieses Repo.
+Die Server-Details stehen im privaten Nachbar-Repo, weil dieses Repo öffentlich ist. Neue Betriebsdetails wie IPs, Ports, Pfade, Benutzer und Zeitpläne nur dort eintragen, nie in dieses Repo.
 
 @../EdvaniqDoc/Betrieb.md
 

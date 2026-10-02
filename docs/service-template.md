@@ -72,7 +72,7 @@ Zum lokalen Testen holst du dir ein Dev-Token mit `dotnet user-jwts` (siehe [Bef
 
 ## Datenbank und Migrationen
 
-Jeder Service hat seine eigene Datenbank `<name>db` und einen eigenen Benutzer `<name>`, der nur auf sie darf. Lokal legt der AppHost beides an (`AddServiceDatabase`). Das Passwort erzeugt er einmal und legt es in seinen User Secrets ab. Der Service bekommt `ConnectionStrings:<name>db` mit diesem Benutzer, nie mit root. Die Datenbank ist nur im Netz der App erreichbar. Auf dem Server legt jemand mit Server-Zugang beides an, bevor der Service zum ersten Mal deployt wird ([Deploy](deploy.md#einen-commit-ausrollen)).
+Jeder Service hat seine eigene Datenbank `<name>db` und einen eigenen Benutzer `<name>`, der nur auf sie darf. Lokal legt der AppHost beides an (`AddServiceDatabase`). Das Passwort erzeugt er einmal und legt es in seinen User Secrets ab. Der Service bekommt `ConnectionStrings:<name>db` mit diesem Benutzer, nie mit root. Die Datenbank ist nur im Netz der App erreichbar.
 
 DbContext und Health-Check verbinden sich über `MySqlConnections.For`, und zwar ohne TLS. Der Grund liegt im Treiber: MySql.Data hält den Zustand des TLS-Aufbaus in statischen `Dictionary`-Feldern ohne gemeinsame Sperre, und gleichzeitig geöffnete Verbindungen machen ihn kaputt.
 
@@ -118,7 +118,7 @@ Die Tests einer Klasse teilen sich eine Datenbank. Jeder Test erfindet seine Nut
 - `IsolationTests`: Nutzer B sieht die Einträge von A weder in der Liste noch einzeln.
 - `HealthTests`: mit und ohne Datenbank, auch außerhalb von Development
 
-Als Gegenprobe: Ohne den Filter in `ServiceDbContext` werden beide Isolationstests rot.
+Ob die Isolationstests wirklich etwas prüfen, zeigt die Gegenprobe. Ohne den Filter in `ServiceDbContext` werden beide rot.
 
 ## Lokal mit echter Datenbank prüfen
 
