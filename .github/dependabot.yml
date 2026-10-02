@@ -15,3 +15,5 @@ updates:
     groups:
       nuget-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: Microsoft.IdentityModel.JsonWebTokens
