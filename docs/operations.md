@@ -74,11 +74,11 @@ Der Server behält die Releases des aktuellen und des vorherigen Stands, ältere
 
 - **Eine MySQL für alle Services**, der Dienst `db` (`<app>-db-1`). Jeder Service hat seine DB `<name>db` und einen eigenen Benutzer `<name>`, der nur darauf darf. Den Connection String hat nur der Service, in `<app-dir>/<name>.env`.
 - **Ansehen:** phpMyAdmin im Tailnet, Server `<app>`, mit dem Benutzer, der nur lesen darf. Name und Passwort hat der Admin.
-- **Abfrage als Service-Benutzer** per SSH, hier für Planning:
+- **Abfrage als Service-Benutzer** per SSH, hier für Planning. Die DB hängt nur im Netz `<app>_backend`:
 
   ```
   pw=$(sed -n 's/.*;Password=//p' <app-dir>/planning.env)
-  platform docker <app> run --rm --network <app>_default -e MYSQL_PWD="$pw" mysql:9.7 mysql -hdb -uplanning planningdb
+  platform docker <app> run --rm --network <app>_backend -e MYSQL_PWD="$pw" mysql:9.7 mysql -hdb -uplanning planningdb
   ```
 
   Das Passwort nie ausgeben, auch nicht in einem Skript, das seine Befehle mitschreibt (`set -x`, `echo "$@"`). Ist es doch einmal sichtbar geworden: `<app-dir>/<name>.env` als App-Benutzer leeren (`runuser -u <app> -- sh -c ': > <app-dir>/<name>.env'`), `platform db-user <app> <name>` erzeugt dann ein neues, und ein Deploy startet die Container mit dem neuen Passwort.

@@ -1,29 +1,19 @@
-# All processes of one commit, rolled out together by the Deploy workflow through the server platform, where Edvaniq
-# runs as its own app (own user, rootless Docker, memory cap). The server sets APP_COMMIT and checks the file first.
-# Every service here needs its entry in AppHost.cs; the CI job "Container images" checks both lists match.
-# Before the switch the server dumps the database and runs every service of the profile migrate to completion. If one
-# fails, nothing is switched (docs/deploy.md).
-
 x-app: &app
   restart: unless-stopped
-  # Secrets only come from env files on the server (docs/secrets.md): app.env for every process, <service>.env with
-  # the connection string only for the processes of that service.
   env_file:
     - path: app.env
       required: true
-  # Own memory limit and no swap: a container that runs out is killed and restarted alone. All limits together
-  # (10 x 256m + 5 x 128m + 1536m for MySQL) stay below the app's memory cap on the server, which also has to hold
-  # Docker itself and a migration while it runs.
   mem_limit: 256m
   memswap_limit: 256m
+  pids_limit: 128
+  cpus: 1
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
-  # Health answers only on the internal port 8081 (ServiceDefaults), which is never published. The image has bash but no
-  # curl. The deploy waits until every container is healthy and restores the previous state if one is not.
+  read_only: true
+  tmpfs:
+    - /tmp
   environment:
     ASPNETCORE_HTTP_PORTS: "8080;8081"
-    # Services from the template do not start without an issuer. Placeholder until the ping token (#158) brings the
-    # real issuer and its key; until then no token is accepted, health works without one.
     Authentication__Schemes__Bearer__ValidIssuer: https://edvaniq.nullradix.de
   healthcheck:
     test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && head -n 1 <&3 | grep -q ' 200 '"]
@@ -33,14 +23,11 @@ x-app: &app
     start_period: 30s
     start_interval: 2s
 
-# Processes that stay a skeleton in the MVP need less.
 x-skeleton: &skeleton
   <<: *app
   mem_limit: 128m
   memswap_limit: 128m
 
-# Processes of a service with its own database: they also read its connection string (created on the server with
-# platform db-user) and wait for the database. A list replaces the one from x-app, so app.env is named again.
 x-planning: &planning
   <<: *app
   env_file:
@@ -48,33 +35,38 @@ x-planning: &planning
       required: true
     - path: planning.env
       required: true
+  networks: [default, backend]
   depends_on:
     db:
       condition: service_healthy
 
 services:
-  # One MySQL for all services, each with its own database and user. Root may only log in inside the container,
-  # for the dump before each deploy. No cap_drop: the image's entrypoint switches to the user mysql.
   db:
     image: mysql:9.7
-    # Most of the memory goes to the InnoDB cache, the limit leaves room for connections and buffers.
     command: ["--innodb-buffer-pool-size=1G"]
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is missing in .env}
       MYSQL_ROOT_HOST: localhost
     volumes:
       - ./db:/var/lib/mysql
-    # Only for the nightly backups and the view on the server, never public. The services reach it as db.
     ports:
       - "127.0.0.1:${DB_PORT:?DB_PORT is missing in .env}:3306"
     labels:
       platform.backup: mysql
+    networks: [backend]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs:
+      - /run/mysqld
+      - /tmp
+    pids_limit: 256
+    cpus: 2
     mem_limit: 1536m
     memswap_limit: 1536m
-    security_opt: [no-new-privileges:true]
     restart: unless-stopped
     stop_grace_period: 60s
-    # TCP answers only once the real server is up, not during the first initialisation.
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
       interval: 10s
@@ -88,7 +80,6 @@ services:
   planning-api:
     <<: *planning
     image: ghcr.io/nullradix-dev/edvaniq/planning-api:sha-${APP_COMMIT:?}
-  # Migration step (profile migrate): runs once to completion before the switch, never with the other services.
   planning-migrate:
     <<: *planning
     image: ghcr.io/nullradix-dev/edvaniq/planning-api:sha-${APP_COMMIT:?}
@@ -124,7 +115,6 @@ services:
   notifications-api:
     <<: *skeleton
     image: ghcr.io/nullradix-dev/edvaniq/notifications-api:sha-${APP_COMMIT:?}
-  # Workers have no HTTP, so no health check.
   content-worker:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/content-worker:sha-${APP_COMMIT:?}
@@ -141,3 +131,6 @@ services:
   web:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/web:sha-${APP_COMMIT:?}
+
+networks:
+  backend:
