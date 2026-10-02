@@ -155,7 +155,9 @@ Die letzte Zeile eines roten Laufs nennt den Grund. Bei allem mit „nothing cha
 
 Er braucht einen Eintrag in `AppHost.cs` und einen Dienst mit dem Anker `*app` in `deploy/compose.yml`, oder `*skeleton`, solange er im MVP nur Skelett ist. Ein Worker ohne HTTP bekommt dazu `healthcheck: disable: true`. Stimmen die beiden Listen nicht überein, schlägt der Job „Container images“ fehl.
 
-Ein Service aus der Vorlage hat eine eigene Datenbank. Seine Prozesse bekommen deshalb einen eigenen Anker wie `x-planning`, der zusätzlich `<name>.env` liest und auf `db` wartet. Dazu kommt der Migrationsschritt `<name>-migrate`. Vorbild ist Planning, die Schritte stehen in der [Service-Vorlage](service-template.md#gerüst-ersetzen).
+Über den Anker erbt jeder Prozess die Härtung: schreibgeschütztes Dateisystem bis auf `/tmp`, keine Capabilities, kein Rechtegewinn, eigene Grenzen für Prozesse, Speicher und CPU. Der Server lehnt einen Dienst ohne diese Härtung vor dem Umschalten ab.
+
+Ein Service aus der Vorlage hat eine eigene Datenbank. Seine Prozesse bekommen deshalb einen eigenen Anker wie `x-planning`, der zusätzlich `<name>.env` liest, im Netz `backend` der DB hängt und auf `db` wartet. Die übrigen Prozesse erreichen die DB nicht. Dazu kommt der Migrationsschritt `<name>-migrate`. Vorbild ist Planning, die Schritte stehen in der [Service-Vorlage](service-template.md#gerüst-ersetzen).
 
 ## Secrets
 

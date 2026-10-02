@@ -149,16 +149,17 @@ Ein neuer Service ersetzt das Beispiel durch seine erste echte Entity:
        .WaitForCompletion(<name>Migrate);
    ```
 
-3. `deploy/compose.yml`: ein Anker `x-<name>` mit `<name>.env` und dem Warten auf `db`, darauf der Dienst `<name>-api` und der Migrationsschritt `<name>-migrate`. Vorbild ist Planning:
+3. `deploy/compose.yml`: ein Anker `x-<name>` mit `<name>.env`, dem Netz `backend` und dem Warten auf `db`, darauf der Dienst `<name>-api` und der Migrationsschritt `<name>-migrate`. Die Liste `env_file` ersetzt die aus `x-app`, deshalb steht `app.env` noch einmal da. Die DB hängt nur im Netz `backend`, nur Prozesse mit eigener DB kommen dazu. Vorbild ist Planning:
 
    ```yaml
    x-<name>: &<name>
      <<: *app
-     env_file:              # ersetzt die Liste aus x-app, deshalb steht app.env noch einmal da
+     env_file:
        - path: app.env
          required: true
        - path: <name>.env
          required: true
+     networks: [default, backend]
      depends_on:
        db:
          condition: service_healthy
