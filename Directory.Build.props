@@ -10,6 +10,13 @@
     <Product>Edvaniq</Product>
   </PropertyGroup>
 
+  <!-- NuGet Audit checks every package including transitive ones. A high or critical advisory fails the restore,
+       locally and in CI. Moderate and low ones stay warnings. -->
+  <PropertyGroup>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1903;NU1904</WarningsAsErrors>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(CI)' == 'true' Or '$(TF_BUILD)' == 'true'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
