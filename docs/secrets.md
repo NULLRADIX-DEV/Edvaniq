@@ -1,6 +1,6 @@
 # Secrets
 
-Ein Secret ist alles, womit sich jemand als Edvaniq ausgeben oder an fremde Daten kommen kann: Passwörter, Connection Strings mit Passwort, Tokens, API-Schlüssel und private Zertifikate. Für sie gilt eine Regel: Sie existieren nur in der Umgebung, in der der Code läuft. Im Repo, im Client, im Image und im Log haben sie nichts verloren.
+Ein Secret ist alles, womit sich jemand als Edvaniq ausgeben oder an fremde Daten kommen kann: Passwörter, Connection Strings mit Passwort, Tokens, API-Schlüssel und private Zertifikate. Sie existieren nur in der Umgebung, in der der Code läuft. Im Repo, im Client, im Image und im Log haben sie nichts verloren.
 
 ## Lokal
 
@@ -10,7 +10,7 @@ Für die Entwicklung musst du keine Secrets anlegen. Aspire verwaltet die Passw�
 
 In GitHub liegen Secrets im Repo oder im Environment `production`, das nur `main` nutzen darf. Für die Container-Registry reicht das automatische `GITHUB_TOKEN`.
 
-Auf dem Server bekommt jeder Container seine Werte erst beim Start, als Umgebungsvariablen aus der Betriebsumgebung. Jeder Service sieht dabei nur, was er braucht: den Connection String seiner eigenen Datenbank, aber weder den eines anderen Service noch das Passwort des DB-Admins.
+Auf dem Server bekommt jeder Container seine Werte erst beim Start, als Umgebungsvariablen aus der Betriebsumgebung. Gemeinsame Werte sehen alle Container. Den Connection String einer Datenbank bekommt aber nur der Service, dem sie gehört, und das Passwort des DB-Admins sieht kein Service.
 
 Im Code liest ein Service ein Secret nur aus der Konfiguration, zum Beispiel `ConnectionStrings__planningdb`. Ein Default im Code wäre ein Secret im Repo.
 

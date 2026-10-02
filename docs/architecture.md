@@ -1,14 +1,14 @@
-# Edvaniq – Architektur
+# Architektur
 
-Microservices-Architektur, orchestriert mit .NET Aspire. Jeder Service ist ein eigener Bounded Context mit eigener Datenbank und eigenem Deployment.
+Edvaniq besteht aus Microservices, die .NET Aspire zusammenhält. Jeder Service ist ein eigener Bounded Context: Er hat seine eigene Datenbank, wird für sich gebaut und läuft als eigener Prozess. So kann ein Service wachsen oder ausgetauscht werden, ohne dass die anderen es merken.
 
 ## Ordnerstruktur
 
 ```
 src/
   Aspire/          AppHost (lokale Orchestrierung), ServiceDefaults (Telemetrie, Health, Service Discovery)
-  BuildingBlocks/  technische Basisbibliotheken – keine Fachlogik
-  Gateway/         API-Gateway (YARP) – einziger Einstiegspunkt für Clients
+  BuildingBlocks/  technische Basisbibliotheken, keine Fachlogik
+  Gateway/         API-Gateway (YARP), einziger Einstiegspunkt für Clients
   Services/<Name>/ ein Microservice = Api + Application + Domain + Infrastructure + Contracts (+ Worker)
   Clients/         Client.Core, Client.DesignSystem, Client.UI, Web, Web.Client, App (MAUI)
 tests/
@@ -45,19 +45,21 @@ templates/
 | `.Contracts` | Integration Events (öffentliche Schnittstelle zu anderen Services) | BuildingBlocks.Contracts |
 | `.Worker` | Hintergrundverarbeitung (nur Content, Notifications) | Application, Infrastructure, ServiceDefaults |
 
-Abhängigkeiten zeigen immer nach innen: `Api → Infrastructure → Application → Domain`.
+Die Abhängigkeiten zeigen immer nach innen: Api, dann Infrastructure, dann Application, dann Domain. Die Fachlogik weiß also nichts von Datenbank oder HTTP.
 
 ## Regeln
 
-1. Ein Service referenziert von anderen Services **nur** `.Contracts`, niemals Domain/Application/Infrastructure/Api.
-2. Kommunikation zwischen Services: **asynchron** über Integration Events (Message Broker), **synchron** nur per HTTP über Aspire Service Discovery.
-3. Jeder Service besitzt seine eigene Datenbank. Kein Service liest die Datenbank eines anderen.
-4. Clients kennen kein Backend-Projekt. `Client.Core` spricht ausschließlich mit dem Gateway (API-Clients per OpenAPI generiert).
-5. BuildingBlocks enthalten nur technische Bausteine, keine Fachbegriffe.
-6. Paketversionen stehen ausschließlich in `Directory.Packages.props`.
-7. Jede Anfrage an einen Service braucht ein gültiges Token. Der Nutzer kommt nur aus dem Token (`sub`), nie aus der Anfrage ([service-template.md](service-template.md#token-prüfung)).
+Diese Regeln halten die Services auseinander:
 
-### Event-Konsum (wer hört auf wessen Contracts)
+1. Von einem anderen Service referenziert ein Service nur dessen `.Contracts`, niemals Domain, Application, Infrastructure oder Api.
+2. Services sprechen asynchron über Integration Events miteinander, über einen Message Broker. Synchron geht nur HTTP über die Service Discovery von Aspire.
+3. Jeder Service besitzt seine eigene Datenbank. Kein Service liest die Datenbank eines anderen.
+4. Clients kennen kein Backend-Projekt. `Client.Core` spricht nur mit dem Gateway, die API-Clients entstehen per OpenAPI.
+5. BuildingBlocks enthalten nur technische Bausteine, keine Fachbegriffe.
+6. Paketversionen stehen nur in `Directory.Packages.props`.
+7. Jede Anfrage an einen Service braucht ein gültiges Token. Der Nutzer kommt nur aus dem Token (`sub`), nie aus der Anfrage ([Service-Vorlage](service-template.md#token-prüfung)).
+
+Wer auf wessen Integration Events hört:
 
 | Consumer | konsumiert von |
 |---|---|
@@ -80,26 +82,25 @@ Edvaniq.Web (Host) ──► Edvaniq.Web.Client (WASM) ──┐
 Edvaniq.App (MAUI Blazor Hybrid) ───────────────────┘         └──► Client.DesignSystem (Tokens, Basis-Komponenten)
 ```
 
-Seiten und Features werden **einmal** in `Client.UI` gebaut und laufen im Browser und in der App.
+Seiten und Features entstehen einmal in `Client.UI` und laufen dann im Browser und in der App.
 
 ## Datenbank
 
-- **MySQL**, ein Server, **eine Datenbank pro Service** (`identitydb`, `planningdb`, …). Worker nutzen die DB ihres Service.
-- Lokal startet Aspire MySQL als Container (persistentes Volume) inkl. phpMyAdmin. Datenbanken werden automatisch angelegt.
-- Services erhalten den Connection String per Aspire als `ConnectionStrings:<service>db`, mit einem eigenen DB-Benutzer, der nur auf die eigene Datenbank darf (`AddServiceDatabase` im AppHost).
-- Daten eines Nutzers (`IOwnedByUser`) sieht nur dieser Nutzer: Der DbContext jedes Service erbt von `ServiceDbContext`, der jede Abfrage auf den Nutzer aus dem Token einschränkt ([service-template.md](service-template.md#daten-je-nutzer)).
-- Das Schema ändert sich nur über EF-Core-Migrationen. Migrieren ist ein eigener Schritt (`<Api>.dll migrate`), nie Teil des Starts ([service-template.md](service-template.md#datenbank-und-migrationen)).
-- EF-Core-Provider: `MySql.EntityFrameworkCore` (Oracle) unterstützt EF Core 10. `Pomelo.EntityFrameworkCore.MySql` ist aktuell nur bis EF Core 9 verfügbar.
+Alle Services nutzen MySQL, einen Server mit einer Datenbank pro Service (`identitydb`, `planningdb` und so weiter). Ein Worker nutzt die Datenbank seines Service. Lokal startet Aspire MySQL als Container mit persistentem Volume und phpMyAdmin und legt die Datenbanken selbst an.
+
+Den Connection String bekommt ein Service von Aspire als `ConnectionStrings:<service>db`, mit einem eigenen DB-Benutzer, der nur auf die eigene Datenbank darf (`AddServiceDatabase` im AppHost). Daten eines Nutzers (`IOwnedByUser`) sieht nur dieser Nutzer, weil der DbContext jedes Service von `ServiceDbContext` erbt. Der schränkt jede Abfrage auf den Nutzer aus dem Token ein ([Service-Vorlage](service-template.md#daten-je-nutzer)).
+
+Das Schema ändert sich nur über EF-Core-Migrationen, und Migrieren ist ein eigener Schritt (`<Api>.dll migrate`), nie Teil des Starts ([Service-Vorlage](service-template.md#datenbank-und-migrationen)). Als Provider dient `MySql.EntityFrameworkCore` von Oracle, weil er EF Core 10 kann. `Pomelo.EntityFrameworkCore.MySql` gibt es bisher nur bis EF Core 9.
 
 ## Starten
 
-Voraussetzung: Docker Desktop (für den MySQL-Container).
+Du brauchst Docker Desktop für den MySQL-Container. Dann startet ein Befehl alles:
 
 ```
 dotnet run --project src/Aspire/Edvaniq.AppHost
 ```
 
-Öffnet das Aspire-Dashboard mit MySQL, allen Services, Workern, Gateway und Web.
+Es öffnet sich das Aspire-Dashboard mit MySQL, allen Services, Workern, Gateway und Web.
 
 ## Neuen Service anlegen
 
@@ -110,4 +111,4 @@ dotnet new install ./templates/service --force   # einmalig und nach jeder Ände
 dotnet new edvaniq-service -n <Name>
 ```
 
-Was entsteht, wie Health „lebendig“ und „bereit“ unterscheidet, die Schritte von Hand danach und alle weiteren Befehle stehen in [service-template.md](service-template.md).
+Was dabei entsteht und was du danach von Hand erledigst, steht in der [Service-Vorlage](service-template.md).

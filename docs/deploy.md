@@ -1,10 +1,10 @@
 # Deploy
 
-Ein Deploy bringt alle Prozesse eines Commits auf `main` gemeinsam auf den Server. Er startet nur von Hand, und das ist die Freigabe: Was niemand bewusst ausrollt, geht nicht live. Für Deploy und Rollback reicht GitHub, Zugang zum Server brauchst du dafür nicht.
+Ein Deploy bringt alle Prozesse eines Commits auf `main` gemeinsam auf den Server. Er startet nur von Hand, und genau das ist die Freigabe. Was niemand bewusst ausrollt, geht nicht live. Für Deploy und Rollback reicht GitHub, Zugang zum Server brauchst du dafür nicht.
 
 ## Voraussetzungen
 
-Du brauchst in der Org `NULLRADIX-DEV` mindestens die Rolle „Write“ im Repo, sonst fehlt in Actions der Knopf „Run workflow“. Ausrollen lässt sich nur, was auf `main` liegt, denn das Environment `production` lehnt jeden anderen Branch ab.
+Du brauchst in der Org `NULLRADIX-DEV` mindestens die Rolle „Write“ im Repo, sonst fehlt in Actions der Knopf „Run workflow“. Ausrollen lässt sich nur ein Commit, der auf `main` liegt. Das prüft der Workflow selbst, und das Environment `production` gibt seine Schlüssel nur an Läufe von `main` heraus.
 
 ## Einen Commit ausrollen
 
@@ -18,9 +18,9 @@ Bringt der Commit einen neuen Service mit eigener Datenbank mit, muss diese Date
 
 ## Was dabei passiert
 
-Der Workflow schickt nur `deploy/compose.yml` aus genau diesem Commit an den Server. Dort läuft Edvaniq als eigene App neben anderen, mit eigenem Benutzer, eigenem Docker und festen Grenzen für Speicher und CPU. So kann Edvaniq keine andere App stören, und umgekehrt.
+Der Workflow schickt nur `deploy/compose.yml` aus genau diesem Commit an den Server. Dort läuft Edvaniq getrennt von anderen Apps und mit festen Grenzen für Speicher und CPU. So kann Edvaniq keine andere App stören, und umgekehrt.
 
-Der Server prüft die Compose-Datei und holt die Images des Commits. Danach sichert er die Datenbank, führt die Migrationen aus und schaltet erst dann alle Dienste um. Er wartet, bis jeder Container healthy ist. Scheitert etwas vor dem Umschalten, läuft der alte Stand unverändert weiter. Scheitert das Umschalten selbst, startet der Server den vorherigen Stand wieder. Alte und neue Prozesse laufen also nie gemischt.
+Der Server prüft die Compose-Datei und holt die Images des Commits. Danach sichert er die Datenbank, führt die Migrationen aus und schaltet erst dann alle Dienste um. Er wartet, bis jeder Container healthy ist. Scheitert etwas vor dem Umschalten, läuft der alte Stand unverändert weiter. Scheitert das Umschalten selbst, startet der Server den vorherigen Stand wieder, alte und neue Prozesse laufen also nie gemischt. Nur in zwei Fällen gibt es keinen vorherigen Stand. Scheitert der allererste Deploy, fährt der Server alles herunter. Scheitert ein erneuter Deploy des Commits, der gerade läuft, muss jemand auf dem Server nachsehen.
 
 ## Hat es geklappt?
 
@@ -31,14 +31,17 @@ Ist er rot, nennt die letzte Zeile im Log den Grund. Endet sie mit „nothing ch
 | Meldung | Was tun |
 |---|---|
 | `not all images of … are available` | Zu früh gestartet. Warten, bis „CI“ auf `main` für diesen Commit grün ist, dann neu starten. |
-| `… is not on main`, `Unknown commit …` | Im Feld „commit“ steht kein Commit von `main`. Leer lassen oder den richtigen Hash eintragen. |
+| `… has revision …` | Ein Image gehört zu einem anderen Commit. Nie von Hand taggen, sondern „CI“ auf `main` für diesen Commit neu laufen lassen. |
+| `'…' is not a commit hash`, `Unknown commit …`, `… is not on main` | Im Feld „commit“ steht kein Commit von `main`. Leer lassen oder den richtigen Hash eintragen. |
+| `… has no deploy/compose.yml` | Der Commit ist älter als der Deploy, er lässt sich nicht ausrollen. |
 | `Either a commit or rollback, not both` | Nur eines von beiden setzen. |
-| `compose.yml breaks the platform rules` | Ein Dienst in `deploy/compose.yml` erbt die Härtung nicht ([Neuer Prozess](#neuer-prozess)). |
+| `compose.yml breaks the platform rules` | Ein Dienst in `deploy/compose.yml` hält die Regeln nicht ein, meist fehlt die Härtung aus dem Anker ([Neuer Prozess](#neuer-prozess)) oder ein Port liegt außerhalb des Bereichs der App. Die Änderung zurücknehmen. |
 | `compose.yml is invalid or an env file is missing` | Lokal mit `docker compose config` prüfen. Bei einem neuen Service fehlt meist seine Datenbank auf dem Server. |
 | `<name>-migrate failed …` | Die Migration ist gescheitert, die Services laufen auf dem alten Stand. Fix per Pull Request, dann neu deployen. |
+| `Rollback failed: no previous release …` | Es gibt noch keinen vorherigen Stand. Einen älteren Commit normal deployen. |
 | `another deploy is running` | Warten und neu starten. |
 
-Alles andere deutet auf den Server hin, dann hilft jemand mit Server-Zugang. Das Actions-Log ist öffentlich, deshalb nennt der Server dort keine Pfade, Hosts oder Benutzer.
+Alle anderen Meldungen deuten auf den Server hin, dann hilft jemand mit Server-Zugang. Das Actions-Log ist öffentlich, deshalb nennt der Server dort keine Pfade, Hosts oder Benutzer.
 
 ## Rollback
 
@@ -47,9 +50,9 @@ Den brauchst du, wenn der neue Stand zwar läuft, aber fachlich kaputt ist. Sche
 1. Actions → „Deploy“ → „Run workflow“
 2. „rollback“ anhaken und „commit“ leer lassen.
 
-Nach 1 bis 2 Minuten ist der Lauf grün, und die Zusammenfassung nennt den Commit, der jetzt läuft. Der Rollback durchläuft dieselben Prüfungen wie ein Deploy. Die Images des vorherigen Stands liegen noch auf dem Server, er braucht also die Registry nicht.
+Nach 1 bis 2 Minuten ist der Lauf grün, und die Zusammenfassung nennt den Commit, der jetzt läuft. Der Rollback durchläuft dieselben Prüfungen wie ein Deploy, und scheitert er, läuft der aktuelle Stand weiter. Die Images des vorherigen Stands liegen noch auf dem Server, er braucht also die Registry nicht.
 
-Danach ist der kaputte Stand der „vorherige“. Ein zweiter Rollback ginge also wieder nach vorn, und ein Deploy ohne Commit rollt `main` aus, also wieder den Fehler. Deploye deshalb erst, wenn der Fix auf `main` ist. Weiter zurück als einen Stand geht es mit einem normalen Deploy und dem alten Commit im Feld „commit“.
+Danach ist der kaputte Stand der „vorherige“. Ein zweiter Rollback ginge also wieder nach vorn, und ein Deploy ohne Commit rollt `main` aus, also wieder den Fehler. Deploye deshalb erst, wenn der Fix auf `main` ist. Weiter zurück als einen Stand geht es mit einem normalen Deploy und dem alten Commit im Feld „commit“. Dessen Images holt der Server dann wieder aus der Registry.
 
 Ein Rollback macht Migrationen nicht rückgängig. Dafür gibt es die Sicherung vor jedem Deploy, die jemand mit Server-Zugang einspielen kann.
 
@@ -59,15 +62,15 @@ Das Schema ändert sich nur im Deploy, nie beim Start eines Service. Ein Migrati
 
 Aus dem Ablauf oben folgen zwei Regeln. Migrationen müssen sich wiederholen lassen, denn jeder Deploy und jeder Rollback führt die Migrationen seines Stands aus. EF Core wendet dabei nur an, was fehlt, und ein älteres Image stuft die Datenbank nie herunter. Außerdem müssen Migrationen abwärtsverträglich sein, weil nach einem Fehlschlag oder Rollback der alte Code gegen das neue Schema läuft. Eine neue Spalte kommt also zuerst dazu, und die alte fällt erst in einem späteren Deploy weg.
 
-Scheitert eine Migration, wird nicht umgeschaltet. Weil MySQL Änderungen am Schema nicht zurückrollt, kann die Datenbank dann halb migriert sein. Im Actions-Log steht nur, dass die Migration gescheitert ist. Ihre Ausgabe bleibt auf dem Server, weil sie Hosts und Benutzer nennen kann.
+Scheitert eine Migration, wird nicht umgeschaltet, und die Datenbank kann halb migriert sein ([warum](service-template.md#datenbank-und-migrationen)). Im Actions-Log steht nur, dass die Migration gescheitert ist. Ihre Ausgabe bleibt auf dem Server, weil sie Hosts und Benutzer nennen kann.
 
 ## Neuer Prozess
 
 Jeder Prozess braucht einen Eintrag in `AppHost.cs` und einen Dienst in `deploy/compose.yml`. Stimmen die beiden Listen nicht überein, schlägt der CI-Job „Container images“ fehl.
 
-Der Dienst erbt über den Anker `*app` alles, was der Server verlangt: ein schreibgeschütztes Dateisystem bis auf `/tmp`, keine Capabilities, keinen Rechtegewinn und eigene Grenzen für Prozesse, Speicher und CPU. Solange ein Prozess im MVP nur Skelett ist, nimmt er `*skeleton`. Ein Worker ohne HTTP bekommt dazu `healthcheck: disable: true`.
+Über den Anker `*app` erbt der Dienst die Härtung: ein schreibgeschütztes Dateisystem bis auf `/tmp`, keine Capabilities, keinen Rechtegewinn und eigene Grenzen für Prozesse, Speicher und CPU. Fehlen die Grenzen, `cap_drop: [ALL]` oder `no-new-privileges`, lehnt der Server die Datei ab. Solange ein Prozess im MVP nur Skelett ist, nimmt er `*skeleton`. Ein Worker ohne HTTP bekommt dazu `healthcheck: disable: true`.
 
-Alle Services teilen sich den MySQL-Dienst `db`, jeder mit eigener Datenbank und eigenem Benutzer. Ein Service mit Datenbank bekommt deshalb einen eigenen Anker wie `x-planning`. Der liest zusätzlich seinen Connection String, hängt im Netz `backend` der Datenbank und wartet auf `db`. Die übrigen Prozesse erreichen die Datenbank nicht. Wie das aussieht, zeigt die [Service-Vorlage](service-template.md#danach-von-hand).
+Alle Services teilen sich den MySQL-Dienst `db`, jeder mit eigener Datenbank und eigenem Benutzer. Ein Service mit Datenbank bekommt deshalb einen eigenen Anker wie `x-planning`, nur er erreicht die Datenbank. Wie das aussieht, zeigt die [Service-Vorlage](service-template.md#danach-von-hand).
 
 ## Speicher
 
