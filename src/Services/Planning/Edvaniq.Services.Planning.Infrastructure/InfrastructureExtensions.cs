@@ -1,6 +1,7 @@
 using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.Services.Planning.Application;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace Edvaniq.Services.Planning.Infrastructure;
@@ -14,6 +15,8 @@ public static class InfrastructureExtensions
     {
         builder.Services.AddMySqlDbContext<PlanningDbContext>(DatabaseName);
         builder.Services.AddScoped<IExampleItems, ExampleItems>();
+        builder.Services.AddScoped<IPings, Pings>();
+        builder.Services.TryAddSingleton(TimeProvider.System);
 
         // Ready only with a reachable database, alive without it.
         builder.Services.AddHealthChecks()
