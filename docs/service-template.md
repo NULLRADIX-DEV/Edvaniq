@@ -188,6 +188,8 @@ Ob die Isolationstests wirklich etwas prüfen, zeigt die Gegenprobe. Ohne den Fi
 
    Den Aussteller der Tokens (`Authentication__Schemes__Bearer__ValidIssuer`) setzt `x-app` für alle, ohne ihn startet ein Service aus der Vorlage nicht.
 
+4. Soll ein Client den Service erreichen, braucht das Gateway eine Route dorthin. Leg in seiner `appsettings.json` unter `ReverseProxy` eine Route `/<name>/{**rest}` und einen Cluster mit dem Ziel `https+http://<name>-api` und einem `HttpRequest:ActivityTimeout` an, Vorbild ist Planning. Auf dem Server findet das Gateway den Service über eine Zeile `services__<name>-api__http__0: http://<name>-api:8080` im Abschnitt `environment` des Dienstes `gateway` in `deploy/compose.yml`. Wie das Gateway weiterleitet, steht in der [Architektur](architecture.md#gateway).
+
 AppHost und Compose gehören zusammen, die CI prüft, dass beide Listen passen, auch bei den Migrationsschritten. Trag den Service aber erst ein, wenn seine Datenbank auf dem Server angelegt ist, sonst bricht der Deploy vor dem Umschalten ab.
 
 ## Gerüst ersetzen

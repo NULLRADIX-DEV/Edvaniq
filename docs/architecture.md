@@ -12,6 +12,7 @@ src/
   Services/<Name>/ ein Microservice = Api + Application + Domain + Infrastructure + Contracts (+ Worker)
   Clients/         Client.Core, Client.DesignSystem, Client.UI, Web, Web.Client, App (MAUI)
 tests/
+  Gateway/         IntegrationTests des Gateways
   Services/<Name>/ UnitTests + IntegrationTests pro Service
   Edvaniq.ArchitectureTests, Edvaniq.EndToEndTests, Edvaniq.Testing (geteilte Test-Helfer)
 templates/
@@ -73,6 +74,14 @@ Wer auf wessen Integration Events hört:
 | Gamification | Identity, Planning, Assessment, Flashcards, LearningEngine |
 | Analytics | Identity, Planning, Assessment, Flashcards, LearningEngine, Gamification |
 | Notifications | Identity, Planning, Flashcards, Gamification |
+
+## Gateway
+
+Clients sprechen nie direkt mit einem Service, sondern immer mit dem Gateway, und das reicht die Anfrage weiter. Welcher Pfad zu welchem Service führt, steht nur in der Konfiguration, im Abschnitt `ReverseProxy` der `appsettings.json` des Gateways. Jeder Service hat dort einen eigenen Pfad, den das Gateway vor dem Weiterreichen abschneidet. `POST /planning/ping` kommt bei Planning also als `POST /ping` an.
+
+Als Ziel steht dort ein Name der Service Discovery, etwa `https+http://planning-api`. Lokal löst Aspire ihn auf, auf dem Server die Variable `services__planning-api__http__0` beim Dienst `gateway` in `deploy/compose.yml`. Das Token reicht das Gateway unverändert durch, geprüft wird es im Service.
+
+Kennt das Gateway einen Pfad nicht, antwortet es mit 404. Ist der Service nicht erreichbar, kommt 502. Bleibt er länger stumm, als `HttpRequest:ActivityTimeout` am Cluster erlaubt, kommt 504. Der Wert liegt unter den 10 Sekunden, die ein Aufrufer mit der Standard-Resilience je Versuch wartet, sonst gäbe der vorher auf. In allen drei Fällen steht im Body ein Problem nach RFC 9457 (`application/problem+json`), das den Grund nennt. Eine gescheiterte Anfrage wiederholt das Gateway nicht von selbst, weil ein `POST` sonst doppelt ankommen könnte.
 
 ## Clients
 
