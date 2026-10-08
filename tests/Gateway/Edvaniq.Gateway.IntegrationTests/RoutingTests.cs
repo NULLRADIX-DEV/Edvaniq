@@ -3,6 +3,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using Edvaniq.Testing;
+
 using Microsoft.Extensions.DependencyInjection;
 
 using Yarp.ReverseProxy;
@@ -25,7 +27,19 @@ public sealed class RoutingTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var echo = await response.Content.ReadFromJsonAsync<Echo>(TestContext.Current.CancellationToken);
-        Assert.Equal(new Echo("planning-stub", "POST", "/ping", "Bearer token"), echo);
+        Assert.Equal(new Echo("planning-stub", "POST", "/ping", "Bearer token", Cookie: ""), echo);
+    }
+
+    // The shell asks the web host, and the web host asks here, whether the backend answers. No service is involved.
+    [Fact]
+    public async Task Status_AnswersWithoutAnyService()
+    {
+        await using var gateway = new GatewayFactory("http://127.0.0.1:9");
+        using var client = gateway.CreateClient();
+
+        using var response = await client.GetAsync("/status", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
     // A path with a dot is a case of its own: the default fallback pattern leaves out what looks like a file.

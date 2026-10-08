@@ -55,7 +55,7 @@ Diese Regeln halten die Services auseinander:
 1. Von einem anderen Service referenziert ein Service nur dessen `.Contracts`, niemals Domain, Application, Infrastructure oder Api.
 2. Services sprechen asynchron über Integration Events miteinander, über einen Message Broker. Synchron geht nur HTTP über die Service Discovery von Aspire.
 3. Jeder Service besitzt seine eigene Datenbank. Kein Service liest die Datenbank eines anderen.
-4. Clients kennen kein Backend-Projekt. `Client.Core` spricht nur mit dem Gateway, die API-Clients entstehen per OpenAPI.
+4. Clients kennen kein Backend-Projekt. `Client.Core` spricht nur mit dem Gateway, im Browser über den Web-Host. Die API-Clients entstehen per OpenAPI.
 5. BuildingBlocks enthalten nur technische Bausteine, keine Fachbegriffe.
 6. Paketversionen stehen nur in `Directory.Packages.props`.
 7. Jede Anfrage an einen Service braucht ein gültiges Token. Der Nutzer kommt nur aus dem Token (`sub`), nie aus der Anfrage ([Service-Vorlage](service-template.md#token-prüfung)).
@@ -81,7 +81,7 @@ Clients sprechen nie direkt mit einem Service, sondern immer mit dem Gateway, un
 
 Als Ziel steht dort ein Name der Service Discovery, etwa `https+http://planning-api`. Lokal löst Aspire ihn auf, auf dem Server die Variable `services__planning-api__http__0` beim Dienst `gateway` in `deploy/compose.yml`. Das Token reicht das Gateway unverändert durch, geprüft wird es im Service.
 
-Kennt das Gateway einen Pfad nicht, antwortet es mit 404. Ist der Service nicht erreichbar, kommt 502. Bleibt er länger stumm, als `HttpRequest:ActivityTimeout` am Cluster erlaubt, kommt 504. Der Wert liegt unter den 10 Sekunden, die ein Aufrufer mit der Standard-Resilience je Versuch wartet, sonst gäbe der vorher auf. In allen drei Fällen steht im Body ein Problem nach RFC 9457 (`application/problem+json`), das den Grund nennt. Eine gescheiterte Anfrage wiederholt das Gateway nicht von selbst, weil ein `POST` sonst doppelt ankommen könnte.
+Kennt das Gateway einen Pfad nicht, antwortet es mit 404. Ist der Service nicht erreichbar, kommt 502. Bleibt er länger stumm, als `HttpRequest:ActivityTimeout` am Cluster erlaubt, kommt 504. Der Wert liegt unter den 10 Sekunden, die ein Aufrufer mit der Standard-Resilience je Versuch wartet, sonst gäbe der vorher auf. In allen drei Fällen steht im Body ein Problem nach RFC 9457 (`application/problem+json`), das den Grund nennt. Eine gescheiterte Anfrage wiederholt das Gateway nicht von selbst, weil ein `POST` sonst doppelt ankommen könnte. Ob das Gateway selbst läuft, sagt `GET /status` mit 204.
 
 ## Clients
 
@@ -94,6 +94,8 @@ Edvaniq.App (MAUI Blazor Hybrid) ───────────────�
 Seiten und Features entstehen einmal in `Client.UI` und laufen dann im Browser und in der App.
 
 Auch die Shell liegt dort: `ShellLayout` mit Kopfzeile, Navigation und dem Hinweis, wenn der Server nicht antwortet, dazu `Routes`. `Edvaniq.Web.Client` und die App binden nur `Routes` ein und registrieren `IBackendStatus` aus `Client.Core`. Farben, Abstände und Grundstile stehen als CSS-Variablen in `Client.DesignSystem/wwwroot/edvaniq.css`. Ein Test prüft jedes Paar aus Text- und Hintergrundfarbe gegen WCAG AA, eine neue Farbe bekommt dort ihr Paar.
+
+Der Browser spricht nur mit dem Web-Host, nie mit dem Gateway. Was unter `/api/…` ankommt, reicht der Web-Host serverseitig ans Gateway weiter, die Routen stehen im Abschnitt `ReverseProxy` seiner `appsettings.json`. Dafür braucht es eine Sitzung, einen verschlüsselten Cookie, den kein Skript lesen kann und den der Browser nur über HTTPS an diese Seite schickt. Ohne Sitzung antwortet der Web-Host mit 401. Den Cookie und einen `Authorization`-Header aus dem Browser gibt er nicht weiter, und Cookies aus dem Backend kommen nicht beim Browser an. Einen Login gibt es noch nicht: `POST /session` startet eine Gast-Sitzung, `DELETE /session` beendet sie, `GET /session` sagt, ob eine besteht. Nur `/api/status` geht ohne Sitzung durch, damit die Shell auch ohne Sitzung erfährt, ob das Gateway antwortet.
 
 ## Datenbank
 
