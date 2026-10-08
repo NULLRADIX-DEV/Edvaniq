@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\Gateway\Edvaniq.Gateway\Edvaniq.Gateway.csproj" />
+    <ProjectReference Include="..\..\..\src\Clients\Edvaniq.Web\Edvaniq.Web.csproj" />
     <ProjectReference Include="..\..\Edvaniq.Testing\Edvaniq.Testing.csproj" />
   </ItemGroup>
 

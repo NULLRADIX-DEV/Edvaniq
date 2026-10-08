@@ -27,6 +27,9 @@ app.MapReverseProxy(proxy =>
     proxy.UsePassiveHealthChecks();
 });
 
+// Whether the gateway itself answers. The web host forwards the status check of the shell here.
+app.MapGet("/status", () => TypedResults.NoContent());
+
 // Everything no route knows. "{**path}" instead of the default pattern, which leaves out paths that look like a file.
 app.MapFallback("{**path}", () => Results.Problem(
     statusCode: StatusCodes.Status404NotFound,
