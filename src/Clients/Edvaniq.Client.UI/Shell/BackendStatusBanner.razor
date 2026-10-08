@@ -1,0 +1,51 @@
+@inject IBackendStatus Backend
+
+@* The live region is always there, so a screen reader announces the hint when it appears, and the all-clear when it
+   goes away again. *@
+<div role="status">
+    @if (!reachable)
+    {
+        <div class="backend-banner">
+            <p><strong>Keine Verbindung zum Server.</strong> Prüf deine Internetverbindung und versuch es dann noch einmal.</p>
+            <button type="button" class="button" @onclick="CheckAsync">
+                @(checking ? "Wird geprüft …" : "Erneut versuchen")
+            </button>
+        </div>
+    }
+    else if (reconnected)
+    {
+        <p class="visually-hidden">Die Verbindung zum Server ist wieder da.</p>
+    }
+</div>
+
+@code {
+    private bool reachable = true;
+    private bool reconnected;
+    private bool checking;
+
+    // Called when a retry succeeds. The button that had the focus is gone then, so the shell gives the focus a new place.
+    [Parameter]
+    public EventCallback OnReconnected { get; set; }
+
+    protected override Task OnInitializedAsync() => CheckAsync();
+
+    // The button stays enabled while checking: a disabled button would lose the keyboard focus.
+    private async Task CheckAsync()
+    {
+        if (checking)
+        {
+            return;
+        }
+
+        var wasDown = !reachable;
+        checking = true;
+        reachable = await Backend.IsReachableAsync();
+        checking = false;
+
+        if (wasDown && reachable)
+        {
+            reconnected = true;
+            await OnReconnected.InvokeAsync();
+        }
+    }
+}

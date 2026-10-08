@@ -56,6 +56,7 @@
 
   <!-- Testing. JsonWebTokens matches the version JwtBearer brings along: a lower one would be a downgrade, a higher one would test against other IdentityModel packages than the services run with. Dependabot leaves it alone, it moves with JwtBearer. -->
   <ItemGroup>
+    <PackageVersion Include="bunit" Version="2.11.3" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
     <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.19.2" />
     <PackageVersion Include="Testcontainers.MySql" Version="4.15.0" />

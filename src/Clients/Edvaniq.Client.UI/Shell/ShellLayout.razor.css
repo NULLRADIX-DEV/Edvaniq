@@ -1,0 +1,148 @@
+/* Phone first: header with a menu button, the navigation opens below it. From 48rem the navigation stands as a column
+   on the left and the button goes away. */
+
+.skip-link {
+    position: absolute;
+    left: var(--space-2);
+    top: -10rem;
+    z-index: 10;
+    padding: var(--space-2) var(--space-4);
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    font-weight: 600;
+    border-radius: var(--radius);
+}
+
+.skip-link:focus {
+    top: var(--space-2);
+}
+
+/* In the app on a phone with a notch the page reaches under it (viewport-fit=cover). In a browser the insets are 0. */
+.shell {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+}
+
+.shell-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-line);
+}
+
+.shell-brand {
+    color: var(--color-accent);
+    font-size: 1.375rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    text-decoration: none;
+}
+
+.shell-menu-button {
+    min-height: 2.75rem;
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--color-line);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-weight: 600;
+}
+
+.shell-menu-button[aria-expanded="true"] {
+    border-color: var(--color-accent);
+}
+
+.shell-nav {
+    display: none;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-line);
+}
+
+.shell-nav.open {
+    display: block;
+}
+
+.shell-nav ul {
+    list-style: none;
+    margin: 0;
+    padding: var(--space-2) var(--space-4) var(--space-4);
+}
+
+.shell-nav ::deep a {
+    display: block;
+    padding: var(--space-3) var(--space-2);
+    color: var(--color-ink);
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: var(--radius);
+}
+
+.shell-nav ::deep a:hover {
+    color: var(--color-accent);
+}
+
+/* The current page is marked like a word run over with a highlighter: a band behind the text only, sitting a little
+   low, with uneven ends. The link around it stays as wide as the column, so it is easy to hit. */
+.shell-nav ::deep a.active {
+    color: var(--color-on-highlight);
+}
+
+.shell-nav ::deep a.active span {
+    background: linear-gradient(transparent 28%, var(--color-highlight) 28%, var(--color-highlight) 90%, transparent 90%);
+    margin: 0 -0.35em;
+    padding: 0 0.35em;
+    border-radius: 0.2em 0.6em 0.3em 0.7em;
+}
+
+.shell-main {
+    padding: var(--space-6) var(--space-4) var(--space-8);
+    max-width: calc(var(--content-width) + 2 * var(--space-4));
+}
+
+.shell-main:focus {
+    outline: none;
+}
+
+@media (min-width: 48rem) {
+    .shell {
+        display: grid;
+        grid-template-columns: var(--shell-nav-width) 1fr;
+        grid-template-rows: auto 1fr;
+    }
+
+    .shell-header {
+        grid-column: 1;
+        grid-row: 1;
+        border-bottom: 0;
+        border-right: 1px solid var(--color-line);
+        padding: var(--space-6) var(--space-6) var(--space-4);
+    }
+
+    .shell-menu-button {
+        display: none;
+    }
+
+    .shell-nav,
+    .shell-nav.open {
+        display: block;
+        grid-column: 1;
+        grid-row: 2;
+        border-bottom: 0;
+        border-right: 1px solid var(--color-line);
+    }
+
+    .shell-nav ul {
+        padding: 0 var(--space-4);
+    }
+
+    .shell-main {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        padding: var(--space-8) var(--space-8) var(--space-8);
+        max-width: calc(var(--content-width) + 2 * var(--space-8));
+    }
+}
