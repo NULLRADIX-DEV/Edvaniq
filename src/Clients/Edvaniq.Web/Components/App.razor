@@ -1,11 +1,12 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="de">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
     <ResourcePreloader />
+    <link rel="stylesheet" href="@Assets["_content/Edvaniq.Client.DesignSystem/edvaniq.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["Edvaniq.Web.styles.css"]" />
     <ImportMap />
@@ -14,6 +15,13 @@
 
 <body>
     <Routes @rendermode="InteractiveWebAssembly" />
+
+    <div id="blazor-error-ui" data-nosnippet>
+        Ein unerwarteter Fehler ist aufgetreten.
+        <a href="." class="reload">Neu laden</a>
+        <button type="button" class="dismiss" aria-label="Hinweis schließen">×</button>
+    </div>
+
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 </body>
 

@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Edvaniq.Client.Core;
+using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.App;
 
@@ -15,6 +16,13 @@ public static class MauiProgram
 			});
 
 		builder.Services.AddMauiBlazorWebView();
+
+		// Until the app gets its own configuration it asks the public web host, like the browser does.
+		builder.Services.AddSingleton<IBackendStatus>(new HttpBackendStatus(new HttpClient
+		{
+			BaseAddress = new Uri("https://edvaniq.nullradix.de/"),
+			Timeout = TimeSpan.FromSeconds(5),
+		}));
 
 #if DEBUG
 		builder.Services.AddBlazorWebViewDeveloperTools();

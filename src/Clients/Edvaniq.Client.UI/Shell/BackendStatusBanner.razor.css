@@ -1,0 +1,13 @@
+/* A correction in the margin, in the red of a teacher's pen. */
+.backend-banner {
+    margin-bottom: var(--space-6);
+    padding: var(--space-4);
+    background: var(--color-alert-surface);
+    color: var(--color-on-alert-surface);
+    border-left: 4px solid var(--color-alert);
+    border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.backend-banner p {
+    margin-bottom: var(--space-3);
+}

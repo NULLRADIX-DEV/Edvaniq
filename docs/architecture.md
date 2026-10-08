@@ -93,6 +93,8 @@ Edvaniq.App (MAUI Blazor Hybrid) ───────────────�
 
 Seiten und Features entstehen einmal in `Client.UI` und laufen dann im Browser und in der App.
 
+Auch die Shell liegt dort: `ShellLayout` mit Kopfzeile, Navigation und dem Hinweis, wenn der Server nicht antwortet, dazu `Routes`. `Edvaniq.Web.Client` und die App binden nur `Routes` ein und registrieren `IBackendStatus` aus `Client.Core`. Farben, Abstände und Grundstile stehen als CSS-Variablen in `Client.DesignSystem/wwwroot/edvaniq.css`. Ein Test prüft jedes Paar aus Text- und Hintergrundfarbe gegen WCAG AA, eine neue Farbe bekommt dort ihr Paar.
+
 ## Datenbank
 
 Alle Services nutzen MySQL, einen Server mit einer Datenbank pro Service (`identitydb`, `planningdb` und so weiter). Ein Worker nutzt die Datenbank seines Service. Lokal startet Aspire MySQL als Container mit persistentem Volume und phpMyAdmin und legt die Datenbanken selbst an.

@@ -1,0 +1,71 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager Navigation
+
+<a class="skip-link" href="@SkipLinkHref" @onclick="FocusMainAsync">Zum Inhalt springen</a>
+
+@* Escape closes the menu wherever the focus is, also on the menu button right after opening. *@
+<div class="shell" @onkeydown="CloseMenuOnEscapeAsync">
+    <header class="shell-header">
+        <a class="shell-brand" href="">Edvaniq</a>
+        @* Until the runtime has loaded, a button would do nothing. Until then the navigation simply stays open. *@
+        @if (RendererInfo.IsInteractive)
+        {
+            <button type="button" class="shell-menu-button" @ref="menuButton"
+                    aria-expanded="@(menuOpen ? "true" : "false")" aria-controls="shell-nav"
+                    @onclick="ToggleMenu">
+                Menü
+            </button>
+        }
+    </header>
+
+    <nav id="shell-nav" class="shell-nav @(NavigationOpen ? "open" : null)" aria-label="Hauptnavigation">
+        <ul>
+            <li><NavLink href="" Match="NavLinkMatch.All"><span>Start</span></NavLink></li>
+        </ul>
+    </nav>
+
+    <main id="main" class="shell-main" tabindex="-1" @ref="main">
+        @* Only the browser can tell whether the backend answers. While the page is prerendered on the server, nothing is
+           checked yet. *@
+        @if (RendererInfo.IsInteractive)
+        {
+            <BackendStatusBanner OnReconnected="FocusMainAsync" />
+        }
+        @Body
+    </main>
+</div>
+
+@code {
+    private bool menuOpen;
+    private ElementReference menuButton;
+    private ElementReference main;
+
+    private bool NavigationOpen => menuOpen || !RendererInfo.IsInteractive;
+
+    // The fragment needs the current path. With <base href="/"> a bare "#main" would lead back to the start page.
+    private string SkipLinkHref => Navigation.ToBaseRelativePath(Navigation.Uri).Split('#')[0] + "#main";
+
+    protected override void OnInitialized() => Navigation.LocationChanged += CloseMenuOnNavigation;
+
+    private void ToggleMenu() => menuOpen = !menuOpen;
+
+    private async Task CloseMenuOnEscapeAsync(KeyboardEventArgs args)
+    {
+        if (menuOpen && args.Key == "Escape")
+        {
+            menuOpen = false;
+            await menuButton.FocusAsync();
+        }
+    }
+
+    private void CloseMenuOnNavigation(object? sender, LocationChangedEventArgs args)
+    {
+        menuOpen = false;
+        StateHasChanged();
+    }
+
+    private async Task FocusMainAsync() => await main.FocusAsync();
+
+    public void Dispose() => Navigation.LocationChanged -= CloseMenuOnNavigation;
+}

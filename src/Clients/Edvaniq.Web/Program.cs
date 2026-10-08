@@ -1,3 +1,4 @@
+using Edvaniq.Client.Core;
 using Edvaniq.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,7 +30,10 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveWebAssemblyRenderMode()
-    .AddAdditionalAssemblies(typeof(Edvaniq.Web.Client._Imports).Assembly);
+    .AddAdditionalAssemblies(typeof(Edvaniq.Client.UI.Routes).Assembly);
+
+// The shell in the browser asks here whether it gets through. For now that means the web host itself answers.
+app.MapGet("/" + HttpBackendStatus.Path, () => TypedResults.NoContent());
 
 app.MapDefaultEndpoints();
 
