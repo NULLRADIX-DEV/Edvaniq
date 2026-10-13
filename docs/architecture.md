@@ -97,6 +97,15 @@ Auch die Shell liegt dort: `ShellLayout` mit Kopfzeile, Navigation und dem Hinwe
 
 Der Browser spricht nur mit dem Web-Host, nie mit dem Gateway. Was unter `/api/…` ankommt, reicht der Web-Host serverseitig ans Gateway weiter, die Routen stehen im Abschnitt `ReverseProxy` seiner `appsettings.json`. Dafür braucht es eine Sitzung, einen verschlüsselten Cookie, den kein Skript lesen kann und den der Browser nur über HTTPS an diese Seite schickt. Ohne Sitzung antwortet der Web-Host mit 401. Den Cookie und einen `Authorization`-Header aus dem Browser gibt er nicht weiter, und Cookies aus dem Backend kommen nicht beim Browser an. Einen Login gibt es noch nicht: `POST /session` startet eine Gast-Sitzung, `DELETE /session` beendet sie, `GET /session` sagt, ob eine besteht. Nur `/api/status` geht ohne Sitzung durch, damit die Shell auch ohne Sitzung erfährt, ob das Gateway antwortet.
 
+## Nachverfolgung
+
+Jede Anfrage hat eine Kennung, die W3C-Trace-ID. Der Server vergibt sie selbst: `traceparent` und seine Begleiter (`tracestate`, `baggage`) aus dem Internet verwirft der Reverse-Proxy vor dem Web-Host, so beginnt der Web-Host für jede Anfrage aus dem Browser eine eigene Trace. Der Web-Host selbst würde einen mitgeschickten `traceparent` übernehmen, lokal tut er das also. OpenTelemetry (ServiceDefaults) reicht sie im Header `traceparent` an Gateway und Services weiter, auch beim Token-Abruf bei Identity. Außerhalb von Development schreibt jeder Prozess sein Log einzeilig auf die Konsole, mit den Scopes und damit mit der `TraceId`. Mit einer Kennung findet man so die Zeilen aller Prozesse, durch die die Anfrage ging.
+
+Fehlerantworten nennen die Kennung im Feld `traceId` eines Problems nach RFC 9457, als 32 Hex-Zeichen. Über das Innere verraten sie sonst nichts: keine Exception, keinen Stacktrace, keine Adresse.
+- Services aus der Vorlage rufen dafür als Erstes `app.UseProblems()` aus BuildingBlocks.Web auf. Eine unbehandelte Exception wird so zu einem nackten 500, ein 401 der Token-Prüfung und ein 404 ohne Body bekommen ebenfalls ein Problem.
+- Das Gateway schreibt seine Probleme selbst.
+- Der Web-Host macht aus den eigenen Fehlern unter `/api` und `/session` Probleme (`ApiProblems`). Probleme aus dem Backend reicht er unverändert durch, sie nennen dieselbe Kennung.
+
 ## Tokens
 
 Jeder Service prüft das Token selbst und muss dem Aussteller deshalb trauen, ohne ein Geheimnis mit ihm zu teilen. Identity signiert jedes Token mit seinem privaten Schlüssel (ES256), den nur Identity kennt. Den öffentlichen Teil holt sich ein Service über seine `Authority` direkt bei Identity, aus dem Discovery-Dokument unter `/.well-known/openid-configuration` und dem Key-Set, auf das es zeigt. Das Gateway leitet von Identity nur den Token-Endpunkt weiter.

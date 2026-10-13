@@ -34,6 +34,9 @@ public sealed class StubService : IAsyncDisposable
     // The form of the last token request.
     public IReadOnlyDictionary<string, string> LastTokenRequest { get; private set; } = new Dictionary<string, string>();
 
+    // The traceparent header of the last request, empty without one. It shows whether the caller passed its trace on.
+    public string LastTraceParent { get; private set; } = "";
+
     // How token requests are answered: 200 with a token, 400 like Identity for a wrong secret, or any other status
     // without a body, such as 503 while Identity is down.
     public int TokenStatus
@@ -52,6 +55,7 @@ public sealed class StubService : IAsyncDisposable
         app.Use((context, next) =>
         {
             Interlocked.Increment(ref stub.requests);
+            stub.LastTraceParent = context.Request.Headers["traceparent"].ToString();
             return next(context);
         });
         app.MapGet("/slow", async (CancellationToken cancellationToken) =>

@@ -24,7 +24,7 @@ Alle Befehle laufen im Repo-Root.
 
 ```
 src/Services/<Name>/
-  Edvaniq.Services.<Name>.Api              Program.cs: AddServiceDefaults, AddTokenValidation, AddInfrastructure, MapDefaultEndpoints, GET /me, Befehl migrate
+  Edvaniq.Services.<Name>.Api              Program.cs: AddServiceDefaults, AddTokenValidation, AddInfrastructure, UseProblems, MapDefaultEndpoints, GET /me, Befehl migrate
                                            ExampleEndpoints.cs: Endpunkte des Beispiels
   Edvaniq.Services.<Name>.Application      IExampleItems.cs: was die Fachlogik vom Beispiel braucht
   Edvaniq.Services.<Name>.Contracts
@@ -34,7 +34,7 @@ src/Services/<Name>/
 tests/Services/<Name>/
   Edvaniq.Services.<Name>.UnitTests
   Edvaniq.Services.<Name>.IntegrationTests ServiceFactory.cs (Prüfstand), TestDatabase.cs
-                                           HealthTests.cs, TokenTests.cs, MigrationTests.cs, IsolationTests.cs
+                                           HealthTests.cs, TokenTests.cs, MigrationTests.cs, IsolationTests.cs, ProblemTests.cs
 ```
 
 Alle sieben Projekte stehen danach in `Edvaniq.slnx`, die CI baut und testet sie also gleich mit. Die Ports in `launchSettings.json` wählt die Vorlage per Zufall. Hat schon ein anderer Prozess denselben Port, wird der Test `Ports_AreUniqueAcrossProcesses` in `Edvaniq.ArchitectureTests` rot.
@@ -70,6 +70,10 @@ Was ein Service prüft, steht im Abschnitt `Authentication:Schemes:Bearer`, den 
 Ohne Issuer oder Audience startet der Service nicht. Sonst würde .NET die fehlende Prüfung still überspringen und auch Tokens annehmen, die für eine andere App gedacht sind.
 
 Die Tokens stellt Identity aus, wie das läuft, steht in der [Architektur](architecture.md#tokens). Unter dem AppHost bekommt der Service also echte Tokens über Web-Host und Gateway. Zum Testen ohne Web-Host holst du dir ein Dev-Token mit `dotnet user-jwts` (siehe [Befehle](#befehle)). Dessen Schlüssel liegt in den User Secrets der Api und gilt nur in Development. In den Tests stellt `ServiceFactory` den Service auf die Tokens aus `Edvaniq.Testing/TestTokens` um, die mit einem Schlüssel nur für diesen Testlauf signiert sind.
+
+## Fehlerantworten
+
+`app.UseProblems()` steht in `Program.cs` als Erstes nach dem Befehl `migrate`. Danach antwortet jeder Fehler als Problem nach RFC 9457 mit der Trace-ID der Anfrage im Feld `traceId`: ein 401 der Token-Prüfung, ein 404 ohne Body und eine unbehandelte Exception, die zu einem nackten 500 ohne Meldung und Stacktrace wird. Dieselbe ID steht in jeder Logzeile der Anfrage, auch bei Gateway und Web-Host ([Nachverfolgung](architecture.md#nachverfolgung)). `ProblemTests` prüft das für 401 und 404.
 
 ## Datenbank und Migrationen
 

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Edvaniq.ServiceDefaults;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -26,6 +28,8 @@ public static class Extensions
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
         builder.ConfigureOpenTelemetry();
+
+        builder.AddTraceIds();
 
         builder.AddDefaultHealthChecks();
 
@@ -81,6 +85,28 @@ public static class Extensions
             });
 
         builder.AddOpenTelemetryExporters();
+
+        return builder;
+    }
+
+    // One id follows a request through web host, gateway and service: the W3C trace id, which OpenTelemetry passes on in
+    // traceparent. Every problem answer names it as traceId, the bare 32 hex digits and nothing else about the inside.
+    // Outside Development the console is the log, one line per entry with the scopes, so each line carries it as TraceId.
+    // An error report thus leads to the log lines of every process the request went through.
+    public static TBuilder AddTraceIds<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
+    {
+        builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
+            context.ProblemDetails.Extensions["traceId"] =
+                Activity.Current?.TraceId.ToHexString() ?? context.HttpContext.TraceIdentifier);
+
+        if (!builder.Environment.IsDevelopment())
+        {
+            builder.Logging.AddSimpleConsole(options =>
+            {
+                options.SingleLine = true;
+                options.IncludeScopes = true;
+            });
+        }
 
         return builder;
     }
