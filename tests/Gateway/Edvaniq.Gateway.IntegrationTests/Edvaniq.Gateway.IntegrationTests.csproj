@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Gateway\Edvaniq.Gateway\Edvaniq.Gateway.csproj" />
+    <ProjectReference Include="..\..\Edvaniq.Testing\Edvaniq.Testing.csproj" />
   </ItemGroup>
 
 </Project>
