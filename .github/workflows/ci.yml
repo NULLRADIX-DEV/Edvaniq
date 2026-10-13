@@ -152,6 +152,9 @@ jobs:
             || { echo "::error::The migration steps in deploy/compose.yml do not match AddMigration in AppHost.cs (< missing, > extra)"; exit 1; }
           # From outside only the web host is reachable, through the server's nginx on loopback. The DB is published on
           # loopback for the server's backups. Every other process stays inside the app's networks.
+          # Rendering the whole file, Compose on the runner reads the env files despite --no-env-resolution. Empty ones
+          # stand in for them.
+          sed -n 's/^ *- path: \(.*\.env\)$/\1/p' deploy/compose.yml | sort -u | (cd "$RUNNER_TEMP" && xargs touch)
           compose --profile '*' config --no-env-resolution --format json \
             | python3 -c 'import json, sys; [print(s, p.get("host_ip", "*"), p["target"]) for s, v in json.load(sys.stdin)["services"].items() for p in v.get("ports", [])]' \
             | sort | diff <(printf '%s\n' 'db 127.0.0.1 3306' 'web 127.0.0.1 8080') - \
