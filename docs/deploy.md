@@ -26,6 +26,8 @@ Der Server prüft die Compose-Datei und holt die Images des Commits. Danach sich
 
 Ist der Lauf grün, steht in seiner Zusammenfassung „Deployed `<commit>`“ und darunter der Stand davor, zu dem ein Rollback zurückginge.
 
+Nach dem Umschalten prüft `deploy/smoke-test.sh` die App von außen, über die öffentliche Adresse: Die Shell lädt, und ein Ping geht über Web-Host, Gateway und Planning in dessen Datenbank und zurück. Der neue Stand bekommt dafür bis zu sechs Versuche im Abstand von 10 Sekunden. Scheitert der Test, rollt der Workflow selbst auf den vorherigen Stand zurück, prüft auch den und meldet den Lauf als fehlgeschlagen. Die Zusammenfassung nennt dann „Smoke test of `<commit>` failed“ und „Rolled back automatically to `<commit>`“. Nach einem Rollback per Häkchen rollt er bei einem roten Test nicht noch einmal zurück. Das Skript kommt aus dem ausgerollten Commit, ein neuer Stand bringt also seine eigene Prüfung mit.
+
 Ist er rot, nennt die letzte Zeile im Log den Grund. Endet sie mit „nothing changed“ oder „the services were not switched“, läuft der alte Stand weiter. Die Meldungen, die du selbst beheben kannst:
 
 | Meldung | Was tun |

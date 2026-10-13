@@ -6,6 +6,8 @@ name: Deploy
 # One environment per app: production for most repos, a repo with more apps adds one each (e.g. demo).
 # Secrets: DEPLOY_SSH_KEY (key that may only run receive), DEPLOY_TARGET (<app>@<server>), DEPLOY_KNOWN_HOSTS.
 # Variable DEPLOY_DIR: folder of the compose.yml, default deploy.
+# After the switch, $DEPLOY_DIR/smoke-test.sh of the running release (if there is one) checks the app from outside;
+# if it fails after a deploy, the workflow rolls back to the previous release by itself.
 # Public repos keep them in the environment (default branch only), private repos as repository secrets and variables.
 on:
   workflow_dispatch:
@@ -93,3 +95,52 @@ jobs:
           if [ -n "$previous" ]; then
             echo "Rollback-Ziel: \`$previous\`" >> "$GITHUB_STEP_SUMMARY"
           fi
+      # If the release that runs now has $DEPLOY_DIR/smoke-test.sh, it checks the app from outside, over its public
+      # address. When the check fails after a deploy, the server goes back to the previous release, which gets its own
+      # check, and the run fails either way. After a rollback or without a previous release, a failed check only fails
+      # the run.
+      - name: Smoke test
+        env:
+          DEPLOY_TARGET: ${{ secrets.DEPLOY_TARGET }}
+          DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+          ROLLBACK: ${{ inputs.rollback }}
+        run: |
+          remote() {
+            ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_TARGET" "$@"
+          }
+          smoke() {
+            if ! git cat-file -e "$1:$DEPLOY_DIR/smoke-test.sh" 2> /dev/null; then
+              outcome="\`$1\` has no smoke test, nothing was checked"
+              echo "$outcome"
+              return 0
+            fi
+            git show "$1:$DEPLOY_DIR/smoke-test.sh" > "$RUNNER_TEMP/smoke-test.sh"
+            outcome="Smoke test of \`$1\` passed"
+            DEPLOY_ENVIRONMENT="$DEPLOY_ENVIRONMENT" bash "$RUNNER_TEMP/smoke-test.sh"
+          }
+          deployed=$(sed -n 's/^Deployed //p' "$RUNNER_TEMP/deploy.log")
+          previous=$(sed -n 's/^Previous release: //p' "$RUNNER_TEMP/deploy.log")
+          if smoke "$deployed"; then
+            echo "$outcome" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "### Smoke test of \`$deployed\` failed" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$ROLLBACK" = true ] || [ -z "$previous" ]; then
+            echo "::error::Smoke test of $deployed failed, no automatic rollback"
+            exit 1
+          fi
+          echo "::error::Smoke test of $deployed failed, rolling back to $previous"
+          remote rollback < /dev/null | tee "$RUNNER_TEMP/rollback.log" || true
+          restored=$(sed -n 's/^Deployed //p' "$RUNNER_TEMP/rollback.log")
+          if [ "$restored" != "$previous" ]; then
+            echo "Automatic rollback to \`$previous\` failed, check the server" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Automatic rollback to $previous failed"
+            exit 1
+          fi
+          echo "Rolled back automatically to \`$restored\`" >> "$GITHUB_STEP_SUMMARY"
+          if smoke "$restored"; then
+            echo "$outcome" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Smoke test of \`$restored\` failed too, check the server" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit 1
