@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 namespace Edvaniq.Web.IntegrationTests;
 
 // Without a login, the web host shows the backend its own technical token. It gets the token from Identity through
-// the gateway, keeps it and sends it only along with the calls under /api it forwards for a session.
+// the gateway, keeps it and sends it only along with the calls whose route asks for it.
 public sealed class BackendTokenTests
 {
     [Fact]
@@ -76,6 +76,27 @@ public sealed class BackendTokenTests
 
         Assert.All(echoes, echo => Assert.Equal("Bearer stub-token-1", echo.Authorization));
         Assert.Equal(1, gateway.TokenRequests);
+    }
+
+    // Until there is a login, anyone can start a guest session. So the token goes only with the ping, the one call the
+    // walking skeleton needs. Every other call reaches the gateway without a token and the service turns it away.
+    [Theory]
+    [InlineData("GET", "/api/planning/me")]
+    [InlineData("GET", "/api/planning/ping")]
+    [InlineData("POST", "/api/planning/example-items")]
+    [InlineData("POST", "/api/content/ping")]
+    public async Task OtherCalls_GoWithoutToken(string method, string path)
+    {
+        await using var gateway = await StubService.StartAsync("gateway-stub");
+        await using var web = new WebFactory(gateway.Address);
+        using var browser = await StartSessionAsync(web);
+
+        using var response = await browser.SendAsync(new HttpRequestMessage(new HttpMethod(method), path), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var echo = await response.Content.ReadFromJsonAsync<Echo>(TestContext.Current.CancellationToken);
+        Assert.Equal("", echo?.Authorization);
+        Assert.Equal(0, gateway.TokenRequests);
     }
 
     // The status check of the shell needs no token, so it does not fetch one either.
