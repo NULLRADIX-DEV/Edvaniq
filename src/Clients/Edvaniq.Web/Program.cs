@@ -1,11 +1,24 @@
 using Edvaniq.Web;
 using Edvaniq.Web.Components;
 
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+
+// On the server the host's nginx ends HTTPS and forwards to the web host through the gateway of the app's network.
+// Only from the networks in ForwardedHeaders:KnownNetworks the web host takes scheme and client address from
+// X-Forwarded-Proto and X-Forwarded-For. Without them it trusts only loopback, the default.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    foreach (var network in builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [])
+    {
+        options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+    }
+});
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -23,6 +36,8 @@ builder.Services.AddReverseProxy()
     .AddBackendToken();
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

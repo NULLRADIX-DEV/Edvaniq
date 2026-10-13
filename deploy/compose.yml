@@ -153,9 +153,16 @@ services:
         required: true
       - path: web.env
         required: true
+    # The only process reachable from outside: the host's nginx forwards to this port on loopback. The deploy sets
+    # APP_PORT and APP_SUBNET.
+    ports:
+      - "127.0.0.1:${APP_PORT:?}:8080"
     environment:
       <<: *app-environment
       services__gateway__http__0: http://gateway:8080
+      # nginx arrives through the gateway of the app's network. Only from there the web host takes scheme and client
+      # address from X-Forwarded-Proto and X-Forwarded-For.
+      ForwardedHeaders__KnownNetworks__0: ${APP_SUBNET:?}
 
 networks:
   backend:
