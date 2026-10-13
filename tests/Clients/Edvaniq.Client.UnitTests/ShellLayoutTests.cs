@@ -101,6 +101,14 @@ public sealed class ShellLayoutTests : BunitContext
     }
 
     [Fact]
+    public void Navigation_LeadsToTheSystemStatus()
+    {
+        var shell = RenderShell();
+
+        Assert.Equal("Systemstatus", shell.Find("nav#shell-nav a[href='systemstatus']").TextContent);
+    }
+
+    [Fact]
     public void WhilePrerendering_NothingIsChecked()
     {
         SetRendererInfo(new RendererInfo("Static", isInteractive: false));
