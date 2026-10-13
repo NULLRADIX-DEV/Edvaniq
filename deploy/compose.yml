@@ -46,7 +46,7 @@ x-planning: &planning
 services:
   db:
     image: mysql:9.7
-    command: ["--innodb-buffer-pool-size=1G"]
+    command: ["--innodb-buffer-pool-size=1G", "--binlog-expire-logs-seconds=86400"]
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is missing in .env}
       MYSQL_ROOT_HOST: localhost

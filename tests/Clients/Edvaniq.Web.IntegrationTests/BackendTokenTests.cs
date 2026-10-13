@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 
 using Edvaniq.Testing;
 
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 
@@ -78,25 +79,54 @@ public sealed class BackendTokenTests
         Assert.Equal(1, gateway.TokenRequests);
     }
 
-    // Until there is a login, anyone can start a guest session. So the token goes only with the ping, the one call the
-    // walking skeleton needs. Every other call reaches the gateway without a token and the service turns it away.
-    [Theory]
-    [InlineData("GET", "/api/planning/me")]
-    [InlineData("GET", "/api/planning/ping")]
-    [InlineData("POST", "/api/planning/example-items")]
-    [InlineData("POST", "/api/content/ping")]
-    public async Task OtherCalls_GoWithoutToken(string method, string path)
+    // Until there is a login, anyone can start a guest session and send what carries the token. So the web host limits
+    // those calls, per client address and in total, and the service's database gets at most so many writes a minute.
+    [Fact]
+    public async Task TokenCalls_AreLimitedPerClient()
     {
         await using var gateway = await StubService.StartAsync("gateway-stub");
-        await using var web = new WebFactory(gateway.Address);
+        await using var web = new WebFactory(gateway.Address, configure: builder => builder
+            .UseSetting("BackendToken:PerClientPerMinute", "2")
+            .UseSetting("BackendToken:TotalPerMinute", "100"));
         using var browser = await StartSessionAsync(web);
 
-        using var response = await browser.SendAsync(new HttpRequestMessage(new HttpMethod(method), path), TestContext.Current.CancellationToken);
+        var statuses = await PingStatusesAsync(browser, 3);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var echo = await response.Content.ReadFromJsonAsync<Echo>(TestContext.Current.CancellationToken);
-        Assert.Equal("", echo?.Authorization);
-        Assert.Equal(0, gateway.TokenRequests);
+        Assert.Equal([HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.TooManyRequests], statuses);
+        // The third never got to the gateway.
+        Assert.Equal(2, gateway.Requests - gateway.TokenRequests);
+    }
+
+    [Fact]
+    public async Task TokenCalls_AreLimitedInTotal()
+    {
+        await using var gateway = await StubService.StartAsync("gateway-stub");
+        await using var web = new WebFactory(gateway.Address, configure: builder => builder
+            .UseSetting("BackendToken:PerClientPerMinute", "100")
+            .UseSetting("BackendToken:TotalPerMinute", "2"));
+        using var first = await StartSessionAsync(web);
+        using var second = await StartSessionAsync(web);
+
+        var statuses = (await PingStatusesAsync(first, 2)).Concat(await PingStatusesAsync(second, 1));
+
+        Assert.Equal([HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.TooManyRequests], statuses);
+    }
+
+    // The status check carries no token, so no limit holds it back.
+    [Fact]
+    public async Task Status_IsNotLimited()
+    {
+        await using var gateway = await StubService.StartAsync("gateway-stub");
+        await using var web = new WebFactory(gateway.Address, configure: builder => builder
+            .UseSetting("BackendToken:PerClientPerMinute", "1")
+            .UseSetting("BackendToken:TotalPerMinute", "1"));
+        using var browser = web.CreateBrowser();
+
+        for (var i = 0; i < 3; i++)
+        {
+            using var response = await browser.GetAsync("/api/status", TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
     }
 
     // The status check of the shell needs no token, so it does not fetch one either.
@@ -198,6 +228,18 @@ public sealed class BackendTokenTests
         using var response = await browser.PostAsync("/api/planning/ping", content: null, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<Echo>(TestContext.Current.CancellationToken))!;
+    }
+
+    private static async Task<List<HttpStatusCode>> PingStatusesAsync(HttpClient browser, int count)
+    {
+        var statuses = new List<HttpStatusCode>();
+        for (var i = 0; i < count; i++)
+        {
+            using var response = await browser.PostAsync("/api/planning/ping", content: null, TestContext.Current.CancellationToken);
+            statuses.Add(response.StatusCode);
+        }
+
+        return statuses;
     }
 
     private static async Task<HttpClient> StartSessionAsync(WebFactory web)

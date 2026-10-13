@@ -91,6 +91,23 @@ public sealed class TokenEndpointTests
         await AssertErrorAsync(response, "invalid_request");
     }
 
+    // A form ASP.NET Core cannot read, with more fields than it allows or a broken multipart body, is a bad request of
+    // the client, not an error of Identity.
+    [Theory]
+    [InlineData("application/x-www-form-urlencoded", "many")]
+    [InlineData("multipart/form-data; boundary=x", "--x\r\nbroken")]
+    public async Task UnreadableForm_IsInvalid(string contentType, string body)
+    {
+        await using var identity = new IdentityFactory();
+        using var client = identity.CreateClient();
+        using var content = new StringContent(body == "many" ? string.Join("&", Enumerable.Repeat("a=1", 2000)) : body);
+        content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
+
+        using var response = await client.PostAsync("/connect/token", content, TestContext.Current.CancellationToken);
+
+        await AssertErrorAsync(response, "invalid_request");
+    }
+
     private static async Task AssertErrorAsync(HttpResponseMessage response, string error)
     {
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

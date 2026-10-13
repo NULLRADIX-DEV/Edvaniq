@@ -15,7 +15,6 @@ public sealed partial class ProblemTests
 {
     [Theory]
     [InlineData("POST", "/api/planning/ping")]
-    [InlineData("GET", "/api/planning/me")]
     [InlineData("GET", "/session")]
     public async Task WithoutSession_IsAProblemNamingTheTrace(string method, string path)
     {
@@ -47,9 +46,9 @@ public sealed partial class ProblemTests
     public async Task GatewayDown_IsAProblemNamingTheTrace_WithoutItsAddress()
     {
         await using var web = new WebFactory("http://127.0.0.1:9");
-        using var browser = await StartSessionAsync(web);
+        using var browser = web.CreateBrowser();
 
-        using var response = await browser.GetAsync("/api/planning/me", TestContext.Current.CancellationToken);
+        using var response = await browser.GetAsync("/api/status", TestContext.Current.CancellationToken);
 
         Assert.Matches(TraceId(), await AssertProblemAsync(response, HttpStatusCode.BadGateway));
         Assert.DoesNotContain("127.0.0.1", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
