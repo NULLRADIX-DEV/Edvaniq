@@ -11,4 +11,9 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 
+  <!-- StartupTests start AddTokenIssuer in a host of their own, see there. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Edvaniq.Services.Identity.IntegrationTests" />
+  </ItemGroup>
+
 </Project>
