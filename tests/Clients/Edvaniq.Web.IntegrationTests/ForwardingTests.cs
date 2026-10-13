@@ -40,17 +40,42 @@ public sealed class ForwardingTests
         Assert.Equal(new Echo("gateway-stub", "POST", "/planning/ping", Authorization: "Bearer stub-token-1", Cookie: ""), echo);
     }
 
-    [Fact]
-    public async Task CookiesFromTheBackend_NeverReachTheBrowser()
+    [Theory]
+    [InlineData("POST", "/api/planning/ping")]
+    [InlineData("GET", "/api/status")]
+    public async Task CookiesFromTheBackend_NeverReachTheBrowser(string method, string path)
+    {
+        await using var gateway = await StubService.StartAsync("gateway-stub");
+        gateway.SetsCookie = true;
+        await using var web = new WebFactory(gateway.Address);
+        using var browser = await StartSessionAsync(web);
+
+        using var response = await browser.SendAsync(new HttpRequestMessage(new HttpMethod(method), path), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.False(response.Headers.Contains("Set-Cookie"));
+    }
+
+    // Only the routes in the section ReverseProxy go on to the gateway. Everything else under /api, the token endpoint
+    // of Identity included, is unknown to the browser: a problem with 404, and the gateway never hears of it.
+    [Theory]
+    [InlineData("GET", "/api/planning/me")]
+    [InlineData("GET", "/api/planning/ping")]
+    [InlineData("POST", "/api/planning/example-items")]
+    [InlineData("POST", "/api/content/ping")]
+    [InlineData("POST", "/api/identity/connect/token")]
+    [InlineData("GET", "/api/status/../planning/me")]
+    public async Task OtherApiPaths_NeverReachTheGateway(string method, string path)
     {
         await using var gateway = await StubService.StartAsync("gateway-stub");
         await using var web = new WebFactory(gateway.Address);
         using var browser = await StartSessionAsync(web);
 
-        using var response = await browser.GetAsync("/api/set-cookie", TestContext.Current.CancellationToken);
+        using var response = await browser.SendAsync(new HttpRequestMessage(new HttpMethod(method), path), TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        Assert.False(response.Headers.Contains("Set-Cookie"));
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(0, gateway.Requests);
     }
 
     // The status check of the shell needs no session: it asks whether the gateway answers at all.

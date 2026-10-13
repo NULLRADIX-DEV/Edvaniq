@@ -26,10 +26,10 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddWebSession();
 
-// The browser never talks to the gateway itself. Everything under /api goes on from here, on the server side, with the
-// routes from the section ReverseProxy. The gateway's address comes from service discovery, like in the gateway.
-// The cluster waits 9 seconds, one more than the gateway waits for a service, so the gateway's own 504 problem gets
-// through to the browser. Routes with the metadata BackendToken carry the web host's token to the backend.
+// The browser never talks to the gateway itself. Only the routes from the section ReverseProxy go on from here, on the
+// server side. The gateway's address comes from service discovery, like in the gateway. The cluster waits 9 seconds,
+// one more than the gateway waits for a service, so the gateway's own 504 problem gets through to the browser. Routes
+// with the metadata BackendToken carry the web host's token to the backend, and only so many calls a minute.
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
     .AddServiceDiscoveryDestinationResolver()
@@ -59,6 +59,7 @@ app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
@@ -68,6 +69,12 @@ app.MapRazorComponents<App>()
 
 app.MapWebSessionEndpoints();
 app.MapReverseProxy()
+    .WithMetadata(new SkipStatusCodePagesAttribute());
+
+// The browser reaches the gateway only through the routes in the section ReverseProxy. Anything else under /api is
+// unknown here and never gets to the gateway, the token endpoint of Identity included. A new feature gets a route of
+// its own there.
+app.Map("/api/{**rest}", () => Results.NotFound())
     .WithMetadata(new SkipStatusCodePagesAttribute());
 
 app.MapDefaultEndpoints();

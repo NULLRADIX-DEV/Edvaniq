@@ -7,8 +7,8 @@ using Xunit;
 namespace Edvaniq.Testing;
 
 // Stands in for a process behind a proxy, the gateway or a service. A real Kestrel on a free port, because YARP
-// forwards over the network and not into a TestServer. Answers every request with what arrived. /slow answers only
-// after 30 seconds, /set-cookie tries to set a cookie in the browser. POST /identity/connect/token answers like
+// forwards over the network and not into a TestServer. Answers every request with what arrived, with SetsCookie also
+// trying to set a cookie in the browser. /slow answers only after 30 seconds. POST /identity/connect/token answers like
 // Identity behind the gateway, with the tokens stub-token-1, stub-token-2 and so on.
 public sealed class StubService : IAsyncDisposable
 {
@@ -37,6 +37,9 @@ public sealed class StubService : IAsyncDisposable
     // The traceparent header of the last request, empty without one. It shows whether the caller passed its trace on.
     public string LastTraceParent { get; private set; } = "";
 
+    // Whether every echo also tries to set a cookie in the browser.
+    public bool SetsCookie { get; set; }
+
     // How token requests are answered: 200 with a token, 400 like Identity for a wrong secret, or any other status
     // without a body, such as 503 while Identity is down.
     public int TokenStatus
@@ -63,11 +66,6 @@ public sealed class StubService : IAsyncDisposable
             await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
             return Results.Ok();
         });
-        app.MapGet("/set-cookie", (HttpResponse response) =>
-        {
-            response.Cookies.Append("backend", "set-by-the-backend");
-            return Results.NoContent();
-        });
         app.MapPost(TokenPath, async (HttpRequest request) =>
         {
             var number = Interlocked.Increment(ref stub.tokenRequests);
@@ -85,12 +83,20 @@ public sealed class StubService : IAsyncDisposable
                 var status => Results.StatusCode(status),
             };
         });
-        app.Map("{**path}", (HttpRequest request) => new Echo(
-            name,
-            request.Method,
-            request.Path,
-            request.Headers.Authorization.ToString(),
-            request.Headers.Cookie.ToString()));
+        app.Map("{**path}", (HttpRequest request, HttpResponse response) =>
+        {
+            if (stub.SetsCookie)
+            {
+                response.Cookies.Append("backend", "set-by-the-backend");
+            }
+
+            return new Echo(
+                name,
+                request.Method,
+                request.Path,
+                request.Headers.Authorization.ToString(),
+                request.Headers.Cookie.ToString());
+        });
 
         await app.StartAsync(TestContext.Current.CancellationToken);
         stub.app = app;

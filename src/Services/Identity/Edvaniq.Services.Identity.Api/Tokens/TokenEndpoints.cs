@@ -59,7 +59,18 @@ internal static class TokenEndpoints
             return Error("invalid_request");
         }
 
-        var form = await context.Request.ReadFormAsync(cancellationToken);
+        // A form beyond the limits of ASP.NET Core or a broken multipart body would otherwise end as a 500 with a stack
+        // trace in the log, as often as anyone sends one.
+        IFormCollection form;
+        try
+        {
+            form = await context.Request.ReadFormAsync(cancellationToken);
+        }
+        catch (Exception exception) when (exception is InvalidDataException or BadHttpRequestException)
+        {
+            return Error("invalid_request");
+        }
+
         if (form["grant_type"] != ClientCredentials)
         {
             return Error(string.IsNullOrEmpty(form["grant_type"]) ? "invalid_request" : "unsupported_grant_type");
