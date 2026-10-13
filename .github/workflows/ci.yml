@@ -150,17 +150,11 @@ jobs:
           comm -13 <(compose config --no-env-resolution --services | sort) <(compose --profile migrate config --no-env-resolution --services | sort) \
             | diff migrations.txt - \
             || { echo "::error::The migration steps in deploy/compose.yml do not match AddMigration in AppHost.cs (< missing, > extra)"; exit 1; }
-          # From outside only the web host is reachable, through the server's nginx on loopback. The DB is published on
-          # loopback for the server's backups. Every other process stays inside the app's networks.
-          # Rendering the whole file, Compose on the runner reads the env files despite --no-env-resolution. Empty ones
-          # stand in for them.
           sed -n 's/^ *- path: \(.*\.env\)$/\1/p' deploy/compose.yml | sort -u | (cd "$RUNNER_TEMP" && xargs touch)
           compose --profile '*' config --no-env-resolution --format json \
             | python3 -c 'import json, sys; [print(s, p.get("host_ip", "*"), p["target"]) for s, v in json.load(sys.stdin)["services"].items() for p in v.get("ports", [])]' \
             | sort | diff <(printf '%s\n' 'db 127.0.0.1 3306' 'web 127.0.0.1 8080') - \
             || { echo "::error::Only web and db may publish a port in deploy/compose.yml, and only on 127.0.0.1 (< expected, > found)"; exit 1; }
-          # default has no way out of the app. Only the web host joins edge for its port, and it never joins backend,
-          # where the database is.
           compose --profile '*' config --no-env-resolution --format json \
             | python3 -c 'import json, sys; c = json.load(sys.stdin); s = c["services"]; print("default internal", bool(c["networks"]["default"].get("internal"))); print("edge", *sorted(k for k, v in s.items() if "edge" in v.get("networks", {}))); print("web", *sorted(s["web"]["networks"]))' \
             | diff <(printf '%s\n' 'default internal True' 'edge web' 'web default edge') - \
