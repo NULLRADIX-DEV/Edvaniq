@@ -14,7 +14,10 @@ x-app: &app
     - /tmp
   environment: &app-environment
     ASPNETCORE_HTTP_PORTS: "8080;8081"
-    Authentication__Schemes__Bearer__ValidIssuer: https://edvaniq.nullradix.de
+    # Tokens come from Identity. A service fetches the public key from it inside the app's network, over HTTP.
+    Authentication__Schemes__Bearer__ValidIssuer: &issuer https://edvaniq.nullradix.de
+    Authentication__Schemes__Bearer__Authority: http://identity-api:8080
+    Authentication__Schemes__Bearer__RequireHttpsMetadata: "false"
   healthcheck:
     test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && head -n 1 <&3 | grep -q ' 200 '"]
     interval: 30s
@@ -77,6 +80,15 @@ services:
   identity-api:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/identity-api:sha-${APP_COMMIT:?}
+    # Signing key and client secrets, only for Identity.
+    env_file:
+      - path: app.env
+        required: true
+      - path: identity-tokens.env
+        required: true
+    environment:
+      <<: *app-environment
+      Tokens__Issuer: *issuer
   planning-api:
     <<: *planning
     image: ghcr.io/nullradix-dev/edvaniq/planning-api:sha-${APP_COMMIT:?}
@@ -131,9 +143,16 @@ services:
     environment:
       <<: *app-environment
       services__planning-api__http__0: http://planning-api:8080
+      services__identity-api__http__0: http://identity-api:8080
   web:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/web:sha-${APP_COMMIT:?}
+    # The web host's client secret for its token from Identity.
+    env_file:
+      - path: app.env
+        required: true
+      - path: web.env
+        required: true
     environment:
       <<: *app-environment
       services__gateway__http__0: http://gateway:8080

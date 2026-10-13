@@ -8,11 +8,16 @@ namespace Edvaniq.Testing;
 
 // Stands in for a process behind a proxy, the gateway or a service. A real Kestrel on a free port, because YARP
 // forwards over the network and not into a TestServer. Answers every request with what arrived. /slow answers only
-// after 30 seconds, /set-cookie tries to set a cookie in the browser.
+// after 30 seconds, /set-cookie tries to set a cookie in the browser. POST /identity/connect/token answers like
+// Identity behind the gateway, with the tokens stub-token-1, stub-token-2 and so on.
 public sealed class StubService : IAsyncDisposable
 {
+    public const string TokenPath = "/identity/connect/token";
+
     private WebApplication? app;
     private int requests;
+    private int tokenRequests;
+    private int tokenStatus = StatusCodes.Status200OK;
 
     private StubService()
     {
@@ -21,8 +26,21 @@ public sealed class StubService : IAsyncDisposable
     // Kestrel replaces port 0 with the port it got once it has started.
     public string Address => app!.Urls.Single();
 
-    // How many requests got this far, to prove that a proxy stopped one before it.
+    // How many requests got this far, to prove that a proxy stopped one before it. Token requests count too.
     public int Requests => Volatile.Read(ref requests);
+
+    public int TokenRequests => Volatile.Read(ref tokenRequests);
+
+    // The form of the last token request.
+    public IReadOnlyDictionary<string, string> LastTokenRequest { get; private set; } = new Dictionary<string, string>();
+
+    // How token requests are answered: 200 with a token, 400 like Identity for a wrong secret, or any other status
+    // without a body, such as 503 while Identity is down.
+    public int TokenStatus
+    {
+        get => Volatile.Read(ref tokenStatus);
+        set => Volatile.Write(ref tokenStatus, value);
+    }
 
     public static async Task<StubService> StartAsync(string name)
     {
@@ -45,6 +63,23 @@ public sealed class StubService : IAsyncDisposable
         {
             response.Cookies.Append("backend", "set-by-the-backend");
             return Results.NoContent();
+        });
+        app.MapPost(TokenPath, async (HttpRequest request) =>
+        {
+            var number = Interlocked.Increment(ref stub.tokenRequests);
+            var form = await request.ReadFormAsync();
+            stub.LastTokenRequest = form.ToDictionary(field => field.Key, field => field.Value.ToString());
+            return stub.TokenStatus switch
+            {
+                StatusCodes.Status200OK => Results.Ok(new Dictionary<string, object>
+                {
+                    ["access_token"] = $"stub-token-{number}",
+                    ["token_type"] = "Bearer",
+                    ["expires_in"] = 300,
+                }),
+                StatusCodes.Status400BadRequest => Results.BadRequest(new Dictionary<string, string> { ["error"] = "invalid_client" }),
+                var status => Results.StatusCode(status),
+            };
         });
         app.Map("{**path}", (HttpRequest request) => new Echo(
             name,

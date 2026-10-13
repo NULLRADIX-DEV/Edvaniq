@@ -64,11 +64,12 @@ Was ein Service prüft, steht im Abschnitt `Authentication:Schemes:Bearer`, den 
 |---|---|---|
 | `ValidAudiences` | `edvaniq-api`, für alle Services gleich, weil das Gateway ein Token an alle weiterreicht | `appsettings.json` |
 | `ValidIssuer` | der Issuer, lokal `dotnet-user-jwts` | lokal `appsettings.Development.json`, sonst die Umgebung |
-| `Authority` | Adresse des Issuers, von der der Service die öffentlichen Schlüssel holt | die Umgebung |
+| `Authority` | Adresse von Identity, von der der Service die öffentlichen Schlüssel holt. Den Issuer von Identity nimmt er dabei zusätzlich an, lokal also neben `dotnet-user-jwts` | AppHost bzw. die Umgebung |
+| `RequireHttpsMetadata` | `false`, weil der Service Identity im Netz der App über HTTP erreicht | AppHost bzw. die Umgebung |
 
 Ohne Issuer oder Audience startet der Service nicht. Sonst würde .NET die fehlende Prüfung still überspringen und auch Tokens annehmen, die für eine andere App gedacht sind.
 
-Zum lokalen Testen holst du dir ein Dev-Token mit `dotnet user-jwts` (siehe [Befehle](#befehle)). Dessen Schlüssel liegt in den User Secrets der Api und gilt nur in Development. In den Tests stellt `ServiceFactory` den Service auf die Tokens aus `Edvaniq.Testing/TestTokens` um, die mit einem Schlüssel nur für diesen Testlauf signiert sind.
+Die Tokens stellt Identity aus, wie das läuft, steht in der [Architektur](architecture.md#tokens). Unter dem AppHost bekommt der Service also echte Tokens über Web-Host und Gateway. Zum Testen ohne Web-Host holst du dir ein Dev-Token mit `dotnet user-jwts` (siehe [Befehle](#befehle)). Dessen Schlüssel liegt in den User Secrets der Api und gilt nur in Development. In den Tests stellt `ServiceFactory` den Service auf die Tokens aus `Edvaniq.Testing/TestTokens` um, die mit einem Schlüssel nur für diesen Testlauf signiert sind.
 
 ## Datenbank und Migrationen
 
@@ -186,7 +187,7 @@ Ob die Isolationstests wirklich etwas prüfen, zeigt die Gegenprobe. Ohne den Fi
          disable: true
    ```
 
-   Den Aussteller der Tokens (`Authentication__Schemes__Bearer__ValidIssuer`) setzt `x-app` für alle, ohne ihn startet ein Service aus der Vorlage nicht.
+   Den Aussteller der Tokens (`Authentication__Schemes__Bearer__ValidIssuer`) und die `Authority` setzt `x-app` für alle, ohne den Aussteller startet ein Service aus der Vorlage nicht. Im AppHost erledigt das `AddService`.
 
 4. Soll ein Client den Service erreichen, braucht das Gateway eine Route dorthin. Leg in seiner `appsettings.json` unter `ReverseProxy` eine Route `/<name>/{**rest}` und einen Cluster mit dem Ziel `https+http://<name>-api` und einem `HttpRequest:ActivityTimeout` an, Vorbild ist Planning. Auf dem Server findet das Gateway den Service über eine Zeile `services__<name>-api__http__0: http://<name>-api:8080` im Abschnitt `environment` des Dienstes `gateway` in `deploy/compose.yml`. Wie das Gateway weiterleitet, steht in der [Architektur](architecture.md#gateway).
 

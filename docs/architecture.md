@@ -97,6 +97,14 @@ Auch die Shell liegt dort: `ShellLayout` mit Kopfzeile, Navigation und dem Hinwe
 
 Der Browser spricht nur mit dem Web-Host, nie mit dem Gateway. Was unter `/api/…` ankommt, reicht der Web-Host serverseitig ans Gateway weiter, die Routen stehen im Abschnitt `ReverseProxy` seiner `appsettings.json`. Dafür braucht es eine Sitzung, einen verschlüsselten Cookie, den kein Skript lesen kann und den der Browser nur über HTTPS an diese Seite schickt. Ohne Sitzung antwortet der Web-Host mit 401. Den Cookie und einen `Authorization`-Header aus dem Browser gibt er nicht weiter, und Cookies aus dem Backend kommen nicht beim Browser an. Einen Login gibt es noch nicht: `POST /session` startet eine Gast-Sitzung, `DELETE /session` beendet sie, `GET /session` sagt, ob eine besteht. Nur `/api/status` geht ohne Sitzung durch, damit die Shell auch ohne Sitzung erfährt, ob das Gateway antwortet.
 
+## Tokens
+
+Jeder Service prüft das Token selbst und muss dem Aussteller deshalb trauen, ohne ein Geheimnis mit ihm zu teilen. Identity signiert jedes Token mit seinem privaten Schlüssel (ES256), den nur Identity kennt. Den öffentlichen Teil holt sich ein Service über seine `Authority` direkt bei Identity, aus dem Discovery-Dokument unter `/.well-known/openid-configuration` und dem Key-Set, auf das es zeigt. Das Gateway leitet von Identity nur den Token-Endpunkt weiter.
+
+Einen Login gibt es noch nicht. Bis dahin holt sich der Web-Host ein eigenes, technisches Token: Er schickt seine Client-ID `web` und sein Client-Secret an `POST /identity/connect/token` (OAuth 2.0 Client Credentials). Das Token gilt 5 Minuten, sein Subjekt `sub` ist der Client selbst. Der Web-Host hält es im Speicher, holt eine Minute vor Ablauf ein neues und hängt es an jeden Aufruf unter `/api/…`, der mit einer Sitzung kommt. Welche Routen das betrifft, sagt die Metadate `BackendToken` an der Route. Bekommt der Web-Host binnen 7 Sekunden kein Token, antwortet er mit 502 und reicht den Aufruf nicht weiter. Aufrufe, die gleichzeitig auf ein Token warten, teilen sich eine Anfrage an Identity. Der Browser sieht das Token nie.
+
+Bis dahin steht in jedem Token derselbe Client statt eines Nutzers, für alle Sitzungen. Der Owner-Filter trennt Gäste also nicht voneinander, und Endpunkte mit Daten eines Nutzers gehören erst hinter den Login. Mit einem echten Login hängt der Web-Host das Token des Nutzers an statt seines eigenen. Issuer, Audience und der Weg zu den Schlüsseln bleiben, die Services merken davon nichts.
+
 ## Datenbank
 
 Alle Services nutzen MySQL, einen Server mit einer Datenbank pro Service (`identitydb`, `planningdb` und so weiter). Ein Worker nutzt die Datenbank seines Service. Lokal startet Aspire MySQL als Container mit persistentem Volume und phpMyAdmin und legt die Datenbanken selbst an.

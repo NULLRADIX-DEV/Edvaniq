@@ -24,8 +24,9 @@ public sealed class ForwardingTests
         Assert.Equal(0, gateway.Requests);
     }
 
+    // The Authorization that arrives is the web host's own token (BackendTokenTests), never the browser's.
     [Fact]
-    public async Task Api_WithSession_ReachesTheGateway_WithoutPrefixCookieOrAuthorization()
+    public async Task Api_WithSession_ReachesTheGateway_WithoutPrefixCookieOrTheBrowsersAuthorization()
     {
         await using var gateway = await StubService.StartAsync("gateway-stub");
         await using var web = new WebFactory(gateway.Address);
@@ -36,7 +37,7 @@ public sealed class ForwardingTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var echo = await response.Content.ReadFromJsonAsync<Echo>(TestContext.Current.CancellationToken);
-        Assert.Equal(new Echo("gateway-stub", "POST", "/planning/ping", Authorization: "", Cookie: ""), echo);
+        Assert.Equal(new Echo("gateway-stub", "POST", "/planning/ping", Authorization: "Bearer stub-token-1", Cookie: ""), echo);
     }
 
     [Fact]

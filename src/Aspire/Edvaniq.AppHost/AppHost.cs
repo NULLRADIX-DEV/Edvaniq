@@ -24,8 +24,14 @@ var notificationsDb = mysql.AddServiceDatabase("notifications");
 // Migrations (one step per service from the template, its API waits until it has finished)
 var planningMigrate = builder.AddMigration<Projects.Edvaniq_Services_Planning_Api>("planning-migrate", planningDb);
 
+// Token issuer: Identity signs the tokens, every service checks them with the public key it gets from Identity
+var signingKey = builder.AddSigningKey("identity-signing-key");
+var webClientSecret = builder.AddClientSecret("web-client-secret");
+var identityApi = builder.AddProject<Projects.Edvaniq_Services_Identity_Api>("identity-api")
+    .WithDatabase(identityDb)
+    .WithTokenIssuer(signingKey, webClientSecret);
+
 // Services
-var identityApi = AddService<Projects.Edvaniq_Services_Identity_Api>("identity-api", identityDb);
 var planningApi = AddService<Projects.Edvaniq_Services_Planning_Api>("planning-api", planningDb)
     .WaitForCompletion(planningMigrate);
 var contentApi = AddService<Projects.Edvaniq_Services_Content_Api>("content-api", contentDb);
@@ -60,11 +66,13 @@ var gateway = builder.AddProject<Projects.Edvaniq_Gateway>("gateway")
 // Frontend
 builder.AddProject<Projects.Edvaniq_Web>("web")
     .WithExternalHttpEndpoints()
-    .WithReference(gateway);
+    .WithReference(gateway)
+    .WithEnvironment("BackendToken__ClientSecret", webClientSecret);
 
 builder.Build().Run();
 
 IResourceBuilder<ProjectResource> AddService<TProject>(string name, ServiceDatabase database)
     where TProject : IProjectMetadata, new() =>
     builder.AddProject<TProject>(name)
-        .WithDatabase(database);
+        .WithDatabase(database)
+        .WithTokenValidation(identityApi);

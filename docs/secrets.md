@@ -4,13 +4,13 @@ Ein Secret ist alles, womit sich jemand als Edvaniq ausgeben oder an fremde Date
 
 ## Lokal
 
-Für die Entwicklung musst du keine Secrets anlegen. Aspire verwaltet die Passwörter seiner Container selbst. Die Passwörter der DB-Benutzer erzeugt der AppHost beim ersten Start und legt sie in seinen User Secrets ab. Auch ein Dev-Token von `dotnet user-jwts` speichert seinen Signaturschlüssel in den User Secrets der Api, und der gilt nur in Development. Brauchst du einen eigenen Wert, etwa einen API-Schlüssel zum Ausprobieren, setzt du ihn mit `dotnet user-secrets` am jeweiligen Projekt.
+Für die Entwicklung musst du keine Secrets anlegen. Aspire verwaltet die Passwörter seiner Container selbst. Die Passwörter der DB-Benutzer erzeugt der AppHost beim ersten Start und legt sie in seinen User Secrets ab, genauso den Signierschlüssel von Identity und das Client-Secret des Web-Hosts. Auch ein Dev-Token von `dotnet user-jwts` speichert seinen Signaturschlüssel in den User Secrets der Api, und der gilt nur in Development. Brauchst du einen eigenen Wert, etwa einen API-Schlüssel zum Ausprobieren, setzt du ihn mit `dotnet user-secrets` am jeweiligen Projekt.
 
 ## CI und Server
 
 In GitHub liegen Secrets im Repo oder im Environment `production`, das nur `main` nutzen darf. Für die Container-Registry reicht das automatische `GITHUB_TOKEN`.
 
-Auf dem Server bekommt jeder Container seine Werte erst beim Start, als Umgebungsvariablen aus der Betriebsumgebung. Gemeinsame Werte sehen alle Container. Den Connection String einer Datenbank bekommt aber nur der Service, dem sie gehört, und das Passwort des DB-Admins sieht kein Service.
+Auf dem Server bekommt jeder Container seine Werte erst beim Start, als Umgebungsvariablen aus der Betriebsumgebung. Gemeinsame Werte sehen alle Container. Den Connection String einer Datenbank bekommt aber nur der Service, dem sie gehört, und das Passwort des DB-Admins sieht kein Service. Den Signierschlüssel der Tokens kennt nur Identity, das Client-Secret des Web-Hosts nur Identity und der Web-Host. Die Services bekommen nur den öffentlichen Schlüssel, und den holen sie sich selbst bei Identity.
 
 Im Code liest ein Service ein Secret nur aus der Konfiguration, zum Beispiel `ConnectionStrings__planningdb`. Ein Default im Code wäre ein Secret im Repo.
 
