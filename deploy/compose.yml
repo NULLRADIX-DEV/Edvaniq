@@ -14,7 +14,6 @@ x-app: &app
     - /tmp
   environment: &app-environment
     ASPNETCORE_HTTP_PORTS: "8080;8081"
-    # Tokens come from Identity. A service fetches the public key from it inside the app's network, over HTTP.
     Authentication__Schemes__Bearer__ValidIssuer: &issuer https://edvaniq.nullradix.de
     Authentication__Schemes__Bearer__Authority: http://identity-api:8080
     Authentication__Schemes__Bearer__RequireHttpsMetadata: "false"
@@ -80,7 +79,6 @@ services:
   identity-api:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/identity-api:sha-${APP_COMMIT:?}
-    # Signing key and client secrets, only for Identity.
     env_file:
       - path: app.env
         required: true
@@ -147,30 +145,19 @@ services:
   web:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/web:sha-${APP_COMMIT:?}
-    # The web host's client secret for its token from Identity.
     env_file:
       - path: app.env
         required: true
       - path: web.env
         required: true
-    # The only process reachable from outside: the host's nginx forwards to this port on loopback. The deploy sets
-    # APP_PORT and APP_SUBNET.
     ports:
       - "127.0.0.1:${APP_PORT:?}:8080"
-    # A published port needs a network that is not internal, so the web host alone also joins edge.
     networks: [default, edge]
     environment:
       <<: *app-environment
       services__gateway__http__0: http://gateway:8080
-      # nginx arrives through the gateway of the app's network. Only from there the web host takes scheme and client
-      # address from X-Forwarded-Proto and X-Forwarded-For.
       ForwardedHeaders__KnownNetworks__0: ${APP_SUBNET:?}
 
-# No process needs a way out of the app: images come in through Docker itself, not through a container. An internal
-# network has none, so a taken-over process on default alone reaches neither the internet nor the server's own
-# addresses. A published port needs a network that is not internal: edge for the web host, backend for the database's
-# loopback port that the server's backups use. A service that has to call out later, an AI provider for instance,
-# needs a network that is not internal too.
 networks:
   default:
     internal: true
