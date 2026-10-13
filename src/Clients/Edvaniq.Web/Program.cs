@@ -16,10 +16,11 @@ builder.Services.AddWebSession();
 // The browser never talks to the gateway itself. Everything under /api goes on from here, on the server side, with the
 // routes from the section ReverseProxy. The gateway's address comes from service discovery, like in the gateway.
 // The cluster waits 9 seconds, one more than the gateway waits for a service, so the gateway's own 504 problem gets
-// through to the browser.
+// through to the browser. Routes with the metadata BackendToken carry the web host's token to the backend.
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
-    .AddServiceDiscoveryDestinationResolver();
+    .AddServiceDiscoveryDestinationResolver()
+    .AddBackendToken();
 
 var app = builder.Build();
 

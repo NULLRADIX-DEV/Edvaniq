@@ -30,6 +30,40 @@ public sealed class RoutingTests
         Assert.Equal(new Echo("planning-stub", "POST", "/ping", "Bearer token", Cookie: ""), echo);
     }
 
+    // The web host gets its token from Identity through here.
+    [Fact]
+    public async Task IdentityTokenRoute_ReachesIdentity_WithoutPrefix()
+    {
+        await using var identity = await StubService.StartAsync("identity-stub");
+        await using var gateway = new GatewayFactory("http://127.0.0.1:9", identityAddress: identity.Address);
+        using var client = gateway.CreateClient();
+
+        using var response = await client.PostAsync("/identity/connect/token", content: null, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var echo = await response.Content.ReadFromJsonAsync<Echo>(TestContext.Current.CancellationToken);
+        Assert.Equal(new Echo("identity-stub", "POST", "/connect/token", Authorization: "", Cookie: ""), echo);
+    }
+
+    // Only the token endpoint is open to the outside. Discovery and key set are for the services, which ask Identity
+    // directly.
+    [Theory]
+    [InlineData("GET", "/identity/connect/token")]
+    [InlineData("GET", "/identity/.well-known/openid-configuration")]
+    [InlineData("GET", "/identity/.well-known/jwks")]
+    [InlineData("GET", "/identity/health")]
+    public async Task RestOfIdentity_IsNotFoundProblem(string method, string path)
+    {
+        await using var identity = await StubService.StartAsync("identity-stub");
+        await using var gateway = new GatewayFactory("http://127.0.0.1:9", identityAddress: identity.Address);
+        using var client = gateway.CreateClient();
+
+        using var response = await client.SendAsync(new HttpRequestMessage(new HttpMethod(method), path), TestContext.Current.CancellationToken);
+
+        await AssertProblemAsync(response, HttpStatusCode.NotFound, "No service answers to this path.");
+        Assert.Equal(0, identity.Requests);
+    }
+
     // The shell asks the web host, and the web host asks here, whether the backend answers. No service is involved.
     [Fact]
     public async Task Status_AnswersWithoutAnyService()
