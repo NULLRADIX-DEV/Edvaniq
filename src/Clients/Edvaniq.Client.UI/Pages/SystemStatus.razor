@@ -1,0 +1,14 @@
+@page "/systemstatus"
+
+<PageTitle>Systemstatus – Edvaniq</PageTitle>
+
+<h1>Systemstatus</h1>
+
+<p>Ein Ping geht von hier über den Server bis in die Datenbank und kommt mit dem zurück, was sie gespeichert hat. So
+    siehst du, ob Edvaniq gerade durchgängig funktioniert.</p>
+
+@* Only the browser sends the ping. While the page is prerendered on the server, there is no IPing to send it with. *@
+@if (RendererInfo.IsInteractive)
+{
+    <PingCheck />
+}

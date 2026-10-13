@@ -11,4 +11,11 @@ builder.Services.AddSingleton<IBackendStatus>(new HttpBackendStatus(new HttpClie
     Timeout = TimeSpan.FromSeconds(5),
 }));
 
+// The host answers within 9 seconds, its wait for a token included, with an error of its own if need be.
+builder.Services.AddSingleton<IPing>(new HttpPing(new HttpClient
+{
+    BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
+    Timeout = TimeSpan.FromSeconds(20),
+}));
+
 await builder.Build().RunAsync();
