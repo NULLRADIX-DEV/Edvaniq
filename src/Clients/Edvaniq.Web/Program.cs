@@ -52,8 +52,9 @@ else
 }
 
 // Pages get the not-found page. /api and /session opt out below (SkipStatusCodePages): a 401 or 502 there must stay
-// what it is and not turn into an HTML page.
+// what it is and not turn into an HTML page. It becomes a problem that names the trace instead.
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+app.UseApiProblems();
 app.UseHttpsRedirection();
 
 app.UseAuthentication();

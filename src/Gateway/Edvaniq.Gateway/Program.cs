@@ -3,7 +3,6 @@ using Edvaniq.Gateway;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
-builder.Services.AddProblemDetails();
 
 // Routes and targets come only from the section ReverseProxy. Service discovery turns a name like planning-api into
 // the address: from Aspire locally, from services__<name>__http__0 in deploy/compose.yml on the server.

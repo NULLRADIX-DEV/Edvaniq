@@ -17,6 +17,9 @@ if (args is ["migrate"])
     return app.RunMigrations();
 }
 
+// Errors become problems that name the trace. First, so they wrap health and the token check too.
+app.UseProblems();
+
 // Health first, then the token check: health must answer without a token. Called by hand, the two run after it,
 // otherwise ASP.NET Core puts them in front of the whole pipeline.
 app.MapDefaultEndpoints();
