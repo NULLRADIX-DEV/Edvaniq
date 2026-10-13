@@ -134,6 +134,9 @@ services:
   web:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/web:sha-${APP_COMMIT:?}
+    environment:
+      <<: *app-environment
+      services__gateway__http__0: http://gateway:8080
 
 networks:
   backend:
