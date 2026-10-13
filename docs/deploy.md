@@ -78,6 +78,8 @@ Ein neuer Prozess bekommt keinen Eintrag `ports` ([Erreichbarkeit](#erreichbarke
 
 Von außen erreichbar ist nur der Web-Host, und nur über HTTPS. Er veröffentlicht als einziger Prozess einen Port, und zwar nur auf der Loopback-Adresse des Servers. Davor steht der Reverse-Proxy des Servers, der HTTPS beendet. Gateway, Services und Worker erreicht nur das Netz der App, das Gateway also nur über den Web-Host und nur mit den Routen, die der Web-Host weiterleitet. Die Datenbank veröffentlicht einen Port ebenfalls nur auf Loopback, für die Sicherungen des Servers. Der CI-Job „Container images“ prüft, dass nur `web` und `db` einen Port veröffentlichen und beide nur auf `127.0.0.1`.
 
+Nach draußen kommen nur die Prozesse, die es brauchen. Das Netz `default` ist `internal`: Gateway, Identity, Worker und die Skelett-Services erreichen weder das Internet noch die Adressen des Servers. Der Web-Host hängt zusätzlich an `edge`, weil ein veröffentlichter Port ein Netz braucht, das nicht `internal` ist. Aus demselben Grund ist `backend` nicht `internal`, dort liegen die Datenbank mit ihrem Port und die Services mit eigener Datenbank. Die Dienste des Servers selbst sperrt die Server-Plattform für alle Container, bis auf HTTPS. Die CI prüft, dass `default` `internal` bleibt und nur `web` an `edge` hängt, nie an `backend`.
+
 Hinter dem Proxy übernimmt der Web-Host Schema und Client-Adresse aus `X-Forwarded-Proto` und `X-Forwarded-For`, aber nur, wenn die Anfrage aus dem Netz der App kommt (`ForwardedHeaders:KnownNetworks`, setzt der Deploy). Von anderswo ignoriert er die Header, niemand kann sich also als Proxy ausgeben.
 
 ## Speicher
