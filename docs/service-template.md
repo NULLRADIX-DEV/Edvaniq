@@ -162,7 +162,7 @@ Ob die Isolationstests wirklich etwas prüfen, zeigt die Gegenprobe. Ohne den Fi
        .WaitForCompletion(<name>Migrate);
    ```
 
-3. In `deploy/compose.yml` einen Anker `x-<name>` anlegen, darauf den Dienst `<name>-api` und den Migrationsschritt `<name>-migrate`. Der Anker liest zusätzlich `<name>.env`, hängt im Netz `backend` und wartet auf `db`. Weil die Liste `env_file` die aus `x-app` ersetzt, steht `app.env` darin noch einmal. Die Datenbank hängt nur im Netz `backend`, und nur Prozesse mit eigener Datenbank kommen dazu. Vorbild ist Planning:
+3. In `deploy/compose.yml` einen Anker `x-<name>` anlegen, darauf den Dienst `<name>-api` und den Migrationsschritt `<name>-migrate`. Der Anker liest zusätzlich `<name>.env`, hängt zusätzlich im Netz `data` und wartet auf `db`. Weil die Listen `env_file` und `networks` die aus `x-app` ersetzen, stehen `app.env` und `inner` darin noch einmal. Die Datenbank erreichen nur Prozesse im Netz `data`, also nur die mit eigener Datenbank. Das Netz `backend` gehört der Datenbank allein, für ihren Port ([Erreichbarkeit](deploy.md#erreichbarkeit)). Vorbild ist Planning:
 
    ```yaml
    x-<name>: &<name>
@@ -172,7 +172,7 @@ Ob die Isolationstests wirklich etwas prüfen, zeigt die Gegenprobe. Ohne den Fi
          required: true
        - path: <name>.env
          required: true
-     networks: [default, backend]
+     networks: [inner, data]
      depends_on:
        db:
          condition: service_healthy

@@ -12,6 +12,7 @@ x-app: &app
   read_only: true
   tmpfs:
     - /tmp
+  networks: [inner]
   environment: &app-environment
     ASPNETCORE_HTTP_PORTS: "8080;8081"
     Authentication__Schemes__Bearer__ValidIssuer: &issuer https://edvaniq.nullradix.de
@@ -37,7 +38,7 @@ x-planning: &planning
       required: true
     - path: planning.env
       required: true
-  networks: [default, backend]
+  networks: [inner, data]
   depends_on:
     db:
       condition: service_healthy
@@ -55,7 +56,7 @@ services:
       - "127.0.0.1:${DB_PORT:?DB_PORT is missing in .env}:3306"
     labels:
       platform.backup: mysql
-    networks: [backend]
+    networks: [data, backend]
     cap_drop: [ALL]
     cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE]
     security_opt: [no-new-privileges:true]
@@ -152,14 +153,15 @@ services:
         required: true
     ports:
       - "127.0.0.1:${APP_PORT:?}:8080"
-    networks: [default, edge]
+    networks: [default, inner]
     environment:
       <<: *app-environment
       services__gateway__http__0: http://gateway:8080
       ForwardedHeaders__KnownNetworks__0: ${APP_SUBNET:?}
 
 networks:
-  default:
+  inner:
+    internal: true
+  data:
     internal: true
   backend:
-  edge:
