@@ -72,6 +72,14 @@ Jeder Prozess braucht einen Eintrag in `AppHost.cs` und einen Dienst in `deploy/
 
 Alle Services teilen sich den MySQL-Dienst `db`, jeder mit eigener Datenbank und eigenem Benutzer. Ein Service mit Datenbank bekommt deshalb einen eigenen Anker wie `x-planning`, nur er erreicht die Datenbank. Wie das aussieht, zeigt die [Service-Vorlage](service-template.md#danach-von-hand).
 
+Ein neuer Prozess bekommt keinen Eintrag `ports` ([Erreichbarkeit](#erreichbarkeit)).
+
+## Erreichbarkeit
+
+Von außen erreichbar ist nur der Web-Host, und nur über HTTPS. Er veröffentlicht als einziger Prozess einen Port, und zwar nur auf der Loopback-Adresse des Servers. Davor steht der Reverse-Proxy des Servers, der HTTPS beendet. Gateway, Services und Worker erreicht nur das Netz der App, das Gateway also nur über den Web-Host und nur mit den Routen, die der Web-Host weiterleitet. Die Datenbank veröffentlicht einen Port ebenfalls nur auf Loopback, für die Sicherungen des Servers. Der CI-Job „Container images“ prüft, dass nur `web` und `db` einen Port veröffentlichen und beide nur auf `127.0.0.1`.
+
+Hinter dem Proxy übernimmt der Web-Host Schema und Client-Adresse aus `X-Forwarded-Proto` und `X-Forwarded-For`, aber nur, wenn die Anfrage aus dem Netz der App kommt (`ForwardedHeaders:KnownNetworks`, setzt der Deploy). Von anderswo ignoriert er die Header, niemand kann sich also als Proxy ausgeben.
+
 ## Speicher
 
 Jeder Container hat eine feste Speichergrenze ohne Swap (`mem_limit` und `memswap_limit`). Produktive Prozesse haben 256 MB, die Skelett-Prozesse 128 MB und MySQL 1536 MB, davon 1 GB InnoDB-Cache. Zusammen sind das 4736 MB, und das liegt unter der Obergrenze von 6 GB für die ganze App. Den Rest brauchen Docker selbst und ein laufender Migrationsschritt.
