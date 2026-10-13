@@ -28,6 +28,21 @@ public sealed partial class ProblemTests
         Assert.Matches(TraceId(), await AssertProblemAsync(response, HttpStatusCode.Unauthorized));
     }
 
+    // A client that takes no JSON keeps the bare status, never an error page in its place.
+    [Fact]
+    public async Task ClientWithoutJson_KeepsTheBareStatus()
+    {
+        await using var web = new WebFactory("http://127.0.0.1:9");
+        using var browser = web.CreateBrowser();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/session");
+        request.Headers.Accept.ParseAdd("text/html");
+
+        using var response = await browser.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public async Task GatewayDown_IsAProblemNamingTheTrace_WithoutItsAddress()
     {

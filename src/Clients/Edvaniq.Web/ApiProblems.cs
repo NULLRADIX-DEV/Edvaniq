@@ -24,7 +24,8 @@ public static class ApiProblems
                 return;
             }
 
-            await context.RequestServices.GetRequiredService<IProblemDetailsService>().WriteAsync(new ProblemDetailsContext
+            // A client that takes no JSON (Accept) keeps the bare status. WriteAsync would throw and turn it into a 500.
+            await context.RequestServices.GetRequiredService<IProblemDetailsService>().TryWriteAsync(new ProblemDetailsContext
             {
                 HttpContext = context,
                 ProblemDetails = { Status = response.StatusCode },
