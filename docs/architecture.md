@@ -48,23 +48,41 @@ templates/
 
 Die Abhängigkeiten zeigen immer nach innen: Api, dann Infrastructure, dann Application, dann Domain. Die Fachlogik weiß also nichts von Datenbank oder HTTP.
 
-## Regeln
+## Service-Regeln
 
-Diese Regeln halten die Services auseinander:
+Diese sechs Regeln halten die Services auseinander. Zu jeder gehört eine Prüffrage, deren Antwort Nein sein muss. Die Architekturtests in `Edvaniq.ArchitectureTests` stellen sie, ein Verstoß macht sie rot. Was der Test nicht sehen kann, steht dabei und gehört ins Review.
 
-1. Von einem anderen Service referenziert ein Service nur dessen `.Contracts`, niemals Domain, Application, Infrastructure oder Api.
-2. Services sprechen asynchron über Integration Events miteinander, über einen Message Broker. Synchron geht nur HTTP über die Service Discovery von Aspire.
-3. Jeder Service besitzt seine eigene Datenbank. Kein Service liest die Datenbank eines anderen.
-4. Clients kennen kein Backend-Projekt. `Client.Core` spricht nur mit dem Gateway, im Browser über den Web-Host. Die API-Clients entstehen per OpenAPI.
-5. BuildingBlocks enthalten nur technische Bausteine, keine Fachbegriffe.
-6. Paketversionen stehen nur in `Directory.Packages.props`.
-7. Jede Anfrage an einen Service braucht ein gültiges Token. Der Nutzer kommt nur aus dem Token (`sub`), nie aus der Anfrage ([Service-Vorlage](service-template.md#token-prüfung)).
+1. **Eigene Datenbank.** Jeder Service mit Daten hat genau eine eigene Datenbank mit eigenem DB-Benutzer. Ihren Connection String bekommen nur die Prozesse dieses Service: lokal über `WithDatabase` im AppHost, auf dem Server über `<name>.env` in `deploy/compose.yml`.
+   - Prüffrage: Bekommt ein Prozess die Datenbank eines anderen Service?
+   - Test: `WithDatabase` im AppHost und die `<name>.env` in `deploy/compose.yml` hängen nur an Prozessen des Service `<name>`.
+2. **Nur Contracts fremder Services.** Von einem anderen Service referenziert ein Projekt nur dessen `.Contracts`.
+   - Prüffrage: Referenziert ein Projekt Domain, Application, Infrastructure, Api oder Worker eines anderen Service?
+   - Test: die Projektreferenzen aller Projekte unter `src/`.
+3. **Schichten zeigen nach innen.** Ein Projekt eines Service referenziert nur, was in der Tabelle [Schichten eines Service](#schichten-eines-service) unter „darf referenzieren“ steht. Domain und Application kennen weder EF Core noch ASP.NET Core.
+   - Prüffrage: Referenziert ein Projekt eine Schicht weiter außen, oder hängen Domain oder Application an EF Core oder ASP.NET Core?
+   - Test: die Referenzen je Schicht, auch die geerbten.
+4. **Integration nur über Ereignisse oder Abfragen.** Services tauschen Daten auf genau zwei Wegen aus: asynchron über Integration Events aus den `.Contracts` des Absenders über einen Message Broker, oder synchron per HTTP-Abfrage über die Service Discovery von Aspire. Es gibt keine feste Adresse, keine geteilten Dateien und keinen geteilten Cache. Ein `.Contracts` hängt nur an `BuildingBlocks.Contracts`.
+   - Prüffrage: Tauschen zwei Services Daten auf einem anderen Weg aus?
+   - Test: Die `.Contracts` referenzieren nur `BuildingBlocks.Contracts`, und unter `src/Services` steht keine Adresse mit Host oder IP. Geteilte Dateien oder ein geteilter Cache fallen nur im Review auf.
+5. **Keine Projektionen fremder Daten.** Von Daten eines anderen Service speichert ein Service nur die ID und Werte, die er selbst daraus berechnet, zum Beispiel die Zahl fälliger Karten je Thema. Eine Kopie fremder Inhalte als Read-Model legt er nicht an. Braucht ein Screen Daten aus mehreren Services, holt der Client sie über das Gateway.
+   - Prüffrage: Speichert ein Service Inhalte, die einem anderen Service gehören?
+   - Test: Kein DbContext mappt einen Typ aus einem anderen Service, und keine Domain referenziert ein `.Contracts`. Wer fremden Inhalt in eine eigene Spalte kopiert, etwa einen Text als `string`, fällt nur im Review auf.
+6. **Zyklen per Abfrage.** Die Integration Events bilden keinen Kreis: Hört A auf Events von B, hört B weder direkt noch über andere Services auf Events von A. Braucht B trotzdem Daten von A, fragt B sie per HTTP ab. Die Typen für Anfrage und Antwort legt B selbst an, so entsteht keine Referenz auf A.
+   - Prüffrage: Hat der Graph „Service referenziert `.Contracts` von“ einen Kreis?
+   - Test: Kreissuche in den Projektreferenzen zwischen den Services.
 
-Wer auf wessen Integration Events hört:
+Weitere Regeln:
+
+- Clients kennen kein Backend-Projekt. `Client.Core` spricht nur mit dem Gateway, im Browser über den Web-Host. Die API-Clients entstehen per OpenAPI.
+- BuildingBlocks enthalten nur technische Bausteine, keine Fachbegriffe.
+- Paketversionen stehen nur in `Directory.Packages.props`.
+- Jede Anfrage an einen Service braucht ein gültiges Token. Der Nutzer kommt nur aus dem Token (`sub`), nie aus der Anfrage ([Service-Vorlage](service-template.md#token-prüfung)).
+
+Wer auf wessen Integration Events hört, nach Regel 6 ohne Kreis. Planning holt die Mastery per Abfrage bei LearningEngine, weil LearningEngine schon auf Planning hört.
 
 | Consumer | konsumiert von |
 |---|---|
-| Planning | Identity, Content, Knowledge, LearningEngine |
+| Planning | Identity, Content, Knowledge |
 | Content | Identity |
 | Knowledge | Identity, Content |
 | Assessment | Identity, Content, Knowledge |
