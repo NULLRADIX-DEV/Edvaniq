@@ -156,9 +156,9 @@ jobs:
             | sort | diff <(printf '%s\n' 'db 127.0.0.1 3306' 'web 127.0.0.1 8080') - \
             || { echo "::error::Only web and db may publish a port in deploy/compose.yml, and only on 127.0.0.1 (< expected, > found)"; exit 1; }
           compose --profile '*' config --no-env-resolution --format json \
-            | python3 -c 'import json, sys; c = json.load(sys.stdin); s = c["services"]; print("default internal", bool(c["networks"]["default"].get("internal"))); print("edge", *sorted(k for k, v in s.items() if "edge" in v.get("networks", {}))); print("web", *sorted(s["web"]["networks"]))' \
-            | diff <(printf '%s\n' 'default internal True' 'edge web' 'web default edge') - \
-            || { echo "::error::default must be internal, and only web joins edge, without backend (< expected, > found)"; exit 1; }
+            | python3 -c 'import json, sys; c = json.load(sys.stdin); s = c["services"]; [print(n, *(["internal"] if v.get("internal") else sorted(k for k, sv in s.items() if n in sv.get("networks", {})))) for n, v in sorted(c["networks"].items())]; print("web", *sorted(s["web"]["networks"]))' \
+            | diff <(printf '%s\n' 'backend db' 'data internal' 'default web' 'inner internal' 'web default inner') - \
+            || { echo "::error::Every network must be internal, except default for the port of web and backend for the port of db, each alone, and web stays away from data (< expected, > found)"; exit 1; }
 
       - name: Scan base layer (web image)
         run: |
