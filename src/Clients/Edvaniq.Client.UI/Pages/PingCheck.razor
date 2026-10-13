@@ -1,0 +1,59 @@
+@using System.Globalization
+@inject IPing Ping
+
+@* The live region is always there, so a screen reader announces each answer. While a ping runs it says so, so a
+   repeated failure is announced again. The button stays outside, it keeps the focus. *@
+<div role="status">
+    @if (pinging)
+    {
+        <p>Ping läuft …</p>
+    }
+    else if (result is not null)
+    {
+        <p class="ping-result">
+            <strong>Alles in Ordnung.</strong> Ping Nr. @result.Id wurde am @Stored(result) Uhr in der Datenbank gespeichert.
+        </p>
+    }
+    else if (failed)
+    {
+        <p class="ping-result ping-failed">
+            <strong>Der Ping ist nicht angekommen.</strong> Edvaniq ist gerade nicht erreichbar. Versuch es in ein paar
+            Sekunden noch einmal.
+        </p>
+    }
+</div>
+
+@* Until the first answer there is nothing to repeat. The button stays enabled while a ping runs: a disabled button would
+   lose the keyboard focus. *@
+@if (result is not null || failed)
+{
+    <button type="button" class="button" @onclick="SendAsync">
+        @(failed ? "Ping erneut senden" : "Noch einmal pingen")
+    </button>
+}
+
+@code {
+    private PingResult? result;
+    private bool failed;
+    private bool pinging;
+
+    protected override Task OnInitializedAsync() => SendAsync();
+
+    // Every ping writes to the database, so a click while one runs sends nothing.
+    private async Task SendAsync()
+    {
+        if (pinging)
+        {
+            return;
+        }
+
+        pinging = true;
+        result = await Ping.SendAsync();
+        failed = result is null;
+        pinging = false;
+    }
+
+    // The time the database stored, in the user's time zone.
+    private static string Stored(PingResult ping) =>
+        ping.PingedAt.ToLocalTime().ToString("dd.MM.yyyy 'um' HH:mm:ss", CultureInfo.InvariantCulture);
+}

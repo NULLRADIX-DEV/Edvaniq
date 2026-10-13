@@ -24,6 +24,14 @@ public static class MauiProgram
 			Timeout = TimeSpan.FromSeconds(5),
 		}));
 
+		// The host answers within 9 seconds, its wait for a token included, with an error of its own if need be. The
+		// default handler keeps the session cookie.
+		builder.Services.AddSingleton<IPing>(new HttpPing(new HttpClient
+		{
+			BaseAddress = new Uri("https://edvaniq.nullradix.de/"),
+			Timeout = TimeSpan.FromSeconds(20),
+		}));
+
 #if DEBUG
 		builder.Services.AddBlazorWebViewDeveloperTools();
 		builder.Logging.AddDebug();
