@@ -1,11 +1,7 @@
-using System.Text.Json;
-
 namespace Edvaniq.ArchitectureTests;
 
 // Rule 3 in docs/architecture.md, second half: Domain and Application depend on neither EF Core nor ASP.NET Core, not
-// even through another project or package. The restore writes every dependency of a project, also the inherited ones,
-// to obj/project.assets.json: packages and projects under targets, with the frameworks they need, and the project's own
-// frameworks under project. The web SDK shows up there as the framework Microsoft.AspNetCore.App.
+// even through another project or package. ProjectAssets lists every dependency of a project, also the inherited ones.
 internal static class FrameworkRule
 {
     private const string AspNetCore = "Microsoft.AspNetCore.App";
@@ -15,37 +11,30 @@ internal static class FrameworkRule
 
     private static IEnumerable<string> Check(ServiceProject project)
     {
-        var assets = Path.Combine(Path.GetDirectoryName(project.File)!, "obj", "project.assets.json");
-        if (!File.Exists(assets))
+        var assets = ProjectAssets.Read(project);
+        if (assets is null)
         {
-            return [$"{project.Name} is not restored, {assets} is missing. Run dotnet restore first."];
+            return [ProjectAssets.NotRestored(project)];
         }
 
-        using var document = JsonDocument.Parse(File.ReadAllText(assets));
-        var root = document.RootElement;
         var violations = new List<string>();
-        foreach (var library in root.GetProperty("targets").EnumerateObject().SelectMany(target => target.Value.EnumerateObject()))
+        foreach (var library in assets.Libraries)
         {
-            var id = library.Name.Split('/')[0];
-            if (id.Contains("EntityFrameworkCore", StringComparison.OrdinalIgnoreCase)
-                || id.StartsWith("Microsoft.AspNetCore", StringComparison.OrdinalIgnoreCase))
+            if (library.Id.Contains("EntityFrameworkCore", StringComparison.OrdinalIgnoreCase)
+                || library.Id.StartsWith("Microsoft.AspNetCore", StringComparison.OrdinalIgnoreCase))
             {
-                violations.Add($"{project.Name} depends on {id}");
+                violations.Add($"{project.Name} depends on {library.Id}");
             }
 
-            if (library.Value.TryGetProperty("frameworkReferences", out var frameworks)
-                && frameworks.EnumerateArray().Any(framework => framework.GetString() == AspNetCore))
+            if (library.Frameworks.Contains(AspNetCore))
             {
-                violations.Add($"{project.Name} depends on {id}, which needs {AspNetCore}");
+                violations.Add($"{project.Name} depends on {library.Id}, which needs {AspNetCore}");
             }
         }
 
-        foreach (var framework in root.GetProperty("project").GetProperty("frameworks").EnumerateObject())
+        if (assets.Frameworks.Contains(AspNetCore))
         {
-            if (framework.Value.TryGetProperty("frameworkReferences", out var references) && references.TryGetProperty(AspNetCore, out _))
-            {
-                violations.Add($"{project.Name} references {AspNetCore}");
-            }
+            violations.Add($"{project.Name} references {AspNetCore}");
         }
 
         return violations;

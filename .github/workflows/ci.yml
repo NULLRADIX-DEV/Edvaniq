@@ -60,7 +60,7 @@ jobs:
           for project in UnitTests IntegrationTests; do
             dotnet test --project "tests/Services/Sample/Edvaniq.Services.Sample.$project" -c Release -- --ignore-exit-code 8
           done
-          dotnet test --project tests/Edvaniq.ArchitectureTests -c Release -- --filter-class "*Rule2ContractsTests" --filter-class "*Rule3LayerTests"
+          dotnet test --project tests/Edvaniq.ArchitectureTests -c Release -- --filter-class "*Rule2ContractsTests" --filter-class "*Rule3LayerTests" --filter-class "*Rule4IntegrationTests" --filter-class "*Rule6CycleTests"
 
   secret-scan:
     name: Secret scan

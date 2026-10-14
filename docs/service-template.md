@@ -152,7 +152,7 @@ Ob die Isolationstests wirklich etwas prüfen, zeigt die Gegenprobe. Ohne den Fi
 
 ## Danach von Hand
 
-1. In `Edvaniq.ArchitectureTests` die Referenzen auf die neuen Projekte ergänzen.
+1. In `Edvaniq.ArchitectureTests` die Referenzen auf die neuen Projekte ergänzen. Sonst wird `Rule5ProjectionTests` rot, weil er den DbContext des Service nicht laden kann.
 2. Im AppHost die Api als `ProjectReference` in `Edvaniq.AppHost.csproj` eintragen, in `AppHost.cs` diese Zeilen ergänzen und im Gateway `WithReference(<name>Api)` dazunehmen:
 
    ```csharp
