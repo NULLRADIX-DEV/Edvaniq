@@ -50,17 +50,17 @@ Die Abhängigkeiten zeigen immer nach innen: Api, dann Infrastructure, dann Appl
 
 ## Service-Regeln
 
-Diese sechs Regeln halten die Services auseinander. Zu jeder gehört eine Prüffrage, deren Antwort Nein sein muss. Unter „Test“ steht, was die Architekturtests in `Edvaniq.ArchitectureTests` dazu prüfen, sobald es sie gibt (#136, #137). Was ein Test nicht sehen kann, steht dabei und gehört ins Review.
+Diese sechs Regeln halten die Services auseinander. Zu jeder gehört eine Prüffrage, deren Antwort Nein sein muss. Unter „Test“ steht, was die Architekturtests in `Edvaniq.ArchitectureTests` dazu prüfen, für Regeln 1–3 mit der Testklasse, für Regeln 4–6 sobald es sie gibt (#137). Zu jeder Prüfung gehört dort ein Test, der einen Fake-Service mit genau diesem Verstoß anlegt und rot erwartet. Was ein Test nicht sehen kann, steht dabei und gehört ins Review.
 
 1. **Eigene Datenbank.** Jeder Service mit Daten hat genau eine eigene Datenbank mit eigenem DB-Benutzer. Ihren Connection String bekommen nur die Prozesse dieses Service: lokal über `WithDatabase` im AppHost, auf dem Server über `<name>.env` in `deploy/compose.yml`.
    - Prüffrage: Bekommt ein Prozess die Datenbank eines anderen Service?
-   - Test: Die Datenbank eines Service hängt im AppHost (`WithDatabase`) nur an seinen Prozessen, und seine `<name>.env` in `deploy/compose.yml` ebenso.
+   - Test: `Rule1DatabaseTests` baut das Modell des AppHost, ohne es zu starten: Jeder Prozess bekommt höchstens eine Datenbank, nur die seines Service, und nie den ganzen Server. Seine `<name>.env` in `deploy/compose.yml` hängt nur an `<name>` und `<name>-*`, das prüft die CI im Job „Container images“.
 2. **Nur Contracts fremder Services.** Ein Projekt eines Service referenziert von einem anderen Service nur dessen `.Contracts`. Der AppHost ist kein Service, er referenziert jede Api, um sie zu starten.
    - Prüffrage: Referenziert ein Projekt unter `src/Services` Domain, Application, Infrastructure, Api oder Worker eines anderen Service?
-   - Test: die Projektreferenzen aller Projekte unter `src/Services`.
+   - Test: `Rule2ContractsTests` liest die Projektreferenzen aller Projekte unter `src/Services`.
 3. **Schichten zeigen nach innen.** Ein Projekt eines Service referenziert direkt nur, was in der Tabelle [Schichten eines Service](#schichten-eines-service) unter „darf referenzieren“ steht. Domain und Application kennen weder EF Core noch ASP.NET Core, auch nicht über eine andere Referenz.
    - Prüffrage: Referenziert ein Projekt eines Service direkt etwas, das nicht in seiner Zeile der Tabelle steht, oder hängen Domain oder Application direkt oder geerbt an EF Core oder ASP.NET Core?
-   - Test: die direkten Projektreferenzen je Schicht gegen die Tabelle, dazu alle Abhängigkeiten von Domain und Application, auch die geerbten.
+   - Test: `Rule3LayerTests` vergleicht die direkten Projektreferenzen je Schicht mit der Tabelle, ein Projekt mit einer Schicht außerhalb der Tabelle ist auch ein Verstoß. Für Domain und Application liest er alle Abhängigkeiten aus `obj/project.assets.json`, auch die geerbten, also erst nach einem Restore.
 4. **Integration nur über Ereignisse oder Abfragen.** Services tauschen Daten auf genau zwei Wegen aus: asynchron über Integration Events aus den `.Contracts` des Absenders über einen Message Broker, oder synchron per HTTP-Abfrage. Die Adresse des anderen Service steht nie im Service selbst, sie kommt von außen: lokal vom AppHost über die Service Discovery von Aspire, auf dem Server aus `deploy/compose.yml`. Geteilte Dateien und einen geteilten Cache gibt es nicht. Ein `.Contracts` hängt nur an `BuildingBlocks.Contracts`.
    - Prüffrage: Tauschen zwei Services Daten auf einem anderen Weg aus, oder steht eine Adresse fest im Service?
    - Test: Die `.Contracts` referenzieren nur `BuildingBlocks.Contracts`, und im Code und in den `appsettings*.json` unter `src/Services` steht keine URL mit Host oder IP. Geteilte Dateien oder ein geteilter Cache fallen nur im Review auf.

@@ -9,7 +9,7 @@ public class LaunchSettingsTests
     [Fact]
     public void Ports_AreUniqueAcrossProcesses()
     {
-        var root = RepositoryRoot();
+        var root = Repository.Root;
         var srcFolder = Path.Combine(root, "src");
         var launchSettingsFiles = Directory.EnumerateFiles(srcFolder, "launchSettings.json", SearchOption.AllDirectories);
 
@@ -31,15 +31,4 @@ public class LaunchSettingsTests
     }
 
     private static readonly Regex PortPattern = new(@"localhost:(\d+)");
-
-    private static string RepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Edvaniq.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        return directory?.FullName ?? throw new InvalidOperationException("Edvaniq.slnx not found above " + AppContext.BaseDirectory);
-    }
 }
