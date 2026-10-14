@@ -60,6 +60,7 @@ jobs:
           for project in UnitTests IntegrationTests; do
             dotnet test --project "tests/Services/Sample/Edvaniq.Services.Sample.$project" -c Release -- --ignore-exit-code 8
           done
+          dotnet test --project tests/Edvaniq.ArchitectureTests -c Release -- --filter-class "*Rule2ContractsTests" --filter-class "*Rule3LayerTests"
 
   secret-scan:
     name: Secret scan
@@ -159,6 +160,13 @@ jobs:
             | python3 -c 'import json, sys; c = json.load(sys.stdin); s = c["services"]; [print(n, *(["internal"] if v.get("internal") else sorted(k for k, sv in s.items() if n in sv.get("networks", {})))) for n, v in sorted(c["networks"].items())]; print("web", *sorted(s["web"]["networks"]))' \
             | diff <(printf '%s\n' 'backend db' 'data internal' 'default web' 'inner internal' 'web default inner') - \
             || { echo "::error::Every network must be internal, except default for the port of web and backend for the port of db, each alone, and web stays away from data (< expected, > found)"; exit 1; }
+          compose --profile '*' config --no-env-resolution --format json \
+            | python3 -c 'import json, os, sys
+          files = [(n, os.path.basename(e["path"])) for n, v in sorted(json.load(sys.stdin)["services"].items()) for e in v.get("env_file", [])]
+          any(f == "planning.env" for _, f in files) or print("no service uses planning.env, the check sees no env files")
+          [print(n, f) for n, f in files if f != "app.env" and n != f[:-4].split("-")[0] and not n.startswith(f[:-4].split("-")[0] + "-")]' \
+            | diff /dev/null - \
+            || { echo "::error::Rule 1 in docs/architecture.md: <name>.env and <name>-*.env may only be used by the service <name> and its processes <name>-* (> found)"; exit 1; }
 
       - name: Scan base layer (web image)
         run: |
