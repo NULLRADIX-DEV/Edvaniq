@@ -151,7 +151,7 @@ jobs:
           comm -13 <(compose config --no-env-resolution --services | sort) <(compose --profile migrate config --no-env-resolution --services | sort) \
             | diff migrations.txt - \
             || { echo "::error::The migration steps in deploy/compose.yml do not match AddMigration in AppHost.cs (< missing, > extra)"; exit 1; }
-          sed -n 's/^ *- path: \(.*\.env\)$/\1/p' deploy/compose.yml | sort -u | (cd "$RUNNER_TEMP" && xargs touch)
+          sed -n 's/^ *- path: \(.*\.env\)$/\1/p' deploy/compose.yml | sort -u | while read -r file; do echo "ENV_FILE_${file//[.-]/_}=$file" > "$RUNNER_TEMP/$file"; done
           compose --profile '*' config --no-env-resolution --format json \
             | python3 -c 'import json, sys; [print(s, p.get("host_ip", "*"), p["target"]) for s, v in json.load(sys.stdin)["services"].items() for p in v.get("ports", [])]' \
             | sort | diff <(printf '%s\n' 'db 127.0.0.1 3306' 'web 127.0.0.1 8080') - \
@@ -160,10 +160,10 @@ jobs:
             | python3 -c 'import json, sys; c = json.load(sys.stdin); s = c["services"]; [print(n, *(["internal"] if v.get("internal") else sorted(k for k, sv in s.items() if n in sv.get("networks", {})))) for n, v in sorted(c["networks"].items())]; print("web", *sorted(s["web"]["networks"]))' \
             | diff <(printf '%s\n' 'backend db' 'data internal' 'default web' 'inner internal' 'web default inner') - \
             || { echo "::error::Every network must be internal, except default for the port of web and backend for the port of db, each alone, and web stays away from data (< expected, > found)"; exit 1; }
-          compose --profile '*' config --no-env-resolution --format json \
-            | python3 -c 'import json, os, sys
-          files = [(n, os.path.basename(e["path"])) for n, v in sorted(json.load(sys.stdin)["services"].items()) for e in v.get("env_file", [])]
-          any(f == "planning.env" for _, f in files) or print("no service uses planning.env, the check sees no env files")
+          compose --profile '*' config --format json \
+            | python3 -c 'import json, sys
+          files = [(n, f) for n, v in sorted(json.load(sys.stdin)["services"].items()) for k, f in (v.get("environment") or {}).items() if k.startswith("ENV_FILE_")]
+          any(f == "planning.env" for _, f in files) or print("no service gets planning.env, the check sees no env files")
           [print(n, f) for n, f in files if f != "app.env" and n != f[:-4].split("-")[0] and not n.startswith(f[:-4].split("-")[0] + "-")]' \
             | diff /dev/null - \
             || { echo "::error::Rule 1 in docs/architecture.md: <name>.env and <name>-*.env may only be used by the service <name> and its processes <name>-* (> found)"; exit 1; }
