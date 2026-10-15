@@ -37,6 +37,15 @@ internal sealed class FakeServices : IDisposable
         return this;
     }
 
+    // Any other file of a project, such as code or settings, at a path relative to the project folder.
+    public FakeServices Source(string service, string name, string path, string content)
+    {
+        var file = Path.Combine(Root, "src", "Services", service, name, path);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, content);
+        return this;
+    }
+
     public IReadOnlyList<ServiceProject> Read() => ServiceProject.ReadAll(Root);
 
     public void Dispose() => Directory.Delete(Root, recursive: true);

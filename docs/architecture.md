@@ -50,7 +50,7 @@ Die Abhängigkeiten zeigen immer nach innen: Api, dann Infrastructure, dann Appl
 
 ## Service-Regeln
 
-Diese sechs Regeln halten die Services auseinander. Zu jeder gehört eine Prüffrage, deren Antwort Nein sein muss. Unter „Test“ steht, was die Architekturtests in `Edvaniq.ArchitectureTests` dazu prüfen, für Regeln 1–3 mit der Testklasse, für Regeln 4–6 sobald es sie gibt (#137). Zu jeder Prüfung gehört dort ein Test, der einen Fake-Service mit genau diesem Verstoß anlegt und rot erwartet. Was ein Test nicht sehen kann, steht dabei und gehört ins Review.
+Diese sechs Regeln halten die Services auseinander. Zu jeder gehört eine Prüffrage, deren Antwort Nein sein muss. Unter „Test“ steht, was die Architekturtests in `Edvaniq.ArchitectureTests` dazu prüfen, mit der Testklasse. Zu jeder Prüfung gehört dort ein Test, der einen Fake-Service mit genau diesem Verstoß anlegt und rot erwartet. Was ein Test nicht sehen kann, steht dabei und gehört ins Review.
 
 1. **Eigene Datenbank.** Jeder Service mit Daten hat genau eine eigene Datenbank mit eigenem DB-Benutzer. Ihren Connection String bekommen nur die Prozesse dieses Service: lokal über `WithDatabase` im AppHost, auf dem Server über `<name>.env` in `deploy/compose.yml`.
    - Prüffrage: Bekommt ein Prozess die Datenbank eines anderen Service?
@@ -63,13 +63,13 @@ Diese sechs Regeln halten die Services auseinander. Zu jeder gehört eine Prüff
    - Test: `Rule3LayerTests` vergleicht die direkten Projektreferenzen je Schicht mit der Tabelle, ein Projekt mit einer Schicht außerhalb der Tabelle ist auch ein Verstoß. Für Domain und Application liest er alle Abhängigkeiten aus `obj/project.assets.json`, auch die geerbten, also erst nach einem Restore.
 4. **Integration nur über Ereignisse oder Abfragen.** Services tauschen Daten auf genau zwei Wegen aus: asynchron über Integration Events aus den `.Contracts` des Absenders über einen Message Broker, oder synchron per HTTP-Abfrage. Die Adresse des anderen Service steht nie im Service selbst, sie kommt von außen: lokal vom AppHost über die Service Discovery von Aspire, auf dem Server aus `deploy/compose.yml`. Geteilte Dateien und einen geteilten Cache gibt es nicht. Ein `.Contracts` hängt nur an `BuildingBlocks.Contracts`.
    - Prüffrage: Tauschen zwei Services Daten auf einem anderen Weg aus, oder steht eine Adresse fest im Service?
-   - Test: Die `.Contracts` referenzieren nur `BuildingBlocks.Contracts`, und im Code und in den `appsettings*.json` unter `src/Services` steht keine URL mit Host oder IP. Geteilte Dateien oder ein geteilter Cache fallen nur im Review auf.
+   - Test: `Rule4IntegrationTests` liest für jedes `.Contracts` alle Abhängigkeiten aus `obj/project.assets.json`, auch die geerbten: Dort darf nur `BuildingBlocks.Contracts` stehen. Im Code (`*.cs`) und in den `appsettings*.json` unter `src/Services` steht keine URL, keine IPv4-Adresse und kein `localhost`. Erlaubt sind ein Name der Service Discovery (`https+http://<ressource>`), `localhost` in der Design-Time-Factory des DbContext, die nur `dotnet ef` nutzt, und Kommentarzeilen. Geteilte Dateien oder ein geteilter Cache fallen nur im Review auf.
 5. **Keine Projektionen fremder Daten.** Von Daten eines anderen Service speichert ein Service nur die ID und Werte, die er selbst daraus berechnet, zum Beispiel die Zahl fälliger Karten je Thema. Eine Kopie fremder Inhalte als Read-Model legt er nicht an. Braucht ein Screen Daten aus mehreren Services, holt der Client sie über das Gateway.
    - Prüffrage: Speichert ein Service Inhalte, die einem anderen Service gehören?
-   - Test: Kein DbContext mappt einen Typ aus einem anderen Service, und keine Domain referenziert ein `.Contracts`. Wer fremden Inhalt in eine eigene Spalte kopiert, etwa einen Text als `string`, fällt nur im Review auf.
+   - Test: `Rule5ProjectionTests` baut das Modell jedes DbContext über seine Design-Time-Factory, wie `dotnet ef`, ohne Datenbank. Kein Entity-Typ, kein Complex Type und kein Property-Typ darin stammt aus einem anderen Service, auch nicht als generisches Argument. Ein DbContext ohne Factory ist ein Verstoß, ebenso ein Projekt eines Service, das `Edvaniq.ArchitectureTests` nicht referenziert. Keine Domain referenziert ein `.Contracts`. Wer fremden Inhalt in eine eigene Spalte kopiert, etwa einen Text als `string`, fällt nur im Review auf.
 6. **Zyklen per Abfrage.** Die Integration Events bilden keinen Kreis: Hört A auf Events von B, hört B weder direkt noch über andere Services auf Events von A. Braucht B trotzdem Daten von A, fragt B sie per HTTP ab. Die Typen für Anfrage und Antwort legt B selbst an, so entsteht keine Referenz auf A.
    - Prüffrage: Hat der Graph „Service referenziert `.Contracts` von“ einen Kreis?
-   - Test: Kreissuche in den Projektreferenzen zwischen den Services.
+   - Test: `Rule6CycleTests` sucht Kreise in den Projektreferenzen zwischen den Services und in der Tabelle unten.
 
 Weitere Regeln:
 
