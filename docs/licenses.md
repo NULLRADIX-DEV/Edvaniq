@@ -6,7 +6,9 @@ Edvaniq nutzt nur Drittkomponenten mit geprüfter freier Lizenz. Drittkomponente
 
 Lizenzen werden mit ihrer [SPDX-Kennung](https://spdx.org/licenses/) angegeben.
 
-**Erlaubt** sind `MIT`, `Apache-2.0`, `BSD-2-Clause`, `BSD-3-Clause`, `ISC`, `Zlib` und `0BSD`, für Schriften zusätzlich `OFL-1.1`. Ein Ausdruck mit `AND` ist erlaubt, wenn jeder Teil erlaubt ist, einer mit `OR`, wenn mindestens ein Teil erlaubt ist.
+**Erlaubt** sind `MIT`, `Apache-2.0`, `BSD-2-Clause`, `BSD-3-Clause`, `ISC`, `Zlib` und `0BSD`, für Schriften zusätzlich `OFL-1.1`.
+
+Ein Ausdruck mit `AND` ist erlaubt, wenn jeder Teil erlaubt ist, einer mit `OR`, wenn mindestens ein Teil erlaubt ist.
 
 **Ausgeschlossen** sind:
 
@@ -14,9 +16,9 @@ Lizenzen werden mit ihrer [SPDX-Kennung](https://spdx.org/licenses/) angegeben.
 - Lizenzen, die Geld kosten oder die Nutzung begrenzen: kommerzielle Lizenzen, Grenzen bei Umsatz oder Nutzerzahl und „source available“ wie `BUSL-1.1`, `Elastic-2.0` oder Commons Clause. Beispiele sind MassTransit ab v9 und iText.
 - Komponenten ohne erkennbare Lizenz.
 
-**Nur mit Einzelfreigabe** kommt eine Komponente dazu, deren Lizenz weder erlaubt noch ausgeschlossen ist, etwa `LGPL`, `MPL-2.0` oder die Lizenzbedingungen des Herstellers einer Zielplattform. Sie steht dann mit Begründung in der Liste.
+**Nur mit Einzelfreigabe** kommt eine Komponente dazu, deren Lizenz weder erlaubt noch ausgeschlossen ist, etwa `LGPL`, `MPL-2.0` oder die Lizenzbedingungen des Herstellers einer Zielplattform. Sie steht dann mit Begründung in der Liste, ihr Einsatz beginnt mit „Einzelfreigabe:“.
 
-**Server-Software**, die als eigener Prozess unverändert läuft und nicht in ein Edvaniq-Image gebaut wird, darf unter `GPL` stehen, etwa MySQL. Sie steht trotzdem in der Liste.
+**Server-Software**, die als eigener Prozess unverändert läuft und nicht in ein Edvaniq-Image gebaut wird, darf unter `GPL` stehen, etwa MySQL. Sie steht trotzdem in der Liste, ihr Einsatz beginnt mit „Server-Software:“.
 
 Indirekte NuGet-Pakete, also Abhängigkeiten der gelisteten Pakete, stehen nicht einzeln in der Liste, solange ihre Lizenz erlaubt ist und als SPDX-Kennung im Paket steht. Alle anderen stehen mit Namen da.
 
@@ -47,8 +49,8 @@ Indirekte NuGet-Pakete, also Abhängigkeiten der gelisteten Pakete, stehen nicht
 | `Microsoft.Extensions.ServiceDiscovery.Yarp` | MIT | Gateway, Web-Host |
 | `Microsoft.IdentityModel.JsonWebTokens` | MIT | Tokens in Tests |
 | `Microsoft.Maui.Controls` | MIT | MAUI-App |
-| `MySql.Data` | GPL-2.0-only WITH Universal-FOSS-exception-1.0 | DB-Verbindung der Services, siehe [Vorläufige Ausnahmen](#vorläufige-ausnahmen) |
-| `MySql.EntityFrameworkCore` | GPL-2.0-only WITH Universal-FOSS-exception-1.0 | EF-Provider der Services, siehe [Vorläufige Ausnahmen](#vorläufige-ausnahmen) |
+| `MySql.Data` | GPL-2.0-only WITH Universal-FOSS-exception-1.0 | Vorläufige Ausnahme: DB-Verbindung der Services, siehe [Vorläufige Ausnahmen](#vorläufige-ausnahmen) |
+| `MySql.EntityFrameworkCore` | GPL-2.0-only WITH Universal-FOSS-exception-1.0 | Vorläufige Ausnahme: EF-Provider der Services, siehe [Vorläufige Ausnahmen](#vorläufige-ausnahmen) |
 | `OpenTelemetry.Exporter.OpenTelemetryProtocol` | Apache-2.0 | ServiceDefaults |
 | `OpenTelemetry.Extensions.Hosting` | Apache-2.0 | ServiceDefaults |
 | `OpenTelemetry.Instrumentation.AspNetCore` | Apache-2.0 | ServiceDefaults |
@@ -82,7 +84,6 @@ Diese Pakete kommen über ein gelistetes Paket dazu und haben keine erlaubte SPD
 | `aspire.cli` | MIT | Start des AppHost mit `dotnet run` |
 | `dotnet-ef` | MIT | Migrationen anlegen (`dotnet-tools.json`) |
 | gitleaks | MIT | Secret-Scan in der CI |
-| Grype (`anchore/grype`) | Apache-2.0 | Schwachstellen-Scan der Images in der CI |
 
 ### GitHub Actions
 
@@ -96,10 +97,11 @@ Diese Pakete kommen über ein gelistetes Paket dazu und haben keine erlaubte SPD
 
 | Komponente | Lizenz | Einsatz |
 |---|---|---|
-| `mcr.microsoft.com/dotnet/aspnet` | MIT, Pakete des Betriebssystems unter ihrer eigenen Lizenz | Basis der Edvaniq-Images mit ASP.NET Core |
-| `mcr.microsoft.com/dotnet/runtime` | MIT, Pakete des Betriebssystems unter ihrer eigenen Lizenz | Basis der Images der Worker |
-| `mysql` | GPL-2.0-only | Datenbank auf dem Server, lokal und in Integrationstests. Server-Software, läuft unverändert als eigener Prozess. |
-| `phpmyadmin` | GPL-2.0-only | Nur lokal über Aspire. Server-Software, läuft unverändert als eigener Prozess. |
+| Grype (`anchore/grype`) | Apache-2.0 | Schwachstellen-Scan der Images in der CI |
+| `mcr.microsoft.com/dotnet/aspnet` | MIT | Basis der Edvaniq-Images mit ASP.NET Core. Die Pakete des Betriebssystems darin stehen unter ihren eigenen Lizenzen. |
+| `mcr.microsoft.com/dotnet/runtime` | MIT | Basis der Images der Worker. Die Pakete des Betriebssystems darin stehen unter ihren eigenen Lizenzen. |
+| `mysql` | GPL-2.0-only | Server-Software: Datenbank auf dem Server, lokal und in Integrationstests, läuft unverändert als eigener Prozess. |
+| `phpmyadmin` | GPL-2.0-only | Server-Software: nur lokal über Aspire, läuft unverändert als eigener Prozess. |
 
 ## Vorläufige Ausnahmen
 
@@ -110,6 +112,24 @@ Diese Pakete kommen über ein gelistetes Paket dazu und haben keine erlaubte SPD
 1. Vor dem ersten Einsatz die Lizenz feststellen. Bei NuGet steht sie als SPDX-Ausdruck in der nuspec, sonst in der LICENSE-Datei des Projekts. Steht dort nur ein Link oder eine Datei, liest du den Text und bestimmst die passende SPDX-Kennung.
 2. Mit der Prüfregel vergleichen. Ist die Lizenz ausgeschlossen, nimm eine Alternative. Ist sie unklar, kommt die Komponente nicht ins Repo, bis ein Issue mit Label `legal` sie entschieden hat.
 3. Im selben Pull Request eine Zeile in die passende Tabelle eintragen, bei einer Einzelfreigabe mit Begründung. Ein indirektes Paket kommt nur dazu, wenn seine Lizenz nicht erlaubt ist oder nicht als SPDX-Kennung im Paket steht.
-4. Der Reviewer prüft Eintrag und Lizenz. Bis die CI die Lizenzen prüft, ist das die einzige Kontrolle.
+4. Die CI prüft die Liste (siehe unten), der Reviewer die Begründung und alles, was die CI nicht sieht.
 5. Bei einem Update auf eine neue Hauptversion nachsehen, ob sich die Lizenz geändert hat. MassTransit zum Beispiel ist mit v9 kommerziell geworden.
 6. Fällt eine Komponente weg, kommt ihre Zeile mit raus.
+
+## Wie geprüft wird
+
+`LicenseTests` in `Edvaniq.ArchitectureTests` gleicht diese Datei bei jedem Pull Request im Pflicht-Schritt „Architecture tests“ mit dem Repo ab. Jede Abweichung steht als eigene Zeile in der Meldung, und schon eine macht die CI rot:
+
+- ein direktes Paket aus `Directory.Packages.props` oder ein SDK mit Version in einer Projektdatei ohne Zeile unter „NuGet-Pakete“, oder eine Zeile dort ohne solches Paket
+- ein Paket aus `obj/project.assets.json` eines Projekts in `Edvaniq.slnx`, dessen nuspec eine andere Lizenz nennt als die Liste
+- ein indirektes Paket ohne Zeile, dessen Lizenz nicht erlaubt ist oder nur als Datei oder Link im Paket steht
+- eine Zeile mit nicht erlaubter Lizenz, deren Einsatz nicht mit „Einzelfreigabe:“, „Vorläufige Ausnahme:“ oder „Server-Software:“ beginnt
+- ein Tool aus `dotnet-tools.json`, eine Action aus `.github/workflows` oder ein Image aus `deploy`, den Workflows oder `tests` ohne Zeile
+
+Nicht sehen kann der Test die Basis-Images des SDK, die Images, die Aspire selbst holt, und Programme, die ein Workflow herunterlädt, wie gitleaks. Die prüft der Reviewer. Der Test liest die Überschriften, Spalten und den Absatz „Erlaubt“ dieser Datei. Benenne sie nicht um, ohne den Test anzupassen.
+
+Selbst nachsehen kannst du nach einem Restore so:
+
+```
+dotnet test --project tests/Edvaniq.ArchitectureTests --filter-class "*LicenseTests"
+```
