@@ -18,4 +18,9 @@
     <ProjectReference Include="..\Edvaniq.Client.DesignSystem\Edvaniq.Client.DesignSystem.csproj" />
   </ItemGroup>
 
+  <!-- The page /open-source shows the license list as maintained in the docs, from the commit the client is built from. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\..\docs\licenses.md" LogicalName="licenses.md" />
+  </ItemGroup>
+
 </Project>

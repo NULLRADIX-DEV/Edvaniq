@@ -12,6 +12,7 @@ public sealed partial class ContrastTests
         { "--color-ink", "--color-paper", 4.5 },
         { "--color-ink", "--color-surface", 4.5 },
         { "--color-ink-muted", "--color-paper", 4.5 },
+        { "--color-ink-muted", "--color-surface", 4.5 },
         { "--color-accent", "--color-paper", 4.5 },
         { "--color-accent", "--color-surface", 4.5 },
         { "--color-accent-hover", "--color-surface", 4.5 },
@@ -63,21 +64,10 @@ public sealed partial class ContrastTests
     private static Dictionary<string, string> Tokens()
     {
         var css = File.ReadAllText(Path.Combine(
-            RepositoryRoot(), "src", "Clients", "Edvaniq.Client.DesignSystem", "wwwroot", "edvaniq.css"));
+            Repository.Root, "src", "Clients", "Edvaniq.Client.DesignSystem", "wwwroot", "edvaniq.css"));
         return ColorToken().Matches(css).ToDictionary(match => match.Groups["name"].Value, match => match.Groups["hex"].Value);
     }
 
     [GeneratedRegex(@"(?<name>--[\w-]+):\s*#(?<hex>[0-9a-fA-F]{6})\s*;")]
     private static partial Regex ColorToken();
-
-    private static string RepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Edvaniq.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        return directory?.FullName ?? throw new InvalidOperationException("Edvaniq.slnx not found above " + AppContext.BaseDirectory);
-    }
 }
