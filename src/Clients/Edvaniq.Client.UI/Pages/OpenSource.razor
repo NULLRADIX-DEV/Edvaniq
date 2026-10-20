@@ -1,0 +1,55 @@
+@page "/open-source"
+@using Edvaniq.Client.UI.OpenSource
+
+<PageTitle>Open-Source-Hinweise – Edvaniq</PageTitle>
+
+<h1>Open-Source-Hinweise</h1>
+
+<p>Edvaniq baut auf freier Software auf. Hier steht jede Komponente, die nicht von uns stammt, mit ihrer Lizenz, so wie
+    die Lizenzliste des Projekts sie für diese Version führt.</p>
+
+@foreach (var group in Notices.Groups)
+{
+    <table class="notices">
+        <caption>@group.Title</caption>
+        <thead>
+            <tr>
+                <th scope="col">Komponente</th>
+                <th scope="col">Lizenz</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var entry in group.Entries)
+            {
+                @* A long package name may break after each dot, not in the middle of a word. *@
+                var parts = entry.Component.Split('.');
+                <tr>
+                    <td>@for (var index = 0; index < parts.Length; index++)
+                        {
+                            if (index > 0)
+                            {
+                                <text>.</text><wbr />
+                            }
+                            @parts[index]
+                        }</td>
+                    <td>@entry.License</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<h2>Lizenztexte</h2>
+
+<p>Den vollen Text jeder Lizenz und jeder Ausnahme findest du bei SPDX:</p>
+
+<ul class="license-texts">
+    @foreach (var id in Notices.SpdxIds)
+    {
+        <li><a href="@($"https://spdx.org/licenses/{id}.html")">@id</a></li>
+    }
+</ul>
+
+@code {
+    private static LicenseNotices Notices => LicenseNotices.Embedded;
+}

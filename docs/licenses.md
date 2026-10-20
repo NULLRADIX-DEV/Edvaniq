@@ -2,6 +2,8 @@
 
 Edvaniq nutzt nur Drittkomponenten mit geprüfter freier Lizenz. Drittkomponente ist alles, was nicht in diesem Repo entsteht: NuGet-Pakete, .NET-Tools, Container-Images, GitHub Actions und Programme in der CI, später auch Schriften, Icons, KI-Modelle und Demo-Material. Hier stehen die Prüfregel, die Liste aller Komponenten und der Weg, auf dem eine neue dazukommt.
 
+Die Web-Shell zeigt die Liste unter `/open-source` mit Komponente und Lizenz, ohne Login. Diese Datei ist dafür in `Edvaniq.Client.UI` eingebettet, die Seite zeigt also immer den Stand des Commits, aus dem gebaut wurde. Wer Überschriften oder Spalten der Liste umbenennt, ändert damit auch die Seite.
+
 ## Prüfregel
 
 Lizenzen werden mit ihrer [SPDX-Kennung](https://spdx.org/licenses/) angegeben.

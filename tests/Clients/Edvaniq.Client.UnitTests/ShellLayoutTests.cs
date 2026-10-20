@@ -109,6 +109,14 @@ public sealed class ShellLayoutTests : BunitContext
     }
 
     [Fact]
+    public void Navigation_LeadsToTheOpenSourceNotices()
+    {
+        var shell = RenderShell();
+
+        Assert.Equal("Open Source", shell.Find("nav#shell-nav a[href='open-source']").TextContent);
+    }
+
+    [Fact]
     public void WhilePrerendering_NothingIsChecked()
     {
         SetRendererInfo(new RendererInfo("Static", isInteractive: false));
