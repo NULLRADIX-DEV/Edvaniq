@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Edvaniq.Services.Planning.Domain\Edvaniq.Services.Planning.Domain.csproj" />
     <ProjectReference Include="..\Edvaniq.Services.Planning.Contracts\Edvaniq.Services.Planning.Contracts.csproj" />
+    <ProjectReference Include="..\..\Identity\Edvaniq.Services.Identity.Domain\Edvaniq.Services.Identity.Domain.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Edvaniq.BuildingBlocks.Application\Edvaniq.BuildingBlocks.Application.csproj" />
   </ItemGroup>
 
