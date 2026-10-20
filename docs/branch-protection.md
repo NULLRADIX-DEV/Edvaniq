@@ -18,4 +18,4 @@ Ein roter Check blockiert den Merge für alle, auch Admins können ihn nicht üb
 
 ## Pflicht-Checks pflegen
 
-Die Architekturtests laufen im Job „Build & test backend“ mit, weil `dotnet test` die ganze Solution testet. Sie sind damit automatisch Pflicht. Soll ein neuer CI-Job Pflicht werden, trägst du seinen Namen in `main-protect` ein. Benennst du einen Pflicht-Job um, musst du auch das Ruleset anpassen, sonst wartet jeder Pull Request auf einen Check, der nie kommt.
+Die Architekturtests haben im Job „Build & test backend“ einen eigenen Schritt „Architecture tests“ und sind damit automatisch Pflicht. Der Schritt „Test“ danach duldet Testprojekte ohne Tests (Exit-Code 8), dieser Schritt nicht: Er wird auch rot, wenn kein Architekturtest läuft oder das Projekt nicht gebaut ist. Dass ein Verstoß den Merge sperrt, zeigt [#801](https://github.com/NULLRADIX-DEV/Edvaniq/pull/801): Ein Verweis auf die Domain eines anderen Service machte den Schritt rot. Soll ein neuer CI-Job Pflicht werden, trägst du seinen Namen in `main-protect` ein. Benennst du einen Pflicht-Job um, musst du auch das Ruleset anpassen, sonst wartet jeder Pull Request auf einen Check, der nie kommt.
