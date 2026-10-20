@@ -10,3 +10,4 @@ Learn smarter. Master anything.
 | [docs/deploy.md](docs/deploy.md) | Ausrollen, Rollback, Migrationen, Speicher und Health im Deploy |
 | [docs/secrets.md](docs/secrets.md) | Umgang mit Secrets und wie sie geprüft werden |
 | [docs/branch-protection.md](docs/branch-protection.md) | Regeln für `main` und Pull Requests |
+| [docs/licenses.md](docs/licenses.md) | Erlaubte Lizenzen, Liste der Drittkomponenten, Aufnahme neuer Komponenten |
