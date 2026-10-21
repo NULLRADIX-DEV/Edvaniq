@@ -12,3 +12,8 @@
     color: var(--color-on-alert-surface);
     border-left-color: var(--color-alert);
 }
+
+/* The padding already gives the block its bottom space. */
+.ping-failed > :last-child {
+    margin-bottom: 0;
+}
