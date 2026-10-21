@@ -6,7 +6,7 @@ Veraltete oder verwundbare Pakete und Images sollen auffallen, bevor sie auf dem
 
 Dependabot öffnet jede Woche Pull Requests, eingestellt in `.github/dependabot.yml`:
 
-- **NuGet** für Backend, Clients und Tests: Minor- und Patch-Updates gesammelt in einem Pull Request, jede neue Hauptversion in einem eigenen. `Microsoft.IdentityModel.JsonWebTokens` ist ausgenommen.
+- **NuGet** für Backend, Clients und Tests: Minor- und Patch-Updates gesammelt in einem Pull Request, jede neue Hauptversion in einem eigenen. `Microsoft.IdentityModel.JsonWebTokens` ist ausgenommen. Erfasst sind auch die SDKs unter `msbuild-sdks` in `global.json`, etwa `Aspire.AppHost.Sdk`. Ihre Version steht deshalb dort und nicht in der Projektdatei.
 - **GitHub Actions**, gesammelt in einem Pull Request.
 - **Images in `deploy/compose.yml`**, die nicht von uns stammen, etwa MySQL.
 
