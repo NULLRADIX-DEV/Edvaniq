@@ -32,6 +32,7 @@ Hängt der Start oder bricht er ab, hilft meist einer dieser Punkte:
 | Datei | Inhalt |
 |---|---|
 | [docs/spec/glossary.md](docs/spec/glossary.md) | Fachbegriffe mit genau einer Definition und ihrem Namen im Code |
+| [docs/spec/modes.md](docs/spec/modes.md) | Was in Übung, Einstufung und Prüfungsmodus gilt |
 | [docs/architecture.md](docs/architecture.md) | Services, Kommunikation, Aufbau eines Service |
 | [docs/service-template.md](docs/service-template.md) | Neuer Service aus der Vorlage, Datenbank, Migrationen, Tests |
 | [docs/deploy.md](docs/deploy.md) | Ausrollen, Rollback, Migrationen, Speicher und Health im Deploy |
