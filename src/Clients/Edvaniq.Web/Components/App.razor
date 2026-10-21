@@ -10,11 +10,11 @@
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["Edvaniq.Web.styles.css"]" />
     <ImportMap />
-    <HeadOutlet @rendermode="InteractiveWebAssembly" />
+    <HeadOutlet @rendermode="PageRenderMode" />
 </head>
 
 <body>
-    <Routes @rendermode="InteractiveWebAssembly" />
+    <Routes @rendermode="PageRenderMode" />
 
     <div id="blazor-error-ui" data-nosnippet>
         Ein unerwarteter Fehler ist aufgetreten.
@@ -26,3 +26,11 @@
 </body>
 
 </html>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    // The error page renders on the server only. If the runtime took it over, its router would not know the page.
+    private IComponentRenderMode? PageRenderMode => HttpContext.AcceptsInteractiveRouting() ? InteractiveWebAssembly : null;
+}
