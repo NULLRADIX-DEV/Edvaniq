@@ -32,6 +32,7 @@ Indirekte NuGet-Pakete, also Abhängigkeiten der gelisteten Pakete, stehen nicht
 |---|---|---|
 | `Aspire.AppHost.Sdk` | MIT | SDK des AppHost |
 | `Aspire.Hosting.MySql` | MIT | MySQL und phpMyAdmin im AppHost |
+| `Aspire.Hosting.Nats` | MIT | NATS im AppHost |
 | `Aspire.Hosting.Testing` | MIT | Ende-zu-Ende- und Architekturtests |
 | `bunit` | MIT | Komponententests der Clients |
 | `Deque.AxeCore.Playwright` | MIT | axe-core in den Barrierefreiheits-Tests der Web-Shell, nur Tests |
@@ -55,14 +56,14 @@ Indirekte NuGet-Pakete, also Abhängigkeiten der gelisteten Pakete, stehen nicht
 | `Microsoft.Playwright` | MIT | Steuert den Browser der Barrierefreiheits-Tests, nur Tests. Bringt Playwright (Apache-2.0) und Node.js (MIT) mit. |
 | `MySql.Data` | GPL-2.0-only WITH Universal-FOSS-exception-1.0 | Vorläufige Ausnahme: DB-Verbindung der Services, siehe [Vorläufige Ausnahmen](#vorläufige-ausnahmen) |
 | `MySql.EntityFrameworkCore` | GPL-2.0-only WITH Universal-FOSS-exception-1.0 | Vorläufige Ausnahme: EF-Provider der Services, siehe [Vorläufige Ausnahmen](#vorläufige-ausnahmen) |
-| `NATS.Net` | Apache-2.0 | Broker-Anbindung im Broker-Spike |
+| `NATS.Net` | Apache-2.0 | Anbindung des Brokers in `BuildingBlocks.Messaging` |
 | `OpenTelemetry.Exporter.OpenTelemetryProtocol` | Apache-2.0 | ServiceDefaults |
 | `OpenTelemetry.Extensions.Hosting` | Apache-2.0 | ServiceDefaults |
 | `OpenTelemetry.Instrumentation.AspNetCore` | Apache-2.0 | ServiceDefaults |
 | `OpenTelemetry.Instrumentation.Http` | Apache-2.0 | ServiceDefaults |
 | `OpenTelemetry.Instrumentation.Runtime` | Apache-2.0 | ServiceDefaults |
 | `Testcontainers.MySql` | MIT | Integrationstests |
-| `Testcontainers.Nats` | MIT | NATS in den Tests des Broker-Spikes |
+| `Testcontainers.Nats` | MIT | NATS in den Integrationstests |
 | `xunit.v3.extensibility.core` | Apache-2.0 | Tests |
 | `xunit.v3.mtp-v2` | Apache-2.0 | Tests |
 | `Yarp.ReverseProxy` | MIT | Gateway, Web-Host |
@@ -110,7 +111,7 @@ Diese Pakete kommen über ein gelistetes Paket dazu und haben keine erlaubte SPD
 | `mcr.microsoft.com/dotnet/aspnet` | MIT | Basis der Edvaniq-Images mit ASP.NET Core. Die Pakete des Betriebssystems darin stehen unter ihren eigenen Lizenzen. |
 | `mcr.microsoft.com/dotnet/runtime` | MIT | Basis der Images der Worker. Die Pakete des Betriebssystems darin stehen unter ihren eigenen Lizenzen. |
 | `mysql` | GPL-2.0-only | Server-Software: Datenbank auf dem Server, lokal und in Integrationstests, läuft unverändert als eigener Prozess. |
-| `nats` | Apache-2.0 | Broker in den Tests des Broker-Spikes |
+| `nats` | Apache-2.0 | Broker lokal im AppHost und in Integrationstests, läuft unverändert als eigener Prozess. |
 | `phpmyadmin` | GPL-2.0-only | Server-Software: nur lokal über Aspire, läuft unverändert als eigener Prozess. |
 
 ## Vorläufige Ausnahmen
