@@ -116,7 +116,9 @@ Ergebnis:
 
 ## Server (Betrieb)
 
-Server-Details stehen in `../EdvaniqDoc/Betrieb.md`.
+Server-Details aller Apps stehen in `../Nullradix-Doc/Betrieb.md`, was nur Edvaniq betrifft, in `../EdvaniqDoc/Betrieb.md`.
+
+@../Nullradix-Doc/Betrieb.md
 
 @../EdvaniqDoc/Betrieb.md
 
