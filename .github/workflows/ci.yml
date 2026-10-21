@@ -52,6 +52,9 @@ jobs:
       - name: Build
         run: dotnet build Edvaniq.slnx -c Release --no-restore
 
+      - name: Install Chromium
+        run: pwsh tests/Clients/Edvaniq.Web.AccessibilityTests/bin/Release/net10.0/playwright.ps1 install --with-deps --only-shell chromium
+
       - name: Architecture tests
         run: dotnet test --project tests/Edvaniq.ArchitectureTests -c Release --no-build
 

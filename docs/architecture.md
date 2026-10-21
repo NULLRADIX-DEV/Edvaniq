@@ -132,6 +132,24 @@ Jede Antwort des Web-Hosts trägt die Header aus der Tabelle, auch Fehlerantwort
 
 Damit lässt sich die Shell in keiner fremden Seite einbetten. Das Basis-Element und Formulare zeigen nur auf die eigene Seite, Plug-in-Inhalte sind gesperrt, und der Browser errät keinen Inhaltstyp. Kamera, Mikrofon und Standort sind für die Seite ausgeschaltet.
 
+## Barrierefreiheits-Check
+
+Grundlegende Fehler in der Shell sollen auffallen, bevor ein Nutzer darüber stolpert. `Edvaniq.Web.AccessibilityTests` startet dafür den echten Web-Host mit einem Stub als Gateway, lädt die Shell in Chromium und wartet, bis der Client läuft. Dann prüft axe-core jede Seite gegen WCAG 2.2 Level A und AA, darunter Kontrast, Beschriftungen, die Namen von Links und Schaltflächen, die Sprache des Dokuments und die Größe der Ziele. Gescannt werden `/`, `/systemstatus`, `/open-source` und die Seite für eine unbekannte Adresse, jede mit 375 px und mit 1280 px Breite. Dazu kommen die Shell mit geöffnetem Menü und `/systemstatus` bei ausgefallenem Server, weil nur dort die Warnfarben vorkommen.
+
+Jede einzelne Verletzung macht den Test rot. Die Meldung nennt Regel, Auswirkung, betroffenes Element und die Seite von Deque, die erklärt, wie man es behebt. Die Tastatur sieht axe nicht, dafür gibt es eigene Tests: Der Skip-Link ist der erste Stopp und setzt den Fokus auf den Inhalt, das Menü öffnet und schließt sich mit Enter, Leertaste und Escape, und jeder Stopp zeigt einen sichtbaren Fokusrahmen. Ein weiterer Test lässt denselben Scan auf eine Seite mit absichtlichen Fehlern los (ein Bild ohne Alternativtext, ein Feld ohne Beschriftung, zu blasser Text) und verlangt, dass er sie meldet. So fällt auf, wenn der Check stumm wird.
+
+Den Browser brauchst du lokal einmal. Nach dem ersten Build lädst du Chromium mit dem Skript, das Playwright neben die Tests legt:
+
+```
+dotnet build tests/Clients/Edvaniq.Web.AccessibilityTests
+pwsh tests/Clients/Edvaniq.Web.AccessibilityTests/bin/Debug/net10.0/playwright.ps1 install --only-shell chromium
+dotnet test --project tests/Clients/Edvaniq.Web.AccessibilityTests
+```
+
+Fehlt der Browser, bricht der Test mit genau diesem Befehl in der Meldung ab. In der CI lädt der Schritt „Install Chromium“ ihn vor den Tests. axe-core steht unter MPL-2.0 und läuft nur in diesen Tests, die Einzelfreigabe steht in [docs/licenses.md](licenses.md).
+
+Der Check findet nur, was sich messen lässt. Ob ein Screenreader eine Seite sinnvoll vorliest, ob die Texte verständlich sind und ob die Reihenfolge stimmt, prüft ein Mensch. Das ist der manuelle Test mit Screenreader, für den Meilenstein M5 geplant ist. Was axe nicht entscheiden kann, etwa Text auf einem Farbverlauf, meldet es als „incomplete“, und das zählt im Check nicht als Verletzung.
+
 ## Nachverfolgung
 
 Jede Anfrage hat eine Kennung, die W3C-Trace-ID. Der Server vergibt sie selbst: `traceparent` und seine Begleiter (`tracestate`, `baggage`) aus dem Internet verwirft der Reverse-Proxy vor dem Web-Host, so beginnt der Web-Host für jede Anfrage aus dem Browser eine eigene Trace. Der Web-Host selbst würde einen mitgeschickten `traceparent` übernehmen, lokal tut er das also. OpenTelemetry (ServiceDefaults) reicht sie im Header `traceparent` an Gateway und Services weiter, auch beim Token-Abruf bei Identity. Außerhalb von Development schreibt jeder Prozess sein Log einzeilig auf die Konsole, mit den Scopes und damit mit der `TraceId`. Mit einer Kennung findet man so die Zeilen aller Prozesse, durch die die Anfrage ging.

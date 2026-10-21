@@ -115,6 +115,7 @@
   </Folder>
   <Folder Name="/tests/Clients/">
     <Project Path="tests/Clients/Edvaniq.Client.UnitTests/Edvaniq.Client.UnitTests.csproj" />
+    <Project Path="tests/Clients/Edvaniq.Web.AccessibilityTests/Edvaniq.Web.AccessibilityTests.csproj" />
     <Project Path="tests/Clients/Edvaniq.Web.IntegrationTests/Edvaniq.Web.IntegrationTests.csproj" />
   </Folder>
   <Folder Name="/tests/Gateway/">

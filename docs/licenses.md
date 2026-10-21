@@ -35,6 +35,7 @@ Indirekte NuGet-Pakete, also Abhängigkeiten der gelisteten Pakete, stehen nicht
 | `Aspire.Hosting.Nats` | MIT | NATS im AppHost |
 | `Aspire.Hosting.Testing` | MIT | Ende-zu-Ende- und Architekturtests |
 | `bunit` | MIT | Komponententests der Clients |
+| `Deque.AxeCore.Playwright` | MIT | axe-core in den Barrierefreiheits-Tests der Web-Shell, nur Tests |
 | `Microsoft.AspNetCore.Authentication.JwtBearer` | MIT | Token-Prüfung der Services |
 | `Microsoft.AspNetCore.Components.Web` | MIT | UI-Bibliothek |
 | `Microsoft.AspNetCore.Components.WebAssembly` | MIT | Web-Client |
@@ -52,6 +53,7 @@ Indirekte NuGet-Pakete, also Abhängigkeiten der gelisteten Pakete, stehen nicht
 | `Microsoft.Extensions.ServiceDiscovery.Yarp` | MIT | Gateway, Web-Host |
 | `Microsoft.IdentityModel.JsonWebTokens` | MIT | Tokens in Tests |
 | `Microsoft.Maui.Controls` | MIT | MAUI-App |
+| `Microsoft.Playwright` | MIT | Steuert den Browser der Barrierefreiheits-Tests, nur Tests. Bringt Playwright (Apache-2.0) und Node.js (MIT) mit. |
 | `MySql.Data` | GPL-2.0-only WITH Universal-FOSS-exception-1.0 | Vorläufige Ausnahme: DB-Verbindung der Services, siehe [Vorläufige Ausnahmen](#vorläufige-ausnahmen) |
 | `MySql.EntityFrameworkCore` | GPL-2.0-only WITH Universal-FOSS-exception-1.0 | Vorläufige Ausnahme: EF-Provider der Services, siehe [Vorläufige Ausnahmen](#vorläufige-ausnahmen) |
 | `NATS.Net` | Apache-2.0 | Anbindung des Brokers in `BuildingBlocks.Messaging` |
@@ -72,6 +74,7 @@ Diese Pakete kommen über ein gelistetes Paket dazu und haben keine erlaubte SPD
 
 | Komponente | Lizenz | Einsatz |
 |---|---|---|
+| `Deque.AxeCore.Commons` | MPL-2.0 | Einzelfreigabe: über `Deque.AxeCore.Playwright`, enthält axe-core. Nur in den Barrierefreiheits-Tests, unverändert und in keinem Prozess und keinem Image. Entschieden am 21.10.2026. |
 | `Fractions` | BSD-2-Clause | über Aspire, nur AppHost und Tests. Die Lizenz liegt nur als Datei im Paket. |
 | `K4os.Compression.LZ4` | MIT | über `MySql.Data`. Die Lizenz steht nur als Link im Paket. |
 | `K4os.Compression.LZ4.Streams` | MIT | über `MySql.Data`. Die Lizenz steht nur als Link im Paket. |
@@ -87,7 +90,9 @@ Diese Pakete kommen über ein gelistetes Paket dazu und haben keine erlaubte SPD
 |---|---|---|
 | .NET SDK und Runtime | MIT | Build und Laufzeit aller Prozesse |
 | `aspire.cli` | MIT | Start des AppHost mit `dotnet run` |
+| Chromium (Headless Shell von Playwright) | BSD-3-Clause | Browser der Barrierefreiheits-Tests, lokal und in der CI. Kommt mit `playwright.ps1 install`, wird nicht ausgeliefert. Die Komponenten darin stehen unter ihren eigenen Lizenzen. |
 | `dotnet-ef` | MIT | Migrationen anlegen (`dotnet-tools.json`) |
+| ffmpeg (von Playwright) | LGPL-2.1-or-later | Einzelfreigabe: kommt mit Chromium, Playwright nutzt es nur für Videoaufnahmen, die Edvaniq nicht macht. Eigener Prozess, unverändert, nicht ausgeliefert. |
 | gitleaks | MIT | Secret-Scan in der CI |
 
 ### GitHub Actions
@@ -132,7 +137,7 @@ Diese Pakete kommen über ein gelistetes Paket dazu und haben keine erlaubte SPD
 - eine Zeile mit nicht erlaubter Lizenz, deren Einsatz nicht mit „Einzelfreigabe:“, „Vorläufige Ausnahme:“ oder „Server-Software:“ beginnt
 - ein Tool aus `dotnet-tools.json`, eine Action aus `.github/workflows` oder ein Image aus `deploy`, den Workflows oder `tests` ohne Zeile
 
-Nicht sehen kann der Test die Basis-Images des SDK, die Images, die Aspire selbst holt, und Programme, die ein Workflow herunterlädt, wie gitleaks. Die prüft der Reviewer. Der Test liest die Überschriften, Spalten und den Absatz „Erlaubt“ dieser Datei. Benenne sie nicht um, ohne den Test anzupassen.
+Nicht sehen kann der Test die Basis-Images des SDK, die Images, die Aspire selbst holt, und Programme, die ein Workflow herunterlädt, wie gitleaks und Chromium. Die prüft der Reviewer. Der Test liest die Überschriften, Spalten und den Absatz „Erlaubt“ dieser Datei. Benenne sie nicht um, ohne den Test anzupassen.
 
 Selbst nachsehen kannst du nach einem Restore so:
 
