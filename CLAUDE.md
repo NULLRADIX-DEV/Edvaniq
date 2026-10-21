@@ -21,7 +21,7 @@ dotnet ef migrations add <Migration> --project src/Services/<Name>/Edvaniq.Servi
 ```
 
 - Tests laufen auf Microsoft Testing Platform (in `global.json` festgelegt) mit xUnit v3. Exit-Code 8 heißt „keine Tests gelaufen“, nicht „fehlgeschlagen“.
-- SDK ist über `global.json` auf 10.0.401 gepinnt. `EnforceCodeStyleInBuild` ist aktiv, Stilverstöße tauchen also schon im Build auf.
+- SDK ist über `global.json` auf 10.0.401 gepinnt, die Version von `Aspire.AppHost.Sdk` steht dort unter `msbuild-sdks`. `EnforceCodeStyleInBuild` ist aktiv, Stilverstöße tauchen also schon im Build auf.
 
 ## Architektur (Kurzfassung, Details in `docs/architecture.md`)
 

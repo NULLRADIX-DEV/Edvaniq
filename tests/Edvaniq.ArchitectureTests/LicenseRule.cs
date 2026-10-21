@@ -5,7 +5,8 @@ using System.Xml.Linq;
 namespace Edvaniq.ArchitectureTests;
 
 // docs/licenses.md: every third-party component the repository uses stands in the license list, with the license it
-// really has. Read are the direct packages (Directory.Packages.props and the SDKs with a version in a project file),
+// really has. Read are the direct packages (Directory.Packages.props, the SDKs under msbuild-sdks in global.json and
+// those with a version in a project file),
 // every package in obj/project.assets.json of each project in Edvaniq.slnx with the license expression of its nuspec,
 // the tools in dotnet-tools.json, the actions in .github/workflows and the images in deploy, in the workflows and in the
 // tests, except our own. Base images, the images Aspire pulls itself and programs a workflow downloads are not found
@@ -105,6 +106,7 @@ internal static partial class LicenseRule
             .Concat(projects.Select(project => XDocument.Load(project).Root!.Attribute("Sdk")?.Value)
                 .Where(sdk => sdk is not null && sdk.Contains('/'))
                 .Select(sdk => sdk!.Split('/')[0]))
+            .Concat(MsBuildSdks(root))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var licenses = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         var packages = projects.Select(AssetsOf).Where(File.Exists).SelectMany(assets => PackagesIn(assets, licenses)).ToList();
@@ -132,6 +134,21 @@ internal static partial class LicenseRule
         Projects(root).Where(project => !File.Exists(AssetsOf(project)))
             .Select(project => $"{Path.GetFileNameWithoutExtension(project)} is not restored, "
                 + $"{Path.GetRelativePath(root, AssetsOf(project))} is missing. Run dotnet restore first.");
+
+    // The SDKs whose version global.json sets under msbuild-sdks, empty without global.json or the section.
+    private static List<string> MsBuildSdks(string root)
+    {
+        var file = Path.Combine(root, "global.json");
+        if (!File.Exists(file))
+        {
+            return [];
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllText(file));
+        return document.RootElement.TryGetProperty("msbuild-sdks", out var sdks)
+            ? sdks.EnumerateObject().Select(sdk => sdk.Name).ToList()
+            : [];
+    }
 
     // The project files in Edvaniq.slnx.
     private static IEnumerable<string> Projects(string root) =>
