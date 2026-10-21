@@ -17,3 +17,10 @@ updates:
         update-types: [minor, patch]
     ignore:
       - dependency-name: Microsoft.IdentityModel.JsonWebTokens
+
+  # The images in deploy/compose.yml that are not our own, such as MySQL. The tests and the AppHost use the same MySQL
+  # image, MySqlImageTests turns the pull request red until they follow.
+  - package-ecosystem: docker-compose
+    directory: /deploy
+    schedule:
+      interval: weekly
