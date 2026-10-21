@@ -115,6 +115,21 @@ Auch die Shell liegt dort: `ShellLayout` mit Kopfzeile, Navigation und dem Hinwe
 
 Der Browser spricht nur mit dem Web-Host, nie mit dem Gateway. Ans Gateway reicht der Web-Host serverseitig nur die Routen aus dem Abschnitt `ReverseProxy` seiner `appsettings.json` weiter: `GET /api/status` und `POST /api/planning/ping`. Alles andere unter `/api` beantwortet er selbst mit 404, es erreicht das Gateway nie, auch der Token-Endpunkt von Identity nicht. Ein neues Feature bekommt dort eine eigene Route. Dafür braucht es eine Sitzung, einen verschlüsselten Cookie, den kein Skript lesen kann und den der Browser nur über HTTPS an diese Seite schickt. Ohne Sitzung antwortet der Web-Host mit 401. Den Cookie und einen `Authorization`-Header aus dem Browser gibt er nicht weiter, und Cookies aus dem Backend kommen nicht beim Browser an. Einen Login gibt es noch nicht: `POST /session` startet eine Gast-Sitzung, `DELETE /session` beendet sie, `GET /session` sagt, ob eine besteht. Nur `/api/status` geht ohne Sitzung durch, damit die Shell auch ohne Sitzung erfährt, ob das Gateway antwortet. Routen, die das technische Token tragen, zählt der Web-Host: höchstens `BackendToken:PerClientPerMinute` Aufrufe pro Minute je Client-Adresse und `BackendToken:TotalPerMinute` insgesamt, darüber antwortet er mit 429. So bekommt die Datenbank von Planning nur eine begrenzte Zahl Pings, egal von wie vielen Adressen sie kommen.
 
+Eine Anfrage, die etwas ändert (`POST`, `PUT`, `PATCH` und `DELETE`), nimmt der Web-Host nur von den eigenen Seiten an. Schickt der Browser `Sec-Fetch-Site`, muss der Wert `same-origin` sein. Ältere Browser ohne diesen Header prüft der Web-Host am `Origin`, der die öffentliche Adresse des Web-Hosts sein muss. Sonst antwortet der Web-Host mit 403 und einem Problem. Weder der Endpunkt noch das Gateway sehen die Anfrage. Eine fremde Seite kann die Sitzung des Besuchers so nicht benutzen, auch wenn der Browser den Cookie mitschickt. Ein Aufrufer ohne Browser, etwa die App, schickt keinen der beiden Header und kommt durch, er hat keinen Cookie, den man ihm unterschieben könnte. Lesende Anfragen prüft der Web-Host nicht.
+
+Jede Antwort des Web-Hosts trägt die Header aus der Tabelle, auch Fehlerantworten, Weiterleitungen und die Dateien der Shell. Außerhalb von Development kommt auf HTTPS-Antworten `Strict-Transport-Security` dazu. Gesetzt werden sie in `SecurityHeaders.cs`.
+
+| Header | Wert |
+|---|---|
+| `Content-Security-Policy` | `frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'` |
+| `X-Frame-Options` | `DENY` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Cross-Origin-Opener-Policy` | `same-origin` |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` |
+
+Damit lässt sich die Shell in keiner fremden Seite einbetten. Das Basis-Element und Formulare zeigen nur auf die eigene Seite, Plug-in-Inhalte sind gesperrt, und der Browser errät keinen Inhaltstyp. Kamera, Mikrofon und Standort sind für die Seite ausgeschaltet.
+
 ## Nachverfolgung
 
 Jede Anfrage hat eine Kennung, die W3C-Trace-ID. Der Server vergibt sie selbst: `traceparent` und seine Begleiter (`tracestate`, `baggage`) aus dem Internet verwirft der Reverse-Proxy vor dem Web-Host, so beginnt der Web-Host für jede Anfrage aus dem Browser eine eigene Trace. Der Web-Host selbst würde einen mitgeschickten `traceparent` übernehmen, lokal tut er das also. OpenTelemetry (ServiceDefaults) reicht sie im Header `traceparent` an Gateway und Services weiter, auch beim Token-Abruf bei Identity. Außerhalb von Development schreibt jeder Prozess sein Log einzeilig auf die Konsole, mit den Scopes und damit mit der `TraceId`. Mit einer Kennung findet man so die Zeilen aller Prozesse, durch die die Anfrage ging.
