@@ -1,6 +1,6 @@
 # Service-Vorlage
 
-Jeder neue Service entsteht aus der Vorlage in `templates/service/`, damit alle gleich gebaut sind und keiner den Schutz der Daten vergisst. Die Vorlage legt mit `dotnet new` (Kurzname `edvaniq-service`) die fünf Projekte an und bringt alles mit, was ein Service von Anfang an braucht: die Prüfung der Tokens, Health mit „lebendig“ und „bereit“, eine eigene Datenbank mit Migrationen, den Schutz der Daten je Nutzer und einen Prüfstand für Integrationstests gegen eine echte Datenbank.
+Jeder neue Service entsteht aus der Vorlage in `templates/service/`, damit alle gleich gebaut sind und keiner den Schutz der Daten vergisst. Die Vorlage legt mit `dotnet new` (Kurzname `edvaniq-service`) die fünf Projekte an und bringt alles mit, was ein Service von Anfang an braucht: die Prüfung der Tokens, Health mit „lebendig“ und „bereit“, eine eigene Datenbank mit Migrationen, den Schutz der Daten je Nutzer, einen Prüfstand für Integrationstests gegen eine echte Datenbank und ein Container-Image.
 
 ## Befehle
 
@@ -34,7 +34,8 @@ src/Services/<Name>/
 tests/Services/<Name>/
   Edvaniq.Services.<Name>.UnitTests
   Edvaniq.Services.<Name>.IntegrationTests ServiceFactory.cs (Prüfstand), TestDatabase.cs
-                                           HealthTests.cs, TokenTests.cs, MigrationTests.cs, IsolationTests.cs, ProblemTests.cs
+                                           HealthTests.cs, TokenTests.cs, MigrationTests.cs, IsolationTests.cs, ProblemTests.cs,
+                                           DatabaseUserTests.cs
 ```
 
 Alle sieben Projekte stehen danach in `Edvaniq.slnx`, die CI baut und testet sie also gleich mit. Die Ports in `launchSettings.json` wählt die Vorlage per Zufall. Hat schon ein anderer Prozess denselben Port, wird der Test `Ports_AreUniqueAcrossProcesses` in `Edvaniq.ArchitectureTests` rot.
@@ -77,7 +78,7 @@ Die Tokens stellt Identity aus, wie das läuft, steht in der [Architektur](archi
 
 ## Datenbank und Migrationen
 
-Jeder Service hat seine eigene Datenbank `<name>db` und einen eigenen Benutzer `<name>`, der nur auf sie darf. Lokal legt der AppHost beides an (`AddServiceDatabase`). Das Passwort erzeugt er einmal und legt es in seinen User Secrets ab. Der Service bekommt `ConnectionStrings:<name>db` mit diesem Benutzer, nie mit root. Die Datenbank ist nur im Netz der App erreichbar.
+Jeder Service hat seine eigene Datenbank `<name>db` und einen eigenen Benutzer `<name>`, der nur auf sie darf. Lokal legt der AppHost beides an (`AddServiceDatabase`). Das Passwort erzeugt er einmal und legt es in seinen User Secrets ab. Der Service bekommt `ConnectionStrings:<name>db` mit diesem Benutzer, nie mit root. Dass MySQL ihm jeden Zugriff außerhalb seiner Datenbank verweigert, belegt `DatabaseUserTests` (siehe [Tests](#tests)). Die Datenbank ist nur im Netz der App erreichbar.
 
 DbContext und Health-Check verbinden sich über `MySqlConnections.For`, und zwar ohne TLS. Der Grund liegt im Treiber: MySql.Data hält den Zustand des TLS-Aufbaus in statischen `Dictionary`-Feldern ohne gemeinsame Sperre, und gleichzeitig geöffnete Verbindungen machen ihn kaputt.
 
@@ -116,14 +117,34 @@ Ein neuer Service ersetzt das Beispiel durch seine erste echte Entity:
 
 Die Datenbank ist echt. `MySqlTestServer` aus `Edvaniq.Testing` startet je Testlauf über Testcontainers einen MySQL-Container mit `mysql:9.7`, wie im AppHost, und `TestDatabase.cs` meldet ihn einmal fürs Projekt an. Jede `ServiceFactory` legt darin ihre eigene Datenbank mit einem eigenen Benutzer an, der nur auf sie darf. So stören sich parallele Testklassen nicht, und der Service meldet sich wie auf dem Server an, nie als root. Docker muss deshalb laufen, lokal wie in der CI.
 
-Die Tests einer Klasse teilen sich eine Datenbank. Jeder Test erfindet seine Nutzer deshalb neu, etwa `alice-<guid>`. Die Vorlage bringt vier Testklassen mit:
+Die Tests einer Klasse teilen sich eine Datenbank. Jeder Test erfindet seine Nutzer deshalb neu, etwa `alice-<guid>`. Die Vorlage bringt sechs Testklassen mit:
 
 - `TokenTests`: Abweisungen und der Nutzer nur aus dem Token
 - `MigrationTests`: Die Migrationen passen zum Modell, laufen auf einer frischen DB und ein zweites Mal ohne Änderung.
 - `IsolationTests`: Nutzer B sieht die Einträge von A weder in der Liste noch einzeln.
 - `HealthTests`: mit und ohne Datenbank, auch außerhalb von Development
+- `ProblemTests`: Fehler kommen als Problem mit der Trace-ID
+- `DatabaseUserTests`: Der Benutzer einer Datenbank kann eine fremde weder lesen noch ändern noch auflisten und legt keine Datenbank an. Das `GRANT` stammt aus `ServiceDatabaseSql` im AppHost, die Tests kompilieren dieselbe Datei.
 
 Ob die Isolationstests wirklich etwas prüfen, zeigt die Gegenprobe. Ohne den Filter in `ServiceDbContext` werden beide rot.
+
+## Container-Image
+
+Jeder Service aus der Vorlage bekommt sein Image vom .NET SDK, ohne Dockerfile. Den Namen leitet `Directory.Build.props` aus dem Projektnamen ab: Aus `Edvaniq.Services.Sample.Api` wird `nullradix-dev/edvaniq/sample-api`. Bei laufendem Docker baust du das Image so, es landet im lokalen Docker und wird nirgends hochgeladen:
+
+```
+dotnet publish src/Services/<Name>/Edvaniq.Services.<Name>.Api -c Release --os linux --arch x64 -t:PublishContainer
+```
+
+Dass das ohne Handarbeit klappt und der Container unter den Grenzen des Servers läuft, beweist die CI bei jedem Lauf an dem frisch erzeugten Service `Sample`, im Schritt „Check service template image“ des Jobs „Build & test backend“. Der Schritt baut das Image wie oben und startet eine MySQL mit der Datenbank und dem eigenen Benutzer des Service. Dann führt er den Migrationsschritt aus, der mit Exit-Code 0 enden muss, und startet die Api. Sie bekommt die Grenzen für Speicher, Swap, CPU und Prozesse aus dem Anker `x-app` in `deploy/compose.yml` und dieselbe Härtung: schreibgeschütztes Dateisystem bis auf `/tmp`, keine Capabilities, kein Rechtegewinn und ein Netz ohne Zugang nach draußen. Der Schritt wartet höchstens zwei Minuten, bis Docker den Container als healthy meldet. Dafür fragt er `/health` auf Port 8081 so ab wie Docker auf dem Server. Scheitert etwas, stehen die Logs von Api und Datenbank im Log des Schritts.
+
+Die Prüfung steckt in `deploy/check-template-image.sh`. Du kannst sie auch lokal für ein eigenes Image starten:
+
+```
+bash deploy/check-template-image.sh <name> nullradix-dev/edvaniq/<name>-api:<tag>
+```
+
+Braucht ein Service zum Start eine neue Einstellung, setzt `deploy/compose.yml` sie für den Server, und das Skript muss sie ebenfalls setzen. Sonst bleibt der Container in der CI hängen, obwohl er auf dem Server startet.
 
 ## Lokal mit echter Datenbank prüfen
 
@@ -220,7 +241,7 @@ rm -rf src/Services/Sample tests/Services/Sample
 git restore Edvaniq.slnx
 ```
 
-Genau das macht die CI bei jedem Lauf im Schritt „Check service template“ des Jobs „Build & test backend“. Zusätzlich prüft sie, dass alle sieben Projekte in der Solution stehen.
+Genau das macht die CI bei jedem Lauf im Schritt „Check service template“ des Jobs „Build & test backend“. Zusätzlich prüft sie, dass alle sieben Projekte in der Solution stehen. Im nächsten Schritt baut sie das Image des Probe-Service und startet es (siehe [Container-Image](#container-image)).
 
 ## Stolperfallen
 

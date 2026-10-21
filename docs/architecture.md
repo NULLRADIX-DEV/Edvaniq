@@ -54,7 +54,7 @@ Diese sechs Regeln halten die Services auseinander. Zu jeder gehört eine Prüff
 
 1. **Eigene Datenbank.** Jeder Service mit Daten hat genau eine eigene Datenbank mit eigenem DB-Benutzer. Ihren Connection String bekommen nur die Prozesse dieses Service: lokal über `WithDatabase` im AppHost, auf dem Server über `<name>.env` in `deploy/compose.yml`.
    - Prüffrage: Bekommt ein Prozess die Datenbank eines anderen Service?
-   - Test: `Rule1DatabaseTests` baut das Modell des AppHost, ohne es zu starten: Jeder Prozess bekommt höchstens eine Datenbank, nur die seines Service, und nie den ganzen Server. Seine `<name>.env` in `deploy/compose.yml` hängt nur an `<name>` und `<name>-*`, das prüft die CI im Job „Container images“.
+   - Test: `Rule1DatabaseTests` baut das Modell des AppHost, ohne es zu starten: Jeder Prozess bekommt höchstens eine Datenbank, nur die seines Service, und nie den ganzen Server. Seine `<name>.env` in `deploy/compose.yml` hängt nur an `<name>` und `<name>-*`, das prüft die CI im Job „Container images“. Dass MySQL einem Benutzer jeden Zugriff außerhalb seiner Datenbank verweigert, belegt `DatabaseUserTests` in den Integrationstests jedes Service, die Vorlage bringt ihn mit. Er legt zwei Datenbanken mit je eigenem Benutzer an, mit demselben `GRANT` wie der AppHost, und prüft gegen eine echte MySQL: Die fremde Datenbank lässt sich weder lesen noch ändern noch auflisten, und `CREATE DATABASE` scheitert.
 2. **Nur Contracts fremder Services.** Ein Projekt eines Service referenziert von einem anderen Service nur dessen `.Contracts`. Der AppHost ist kein Service, er referenziert jede Api, um sie zu starten.
    - Prüffrage: Referenziert ein Projekt unter `src/Services` Domain, Application, Infrastructure, Api oder Worker eines anderen Service?
    - Test: `Rule2ContractsTests` liest die Projektreferenzen aller Projekte unter `src/Services`.
@@ -113,7 +113,24 @@ Seiten und Features entstehen einmal in `Client.UI` und laufen dann im Browser u
 
 Auch die Shell liegt dort: `ShellLayout` mit Kopfzeile, Navigation und dem Hinweis, wenn der Server nicht antwortet, dazu `Routes`. `Edvaniq.Web.Client` und die App binden nur `Routes` ein und registrieren `IBackendStatus` und `IPing` aus `Client.Core`. Die Seite `/systemstatus` schickt den Ping über Web-Host, Gateway und Planning in dessen Datenbank und zeigt, was dort gespeichert wurde. Ohne Sitzung startet `HttpPing` selbst eine Gast-Sitzung und versucht es einmal neu. Farben, Abstände und Grundstile stehen als CSS-Variablen in `Client.DesignSystem/wwwroot/edvaniq.css`. Ein Test prüft jedes Paar aus Text- und Hintergrundfarbe gegen WCAG AA, eine neue Farbe bekommt dort ihr Paar.
 
+Eine unbekannte Adresse zeigt `NotFound`. Bei einem unerwarteten Fehler auf dem Server zeigt der Web-Host `ServerError`, auch aus `Client.UI`. Die Seite sagt kurz und ohne Details, dass etwas schiefgegangen ist, und nennt die Kennung der Anfrage. „Erneut versuchen“ holt dieselbe Seite noch einmal, ein zweiter Link führt zur Startseite. `ServerError` kommt fertig gerendert vom Server und braucht die Laufzeit im Browser nicht, weil die Seite auch bei einer langsamen Verbindung da sein soll. Aus demselben Grund sagt `/systemstatus`, bis die Laufzeit geladen ist, „Wird geladen …“, als Statusmeldung, die ein Screenreader vorliest.
+
 Der Browser spricht nur mit dem Web-Host, nie mit dem Gateway. Ans Gateway reicht der Web-Host serverseitig nur die Routen aus dem Abschnitt `ReverseProxy` seiner `appsettings.json` weiter: `GET /api/status` und `POST /api/planning/ping`. Alles andere unter `/api` beantwortet er selbst mit 404, es erreicht das Gateway nie, auch der Token-Endpunkt von Identity nicht. Ein neues Feature bekommt dort eine eigene Route. Dafür braucht es eine Sitzung, einen verschlüsselten Cookie, den kein Skript lesen kann und den der Browser nur über HTTPS an diese Seite schickt. Ohne Sitzung antwortet der Web-Host mit 401. Den Cookie und einen `Authorization`-Header aus dem Browser gibt er nicht weiter, und Cookies aus dem Backend kommen nicht beim Browser an. Einen Login gibt es noch nicht: `POST /session` startet eine Gast-Sitzung, `DELETE /session` beendet sie, `GET /session` sagt, ob eine besteht. Nur `/api/status` geht ohne Sitzung durch, damit die Shell auch ohne Sitzung erfährt, ob das Gateway antwortet. Routen, die das technische Token tragen, zählt der Web-Host: höchstens `BackendToken:PerClientPerMinute` Aufrufe pro Minute je Client-Adresse und `BackendToken:TotalPerMinute` insgesamt, darüber antwortet er mit 429. So bekommt die Datenbank von Planning nur eine begrenzte Zahl Pings, egal von wie vielen Adressen sie kommen.
+
+Eine Anfrage, die etwas ändert (`POST`, `PUT`, `PATCH` und `DELETE`), nimmt der Web-Host nur von den eigenen Seiten an. Schickt der Browser `Sec-Fetch-Site`, muss der Wert `same-origin` sein. Ältere Browser ohne diesen Header prüft der Web-Host am `Origin`, der die öffentliche Adresse des Web-Hosts sein muss. Sonst antwortet der Web-Host mit 403 und einem Problem. Weder der Endpunkt noch das Gateway sehen die Anfrage. Eine fremde Seite kann die Sitzung des Besuchers so nicht benutzen, auch wenn der Browser den Cookie mitschickt. Ein Aufrufer ohne Browser, etwa die App, schickt keinen der beiden Header und kommt durch, er hat keinen Cookie, den man ihm unterschieben könnte. Lesende Anfragen prüft der Web-Host nicht.
+
+Jede Antwort des Web-Hosts trägt die Header aus der Tabelle, auch Fehlerantworten, Weiterleitungen und die Dateien der Shell. Außerhalb von Development kommt auf HTTPS-Antworten `Strict-Transport-Security` dazu. Gesetzt werden sie in `SecurityHeaders.cs`.
+
+| Header | Wert |
+|---|---|
+| `Content-Security-Policy` | `frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'` |
+| `X-Frame-Options` | `DENY` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Cross-Origin-Opener-Policy` | `same-origin` |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` |
+
+Damit lässt sich die Shell in keiner fremden Seite einbetten. Das Basis-Element und Formulare zeigen nur auf die eigene Seite, Plug-in-Inhalte sind gesperrt, und der Browser errät keinen Inhaltstyp. Kamera, Mikrofon und Standort sind für die Seite ausgeschaltet.
 
 ## Nachverfolgung
 
@@ -123,6 +140,7 @@ Fehlerantworten nennen die Kennung im Feld `traceId` eines Problems nach RFC 945
 - Services aus der Vorlage rufen dafür als Erstes `app.UseProblems()` aus BuildingBlocks.Web auf. Eine unbehandelte Exception wird so zu einem nackten 500, ein 401 der Token-Prüfung und ein 404 ohne Body bekommen ebenfalls ein Problem.
 - Das Gateway schreibt seine Probleme selbst.
 - Der Web-Host macht aus den eigenen Fehlern unter `/api` und `/session` Probleme (`ApiProblems`). Probleme aus dem Backend reicht er unverändert durch, sie nennen dieselbe Kennung.
+- Bei einer Seite zeigt der Web-Host im Fehlerfall `ServerError` mit derselben Kennung. Ein gescheiterter Ping auf `/systemstatus` nennt die Kennung seines Problems, `HttpPing` reicht sie dafür an die Seite durch.
 
 ## Tokens
 
@@ -142,13 +160,7 @@ Das Schema ändert sich nur über EF-Core-Migrationen, und Migrieren ist ein eig
 
 ## Starten
 
-Du brauchst Docker Desktop für den MySQL-Container. Dann startet ein Befehl alles:
-
-```
-dotnet run --project src/Aspire/Edvaniq.AppHost
-```
-
-Es öffnet sich das Aspire-Dashboard mit MySQL, allen Services, Workern, Gateway und Web.
+Wie du das Backend und die Web-Shell lokal mit einem Befehl startest, steht in der [README](../README.md#lokal-starten).
 
 ## Neuen Service anlegen
 
