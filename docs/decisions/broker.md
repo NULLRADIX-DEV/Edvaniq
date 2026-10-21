@@ -18,7 +18,7 @@ Die Tests zeigen, dass eine Nachricht vom einen Prozess beim anderen ankommt und
 
 ## Grenzen
 
-JetStream erkennt doppelte Nachrichten nur innerhalb eines Zeitfensters, ohne eigene Einstellung zwei Minuten. Die Outbox kann eine Nachricht aber auch viel später noch einmal senden, wenn ihr Commit nach dem Senden scheitert. Jeder Consumer braucht deshalb seine Inbox, das Zeitfenster spart nur Arbeit.
+JetStream erkennt doppelte Nachrichten nur innerhalb eines Zeitfensters, ohne eigene Einstellung zwei Minuten. Die Outbox kann eine Nachricht aber auch viel später noch einmal senden, wenn ihr Commit nach dem Senden scheitert. Jeder Consumer braucht deshalb seine Inbox, das Zeitfenster spart nur Arbeit. Verwirft JetStream eine Nachricht als doppelt, meldet er beim Senden `Duplicate`. Der Dispatcher wertet das als gesendet, denn die Nachricht liegt schon im Stream. `EnsureSuccess()` aus `NATS.Net` wirft in diesem Fall eine Exception.
 
 Ein einzelner Consumer bekommt die Nachrichten eines Streams in der Reihenfolge, in der sie ankamen. Nach einer erneuten Zustellung oder mit mehreren Consumern gilt das nicht mehr, Consumer verlassen sich also wie bei der Outbox nicht auf die Reihenfolge. Die Inbox wächst mit jeder Nachricht, bis jemand alte Einträge löscht.
 

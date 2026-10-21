@@ -111,7 +111,13 @@ public sealed class BrokerTests(NatsTestServer natsServer, MySqlTestServer mysql
     {
         var ack = await nats.CreateJetStreamContext().PublishAsync(Subject, documentCreated,
             opts: new NatsJSPubOpts { MsgId = messageId.ToString() });
-        ack.EnsureSuccess();
+
+        // A duplicate is already in the stream, so it counts as sent. EnsureSuccess would throw for it.
+        if (!ack.Duplicate)
+        {
+            ack.EnsureSuccess();
+        }
+
         return ack;
     }
 
