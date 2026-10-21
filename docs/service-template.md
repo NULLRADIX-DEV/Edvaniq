@@ -1,6 +1,6 @@
 # Service-Vorlage
 
-Jeder neue Service entsteht aus der Vorlage in `templates/service/`, damit alle gleich gebaut sind und keiner den Schutz der Daten vergisst. Die Vorlage legt mit `dotnet new` (Kurzname `edvaniq-service`) die fünf Projekte an und bringt alles mit, was ein Service von Anfang an braucht: die Prüfung der Tokens, Health mit „lebendig“ und „bereit“, eine eigene Datenbank mit Migrationen, den Schutz der Daten je Nutzer, einen Prüfstand für Integrationstests gegen eine echte Datenbank und ein Container-Image.
+Jeder neue Service entsteht aus der Vorlage in `templates/service/`, damit alle gleich gebaut sind und keiner den Schutz der Daten vergisst. Die Vorlage legt mit `dotnet new` (Kurzname `edvaniq-service`) die fünf Projekte an und bringt alles mit, was ein Service von Anfang an braucht: die Prüfung der Tokens, Health mit „lebendig“ und „bereit“, eine eigene Datenbank mit Migrationen, den Schutz der Daten je Nutzer, Outbox und Inbox für Integration Events, einen Prüfstand für Integrationstests gegen eine echte Datenbank und ein Container-Image.
 
 ## Befehle
 
@@ -27,15 +27,17 @@ src/Services/<Name>/
   Edvaniq.Services.<Name>.Api              Program.cs: AddServiceDefaults, AddTokenValidation, AddInfrastructure, UseProblems, MapDefaultEndpoints, GET /me, Befehl migrate
                                            ExampleEndpoints.cs: Endpunkte des Beispiels
   Edvaniq.Services.<Name>.Application      IExampleItems.cs: was die Fachlogik vom Beispiel braucht
-  Edvaniq.Services.<Name>.Contracts
+                                           ExampleItemCreatedHandler.cs: Beispiel für einen Handler
+  Edvaniq.Services.<Name>.Contracts        ExampleItemCreated.cs: Beispiel für ein Integration Event
   Edvaniq.Services.<Name>.Domain           ExampleItem.cs: Beispiel für Daten eines Nutzers
-  Edvaniq.Services.<Name>.Infrastructure   InfrastructureExtensions.cs: DbContext, Beispiel und DB-Prüfung für Health
-                                           <Name>DbContext.cs, ExampleItems.cs, Migrations/ (Initial, ExampleItems)
+  Edvaniq.Services.<Name>.Infrastructure   InfrastructureExtensions.cs: DbContext, Beispiel, Nachrichten und DB-Prüfung für Health
+                                           <Name>DbContext.cs, ExampleItems.cs, Migrations/ (Initial, ExampleItems, Messaging)
 tests/Services/<Name>/
   Edvaniq.Services.<Name>.UnitTests
   Edvaniq.Services.<Name>.IntegrationTests ServiceFactory.cs (Prüfstand), TestDatabase.cs
                                            HealthTests.cs, TokenTests.cs, MigrationTests.cs, IsolationTests.cs, ProblemTests.cs,
-                                           DatabaseUserTests.cs
+                                           DatabaseUserTests.cs,
+                                           MessagingTests.cs
 ```
 
 Alle sieben Projekte stehen danach in `Edvaniq.slnx`, die CI baut und testet sie also gleich mit. Die Ports in `launchSettings.json` wählt die Vorlage per Zufall. Hat schon ein anderer Prozess denselben Port, wird der Test `Ports_AreUniqueAcrossProcesses` in `Edvaniq.ArchitectureTests` rot.
@@ -102,22 +104,59 @@ Ein fremder Eintrag liefert 404, genau wie einer, den es nicht gibt, denn ein 40
 
 ## Beispiel
 
-`ExampleItem` zeigt an Daten eines Nutzers, wie die Schichten zusammenspielen: Domain (`ExampleItem`), Application (`IExampleItems`), Infrastructure (`ExampleItems`, Tabelle `ExampleItems`) und Api (`POST /examples`, `GET /examples`, `GET /examples/{id}`). Der Isolationstest der Vorlage läuft daran.
+`ExampleItem` zeigt an Daten eines Nutzers, wie die Schichten zusammenspielen: Domain (`ExampleItem`), Application (`IExampleItems`), Infrastructure (`ExampleItems`, Tabelle `ExampleItems`) und Api (`POST /examples`, `GET /examples`, `GET /examples/{id}`). Der Isolationstest der Vorlage läuft daran. Beim Anlegen schreibt `ExampleItems` auch ein Event in die Outbox ([Nachrichten](#nachrichten)).
 
 Ein neuer Service ersetzt das Beispiel durch seine erste echte Entity:
 
 1. Die eigene Entity nach demselben Muster anlegen, mit `IOwnedByUser`, wenn sie einem Nutzer gehört.
 2. `ExampleItem`, `IExampleItems`, `ExampleItems`, `ExampleEndpoints` und die beiden Zeilen dafür (`AddScoped`, `MapExampleEndpoints`) löschen.
-3. Eine Migration anlegen. Sie entfernt die Tabelle `ExampleItems` und legt die eigene an.
-4. `IsolationTests` auf die eigenen Endpunkte umstellen. Der Test „Nutzer A sieht B nicht“ bleibt Pflicht.
+3. `ExampleItemCreated`, `ExampleItemCreatedHandler` und die Zeile `AddIntegrationEventHandler` löschen. Das erste echte Event ersetzt das Beispiel, `AddMessaging` und die Tabellen für Outbox und Inbox bleiben.
+4. Eine Migration anlegen. Sie entfernt die Tabelle `ExampleItems` und legt die eigene an.
+5. `IsolationTests` auf die eigenen Endpunkte umstellen. Der Test „Nutzer A sieht B nicht“ bleibt Pflicht. `MessagingTests` zeigt auf das neue Event.
+
+## Nachrichten
+
+Jeder Service aus der Vorlage kann Ereignisse sicher senden und doppelt zugestellte Nachrichten nur einmal verarbeiten. Die Bausteine liegen in `BuildingBlocks.Messaging`, `AddInfrastructure` hängt sie mit `AddMessaging` an den DbContext des Service. Warum Outbox und NATS, steht in den Entscheidungen zu [Outbox](decisions/outbox.md) und [Broker](decisions/broker.md), der Überblick in der [Architektur](architecture.md#nachrichten).
+
+### Ereignis senden
+
+Ein Integration Event ist ein Record in den `.Contracts` des Service, der `IIntegrationEvent` implementiert. Sein Namensraum `Edvaniq.Services.<Name>.Contracts` legt fest, wohin es geht: in den Stream `<NAME>` mit dem Subject `<name>.<ereignis>`, dem Typnamen in Kleinbuchstaben. `ExampleItemCreated` von Planning geht also nach `planning.exampleitemcreated`. Ein Event trägt IDs und die Werte, die ein Hörer braucht, nicht den ganzen Inhalt (Regel 5). Ein Service sendet nur eigene Events, `IEventOutbox.Add` wirft bei einem fremden Typ.
+
+Ein Use Case legt das Event über `IEventOutbox` aus `BuildingBlocks.Application` in die Outbox, bevor er speichert. `Add` sendet nichts, es legt eine Zeile für `outbox_messages` in den DbContext der Anfrage, und das `SaveChanges`, das die Änderung speichert, speichert sie mit. Scheitert es, fehlen Änderung und Event zusammen. So macht es `ExampleItems.AddAsync`:
+
+```csharp
+db.ExampleItems.Add(item);
+outbox.Add(new ExampleItemCreated(item.Id, item.OwnerId));
+await db.SaveChangesAsync(cancellationToken);
+```
+
+Gesendet wird in einem eigenen Schritt. Der Dispatcher läuft im Prozess der Api, holt jede Sekunde bis zu 50 offene Zeilen und schickt sie der Reihe nach an NATS, mit der `MessageId` der Zeile als `Nats-Msg-Id`. Danach markiert er sie als gesendet. Nimmt NATS eine Nachricht nicht an, endet die Runde. Die Zeile merkt sich Fehler und Versuche in `LastError` und `Attempts`, und der Dispatcher probiert es nach einer wachsenden Pause wieder, höchstens alle 30 Sekunden. Kennt der Stream die `MessageId` schon, zählt die Nachricht als gesendet. Beim Start legt der Dispatcher den Stream des Service an oder gleicht ihn an: Nachrichten bleiben 7 Tage, höchstens 256 MB (`Messaging:StreamMaxAge`, `Messaging:StreamMaxBytes`).
+
+### Ereignis empfangen
+
+Ein Handler im Application-Projekt implementiert `IIntegrationEventHandler<TEvent>`. Das Event stammt aus den `.Contracts` eines anderen Service, und nur dieses Projekt darf der Service referenzieren (Regel 2). Die Beziehung kommt in die Tabelle in der [Architektur](architecture.md#service-regeln) und darf keinen Kreis erzeugen (Regel 6). Registriert wird der Handler in `AddInfrastructure`:
+
+```csharp
+builder.Services.AddIntegrationEventHandler<ExampleItemCreated, ExampleItemCreatedHandler>();
+```
+
+Für jeden Handler läuft ein dauerhafter Consumer `<name>-<Handler>` im Stream des Absenders. Er behandelt eine Nachricht so: Er legt einen Eintrag für `inbox_messages` in den DbContext, ruft den Handler und speichert beides mit einem `SaveChanges`. Erst danach bestätigt er die Nachricht. Kennt die Inbox die `MessageId` für diesen Consumer schon, bestätigt er nur. Ein Handler ändert deshalb nur den DbContext und ruft kein `SaveChanges`. Wirft er, wird nichts gespeichert, und der Broker stellt die Nachricht nach 5 Sekunden wieder zu. Gibt es den Stream des Absenders noch nicht, versucht es der Consumer alle 5 Sekunden neu.
+
+Die Vorlage hört auf ihr eigenes `ExampleItemCreated`, damit der Weg von der Outbox bis in den Handler schon im Beispiel zu sehen ist. Ein echter Handler hört auf ein Event eines anderen Service. Eine Nachricht kann mehr als einmal und in anderer Reihenfolge ankommen, ein Handler verlässt sich auf beides nicht.
+
+### Ohne Broker und in Tests
+
+Die Adresse von NATS kommt nur von außen, als `ConnectionStrings:nats`. Lokal setzt sie der AppHost mit `WithMessaging(nats)`, auf dem Server läuft noch kein NATS. Fehlt die Adresse, starten weder Dispatcher noch Consumer, und der Service verhält sich, als gäbe es keine Nachrichten: Die Events bleiben in der Outbox, bis ein Broker da ist. Gesendete Outbox-Zeilen und Inbox-Einträge löscht der Service nach 14 Tagen (`Messaging:Retention`), ungesendete bleiben.
+
+`ServiceFactory` tauscht den Broker mit `AddInMemoryTransport()` gegen `InMemoryTransport` aus, die Tests der Services brauchen also kein NATS. `MessagingTests` legt ein Item an und wartet, bis das Event gesendet ist und der Handler es in die Inbox eingetragen hat. Die Garantien des Bausteins selbst prüfen die Tests in `tests/BuildingBlocks`: Outbox, Inbox und ein Event zwischen zwei Services über NATS. `Edvaniq.BuildingBlocks.Messaging.UnitTests` laufen ohne Docker, die `IntegrationTests` brauchen Docker für MySQL und NATS.
 
 ## Tests
 
-`ServiceFactory` ist der Prüfstand: Er startet den echten Service, so wie er läuft, mit einer frischen MySQL-Datenbank, auf die alle Migrationen angewendet sind, und vertraut den Tokens aus `Edvaniq.Testing/TestTokens`. Eine Testklasse holt ihn sich per `IClassFixture<ServiceFactory>`.
+`ServiceFactory` ist der Prüfstand: Er startet den echten Service, so wie er läuft, mit einer frischen MySQL-Datenbank, auf die alle Migrationen angewendet sind, und vertraut den Tokens aus `Edvaniq.Testing/TestTokens`. Den Broker tauscht er gegen einen im Prozess aus. Eine Testklasse holt ihn sich per `IClassFixture<ServiceFactory>`.
 
 Die Datenbank ist echt. `MySqlTestServer` aus `Edvaniq.Testing` startet je Testlauf über Testcontainers einen MySQL-Container mit `mysql:9.7`, wie im AppHost, und `TestDatabase.cs` meldet ihn einmal fürs Projekt an. Jede `ServiceFactory` legt darin ihre eigene Datenbank mit einem eigenen Benutzer an, der nur auf sie darf. So stören sich parallele Testklassen nicht, und der Service meldet sich wie auf dem Server an, nie als root. Docker muss deshalb laufen, lokal wie in der CI.
 
-Die Tests einer Klasse teilen sich eine Datenbank. Jeder Test erfindet seine Nutzer deshalb neu, etwa `alice-<guid>`. Die Vorlage bringt sechs Testklassen mit:
+Die Tests einer Klasse teilen sich eine Datenbank. Jeder Test erfindet seine Nutzer deshalb neu, etwa `alice-<guid>`. Die Vorlage bringt sieben Testklassen mit:
 
 - `TokenTests`: Abweisungen und der Nutzer nur aus dem Token
 - `MigrationTests`: Die Migrationen passen zum Modell, laufen auf einer frischen DB und ein zweites Mal ohne Änderung.
@@ -125,6 +164,7 @@ Die Tests einer Klasse teilen sich eine Datenbank. Jeder Test erfindet seine Nut
 - `HealthTests`: mit und ohne Datenbank, auch außerhalb von Development
 - `ProblemTests`: Fehler kommen als Problem mit der Trace-ID
 - `DatabaseUserTests`: Der Benutzer einer Datenbank kann eine fremde weder lesen noch ändern noch auflisten und legt keine Datenbank an. Das `GRANT` stammt aus `ServiceDatabaseSql` im AppHost, die Tests kompilieren dieselbe Datei.
+- `MessagingTests`: Ein neues Item schreibt sein Event in die Outbox, der Dispatcher sendet es, und der Handler bekommt es einmal.
 
 Ob die Isolationstests wirklich etwas prüfen, zeigt die Gegenprobe. Ohne den Filter in `ServiceDbContext` werden beide rot.
 
@@ -180,8 +220,11 @@ Braucht ein Service zum Start eine neue Einstellung, setzt `deploy/compose.yml` 
    var <name>Db = mysql.AddServiceDatabase("<name>");
    var <name>Migrate = builder.AddMigration<Projects.Edvaniq_Services_<Name>_Api>("<name>-migrate", <name>Db);
    var <name>Api = AddService<Projects.Edvaniq_Services_<Name>_Api>("<name>-api", <name>Db)
-       .WaitForCompletion(<name>Migrate);
+       .WaitForCompletion(<name>Migrate)
+       .WithMessaging(nats);
    ```
+
+   `WithMessaging(nats)` gibt dem Service die Adresse von NATS. Ein Service, der nichts sendet oder empfängt, lässt es weg.
 
 3. In `deploy/compose.yml` einen Anker `x-<name>` anlegen, darauf den Dienst `<name>-api` und den Migrationsschritt `<name>-migrate`. Der Anker liest zusätzlich `<name>.env`, hängt zusätzlich im Netz `data` und wartet auf `db`. Weil die Listen `env_file` und `networks` die aus `x-app` ersetzen, stehen `app.env` und `inner` darin noch einmal. Die Datenbank erreichen nur Prozesse im Netz `data`, also nur die mit eigener Datenbank. Das Netz `backend` gehört der Datenbank allein, für ihren Port ([Erreichbarkeit](deploy.md#erreichbarkeit)). Vorbild ist Planning:
 
@@ -224,7 +267,7 @@ Die übrigen Services stammen noch aus dem ersten Skelett: fünf leere Projekte,
 
 1. Die sieben Projekte aus `Edvaniq.slnx` austragen (`dotnet sln Edvaniq.slnx remove …`) und beide Ordner ganz löschen, auch `bin/` und `obj/`. Sonst bricht `dotnet new` ab, weil es Dateien überschreiben müsste.
 2. Den Service erzeugen wie oben. Die Pfade bleiben gleich, die Verweise anderer Services auf `.Contracts` und die Referenzen in `Edvaniq.ArchitectureTests` stimmen also weiter.
-3. In `AppHost.cs` den Migrationsschritt ergänzen und die Api mit `WaitForCompletion` darauf warten lassen. `AddServiceDatabase` und `AddService` stehen schon da.
+3. In `AppHost.cs` den Migrationsschritt ergänzen, die Api mit `WaitForCompletion` darauf warten lassen und ihr mit `WithMessaging(nats)` die Adresse von NATS geben. `AddServiceDatabase` und `AddService` stehen schon da.
 4. Die Datenbank des Service auf dem Server anlegen lassen, das übernimmt jemand mit Server-Zugang. Erst danach in `deploy/compose.yml` den Dienst `<name>-api` auf den eigenen Anker umstellen und den Migrationsschritt ergänzen, wie in [Danach von Hand](#danach-von-hand) Schritt 3. So ist Planning dazugekommen (#126).
 
 ## Vorlage ändern
@@ -256,3 +299,5 @@ Genau das macht die CI bei jedem Lauf im Schritt „Check service template“ de
 - Wird ein Isolationstest rot, gibt es eine Entity ohne `IOwnedByUser`, einen DbContext, der nicht von `ServiceDbContext` erbt, oder eine Abfrage mit `IgnoreQueryFilters` ohne Not.
 - Fehlt `dotnet ef`, hilft `dotnet tool restore`. Das Tool steht im Manifest `dotnet-tools.json`.
 - Stell DB-Prüfung und Migration nicht auf async um. `OpenAsync` von `MySql.Data` ignoriert Timeout und Abbruch, wenn die Datenbank die Verbindung annimmt und dann schweigt, und hängt ohne Ende. Deshalb nutzt die Prüfung das synchrone `Open()` und der Migrationsschritt das synchrone `Migrate()`. Das deckt der Test `Health_WithSilentDatabase_ReportsUnhealthyInTime` ab.
+- Wirft `IEventOutbox.Add` oder `AddIntegrationEventHandler` „is no integration event of a service“, steht der Typ nicht im Namensraum `Edvaniq.Services.<Name>.Contracts`. Der Namensraum bestimmt Stream und Subject.
+- Ruft ein Handler `SaveChanges` auf, speichert er seine Änderung ohne den Eintrag in der Inbox. Kommt die Nachricht noch einmal, hat sie die Wirkung zweimal.

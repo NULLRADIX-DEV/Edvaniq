@@ -158,6 +158,14 @@ Den Connection String bekommt ein Service von Aspire als `ConnectionStrings:<ser
 
 Das Schema ändert sich nur über EF-Core-Migrationen, und Migrieren ist ein eigener Schritt (`<Api>.dll migrate`), nie Teil des Starts ([Service-Vorlage](service-template.md#datenbank-und-migrationen)). Als Provider dient `MySql.EntityFrameworkCore` von Oracle, weil er EF Core 10 kann. `Pomelo.EntityFrameworkCore.MySql` gibt es bisher nur bis EF Core 9.
 
+## Nachrichten
+
+Services melden sich Ereignisse über NATS JetStream. Damit ein Ereignis weder verloren geht noch ohne seine Änderung hinausgeht, schreibt ein Service es mit der Änderung in die Tabelle `outbox_messages` seiner eigenen Datenbank, im selben `SaveChanges`. Ein Dispatcher im Prozess des Service schickt die Zeilen von dort an den Broker. Jeder Service hat beim Broker einen eigenen Stream, der nach ihm heißt, und seine Ereignisse liegen darunter. Wer ein Ereignis hören will, braucht nur dessen Typ aus den `.Contracts` des Absenders, Stream und Subject ergeben sich aus dem Namensraum.
+
+Ein Consumer trägt jede Nachricht, die er behandelt, in seine Tabelle `inbox_messages` ein, im selben `SaveChanges` wie die Wirkung, und bestätigt sie erst danach beim Broker. Stellt der Broker eine Nachricht mehrmals zu, hat sie so nur eine Wirkung. Zugestellt wird mindestens einmal und ohne feste Reihenfolge. Beide Tabellen legt `ServiceDbContext` an, kein Service kann sie vergessen. Wie ein Service senden und empfangen kann, steht in der [Service-Vorlage](service-template.md#nachrichten), warum es so gebaut ist, in den Entscheidungen zu [Outbox](decisions/outbox.md) und [Broker](decisions/broker.md).
+
+Lokal startet der AppHost NATS und gibt Services aus der Vorlage die Adresse als `ConnectionStrings:nats`. Auf dem Server läuft noch kein NATS: Ein Service ohne diese Adresse sendet und empfängt nichts und verhält sich wie vorher, seine Ereignisse bleiben in der Outbox.
+
 ## Starten
 
 Wie du das Backend und die Web-Shell lokal mit einem Befehl startest, steht in der [README](../README.md#lokal-starten).

@@ -10,12 +10,12 @@ Eine fertige Outbox aus einer Bibliothek passt nicht zu unserem Treiber. Die Ser
 
 ## Nachweis
 
-Der Prototyp in `tests/Spikes/Edvaniq.Spikes.Outbox` läuft in der CI gegen eine echte MySQL 9.7, mit demselben Treiber und denselben Verbindungseinstellungen wie die Services. Seine Tests zeigen, dass ein gescheitertes `SaveChanges` oder ein Rollback weder die Änderung noch das Ereignis hinterlässt und dass der Dispatcher Ereignisse einer offenen Transaktion nicht sieht. Ein Ereignis, das vor einem Absturz oder einem gescheiterten Senden gespeichert wurde, geht beim nächsten Lauf raus. Vier Dispatcher gleichzeitig senden 300 Ereignisse, jedes genau einmal.
+Die Outbox liegt in `BuildingBlocks.Messaging`, und `ServiceDbContext` legt `outbox_messages` und die Inbox-Tabelle in jedem Service an. Die `OutboxTests` in `tests/BuildingBlocks/Edvaniq.BuildingBlocks.Messaging.IntegrationTests` laufen in der CI gegen eine echte MySQL 9.7, mit demselben Treiber und denselben Verbindungseinstellungen wie die Services. Sie zeigen, dass ein gescheitertes `SaveChanges` oder ein Rollback weder die Änderung noch das Ereignis hinterlässt und dass der Dispatcher Ereignisse einer offenen Transaktion nicht sieht. Ein Ereignis, das vor einem Absturz oder einem gescheiterten Senden gespeichert wurde, geht beim nächsten Lauf raus. Vier Dispatcher gleichzeitig senden 300 Ereignisse, jedes genau einmal. Ein weiterer Test deckt das Aufräumen alter Zeilen ab.
 
 ## Grenzen
 
 Zugestellt wird mindestens einmal, nicht genau einmal. Scheitert der Commit nach dem Senden, geht der Stapel noch einmal raus. Jedes Ereignis trägt deshalb eine `MessageId`, an der ein Consumer erkennt, dass er es schon verarbeitet hat.
 
-Ein Ereignis geht erst mit dem nächsten Lauf des Dispatchers raus, und solange er sendet, hält er die Zeilen seines Stapels gesperrt. Mit mehreren Dispatchern oder nach einem Fehlschlag kann ein späteres Ereignis vor einem früheren ankommen, Consumer dürfen sich also nicht auf die Reihenfolge verlassen. Gesendete Zeilen bleiben stehen, bis jemand sie löscht.
+Ein Ereignis geht erst mit dem nächsten Lauf des Dispatchers raus, und solange er sendet, hält er die Zeilen seines Stapels gesperrt. Mit mehreren Dispatchern kann ein späteres Ereignis vor einem früheren ankommen, Consumer dürfen sich also nicht auf die Reihenfolge verlassen.
 
-Wie oft der Dispatcher läuft, wie groß ein Stapel ist und wann alte Zeilen verschwinden, legt die echte Outbox in der Service-Vorlage fest. Sie ersetzt dann auch den Prototyp (#151).
+Der Dispatcher läuft jede Sekunde und sendet bis zu 50 Ereignisse je Runde. Nimmt der Broker ein Ereignis nicht an, endet die Runde dort: Er ist dann meist für alle weg, und die Reihenfolge bleibt erhalten. Die Zeile merkt sich Fehler und Versuche, und der Dispatcher probiert es mit wachsendem Abstand wieder. Ein Ereignis, das der Broker nie annimmt, hält deshalb die dahinter auf, bis jemand es behebt. Gesendete Zeilen löscht der Service nach 14 Tagen, ungesendete bleiben.
