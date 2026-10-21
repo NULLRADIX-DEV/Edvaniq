@@ -1,0 +1,28 @@
+<PageTitle>Etwas ist schiefgelaufen – Edvaniq</PageTitle>
+
+<h1>Etwas ist schiefgelaufen</h1>
+
+<p>Bei uns ist ein Fehler aufgetreten, du hast nichts falsch gemacht. Versuch es gleich noch einmal.</p>
+
+@* A plain link, not a button: nothing here may depend on the runtime having loaded. The page asked for has to be
+   fetched whole again, so this link skips the enhanced navigation. *@
+<p class="error-actions">
+    <a class="button" href="@RetryHref" data-enhance-nav="false">Erneut versuchen</a>
+    <a href="">Zur Startseite</a>
+</p>
+
+@if (!string.IsNullOrEmpty(TraceId))
+{
+    <p>Bleibt der Fehler, nenn uns bitte diese Kennung. Mit ihr finden wir die Ursache schneller.</p>
+    <RequestId Value="@TraceId" />
+}
+
+@code {
+    // Where the failed request led to, so a retry asks for the same page again.
+    [Parameter, EditorRequired]
+    public string RetryHref { get; set; } = "";
+
+    // The trace id of the failed request.
+    [Parameter]
+    public string? TraceId { get; set; }
+}

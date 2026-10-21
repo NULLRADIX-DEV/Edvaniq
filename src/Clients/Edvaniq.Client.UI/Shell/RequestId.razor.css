@@ -1,0 +1,5 @@
+/* 32 hex digits are wider than a phone, so the id may break anywhere. A tap selects all of it, to copy. */
+.request-id code {
+    overflow-wrap: anywhere;
+    user-select: all;
+}
