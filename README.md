@@ -32,6 +32,7 @@ Hängt der Start oder bricht er ab, hilft meist einer dieser Punkte:
 | Datei | Inhalt |
 |---|---|
 | [docs/spec/glossary.md](docs/spec/glossary.md) | Fachbegriffe mit genau einer Definition und ihrem Namen im Code |
+| [docs/spec/non-goals.md](docs/spec/non-goals.md) | Was je Kernpunkt bewusst nicht gebaut wird |
 | [docs/spec/object-model.md](docs/spec/object-model.md) | Kernobjekte und der Service, dem jedes gehört |
 | [docs/spec/modes.md](docs/spec/modes.md) | Was in Übung, Einstufung und Prüfungsmodus gilt |
 | [docs/architecture.md](docs/architecture.md) | Services, Kommunikation, Aufbau eines Service |
