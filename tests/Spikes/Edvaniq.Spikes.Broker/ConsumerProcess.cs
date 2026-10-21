@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Text;
 using System.Threading.Channels;
 
@@ -9,14 +10,18 @@ public sealed class ConsumerProcess : IDisposable
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
 
+    private static readonly string ConsumerPath = typeof(ConsumerProcess).Assembly
+        .GetCustomAttributes<AssemblyMetadataAttribute>()
+        .Single(attribute => attribute.Key == nameof(ConsumerPath))
+        .Value!;
+
     private readonly Process process;
     private readonly Channel<string> lines = Channel.CreateUnbounded<string>();
     private readonly StringBuilder errors = new();
 
     private ConsumerProcess(IReadOnlyDictionary<string, string> environment)
     {
-        var dll = Path.Combine(AppContext.BaseDirectory, "Edvaniq.Spikes.Broker.Consumer.dll");
-        var startInfo = new ProcessStartInfo("dotnet", [dll])
+        var startInfo = new ProcessStartInfo("dotnet", [ConsumerPath])
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,

@@ -25,4 +25,9 @@
     <ProjectReference Include="..\..\Edvaniq.Testing\Edvaniq.Testing.csproj" />
   </ItemGroup>
 
+  <!-- The consumer runs from its own output. Ours drops packages that ASP.NET Core brings, which the consumer doesn't load. -->
+  <ItemGroup>
+    <AssemblyMetadata Include="ConsumerPath" Value="$(MSBuildThisFileDirectory)../Edvaniq.Spikes.Broker.Consumer/bin/$(Configuration)/$(TargetFramework)/Edvaniq.Spikes.Broker.Consumer.dll" />
+  </ItemGroup>
+
 </Project>
