@@ -5,6 +5,7 @@ Learn smarter. Master anything.
 
 | Datei | Inhalt |
 |---|---|
+| [docs/spec/glossary.md](docs/spec/glossary.md) | Fachbegriffe mit genau einer Definition und ihrem Namen im Code |
 | [docs/architecture.md](docs/architecture.md) | Services, Kommunikation, Aufbau eines Service |
 | [docs/service-template.md](docs/service-template.md) | Neuer Service aus der Vorlage, Datenbank, Migrationen, Tests |
 | [docs/deploy.md](docs/deploy.md) | Ausrollen, Rollback, Migrationen, Speicher und Health im Deploy |
