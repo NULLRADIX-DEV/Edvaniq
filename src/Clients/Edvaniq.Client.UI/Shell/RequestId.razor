@@ -1,0 +1,10 @@
+@if (!string.IsNullOrEmpty(Value))
+{
+    <p class="request-id">Anfragekennung: <code>@Value</code></p>
+}
+
+@code {
+    // The trace id of the request, as a problem names it. Nothing shows without one.
+    [Parameter]
+    public string? Value { get; set; }
+}

@@ -34,7 +34,8 @@ src/Services/<Name>/
 tests/Services/<Name>/
   Edvaniq.Services.<Name>.UnitTests
   Edvaniq.Services.<Name>.IntegrationTests ServiceFactory.cs (Prüfstand), TestDatabase.cs
-                                           HealthTests.cs, TokenTests.cs, MigrationTests.cs, IsolationTests.cs, ProblemTests.cs
+                                           HealthTests.cs, TokenTests.cs, MigrationTests.cs, IsolationTests.cs, ProblemTests.cs,
+                                           DatabaseUserTests.cs
 ```
 
 Alle sieben Projekte stehen danach in `Edvaniq.slnx`, die CI baut und testet sie also gleich mit. Die Ports in `launchSettings.json` wählt die Vorlage per Zufall. Hat schon ein anderer Prozess denselben Port, wird der Test `Ports_AreUniqueAcrossProcesses` in `Edvaniq.ArchitectureTests` rot.
@@ -77,7 +78,7 @@ Die Tokens stellt Identity aus, wie das läuft, steht in der [Architektur](archi
 
 ## Datenbank und Migrationen
 
-Jeder Service hat seine eigene Datenbank `<name>db` und einen eigenen Benutzer `<name>`, der nur auf sie darf. Lokal legt der AppHost beides an (`AddServiceDatabase`). Das Passwort erzeugt er einmal und legt es in seinen User Secrets ab. Der Service bekommt `ConnectionStrings:<name>db` mit diesem Benutzer, nie mit root. Die Datenbank ist nur im Netz der App erreichbar.
+Jeder Service hat seine eigene Datenbank `<name>db` und einen eigenen Benutzer `<name>`, der nur auf sie darf. Lokal legt der AppHost beides an (`AddServiceDatabase`). Das Passwort erzeugt er einmal und legt es in seinen User Secrets ab. Der Service bekommt `ConnectionStrings:<name>db` mit diesem Benutzer, nie mit root. Dass MySQL ihm jeden Zugriff außerhalb seiner Datenbank verweigert, belegt `DatabaseUserTests` (siehe [Tests](#tests)). Die Datenbank ist nur im Netz der App erreichbar.
 
 DbContext und Health-Check verbinden sich über `MySqlConnections.For`, und zwar ohne TLS. Der Grund liegt im Treiber: MySql.Data hält den Zustand des TLS-Aufbaus in statischen `Dictionary`-Feldern ohne gemeinsame Sperre, und gleichzeitig geöffnete Verbindungen machen ihn kaputt.
 
@@ -116,12 +117,14 @@ Ein neuer Service ersetzt das Beispiel durch seine erste echte Entity:
 
 Die Datenbank ist echt. `MySqlTestServer` aus `Edvaniq.Testing` startet je Testlauf über Testcontainers einen MySQL-Container mit `mysql:9.7`, wie im AppHost, und `TestDatabase.cs` meldet ihn einmal fürs Projekt an. Jede `ServiceFactory` legt darin ihre eigene Datenbank mit einem eigenen Benutzer an, der nur auf sie darf. So stören sich parallele Testklassen nicht, und der Service meldet sich wie auf dem Server an, nie als root. Docker muss deshalb laufen, lokal wie in der CI.
 
-Die Tests einer Klasse teilen sich eine Datenbank. Jeder Test erfindet seine Nutzer deshalb neu, etwa `alice-<guid>`. Die Vorlage bringt vier Testklassen mit:
+Die Tests einer Klasse teilen sich eine Datenbank. Jeder Test erfindet seine Nutzer deshalb neu, etwa `alice-<guid>`. Die Vorlage bringt sechs Testklassen mit:
 
 - `TokenTests`: Abweisungen und der Nutzer nur aus dem Token
 - `MigrationTests`: Die Migrationen passen zum Modell, laufen auf einer frischen DB und ein zweites Mal ohne Änderung.
 - `IsolationTests`: Nutzer B sieht die Einträge von A weder in der Liste noch einzeln.
 - `HealthTests`: mit und ohne Datenbank, auch außerhalb von Development
+- `ProblemTests`: Fehler kommen als Problem mit der Trace-ID
+- `DatabaseUserTests`: Der Benutzer einer Datenbank kann eine fremde weder lesen noch ändern noch auflisten und legt keine Datenbank an. Das `GRANT` stammt aus `ServiceDatabaseSql` im AppHost, die Tests kompilieren dieselbe Datei.
 
 Ob die Isolationstests wirklich etwas prüfen, zeigt die Gegenprobe. Ohne den Filter in `ServiceDbContext` werden beide rot.
 

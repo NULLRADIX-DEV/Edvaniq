@@ -24,6 +24,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 builder.Services.AddRazorComponents()
     .AddInteractiveWebAssemblyComponents();
 
+// SecurityHeaders sends X-Frame-Options itself. Antiforgery would add SAMEORIGIN on a page with a form.
+builder.Services.AddAntiforgery(options => options.SuppressXFrameOptionsHeader = true);
+
 builder.Services.AddWebSession();
 
 // The browser never talks to the gateway itself. Only the routes from the section ReverseProxy go on from here, on the
@@ -38,6 +41,7 @@ builder.Services.AddReverseProxy()
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseSecurityHeaders();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -55,6 +59,7 @@ else
 // what it is and not turn into an HTML page. It becomes a problem that names the trace instead.
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseApiProblems();
+app.UseOriginCheck();
 app.UseHttpsRedirection();
 
 app.UseAuthentication();

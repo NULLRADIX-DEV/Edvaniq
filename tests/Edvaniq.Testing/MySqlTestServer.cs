@@ -1,5 +1,9 @@
 using System.Data.Common;
+
+using Edvaniq.AppHost;
+
 using Testcontainers.MySql;
+
 using Xunit;
 
 namespace Edvaniq.Testing;
@@ -27,10 +31,10 @@ public sealed class MySqlTestServer : IAsyncLifetime
         var name = $"{namePrefix}{Interlocked.Increment(ref databaseCount)}";
         var password = Guid.NewGuid().ToString("N");
 
-        // The mysql client in the container, as root. ExecScriptAsync builds a broken call for the root user.
-        var sql = $"CREATE DATABASE `{name}`; CREATE USER \"{name}\"@\"%\" IDENTIFIED BY \"{password}\"; "
-            + $"GRANT ALL PRIVILEGES ON `{name}`.* TO \"{name}\"@\"%\";";
-        var result = await container.ExecAsync(["sh", "-c", $"MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysql -uroot -e '{sql}'"]);
+        // The mysql client in the container, as root. ExecScriptAsync builds a broken call for the root user. The SQL is
+        // an argument of its own, so no shell quoting touches it. The grant is the one the AppHost runs.
+        var sql = $"CREATE DATABASE `{name}`; CREATE USER '{name}'@'%' IDENTIFIED BY '{password}'; {ServiceDatabaseSql.Grant(name, name)};";
+        var result = await container.ExecAsync(["sh", "-c", "MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysql -uroot -e \"$1\"", "sh", sql]);
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException($"Creating database {name} failed: {result.Stderr}");

@@ -27,7 +27,7 @@ internal static class ServiceDatabaseExtensions
             command.CommandText = $"""
                 CREATE USER IF NOT EXISTS '{service}'@'%' IDENTIFIED BY @password;
                 ALTER USER '{service}'@'%' IDENTIFIED BY @password;
-                GRANT ALL PRIVILEGES ON `{database.Resource.DatabaseName}`.* TO '{service}'@'%';
+                {ServiceDatabaseSql.Grant(service, database.Resource.DatabaseName)};
                 """;
             command.Parameters.AddWithValue("@password", await password.Resource.GetValueAsync(cancellationToken));
             await command.ExecuteNonQueryAsync(cancellationToken);

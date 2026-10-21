@@ -4,8 +4,15 @@ namespace Edvaniq.Client.Core;
 // An answer proves the whole way works.
 public interface IPing
 {
-    // The ping as the database stored it, or null when it did not get through.
-    Task<PingResult?> SendAsync(CancellationToken cancellationToken = default);
+    // How the ping ended: with the value the database stored, or without it when it did not get through.
+    Task<PingOutcome> SendAsync(CancellationToken cancellationToken = default);
 }
 
 public sealed record PingResult(int Id, DateTimeOffset PingedAt);
+
+// A ping that did not get through names the trace of the failed request when the host answered with a problem, so the
+// user can pass the id on.
+public sealed record PingOutcome(PingResult? Result, string? TraceId = null)
+{
+    public static PingOutcome Failed(string? traceId = null) => new(null, traceId);
+}
