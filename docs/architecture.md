@@ -142,13 +142,7 @@ Das Schema ändert sich nur über EF-Core-Migrationen, und Migrieren ist ein eig
 
 ## Starten
 
-Du brauchst Docker Desktop für den MySQL-Container. Dann startet ein Befehl alles:
-
-```
-dotnet run --project src/Aspire/Edvaniq.AppHost
-```
-
-Es öffnet sich das Aspire-Dashboard mit MySQL, allen Services, Workern, Gateway und Web.
+Wie du das Backend und die Web-Shell lokal mit einem Befehl startest, steht in der [README](../README.md#lokal-starten).
 
 ## Neuen Service anlegen
 
