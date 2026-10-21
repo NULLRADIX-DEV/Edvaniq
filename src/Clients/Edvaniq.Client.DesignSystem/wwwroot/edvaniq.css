@@ -106,6 +106,18 @@ button {
     background: var(--color-accent-hover);
 }
 
+/* A link that looks like the button: where nothing may depend on the runtime having loaded, a link still works. */
+a.button {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    text-decoration: none;
+}
+
+a.button:hover {
+    color: var(--color-on-accent);
+}
+
 /* Read out by screen readers, not shown. */
 .visually-hidden {
     position: absolute;
