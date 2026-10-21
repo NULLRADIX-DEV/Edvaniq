@@ -228,6 +228,7 @@ public class LicenseTests
             .File("packages/k4os.hash.xxhash/1.0.8/k4os.hash.xxhash.nuspec", """
                 <package><metadata><id>K4os.Hash.xxHash</id><licenseUrl>https://example.org/LICENSE</licenseUrl></metadata></package>
                 """)
+            .File("global.json", """{ "sdk": { "version": "10.0.401" }, "msbuild-sdks": { "Microsoft.Build.Traversal": "4.1.0" } }""")
             .File("dotnet-tools.json", """{ "version": 1, "tools": { "dotnet-ef": { "version": "10.0.12" } } }""")
             .File(".github/workflows/ci.yml", """
                 jobs:
@@ -248,7 +249,7 @@ public class LicenseTests
 
         var used = LicenseRule.Read(repository.Root);
 
-        Assert.Equal(["Aspire.AppHost.Sdk", "Yarp.ReverseProxy"], used.Direct.Order(StringComparer.Ordinal));
+        Assert.Equal(["Aspire.AppHost.Sdk", "Microsoft.Build.Traversal", "Yarp.ReverseProxy"], used.Direct.Order(StringComparer.Ordinal));
         Assert.Equal(
             [
                 new LicenseRule.Package("Yarp.ReverseProxy", "2.3.0", "Edvaniq.Gateway", "MIT", true),

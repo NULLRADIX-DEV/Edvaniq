@@ -122,7 +122,7 @@ Diese Pakete kommen über ein gelistetes Paket dazu und haben keine erlaubte SPD
 
 `LicenseTests` in `Edvaniq.ArchitectureTests` gleicht diese Datei bei jedem Pull Request im Pflicht-Schritt „Architecture tests“ mit dem Repo ab. Jede Abweichung steht als eigene Zeile in der Meldung, und schon eine macht die CI rot:
 
-- ein direktes Paket aus `Directory.Packages.props` oder ein SDK mit Version in einer Projektdatei ohne Zeile unter „NuGet-Pakete“, oder eine Zeile dort ohne solches Paket
+- ein direktes Paket aus `Directory.Packages.props`, ein SDK unter `msbuild-sdks` in `global.json` oder ein SDK mit Version in einer Projektdatei ohne Zeile unter „NuGet-Pakete“, oder eine Zeile dort ohne solches Paket
 - ein Paket aus `obj/project.assets.json` eines Projekts in `Edvaniq.slnx`, dessen nuspec eine andere Lizenz nennt als die Liste
 - ein indirektes Paket ohne Zeile, dessen Lizenz nicht erlaubt ist oder nur als Datei oder Link im Paket steht
 - eine Zeile mit nicht erlaubter Lizenz, deren Einsatz nicht mit „Einzelfreigabe:“, „Vorläufige Ausnahme:“ oder „Server-Software:“ beginnt

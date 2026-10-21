@@ -1,4 +1,5 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.6.0">
+<!-- The version of Aspire.AppHost.Sdk stands in global.json (msbuild-sdks), where Dependabot raises it. -->
+<Project Sdk="Aspire.AppHost.Sdk">
 
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.MySql" />
