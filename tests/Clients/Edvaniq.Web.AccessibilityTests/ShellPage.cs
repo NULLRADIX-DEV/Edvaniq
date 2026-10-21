@@ -5,6 +5,8 @@ namespace Edvaniq.Web.AccessibilityTests;
 // One page in a browser context of its own. Remembers what the browser logged, so a shell that did not start says why.
 public sealed class ShellPage : IAsyncDisposable
 {
+    private const int LoadAttempts = 3;
+
     private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(60);
 
     private readonly IBrowserContext context;
@@ -23,10 +25,23 @@ public sealed class ShellPage : IAsyncDisposable
 
     // Opens the address and waits until the shell is interactive. Only then the prerendered page has turned into the
     // one the client runs, with the menu button, the check of the backend and everything else a visitor can use.
+    // On the CI runner the integration tests create Docker networks at the same time. Chromium takes that as a network
+    // change and drops the runtime's downloads (ERR_NETWORK_CHANGED), so such a load gets another go.
     public async Task LoadAsync(string url)
     {
-        await Page.GotoAsync(url);
-        await WaitUntilInteractiveAsync();
+        for (var attempt = 1; ; attempt++)
+        {
+            var logged = Log().Count;
+            await Page.GotoAsync(url);
+            try
+            {
+                await WaitUntilInteractiveAsync();
+                return;
+            }
+            catch (InvalidOperationException) when (attempt < LoadAttempts && NetworkChangedSince(logged))
+            {
+            }
+        }
     }
 
     public async Task WaitUntilInteractiveAsync()
@@ -60,6 +75,9 @@ public sealed class ShellPage : IAsyncDisposable
             log.Add(line);
         }
     }
+
+    private bool NetworkChangedSince(int logged) =>
+        Log().Skip(logged).Any(line => line.Contains("ERR_NETWORK_CHANGED", StringComparison.Ordinal));
 
     private List<string> Log()
     {
