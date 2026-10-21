@@ -161,4 +161,7 @@
     <Project Path="tests/Services/Tutor/Edvaniq.Services.Tutor.IntegrationTests/Edvaniq.Services.Tutor.IntegrationTests.csproj" />
     <Project Path="tests/Services/Tutor/Edvaniq.Services.Tutor.UnitTests/Edvaniq.Services.Tutor.UnitTests.csproj" />
   </Folder>
+  <Folder Name="/tests/Spikes/">
+    <Project Path="tests/Spikes/Edvaniq.Spikes.Outbox/Edvaniq.Spikes.Outbox.csproj" />
+  </Folder>
 </Solution>
