@@ -13,3 +13,4 @@ Learn smarter. Master anything.
 | [docs/licenses.md](docs/licenses.md) | Erlaubte Lizenzen, Liste der Drittkomponenten, Aufnahme neuer Komponenten |
 | [docs/dependencies.md](docs/dependencies.md) | Update-Vorschläge, Schwachstellenprüfung und Umgang mit Funden |
 | [docs/decisions/outbox.md](docs/decisions/outbox.md) | Warum jeder Service eine eigene Outbox-Tabelle hat |
+| [docs/decisions/broker.md](docs/decisions/broker.md) | Warum NATS JetStream die Integration Events verteilt |

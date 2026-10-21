@@ -6,7 +6,7 @@ Ein Service speichert eine Änderung und meldet sie anderen Services als Ereigni
 
 Jeder Service hat in seiner eigenen Datenbank eine Tabelle `outbox_messages`. Ein Ereignis kommt dort im selben `SaveChanges` an wie die Änderung, zu der es gehört, also speichert MySQL beides oder keins von beidem. Ein Dispatcher im Prozess des Service holt die offenen Ereignisse in Stapeln ab, gibt sie an den Broker und markiert sie als gesendet. Er holt sie mit `SELECT … FOR UPDATE SKIP LOCKED`, damit ein zweiter Dispatcher nicht wartet, sondern die nächsten Zeilen nimmt.
 
-Eine fertige Outbox aus einer Bibliothek passt nicht zu unserem Treiber. Die Services sprechen über Oracles `MySql.Data` mit MySQL, die MySQL-Speicher von Wolverine, CAP und Rebus bauen dagegen auf `MySqlConnector`. Über zwei Treiber hinweg gibt es keine gemeinsame Transaktion, und genau die braucht die Outbox. MassTransit fällt weg, weil es ab Version 9 kommerziell ist. Die eigene Tabelle hängt außerdem an keinem Broker: Der Dispatcher kennt nur eine Schnittstelle zum Senden, welche Bibliothek dahinter steckt, entscheidet sich getrennt (#150).
+Eine fertige Outbox aus einer Bibliothek passt nicht zu unserem Treiber. Die Services sprechen über Oracles `MySql.Data` mit MySQL, die MySQL-Speicher von Wolverine, CAP und Rebus bauen dagegen auf `MySqlConnector`. Über zwei Treiber hinweg gibt es keine gemeinsame Transaktion, und genau die braucht die Outbox. MassTransit fällt weg, weil es ab Version 9 kommerziell ist. Die eigene Tabelle hängt außerdem an keinem Broker: Der Dispatcher kennt nur eine Schnittstelle zum Senden, dahinter steckt NATS JetStream ([broker.md](broker.md)).
 
 ## Nachweis
 
