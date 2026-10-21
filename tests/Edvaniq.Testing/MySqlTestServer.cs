@@ -10,7 +10,7 @@ namespace Edvaniq.Testing;
 // AppHost. Register it once per test project: [assembly: AssemblyFixture(typeof(MySqlTestServer))].
 public sealed class MySqlTestServer : IAsyncLifetime
 {
-    // Same image as the AppHost (Aspire.Hosting.MySql).
+    // Same image as the AppHost (Aspire.Hosting.MySql) and the server (deploy/compose.yml), MySqlImageTests checks it.
     private const string Image = "mysql:9.7";
 
     private readonly MySqlContainer container = new MySqlBuilder(Image).WithUsername("root").Build();
