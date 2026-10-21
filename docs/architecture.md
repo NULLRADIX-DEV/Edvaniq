@@ -132,6 +132,24 @@ Jede Antwort des Web-Hosts trägt die Header aus der Tabelle, auch Fehlerantwort
 
 Damit lässt sich die Shell in keiner fremden Seite einbetten. Das Basis-Element und Formulare zeigen nur auf die eigene Seite, Plug-in-Inhalte sind gesperrt, und der Browser errät keinen Inhaltstyp. Kamera, Mikrofon und Standort sind für die Seite ausgeschaltet.
 
+## Barrierefreiheits-Check
+
+Grundlegende Fehler in der Shell sollen auffallen, bevor ein Nutzer darüber stolpert. `Edvaniq.Web.AccessibilityTests` startet dafür den echten Web-Host mit einem Stub als Gateway, lädt die Shell in Chromium und wartet, bis der Client läuft. Dann prüft axe-core jede Seite gegen WCAG 2.2 Level A und AA, darunter Kontrast, Beschriftungen, die Namen von Links und Schaltflächen, die Sprache des Dokuments und die Größe der Ziele. Gescannt werden `/`, `/systemstatus`, `/open-source` und die Seite für eine unbekannte Adresse, jede mit 375 px und mit 1280 px Breite. Dazu kommen die Shell mit geöffnetem Menü und `/systemstatus` bei ausgefallenem Server, weil nur dort die Warnfarben vorkommen.
+
+Jede einzelne Verletzung macht den Test rot. Die Meldung nennt Regel, Auswirkung, betroffenes Element und die Seite von Deque, die erklärt, wie man es behebt. Die Tastatur sieht axe nicht, dafür gibt es eigene Tests: Der Skip-Link ist der erste Stopp und setzt den Fokus auf den Inhalt, das Menü öffnet und schließt sich mit Enter, Leertaste und Escape, und jeder Stopp zeigt einen sichtbaren Fokusrahmen. Ein weiterer Test lässt denselben Scan auf eine Seite mit absichtlichen Fehlern los (ein Bild ohne Alternativtext, ein Feld ohne Beschriftung, zu blasser Text) und verlangt, dass er sie meldet. So fällt auf, wenn der Check stumm wird.
+
+Den Browser brauchst du lokal einmal. Nach dem ersten Build lädst du Chromium mit dem Skript, das Playwright neben die Tests legt:
+
+```
+dotnet build tests/Clients/Edvaniq.Web.AccessibilityTests
+pwsh tests/Clients/Edvaniq.Web.AccessibilityTests/bin/Debug/net10.0/playwright.ps1 install --only-shell chromium
+dotnet test --project tests/Clients/Edvaniq.Web.AccessibilityTests
+```
+
+Fehlt der Browser, bricht der Test mit genau diesem Befehl in der Meldung ab. In der CI lädt der Schritt „Install Chromium“ ihn vor den Tests. axe-core steht unter MPL-2.0 und läuft nur in diesen Tests, die Einzelfreigabe steht in [docs/licenses.md](licenses.md).
+
+Der Check findet nur, was sich messen lässt. Ob ein Screenreader eine Seite sinnvoll vorliest, ob die Texte verständlich sind und ob die Reihenfolge stimmt, prüft ein Mensch. Das ist der manuelle Test mit Screenreader, für den Meilenstein M5 geplant ist. Was axe nicht entscheiden kann, etwa Text auf einem Farbverlauf, meldet es als „incomplete“, und das zählt im Check nicht als Verletzung.
+
 ## Nachverfolgung
 
 Jede Anfrage hat eine Kennung, die W3C-Trace-ID. Der Server vergibt sie selbst: `traceparent` und seine Begleiter (`tracestate`, `baggage`) aus dem Internet verwirft der Reverse-Proxy vor dem Web-Host, so beginnt der Web-Host für jede Anfrage aus dem Browser eine eigene Trace. Der Web-Host selbst würde einen mitgeschickten `traceparent` übernehmen, lokal tut er das also. OpenTelemetry (ServiceDefaults) reicht sie im Header `traceparent` an Gateway und Services weiter, auch beim Token-Abruf bei Identity. Außerhalb von Development schreibt jeder Prozess sein Log einzeilig auf die Konsole, mit den Scopes und damit mit der `TraceId`. Mit einer Kennung findet man so die Zeilen aller Prozesse, durch die die Anfrage ging.
@@ -157,6 +175,14 @@ Alle Services nutzen MySQL, einen Server mit einer Datenbank pro Service (`ident
 Den Connection String bekommt ein Service von Aspire als `ConnectionStrings:<service>db`, mit einem eigenen DB-Benutzer, der nur auf die eigene Datenbank darf (`AddServiceDatabase` im AppHost). Daten eines Nutzers (`IOwnedByUser`) sieht nur dieser Nutzer, weil der DbContext jedes Service von `ServiceDbContext` erbt. Der schränkt jede Abfrage auf den Nutzer aus dem Token ein ([Service-Vorlage](service-template.md#daten-je-nutzer)).
 
 Das Schema ändert sich nur über EF-Core-Migrationen, und Migrieren ist ein eigener Schritt (`<Api>.dll migrate`), nie Teil des Starts ([Service-Vorlage](service-template.md#datenbank-und-migrationen)). Als Provider dient `MySql.EntityFrameworkCore` von Oracle, weil er EF Core 10 kann. `Pomelo.EntityFrameworkCore.MySql` gibt es bisher nur bis EF Core 9.
+
+## Nachrichten
+
+Services melden sich Ereignisse über NATS JetStream. Damit ein Ereignis weder verloren geht noch ohne seine Änderung hinausgeht, schreibt ein Service es mit der Änderung in die Tabelle `outbox_messages` seiner eigenen Datenbank, im selben `SaveChanges`. Ein Dispatcher im Prozess des Service schickt die Zeilen von dort an den Broker. Jeder Service hat beim Broker einen eigenen Stream, der nach ihm heißt, und seine Ereignisse liegen darunter. Wer ein Ereignis hören will, braucht nur dessen Typ aus den `.Contracts` des Absenders, Stream und Subject ergeben sich aus dem Namensraum.
+
+Ein Consumer trägt jede Nachricht, die er behandelt, in seine Tabelle `inbox_messages` ein, im selben `SaveChanges` wie die Wirkung, und bestätigt sie erst danach beim Broker. Stellt der Broker eine Nachricht mehrmals zu, hat sie so nur eine Wirkung. Zugestellt wird mindestens einmal und ohne feste Reihenfolge. Beide Tabellen legt `ServiceDbContext` an, kein Service kann sie vergessen. Wie ein Service senden und empfangen kann, steht in der [Service-Vorlage](service-template.md#nachrichten), warum es so gebaut ist, in den Entscheidungen zu [Outbox](decisions/outbox.md) und [Broker](decisions/broker.md).
+
+Lokal startet der AppHost NATS und gibt Services aus der Vorlage die Adresse als `ConnectionStrings:nats`. Auf dem Server läuft noch kein NATS: Ein Service ohne diese Adresse sendet und empfängt nichts und verhält sich wie vorher, seine Ereignisse bleiben in der Outbox.
 
 ## Starten
 

@@ -7,6 +7,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
     <PackageReference Include="Testcontainers.MySql" />
+    <PackageReference Include="Testcontainers.Nats" />
     <PackageReference Include="xunit.v3.extensibility.core" />
   </ItemGroup>
 

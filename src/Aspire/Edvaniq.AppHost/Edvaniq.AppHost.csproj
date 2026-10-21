@@ -3,6 +3,7 @@
 
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.MySql" />
+    <PackageReference Include="Aspire.Hosting.Nats" />
   </ItemGroup>
 
   <ItemGroup>
