@@ -69,6 +69,11 @@ jobs:
           done
           dotnet test --project tests/Edvaniq.ArchitectureTests -c Release -- --filter-class "*Rule2ContractsTests" --filter-class "*Rule3LayerTests" --filter-class "*Rule4IntegrationTests" --filter-class "*Rule6CycleTests"
 
+      - name: Check service template image
+        run: |
+          dotnet publish src/Services/Sample/Edvaniq.Services.Sample.Api/Edvaniq.Services.Sample.Api.csproj -c Release --os linux --arch x64 -t:PublishContainer -p:ContainerImageTag=template-check
+          bash deploy/check-template-image.sh sample nullradix-dev/edvaniq/sample-api:template-check
+
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-24.04
