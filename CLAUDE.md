@@ -37,7 +37,7 @@ dotnet ef migrations add <Migration> --project src/Services/<Name>/Edvaniq.Servi
 
 ## Konventionen
 
-- Paketversionen stehen nur in `Directory.Packages.props`. In den csproj-Dateien `PackageReference` immer ohne `Version` angeben.
+- Paketversionen stehen nur in `Directory.Packages.props`. In den csproj-Dateien `PackageReference` immer ohne `Version` angeben. Pakete kommen nur von nuget.org: `nuget.config` im Root leert mit `<clear />` die Quellen aus der persönlichen Konfiguration.
 - Eine neue Drittkomponente (Paket, Tool, Image, Action, Schrift, Modell) kommt nur nach der Prüfregel in `docs/licenses.md` dazu und steht im selben PR in deren Liste, sonst wird `LicenseTests` rot. `MySql.Data` und `MySql.EntityFrameworkCore` (GPL mit FOSS-Ausnahme) sind dort nur vorläufig freigegeben, Klärung offen.
 - EF-Core-Provider ist `MySql.EntityFrameworkCore` (Oracle). Nicht Pomelo, das kann nur EF Core 9.
 - Connection Strings bekommt ein Service von Aspire unter `ConnectionStrings:<service>db`, mit seinem eigenen DB-Benutzer, nie mit root. Jede Verbindung zur eigenen DB geht über `MySqlConnections.For` (BuildingBlocks.Infrastructure): ohne TLS, weil MySql.Data beim TLS-Aufbau parallele Verbindungen nicht verträgt, und mit `AllowPublicKeyRetrieval` für die erste Anmeldung ohne TLS. Auch die Tests melden sich mit einem eigenen Benutzer an, nicht als root.
