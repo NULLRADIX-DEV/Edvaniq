@@ -16,10 +16,13 @@
     }
     else if (failed)
     {
-        <p class="ping-result ping-failed">
-            <strong>Der Ping ist nicht angekommen.</strong> Edvaniq ist gerade nicht erreichbar. Versuch es in ein paar
-            Sekunden noch einmal.
-        </p>
+        <div class="ping-result ping-failed">
+            <p>
+                <strong>Der Ping ist nicht angekommen.</strong> Edvaniq ist gerade nicht erreichbar. Versuch es in ein paar
+                Sekunden noch einmal.
+            </p>
+            <RequestId Value="@traceId" />
+        </div>
     }
 </div>
 
@@ -34,6 +37,7 @@
 
 @code {
     private PingResult? result;
+    private string? traceId;
     private bool failed;
     private bool pinging;
 
@@ -48,7 +52,9 @@
         }
 
         pinging = true;
-        result = await Ping.SendAsync();
+        var outcome = await Ping.SendAsync();
+        result = outcome.Result;
+        traceId = outcome.TraceId;
         failed = result is null;
         pinging = false;
     }
