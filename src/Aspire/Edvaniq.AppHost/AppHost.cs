@@ -8,6 +8,14 @@ var mysql = builder.AddMySql("mysql")
     .WithLifetime(ContainerLifetime.Persistent)
     .WithPhpMyAdmin();
 
+// Message broker for the integration events: NATS with JetStream. Only the AppHost starts it so far. A service gets its
+// address as ConnectionStrings:nats (WithMessaging), and without it runs without a broker. The image tag is the one of
+// the tests (NatsImageTests).
+var nats = builder.AddNats("nats")
+    .WithImageTag("2.15")
+    .WithJetStream()
+    .WithDataVolume();
+
 // Databases (one per service, each with its own user)
 var identityDb = mysql.AddServiceDatabase("identity");
 var planningDb = mysql.AddServiceDatabase("planning");
@@ -33,7 +41,8 @@ var identityApi = builder.AddProject<Projects.Edvaniq_Services_Identity_Api>("id
 
 // Services
 var planningApi = AddService<Projects.Edvaniq_Services_Planning_Api>("planning-api", planningDb)
-    .WaitForCompletion(planningMigrate);
+    .WaitForCompletion(planningMigrate)
+    .WithMessaging(nats);
 var contentApi = AddService<Projects.Edvaniq_Services_Content_Api>("content-api", contentDb);
 var knowledgeApi = AddService<Projects.Edvaniq_Services_Knowledge_Api>("knowledge-api", knowledgeDb);
 var assessmentApi = AddService<Projects.Edvaniq_Services_Assessment_Api>("assessment-api", assessmentDb);

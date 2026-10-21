@@ -109,8 +109,13 @@
     <Project Path="tests/Edvaniq.EndToEndTests/Edvaniq.EndToEndTests.csproj" />
     <Project Path="tests/Edvaniq.Testing/Edvaniq.Testing.csproj" />
   </Folder>
+  <Folder Name="/tests/BuildingBlocks/">
+    <Project Path="tests/BuildingBlocks/Edvaniq.BuildingBlocks.Messaging.IntegrationTests/Edvaniq.BuildingBlocks.Messaging.IntegrationTests.csproj" />
+    <Project Path="tests/BuildingBlocks/Edvaniq.BuildingBlocks.Messaging.UnitTests/Edvaniq.BuildingBlocks.Messaging.UnitTests.csproj" />
+  </Folder>
   <Folder Name="/tests/Clients/">
     <Project Path="tests/Clients/Edvaniq.Client.UnitTests/Edvaniq.Client.UnitTests.csproj" />
+    <Project Path="tests/Clients/Edvaniq.Web.AccessibilityTests/Edvaniq.Web.AccessibilityTests.csproj" />
     <Project Path="tests/Clients/Edvaniq.Web.IntegrationTests/Edvaniq.Web.IntegrationTests.csproj" />
   </Folder>
   <Folder Name="/tests/Gateway/">
@@ -160,10 +165,5 @@
   <Folder Name="/tests/Services/Tutor/">
     <Project Path="tests/Services/Tutor/Edvaniq.Services.Tutor.IntegrationTests/Edvaniq.Services.Tutor.IntegrationTests.csproj" />
     <Project Path="tests/Services/Tutor/Edvaniq.Services.Tutor.UnitTests/Edvaniq.Services.Tutor.UnitTests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Spikes/">
-    <Project Path="tests/Spikes/Edvaniq.Spikes.Broker.Consumer/Edvaniq.Spikes.Broker.Consumer.csproj" />
-    <Project Path="tests/Spikes/Edvaniq.Spikes.Broker/Edvaniq.Spikes.Broker.csproj" />
-    <Project Path="tests/Spikes/Edvaniq.Spikes.Outbox/Edvaniq.Spikes.Outbox.csproj" />
   </Folder>
 </Solution>
