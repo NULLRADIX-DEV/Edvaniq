@@ -6,9 +6,13 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # Weekly on main without a new commit: the NuGet audit with the latest advisories and the scan of a fresh base image.
+  schedule:
+    - cron: "0 5 * * 1"
 
+# The weekly run has a group of its own, so it never cancels a waiting run for a push to main.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}${{ github.event_name == 'schedule' && '-schedule' || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -171,14 +175,19 @@ jobs:
             | diff /dev/null - \
             || { echo "::error::Rule 1 in docs/architecture.md: <name>.env and <name>-*.env may only be used by the service <name> and its processes <name>-* (> found)"; exit 1; }
 
+      # A pull request and a push stop at critical, the weekly run already at high. A high finding in the base image is
+      # thus reported every week, but blocks no merge while Microsoft has not rebuilt the image yet.
       - name: Scan base layer (web image)
+        env:
+          FAIL_ON: ${{ github.event_name == 'schedule' && 'high' || 'critical' }}
         run: |
           mkdir -p "$RUNNER_TEMP/scan"
           docker save "nullradix-dev/edvaniq/web:$TAG" -o "$RUNNER_TEMP/scan/image.tar"
-          docker run --rm -v "$RUNNER_TEMP/scan:/scan:ro" "$GRYPE_IMAGE" docker-archive:/scan/image.tar --only-fixed --fail-on critical
+          docker run --rm -v "$RUNNER_TEMP/scan:/scan:ro" "$GRYPE_IMAGE" docker-archive:/scan/image.tar --only-fixed --fail-on "$FAIL_ON"
 
+      # The weekly run only checks, the images of a commit come from its push.
       - name: Push images
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
