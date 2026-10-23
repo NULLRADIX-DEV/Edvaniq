@@ -64,7 +64,7 @@ Das Schema ändert sich nur im Deploy, nie beim Start eines Service. Ein Migrati
 
 Aus dem Ablauf oben folgen zwei Regeln. Migrationen müssen sich wiederholen lassen, denn jeder Deploy und jeder Rollback führt die Migrationen seines Stands aus. EF Core wendet dabei nur an, was fehlt, und ein älteres Image stuft die Datenbank nie herunter. Außerdem müssen Migrationen abwärtsverträglich sein, weil nach einem Fehlschlag oder Rollback der alte Code gegen das neue Schema läuft. Eine neue Spalte kommt also zuerst dazu, und die alte fällt erst in einem späteren Deploy weg.
 
-Scheitert eine Migration, wird nicht umgeschaltet, und die Datenbank kann halb migriert sein ([warum](service-template.md#datenbank-und-migrationen)). Im Actions-Log steht nur, dass die Migration gescheitert ist. Ihre Ausgabe bleibt auf dem Server, weil sie Hosts und Benutzer nennen kann.
+Scheitert eine Migration, wird nicht umgeschaltet, und die Datenbank kann halb migriert sein ([warum](service-internals.md#datenbank-und-migrationen)). Im Actions-Log steht nur, dass die Migration gescheitert ist. Ihre Ausgabe bleibt auf dem Server, weil sie Hosts und Benutzer nennen kann.
 
 ## Neuer Prozess
 
@@ -72,7 +72,7 @@ Jeder Prozess braucht einen Eintrag in `AppHost.cs` und einen Dienst in `deploy/
 
 Über den Anker `*app` erbt der Dienst die Härtung: ein schreibgeschütztes Dateisystem bis auf `/tmp`, keine Capabilities, keinen Rechtegewinn und eigene Grenzen für Prozesse, Speicher und CPU. Fehlen die Grenzen, `cap_drop: [ALL]` oder `no-new-privileges`, lehnt der Server die Datei ab. Solange ein Prozess im MVP nur Skelett ist, nimmt er `*skeleton`. Ein Worker ohne HTTP bekommt dazu `healthcheck: disable: true`.
 
-Alle Services teilen sich den MySQL-Dienst `db`, jeder mit eigener Datenbank und eigenem Benutzer. Ein Service mit Datenbank bekommt deshalb einen eigenen Anker wie `x-planning`, nur er erreicht die Datenbank. Wie das aussieht, zeigt die [Service-Vorlage](service-template.md#danach-von-hand).
+Alle Services teilen sich den MySQL-Dienst `db`, jeder mit eigener Datenbank und eigenem Benutzer. Ein Service mit Datenbank bekommt deshalb einen eigenen Anker wie `x-planning`, nur er erreicht die Datenbank. Wie das aussieht, zeigt Schritt 7 von [Einen neuen Service anlegen](service-template.md#schritte).
 
 Ein neuer Prozess bekommt keinen Eintrag `ports` ([Erreichbarkeit](#erreichbarkeit)).
 
@@ -92,6 +92,6 @@ Braucht ein Container mehr als seine Grenze, beendet der Kernel nur ihn, und Doc
 
 ## Health
 
-Jeder Prozess mit HTTP meldet `/alive` (der Prozess lebt) und `/health` (er ist bereit). Services aus der Vorlage sind erst bereit, wenn sie ihre eigene Datenbank erreichen ([Service-Vorlage](service-template.md#health)). Außerhalb von Development antworten beide nur auf dem internen Port 8081, den nur der Container selbst und das Netz der App erreichen. Auf dem App-Port 8080 gibt es für beide Pfade 404, bei Services mit Token-Prüfung ohne Token 401. Das gilt auch mit einem gefälschten Header `Host: …:8081`, denn es zählt der Port, auf dem die Verbindung ankommt. Die Antwort ist nur `Healthy`, `Degraded` oder `Unhealthy`, ohne Namen der Checks und ohne Fehlermeldungen.
+Jeder Prozess mit HTTP meldet `/alive` (der Prozess lebt) und `/health` (er ist bereit). Services aus der Vorlage sind erst bereit, wenn sie ihre eigene Datenbank erreichen ([Aufbau eines Service](service-internals.md#health)). Außerhalb von Development antworten beide nur auf dem internen Port 8081, den nur der Container selbst und das Netz der App erreichen. Auf dem App-Port 8080 gibt es für beide Pfade 404, bei Services mit Token-Prüfung ohne Token 401. Das gilt auch mit einem gefälschten Header `Host: …:8081`, denn es zählt der Port, auf dem die Verbindung ankommt. Die Antwort ist nur `Healthy`, `Degraded` oder `Unhealthy`, ohne Namen der Checks und ohne Fehlermeldungen.
 
 Docker fragt `/health` alle 30 Sekunden ab, beim Start alle 2 Sekunden. Das läuft per bash, weil die Images kein curl haben. Der Deploy wartet, bis alle Container healthy sind, und wird einer es nicht, läuft wieder der vorherige Stand. Worker haben kein HTTP und deshalb keinen Health-Check. Für sie zählt, dass sie laufen und nicht neu starten.
