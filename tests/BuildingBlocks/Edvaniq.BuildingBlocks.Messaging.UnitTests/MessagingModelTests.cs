@@ -31,6 +31,18 @@ public class MessagingModelTests
         Assert.Contains(outbox.GetIndexes(), index => index.Properties.Single().Name == nameof(OutboxMessage.SentAt));
     }
 
+    // A W3C traceparent has 55 characters: 00-<32 hex>-<16 hex>-<2 hex>.
+    [Fact]
+    public void OutboxTable_HasRoomForATraceParent()
+    {
+        using var db = TestDbContext.Create();
+
+        var traceParent = db.Model.FindEntityType(typeof(OutboxMessage))!.FindProperty(nameof(OutboxMessage.TraceParent))!;
+
+        Assert.Equal(55, traceParent.GetMaxLength());
+        Assert.True(traceParent.IsNullable);
+    }
+
     [Fact]
     public void InboxTable_KnowsAMessageOncePerConsumer()
     {

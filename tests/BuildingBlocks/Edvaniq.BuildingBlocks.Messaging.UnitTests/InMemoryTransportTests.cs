@@ -123,6 +123,19 @@ public class InMemoryTransportTests
         Assert.Single(transport.Published);
     }
 
+    [Fact]
+    public async Task Consumer_GetsTheTraceParentOfTheMessage()
+    {
+        const string traceParent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+        var transport = new InMemoryTransport();
+        await using var consumer = new TestConsumer(transport, Pings);
+
+        await transport.PublishAsync(Message("alpha.pinged") with { TraceParent = traceParent }, TestContext.Current.CancellationToken);
+
+        await Wait.UntilAsync(() => consumer.Received.Count == 1, "The consumer did not get the message.");
+        Assert.Equal(traceParent, Assert.Single(consumer.Received).TraceParent);
+    }
+
     private static OutgoingMessage Message(string subject) => new(subject, Guid.NewGuid(), "{}");
 
     // A consumer that runs in the background until the test ends.

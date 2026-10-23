@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 
 using Edvaniq.Services.Alpha.Contracts;
@@ -51,6 +52,29 @@ public class EventOutboxTests
 
         var ids = db.ChangeTracker.Entries<OutboxMessage>().Select(entry => entry.Entity.MessageId).ToList();
         Assert.Equal(2, ids.Distinct().Count());
+    }
+
+    // The consumers continue the trace of the request that stored the event.
+    [Fact]
+    public void Add_StoresTheTraceParentOfTheRequest()
+    {
+        using var db = TestDbContext.Create();
+        using var request = new Activity("request").Start();
+
+        Outbox(db).Add(new Pinged(Guid.NewGuid(), "Hallo"));
+
+        Assert.Equal(request.Id, db.ChangeTracker.Entries<OutboxMessage>().Single().Entity.TraceParent);
+    }
+
+    [Fact]
+    public void Add_OutsideAnActivity_StoresNoTraceParent()
+    {
+        using var db = TestDbContext.Create();
+        Activity.Current = null;
+
+        Outbox(db).Add(new Pinged(Guid.NewGuid(), "Hallo"));
+
+        Assert.Null(db.ChangeTracker.Entries<OutboxMessage>().Single().Entity.TraceParent);
     }
 
     [Fact]

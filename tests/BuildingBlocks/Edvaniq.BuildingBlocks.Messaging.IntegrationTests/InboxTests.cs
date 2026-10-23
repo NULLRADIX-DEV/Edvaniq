@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 
 using Edvaniq.Services.Sender.Contracts;
@@ -103,6 +104,23 @@ public sealed class InboxTests(MySqlTestServer mysql) : IAsyncLifetime
         Assert.Equal(2, behavior.Calls);
     }
 
+    // The handler runs in the trace of the request that stored the event, and the log says when its effect is stored.
+    [Fact]
+    public async Task Event_IsHandledInTheTraceOfTheSender_AndTheLogSaysWhenItsEffectIsStored()
+    {
+        await StartReceiverAsync();
+        var traceId = ActivityTraceId.CreateRandom();
+
+        var messageId = await PublishAsync("Hallo", traceParent: $"00-{traceId.ToHexString()}-{ActivitySpanId.CreateRandom().ToHexString()}-01");
+
+        await Wait.UntilAsync(
+            () => receiver!.Logs.Contains($"Consumer {Consumer} has handled message {messageId}", StringComparison.Ordinal),
+            "The log does not say that the event was handled.",
+            () => receiver!.Logs);
+        Assert.True(Inbox(messageId, Consumer));
+        Assert.Equal(traceId, Assert.Single(behavior.TraceIds));
+    }
+
     [Fact]
     public async Task TwoHandlersOfOneEvent_EachHandleItOnce()
     {
@@ -133,11 +151,11 @@ public sealed class InboxTests(MySqlTestServer mysql) : IAsyncLifetime
     }
 
     // The way the dispatcher of the sending service publishes: the JSON of the event, under the MessageId.
-    private async Task<Guid> PublishAsync(string text, Guid? messageId = null, Guid? greetingId = null)
+    private async Task<Guid> PublishAsync(string text, Guid? messageId = null, Guid? greetingId = null, string? traceParent = null)
     {
         var id = messageId ?? Guid.NewGuid();
         var payload = JsonSerializer.Serialize(new Greeted(greetingId ?? Guid.NewGuid(), text), MessageJson.Options);
-        await transport.PublishAsync(new OutgoingMessage("sender.greeted", id, payload), TestContext.Current.CancellationToken);
+        await transport.PublishAsync(new OutgoingMessage("sender.greeted", id, payload, traceParent), TestContext.Current.CancellationToken);
         return id;
     }
 

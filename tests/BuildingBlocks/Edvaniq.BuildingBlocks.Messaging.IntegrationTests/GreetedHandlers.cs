@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.Services.Sender.Contracts;
 
@@ -10,11 +13,15 @@ public sealed class HandlerBehavior
 
     public int Calls => Volatile.Read(ref calls);
 
+    // The trace each call ran in.
+    public ConcurrentQueue<ActivityTraceId> TraceIds { get; } = new();
+
     // The first call changes the DbContext and then throws, the way a handler fails halfway.
     public bool FailFirstCall { get; set; }
 
     internal void Enter()
     {
+        TraceIds.Enqueue(Activity.Current?.TraceId ?? default);
         if (Interlocked.Increment(ref calls) == 1 && FailFirstCall)
         {
             throw new InvalidOperationException("Not now.");

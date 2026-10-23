@@ -69,6 +69,10 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("varchar(200)");
 
+                    b.Property<string>("TraceParent")
+                        .HasMaxLength(55)
+                        .HasColumnType("varchar(55)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("MessageId")

@@ -100,7 +100,7 @@ internal sealed class OutboxDispatcher(
             message.Attempts++;
             try
             {
-                await transport.PublishAsync(new OutgoingMessage(message.Subject, message.MessageId, message.Payload), cancellationToken);
+                await transport.PublishAsync(new OutgoingMessage(message.Subject, message.MessageId, message.Payload, message.TraceParent), cancellationToken);
                 message.SentAt = time.GetUtcNow().UtcDateTime;
                 message.LastError = null;
                 sent++;

@@ -72,7 +72,8 @@ public static class Extensions
             })
             .WithTracing(tracing =>
             {
-                tracing.AddSource(builder.Environment.ApplicationName)
+                // Edvaniq.Messaging is MessageTrace.SourceName: the consumers handle each message in an activity of it.
+                tracing.AddSource(builder.Environment.ApplicationName, "Edvaniq.Messaging")
                     .AddAspNetCoreInstrumentation(tracing =>
                         // Exclude health check requests from tracing
                         tracing.Filter = context =>

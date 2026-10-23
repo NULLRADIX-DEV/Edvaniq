@@ -4,6 +4,12 @@ namespace Edvaniq.BuildingBlocks.Messaging;
 
 internal static partial class MessagingLog
 {
+    private static readonly Func<ILogger, string, Guid, IDisposable?> Scope =
+        LoggerMessage.DefineScope<string, Guid>("Consumer {Consumer}, message {MessageId}");
+
+    // Everything logged while a message is handled, also by the handler, names the consumer and the message.
+    public static IDisposable? MessageScope(ILogger logger, string consumer, Guid messageId) => Scope(logger, consumer, messageId);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "No broker is configured (ConnectionStrings:nats), messaging stays idle")]
     public static partial void NoBroker(ILogger logger);
 
@@ -18,6 +24,13 @@ internal static partial class MessagingLog
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Consumer {Consumer} failed on message {MessageId}, the broker delivers it again")]
     public static partial void HandlerFailed(ILogger logger, Exception exception, string consumer, Guid messageId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Consumer {Consumer} waits for the stream {Stream} of its sender")]
+    public static partial void WaitingForStream(ILogger logger, string consumer, string stream);
+
+    // The proof that a message took effect: written after the SaveChanges that stored the effect with the inbox entry.
+    [LoggerMessage(Level = LogLevel.Information, Message = "Consumer {Consumer} has handled message {MessageId}")]
+    public static partial void Handled(ILogger logger, string consumer, Guid messageId);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Consumer {Consumer} has handled message {MessageId} before, skipped")]
     public static partial void AlreadyHandled(ILogger logger, string consumer, Guid messageId);
