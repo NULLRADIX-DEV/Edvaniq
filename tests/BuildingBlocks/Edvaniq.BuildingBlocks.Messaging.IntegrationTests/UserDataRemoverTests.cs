@@ -60,6 +60,22 @@ public sealed class UserDataRemoverTests(MySqlTestServer mysql) : IAsyncLifetime
         Assert.Equal(new Rows(2, 2, 2), RowsOf(bob));
     }
 
+    // "Alice" and "alice" are two users, removing one keeps the data of the other.
+    [Fact]
+    public void RemoveAll_OfAUserWithTheSameNameInOtherCase_KeepsTheOtherUsersData()
+    {
+        var id = Guid.NewGuid().ToString("N");
+        var lower = $"alice-{id}";
+        var upper = $"Alice-{id}";
+        Seed(lower);
+        Seed(upper);
+
+        Remove(upper, save: true);
+
+        Assert.Equal(new Rows(0, 0, 0), RowsOf(upper));
+        Assert.Equal(new Rows(2, 2, 2), RowsOf(lower));
+    }
+
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
 
     private void Seed(string user)

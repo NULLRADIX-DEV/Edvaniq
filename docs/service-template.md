@@ -97,6 +97,10 @@ Halte Migrationen klein. MySQL rollt Änderungen am Schema nicht zurück, eine M
 
 Eine Entity, die einem Nutzer gehört, implementiert `IOwnedByUser` aus `BuildingBlocks.Domain` und hat damit eine `OwnerId`. Erbt der DbContext des Service von `ServiceDbContext` aus `BuildingBlocks.Infrastructure`, bekommt jede so markierte Entity den Query-Filter `Owner`: Jede Abfrage sieht nur die Zeilen des Nutzers aus dem Token. Nutzer B kann die Daten von A also weder lesen noch ändern noch löschen, auch wenn eine Abfrage den Besitzer vergisst. Dazu kommen `OwnerId` als Pflichtfeld mit höchstens 128 Zeichen und ein Index darauf.
 
+`OwnerId` wird Byte für Byte verglichen (Collation `utf8mb4_0900_bin`), „Alice“ und „alice“ sind also zwei Nutzer. Mit der Standard-Collation von MySQL, die Groß-/Kleinschreibung und Akzente ignoriert, sähe „Abc“ die Zeilen von „abc“, und das Löschen von „Abc“ entfernte auch deren Daten. Der Service verlässt sich so nicht darauf, in welcher Schreibweise der Aussteller die `sub` vergibt. Identity muss dafür dieselbe Person immer mit derselben Schreibweise ausstellen.
+
+Der MySQL-Provider ignoriert `UseCollation` an einer Spalte und lässt `COLLATE` auch bei `AlterColumn` weg. `ServiceDbContext` setzt deshalb die Annotation `MySQL:Collation`, und eine neue Tabelle bekommt die Collation aus dem Modell. Eine Spalte, die es schon gibt, bekommt sie nur über ein selbst geschriebenes `ALTER TABLE … MODIFY COLUMN` in der Migration, `dotnet ef migrations add` erzeugt dafür eine leere Migration. Vorbild ist `OwnerIdCollation` in Planning. `OwnerIdColumns_AreComparedByteForByte` in `MigrationTests` prüft gegen die echte Datenbank, dass keine `OwnerId` die Standard-Collation hat.
+
 Eigene Konfiguration kommt in `ConfigureModel`. `OnModelCreating` ist versiegelt, damit kein Service den Filter versehentlich verliert.
 
 Läuft eine Abfrage ohne Nutzer, etwa im Hintergrund, wirft sie einen Fehler, statt alle Zeilen zu zeigen. Code, der bewusst alle Nutzer sieht, schreibt `IgnoreQueryFilters([ServiceDbContext.OwnerFilter])`. Eine abgeleitete Entity in derselben Tabelle bekommt den Filter von ihrer Basis, weil EF ihn nur an der Wurzel annimmt.
@@ -177,15 +181,15 @@ Die Datenbank ist echt. `MySqlTestServer` aus `Edvaniq.Testing` startet je Testl
 Die Tests einer Klasse teilen sich eine Datenbank. Jeder Test erfindet seine Nutzer deshalb neu, etwa `alice-<guid>`. Die Vorlage bringt acht Testklassen mit:
 
 - `TokenTests`: Abweisungen und der Nutzer nur aus dem Token
-- `MigrationTests`: Die Migrationen passen zum Modell, laufen auf einer frischen DB und ein zweites Mal ohne Änderung.
-- `IsolationTests`: Nutzer B sieht die Einträge von A weder in der Liste noch einzeln.
+- `MigrationTests`: Die Migrationen passen zum Modell, laufen auf einer frischen DB und ein zweites Mal ohne Änderung. Jede `OwnerId` wird Byte für Byte verglichen.
+- `IsolationTests`: Nutzer B sieht die Einträge von A weder in der Liste noch einzeln, auch dann nicht, wenn sich beide nur in der Groß-/Kleinschreibung der ID unterscheiden.
 - `HealthTests`: mit und ohne Datenbank, auch außerhalb von Development
 - `ProblemTests`: Fehler kommen als Problem mit der Trace-ID
 - `DatabaseUserTests`: Der Benutzer einer Datenbank kann eine fremde weder lesen noch ändern noch auflisten und legt keine Datenbank an. Das `GRANT` stammt aus `ServiceDatabaseSql` im AppHost, die Tests kompilieren dieselbe Datei.
 - `MessagingTests`: Ein neues Item schreibt sein Event in die Outbox, der Dispatcher sendet es, und der Handler bekommt es einmal.
-- `UserDeletionTests`: Nach `UserDeleted` sind die Einträge des Nutzers weg und die anderer noch da, auch bei doppelter Zustellung. Inbox und Log belegen die Löschung.
+- `UserDeletionTests`: Nach `UserDeleted` sind die Einträge des Nutzers weg und die anderer noch da, auch bei doppelter Zustellung und bei einer ID, die sich nur in der Groß-/Kleinschreibung unterscheidet. Inbox und Log belegen die Löschung.
 
-Ob die Isolationstests wirklich etwas prüfen, zeigt die Gegenprobe. Ohne den Filter in `ServiceDbContext` werden beide rot.
+Ob die Isolationstests wirklich etwas prüfen, zeigt die Gegenprobe. Ohne den Filter in `ServiceDbContext` werden alle rot, ohne die Collation nur die Tests mit den zwei Schreibweisen.
 
 ## Container-Image
 

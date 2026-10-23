@@ -39,6 +39,23 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         Assert.Equal(1, ItemsOf(bob));
     }
 
+    // "Alice" and "alice" are two users, deleting one keeps the data of the other.
+    [Fact]
+    public async Task DeletedUser_KeepsTheDataOfTheSameNameInOtherCase()
+    {
+        var id = Guid.NewGuid().ToString("N");
+        var lower = $"alice-{id}";
+        var upper = $"Alice-{id}";
+        await CreateItemAsync(lower, "Notiz klein");
+        await CreateItemAsync(upper, "Notiz gross");
+
+        var messageId = await DeleteAsync(upper);
+
+        await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
+        Assert.Equal(0, ItemsOf(upper));
+        Assert.Equal(1, ItemsOf(lower));
+    }
+
     // A redelivery and a second deletion of the same user both do nothing.
     [Fact]
     public async Task DeletionDeliveredTwice_OrSentTwice_DoesNoHarm()
