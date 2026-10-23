@@ -3,7 +3,7 @@ using Edvaniq.Services.Identity.Contracts;
 
 namespace Edvaniq.Services.ServiceName.Application;
 
-// Keep it when the example goes, the remover finds every IOwnedByUser entity itself (docs/service-template.md).
+// Keep it when the example goes, the remover finds every IOwnedByUser entity itself (docs/service-internals.md#nutzer-löschen).
 public sealed class UserDeletedHandler(IUserDataRemover userData) : IIntegrationEventHandler<UserDeleted>
 {
     public Task HandleAsync(UserDeleted integrationEvent, CancellationToken cancellationToken)
