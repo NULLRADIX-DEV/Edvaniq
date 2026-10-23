@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.Services.Sender.Contracts;
 using Edvaniq.Testing;
@@ -95,6 +97,24 @@ public sealed class CrossServiceTests(MySqlTestServer mysql, NatsTestServer nats
         Assert.Equal(1, Notifications(greetingId));
         // The handler ran for the first event and for the marker, the second delivery stopped at the inbox.
         Assert.Equal(2, behavior.Calls);
+    }
+
+    // NATS carries the request's TraceId to the other service.
+    [Fact]
+    public async Task Event_CarriesTheTraceOfTheRequest_OverNats()
+    {
+        await StartSenderAsync(natsUrl: nats.Url);
+        await StartReceiverAsync(natsUrl: nats.Url);
+        Guid greetingId;
+        ActivityTraceId traceId;
+        using (var request = new Activity("request").Start())
+        {
+            traceId = request.TraceId;
+            greetingId = Greet("Hallo");
+        }
+
+        await WaitForHandledAsync(greetingId);
+        Assert.Equal(traceId, Assert.Single(behavior.TraceIds));
     }
 
     // The same flow without NATS, the services share a broker inside the process.

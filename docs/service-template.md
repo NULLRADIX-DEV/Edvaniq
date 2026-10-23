@@ -28,16 +28,17 @@ src/Services/<Name>/
                                            ExampleEndpoints.cs: Endpunkte des Beispiels
   Edvaniq.Services.<Name>.Application      IExampleItems.cs: was die Fachlogik vom Beispiel braucht
                                            ExampleItemCreatedHandler.cs: Beispiel für einen Handler
+                                           UserDeletedHandler.cs: entfernt die Daten eines gelöschten Nutzers
   Edvaniq.Services.<Name>.Contracts        ExampleItemCreated.cs: Beispiel für ein Integration Event
   Edvaniq.Services.<Name>.Domain           ExampleItem.cs: Beispiel für Daten eines Nutzers
-  Edvaniq.Services.<Name>.Infrastructure   InfrastructureExtensions.cs: DbContext, Beispiel, Nachrichten und DB-Prüfung für Health
-                                           <Name>DbContext.cs, ExampleItems.cs, Migrations/ (Initial, ExampleItems, Messaging)
+  Edvaniq.Services.<Name>.Infrastructure   InfrastructureExtensions.cs: DbContext, Beispiel, Nachrichten, Nutzer löschen und DB-Prüfung für Health
+                                           <Name>DbContext.cs, ExampleItems.cs, Migrations/ (Initial, ExampleItems, Messaging, OutboxTraceParent)
 tests/Services/<Name>/
   Edvaniq.Services.<Name>.UnitTests
   Edvaniq.Services.<Name>.IntegrationTests ServiceFactory.cs (Prüfstand), TestDatabase.cs
                                            HealthTests.cs, TokenTests.cs, MigrationTests.cs, IsolationTests.cs, ProblemTests.cs,
                                            DatabaseUserTests.cs,
-                                           MessagingTests.cs
+                                           MessagingTests.cs, UserDeletionTests.cs
 ```
 
 Alle sieben Projekte stehen danach in `Edvaniq.slnx`, die CI baut und testet sie also gleich mit. Die Ports in `launchSettings.json` wählt die Vorlage per Zufall. Hat schon ein anderer Prozess denselben Port, wird der Test `Ports_AreUniqueAcrossProcesses` in `Edvaniq.ArchitectureTests` rot.
@@ -98,7 +99,7 @@ Eine Entity, die einem Nutzer gehört, implementiert `IOwnedByUser` aus `Buildin
 
 Eigene Konfiguration kommt in `ConfigureModel`. `OnModelCreating` ist versiegelt, damit kein Service den Filter versehentlich verliert.
 
-Läuft eine Abfrage ohne Nutzer, etwa im Hintergrund, wirft sie einen Fehler, statt alle Zeilen zu zeigen. Code, der bewusst alle Nutzer sieht, wie der spätere Lösch-Consumer, schreibt `IgnoreQueryFilters([ServiceDbContext.OwnerFilter])`.
+Läuft eine Abfrage ohne Nutzer, etwa im Hintergrund, wirft sie einen Fehler, statt alle Zeilen zu zeigen. Code, der bewusst alle Nutzer sieht, schreibt `IgnoreQueryFilters([ServiceDbContext.OwnerFilter])`. Eine abgeleitete Entity in derselben Tabelle bekommt den Filter von ihrer Basis, weil EF ihn nur an der Wurzel annimmt.
 
 Ein fremder Eintrag liefert 404, genau wie einer, den es nicht gibt, denn ein 403 würde verraten, dass er existiert. Beim Anlegen kommt `OwnerId` aus `ICurrentUser`. In Anfragen und Antworten taucht der Besitzer nie auf.
 
@@ -110,9 +111,9 @@ Ein neuer Service ersetzt das Beispiel durch seine erste echte Entity:
 
 1. Die eigene Entity nach demselben Muster anlegen, mit `IOwnedByUser`, wenn sie einem Nutzer gehört.
 2. `ExampleItem`, `IExampleItems`, `ExampleItems`, `ExampleEndpoints` und die beiden Zeilen dafür (`AddScoped`, `MapExampleEndpoints`) löschen.
-3. `ExampleItemCreated`, `ExampleItemCreatedHandler` und die Zeile `AddIntegrationEventHandler` löschen. Das erste echte Event ersetzt das Beispiel, `AddMessaging` und die Tabellen für Outbox und Inbox bleiben.
+3. `ExampleItemCreated`, `ExampleItemCreatedHandler` und die Zeile `AddIntegrationEventHandler<ExampleItemCreated, ExampleItemCreatedHandler>` löschen. Das erste echte Event ersetzt das Beispiel, `AddMessaging` und die Tabellen für Outbox und Inbox bleiben. `UserDeletedHandler` und seine beiden Zeilen bleiben auch ([Nutzer löschen](#nutzer-löschen)).
 4. Eine Migration anlegen. Sie entfernt die Tabelle `ExampleItems` und legt die eigene an.
-5. `IsolationTests` auf die eigenen Endpunkte umstellen. Der Test „Nutzer A sieht B nicht“ bleibt Pflicht. `MessagingTests` zeigt auf das neue Event.
+5. `IsolationTests` auf die eigenen Endpunkte umstellen. Der Test „Nutzer A sieht B nicht“ bleibt Pflicht. `MessagingTests` zeigt auf das neue Event. `UserDeletionTests` legt statt der Items die eigenen Daten an.
 
 ## Nachrichten
 
@@ -140,7 +141,9 @@ Ein Handler im Application-Projekt implementiert `IIntegrationEventHandler<TEven
 builder.Services.AddIntegrationEventHandler<ExampleItemCreated, ExampleItemCreatedHandler>();
 ```
 
-Für jeden Handler läuft ein dauerhafter Consumer `<name>-<Handler>` im Stream des Absenders. Er behandelt eine Nachricht so: Er legt einen Eintrag für `inbox_messages` in den DbContext, ruft den Handler und speichert beides mit einem `SaveChanges`. Erst danach bestätigt er die Nachricht. Kennt die Inbox die `MessageId` für diesen Consumer schon, bestätigt er nur. Ein Handler ändert deshalb nur den DbContext und ruft kein `SaveChanges`. Wirft er, wird nichts gespeichert, und der Broker stellt die Nachricht nach 5 Sekunden wieder zu. Gibt es den Stream des Absenders noch nicht, versucht es der Consumer alle 5 Sekunden neu.
+Für jeden Handler läuft ein dauerhafter Consumer `<name>-<Handler>` im Stream des Absenders. Er behandelt eine Nachricht so: Er legt einen Eintrag für `inbox_messages` in den DbContext, ruft den Handler und speichert beides mit einem `SaveChanges`. Erst danach bestätigt er die Nachricht. Kennt die Inbox die `MessageId` für diesen Consumer schon, bestätigt er nur. Ein Handler ändert deshalb nur den DbContext und ruft kein `SaveChanges`. Wirft er, wird nichts gespeichert, und der Broker stellt die Nachricht nach 5 Sekunden wieder zu. Hat der Absender noch nichts gesendet und deshalb noch keinen Stream, sagt der Consumer das einmal im Log und versucht es alle 5 Sekunden neu.
+
+Ein Consumer arbeitet in der Trace der Anfrage, die das Ereignis ausgelöst hat. `IEventOutbox.Add` speichert dafür den `traceparent` mit dem Ereignis, der Dispatcher schickt ihn im Header `traceparent` mit, und der Consumer startet darunter eine Activity der Quelle `Edvaniq.Messaging`. Alles, was der Handler loggt, trägt so die `TraceId` dieser Anfrage, dazu `Consumer` und `MessageId`. Nach dem Speichern loggt der Consumer „Consumer <consumer> has handled message <MessageId>“.
 
 Die Vorlage hört auf ihr eigenes `ExampleItemCreated`, damit der Weg von der Outbox bis in den Handler schon im Beispiel zu sehen ist. Ein echter Handler hört auf ein Event eines anderen Service. Eine Nachricht kann mehr als einmal und in anderer Reihenfolge ankommen, ein Handler verlässt sich auf beides nicht.
 
@@ -150,13 +153,28 @@ Die Adresse von NATS kommt nur von außen, als `ConnectionStrings:nats`. Lokal s
 
 `ServiceFactory` tauscht den Broker mit `AddInMemoryTransport()` gegen `InMemoryTransport` aus, die Tests der Services brauchen also kein NATS. `MessagingTests` legt ein Item an und wartet, bis das Event gesendet ist und der Handler es in die Inbox eingetragen hat. Die Garantien des Bausteins selbst prüfen die Tests in `tests/BuildingBlocks`: Outbox, Inbox und ein Event zwischen zwei Services über NATS. `Edvaniq.BuildingBlocks.Messaging.UnitTests` laufen ohne Docker, die `IntegrationTests` brauchen Docker für MySQL und NATS.
 
+## Nutzer löschen
+
+Wird ein Konto gelöscht, müssen die Daten des Nutzers aus jedem Service verschwinden, nicht nur aus Identity. Identity sendet dafür `UserDeleted` aus `Identity.Contracts` mit der `UserId`, also dem `sub` seiner Tokens und damit der `OwnerId` seiner Zeilen. Bis sich ein Konto löschen lässt, kommt das Ereignis nur in den Tests vor.
+
+Jeder Service aus der Vorlage hört mit dem `UserDeletedHandler` darauf, der `IUserDataRemover` aufruft. `AddInfrastructure` registriert beide:
+
+```csharp
+builder.Services.AddUserDataRemover<ServiceNameDbContext>();
+builder.Services.AddIntegrationEventHandler<UserDeleted, UserDeletedHandler>();
+```
+
+Der Remover geht jede Entity mit `IOwnedByUser` im Modell durch und markiert alle Zeilen des Nutzers zum Löschen, auch solche, die ein eigener Query-Filter versteckt. Eine neue Entity mit `IOwnedByUser` ist damit ohne weiteren Code dabei. Zeilen ohne `OwnerId` gehen per Cascade Delete mit, deshalb muss ihre Beziehung Pflicht sein (`IsRequired`). Bei einer optionalen Beziehung scheitert das Löschen am Fremdschlüssel, und die Nachricht kommt immer wieder.
+
+Gespeichert wird wie bei jedem Handler vom Consumer, zusammen mit dem Inbox-Eintrag. Ob ein Service die Daten entfernt hat, zeigen dieser Eintrag für `<name>-UserDeletedHandler` und die Logzeile „Consumer <name>-UserDeletedHandler has handled message <MessageId>“. Die Zeile trägt die `TraceId` der Anfrage, die den Nutzer gelöscht hat, aber nicht seine `UserId`. Mit dieser Kennung findet man die Bestätigung jedes Service ([Ereignis empfangen](#ereignis-empfangen)).
+
 ## Tests
 
 `ServiceFactory` ist der Prüfstand: Er startet den echten Service, so wie er läuft, mit einer frischen MySQL-Datenbank, auf die alle Migrationen angewendet sind, und vertraut den Tokens aus `Edvaniq.Testing/TestTokens`. Den Broker tauscht er gegen einen im Prozess aus. Eine Testklasse holt ihn sich per `IClassFixture<ServiceFactory>`.
 
 Die Datenbank ist echt. `MySqlTestServer` aus `Edvaniq.Testing` startet je Testlauf über Testcontainers einen MySQL-Container mit `mysql:9.7`, wie im AppHost, und `TestDatabase.cs` meldet ihn einmal fürs Projekt an. Jede `ServiceFactory` legt darin ihre eigene Datenbank mit einem eigenen Benutzer an, der nur auf sie darf. So stören sich parallele Testklassen nicht, und der Service meldet sich wie auf dem Server an, nie als root. Docker muss deshalb laufen, lokal wie in der CI.
 
-Die Tests einer Klasse teilen sich eine Datenbank. Jeder Test erfindet seine Nutzer deshalb neu, etwa `alice-<guid>`. Die Vorlage bringt sieben Testklassen mit:
+Die Tests einer Klasse teilen sich eine Datenbank. Jeder Test erfindet seine Nutzer deshalb neu, etwa `alice-<guid>`. Die Vorlage bringt acht Testklassen mit:
 
 - `TokenTests`: Abweisungen und der Nutzer nur aus dem Token
 - `MigrationTests`: Die Migrationen passen zum Modell, laufen auf einer frischen DB und ein zweites Mal ohne Änderung.
@@ -165,6 +183,7 @@ Die Tests einer Klasse teilen sich eine Datenbank. Jeder Test erfindet seine Nut
 - `ProblemTests`: Fehler kommen als Problem mit der Trace-ID
 - `DatabaseUserTests`: Der Benutzer einer Datenbank kann eine fremde weder lesen noch ändern noch auflisten und legt keine Datenbank an. Das `GRANT` stammt aus `ServiceDatabaseSql` im AppHost, die Tests kompilieren dieselbe Datei.
 - `MessagingTests`: Ein neues Item schreibt sein Event in die Outbox, der Dispatcher sendet es, und der Handler bekommt es einmal.
+- `UserDeletionTests`: Nach `UserDeleted` sind die Einträge des Nutzers weg und die anderer noch da, auch bei doppelter Zustellung. Inbox und Log belegen die Löschung.
 
 Ob die Isolationstests wirklich etwas prüfen, zeigt die Gegenprobe. Ohne den Filter in `ServiceDbContext` werden beide rot.
 

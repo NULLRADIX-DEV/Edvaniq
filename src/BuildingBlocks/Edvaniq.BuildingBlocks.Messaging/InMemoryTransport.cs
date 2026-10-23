@@ -121,7 +121,7 @@ public sealed class InMemoryTransport : IMessageTransport
 
             try
             {
-                await onMessage(new IncomingMessage(next.MessageId, next.Payload), cancellationToken);
+                await onMessage(new IncomingMessage(next.MessageId, next.Payload, next.TraceParent), cancellationToken);
                 lock (gate)
                 {
                     positions[consumer] = index + 1;

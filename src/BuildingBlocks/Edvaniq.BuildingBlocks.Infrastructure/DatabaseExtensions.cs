@@ -1,3 +1,5 @@
+using Edvaniq.BuildingBlocks.Application;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +17,11 @@ public static partial class DatabaseExtensions
         services.AddDbContext<TContext>((provider, options) => options.UseMySQL(MySqlConnections.For(
             provider.GetRequiredService<IConfiguration>().GetConnectionString(connectionName)
             ?? throw new InvalidOperationException($"Connection string '{connectionName}' is missing.")).ConnectionString));
+
+    // For the UserDeleted handler (docs/service-template.md).
+    public static IServiceCollection AddUserDataRemover<TContext>(this IServiceCollection services)
+        where TContext : ServiceDbContext =>
+        services.AddScoped<IUserDataRemover, UserDataRemover<TContext>>();
 
     // Applies all pending migrations and returns the exit code. A second run finds nothing to do. Like Run(), it
     // disposes the host at the end, so the last log lines get out.

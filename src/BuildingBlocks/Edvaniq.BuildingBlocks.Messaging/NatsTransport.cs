@@ -13,6 +13,9 @@ internal sealed class NatsTransport : IMessageTransport, IAsyncDisposable, IDisp
 {
     private const string MessageIdHeader = "Nats-Msg-Id";
 
+    // JetStream's error code for an unknown stream
+    private const int StreamNotFound = 10059;
+
     private static readonly TimeSpan PublishTimeout = TimeSpan.FromSeconds(10);
 
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
@@ -50,6 +53,7 @@ internal sealed class NatsTransport : IMessageTransport, IAsyncDisposable, IDisp
             message.Subject,
             message.Payload,
             opts: new NatsJSPubOpts { MsgId = message.MessageId.ToString() },
+            headers: message.TraceParent is null ? null : new NatsHeaders { [MessageTrace.Header] = message.TraceParent },
             cancellationToken: timeout.Token);
 
         // A message the stream knows already counts as sent. EnsureSuccess would throw for it.
@@ -64,15 +68,23 @@ internal sealed class NatsTransport : IMessageTransport, IAsyncDisposable, IDisp
         Func<IncomingMessage, CancellationToken, Task> onMessage,
         CancellationToken cancellationToken)
     {
-        var consumer = await jetStream.CreateOrUpdateConsumerAsync(
-            subscription.Stream,
-            new ConsumerConfig(subscription.Consumer)
-            {
-                AckPolicy = ConsumerConfigAckPolicy.Explicit,
-                AckWait = options.AckWait,
-                FilterSubject = subscription.Subject,
-            },
-            cancellationToken);
+        INatsJSConsumer consumer;
+        try
+        {
+            consumer = await jetStream.CreateOrUpdateConsumerAsync(
+                subscription.Stream,
+                new ConsumerConfig(subscription.Consumer)
+                {
+                    AckPolicy = ConsumerConfigAckPolicy.Explicit,
+                    AckWait = options.AckWait,
+                    FilterSubject = subscription.Subject,
+                },
+                cancellationToken);
+        }
+        catch (NatsJSApiException exception) when (exception.Error.ErrCode == StreamNotFound)
+        {
+            throw new StreamMissingException(subscription.Stream, exception);
+        }
 
         // Few messages at a time: the ack wait of the broker runs from the delivery on, not from our turn.
         await foreach (var message in consumer.ConsumeAsync<string>(
@@ -87,7 +99,7 @@ internal sealed class NatsTransport : IMessageTransport, IAsyncDisposable, IDisp
 
             try
             {
-                await onMessage(new IncomingMessage(messageId, message.Data), cancellationToken);
+                await onMessage(new IncomingMessage(messageId, message.Data, TraceParentOf(message.Headers)), cancellationToken);
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
@@ -103,6 +115,9 @@ internal sealed class NatsTransport : IMessageTransport, IAsyncDisposable, IDisp
     public ValueTask DisposeAsync() => client.DisposeAsync();
 
     public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+    private static string? TraceParentOf(NatsHeaders? headers) =>
+        headers is not null && headers.TryGetValue(MessageTrace.Header, out var value) ? value.ToString() : null;
 
     private static bool TryGetMessageId(NatsHeaders? headers, out Guid messageId)
     {
