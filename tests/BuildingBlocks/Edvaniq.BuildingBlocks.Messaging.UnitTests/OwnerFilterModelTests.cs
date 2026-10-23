@@ -3,10 +3,13 @@ using Edvaniq.BuildingBlocks.Domain;
 using Edvaniq.BuildingBlocks.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Edvaniq.BuildingBlocks.Messaging.UnitTests;
 
-// EF only takes a filter on the root of a hierarchy. Built without a database.
+// The filter sits on the root of a hierarchy and OwnerId is compared byte for byte. Built without a database.
 public class OwnerFilterModelTests
 {
     [Fact]
@@ -20,6 +23,19 @@ public class OwnerFilterModelTests
         Assert.NotNull(entry.FindDeclaredQueryFilter(ServiceDbContext.OwnerFilter));
         Assert.Same(entry, archived.BaseType);
         Assert.Null(archived.FindDeclaredQueryFilter(ServiceDbContext.OwnerFilter));
+    }
+
+    // The MySQL provider drops a collation it does not know from the SQL without a word, so look at the SQL itself.
+    [Fact]
+    public void OwnerId_IsComparedByteForByte_InTheSqlOfANewTable()
+    {
+        using var db = new EntriesDbContext();
+        var model = db.GetService<IDesignTimeModel>().Model;
+        var operations = db.GetService<IMigrationsModelDiffer>().GetDifferences(null, model.GetRelationalModel());
+
+        var sql = string.Join(Environment.NewLine, db.GetService<IMigrationsSqlGenerator>().Generate(operations, model).Select(command => command.CommandText));
+
+        Assert.Contains("`OwnerId` varchar(128) COLLATE utf8mb4_0900_bin NOT NULL", sql);
     }
 
     private sealed class EntriesDbContext() : ServiceDbContext(

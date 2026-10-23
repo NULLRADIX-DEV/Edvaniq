@@ -27,6 +27,26 @@ public sealed class MigrationTests(ServiceFactory service) : IClassFixture<Servi
         Assert.Equal(database.GetMigrations(), database.GetAppliedMigrations());
     }
 
+    // The provider leaves the collation out of ALTER TABLE, so a column that existed before gets it from the migration by hand.
+    [Fact]
+    public void OwnerIdColumns_AreComparedByteForByte()
+    {
+        using var scope = service.Services.CreateScope();
+        var connection = scope.ServiceProvider.GetRequiredService<ServiceNameDbContext>().Database.GetDbConnection();
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT TABLE_NAME, COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME = 'OwnerId'";
+        using var reader = command.ExecuteReader();
+        var columns = new List<(string Table, string? Collation)>();
+        while (reader.Read())
+        {
+            columns.Add((reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1)));
+        }
+
+        Assert.NotEmpty(columns);
+        Assert.All(columns, column => Assert.True(column.Collation == "utf8mb4_0900_bin", $"{column.Table}.OwnerId has the collation {column.Collation}."));
+    }
+
     [Fact]
     public void Migrate_RunAgain_ChangesNothing()
     {

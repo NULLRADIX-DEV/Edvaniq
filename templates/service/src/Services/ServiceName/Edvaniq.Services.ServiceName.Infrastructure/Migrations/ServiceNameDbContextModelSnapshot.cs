@@ -92,7 +92,8 @@ namespace Edvaniq.Services.ServiceName.Infrastructure.Migrations
                     b.Property<string>("OwnerId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("Text")
                         .IsRequired()
