@@ -7,6 +7,9 @@ public sealed class OutboxMessage
 
     public const int LastErrorMaxLength = 2000;
 
+    // 00-<trace id>-<span id>-<flags>
+    public const int TraceParentMaxLength = 55;
+
     // Insert order, the dispatcher sends by it.
     public long Id { get; set; }
 
@@ -18,6 +21,9 @@ public sealed class OutboxMessage
     public required string Payload { get; set; }
 
     public DateTime OccurredAt { get; set; }
+
+    // Of the request that stored the event, see MessageTrace.
+    public string? TraceParent { get; set; }
 
     public DateTime? SentAt { get; set; }
 

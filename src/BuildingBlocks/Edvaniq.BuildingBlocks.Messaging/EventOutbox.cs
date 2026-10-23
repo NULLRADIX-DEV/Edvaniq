@@ -26,6 +26,7 @@ internal sealed class EventOutbox(DbContext db, MessagingOptions options, TimePr
             Subject = route.Subject,
             Payload = JsonSerializer.Serialize(integrationEvent, type, MessageJson.Options),
             OccurredAt = time.GetUtcNow().UtcDateTime,
+            TraceParent = MessageTrace.Current(),
         });
     }
 }

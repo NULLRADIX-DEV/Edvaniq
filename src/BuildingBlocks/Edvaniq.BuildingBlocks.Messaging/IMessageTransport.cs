@@ -13,6 +13,7 @@ public interface IMessageTransport
 
     // Hands the messages of a durable consumer to onMessage, one after the other, until cancellationToken ends. The
     // transport confirms a message to the broker when onMessage returns and has it delivered again when onMessage throws.
+    // NATS throws StreamMissingException while the sender's stream doesn't exist.
     Task ConsumeAsync(
         Subscription subscription,
         Func<IncomingMessage, CancellationToken, Task> onMessage,
@@ -22,9 +23,10 @@ public interface IMessageTransport
 // The stream of a service. Subjects is the filter for every subject below it, such as planning.>.
 public sealed record StreamSpec(string Name, string Subjects);
 
-public sealed record OutgoingMessage(string Subject, Guid MessageId, string Payload);
+// TraceParent: of the request that stored the event (MessageTrace), or null.
+public sealed record OutgoingMessage(string Subject, Guid MessageId, string Payload, string? TraceParent = null);
 
-public sealed record IncomingMessage(Guid MessageId, string Payload);
+public sealed record IncomingMessage(Guid MessageId, string Payload, string? TraceParent = null);
 
 // A durable consumer of one subject in a stream. It keeps its place when the process stops.
 public sealed record Subscription(string Stream, string Consumer, string Subject);

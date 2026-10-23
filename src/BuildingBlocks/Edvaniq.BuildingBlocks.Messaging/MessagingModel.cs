@@ -16,6 +16,7 @@ public static class MessagingModel
             message.ToTable(OutboxTable);
             message.Property(m => m.Subject).HasMaxLength(OutboxMessage.SubjectMaxLength);
             message.Property(m => m.LastError).HasMaxLength(OutboxMessage.LastErrorMaxLength);
+            message.Property(m => m.TraceParent).HasMaxLength(OutboxMessage.TraceParentMaxLength);
             message.HasIndex(m => m.MessageId).IsUnique();
             message.HasIndex(m => m.SentAt);
         });

@@ -1,5 +1,6 @@
 using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.BuildingBlocks.Messaging;
+using Edvaniq.Services.Identity.Contracts;
 using Edvaniq.Services.ServiceName.Application;
 using Edvaniq.Services.ServiceName.Contracts;
 
@@ -24,6 +25,10 @@ public static class InfrastructureExtensions
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<ServiceNameDbContext>(ServiceKey);
         builder.Services.AddIntegrationEventHandler<ExampleItemCreated, ExampleItemCreatedHandler>();
+
+        // Stays when the example goes.
+        builder.Services.AddUserDataRemover<ServiceNameDbContext>();
+        builder.Services.AddIntegrationEventHandler<UserDeleted, UserDeletedHandler>();
 
         // Ready only with a reachable database, alive without it.
         builder.Services.AddHealthChecks()

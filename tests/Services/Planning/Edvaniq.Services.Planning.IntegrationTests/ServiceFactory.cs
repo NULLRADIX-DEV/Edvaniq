@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.Services.Planning.IntegrationTests;
 
@@ -17,6 +18,9 @@ namespace Edvaniq.Services.Planning.IntegrationTests;
 public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Program>, IAsyncLifetime
 {
     public string ConnectionString { get; private set; } = "";
+
+    // What the service logs, for the tests that look for a log line.
+    public TestLogs Logs { get; } = new();
 
     public async ValueTask InitializeAsync()
     {
@@ -42,5 +46,6 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
                         options.TokenValidationParameters.IssuerSigningKeys = [TestTokens.SigningKey];
                     });
                 services.AddInMemoryTransport();
+                services.AddSingleton<ILoggerProvider>(Logs);
             });
 }

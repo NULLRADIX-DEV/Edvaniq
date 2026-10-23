@@ -11,7 +11,8 @@ namespace Edvaniq.BuildingBlocks.Infrastructure;
 
 // Base of every service's DbContext. Each entity that belongs to a user (IOwnedByUser) gets the query filter "Owner":
 // queries only see the rows of the user from the token, so user B can neither read, change nor delete what belongs to
-// A. Code that must see all users, like the delete consumer, says so with IgnoreQueryFilters([OwnerFilter]). It also maps
+// A. Code that must see all users says so with IgnoreQueryFilters([OwnerFilter]), the UserDataRemover drops every
+// filter. It also maps
 // the outbox and inbox tables, so no service can forget them.
 public abstract class ServiceDbContext(DbContextOptions options, ICurrentUser currentUser) : DbContext(options)
 {
@@ -29,8 +30,10 @@ public abstract class ServiceDbContext(DbContextOptions options, ICurrentUser cu
         ConfigureModel(modelBuilder);
         modelBuilder.AddMessagingTables();
 
+        // EF only takes a filter on the root, derived types get it from their base.
         var owned = modelBuilder.Model.GetEntityTypes()
-            .Where(entityType => typeof(IOwnedByUser).IsAssignableFrom(entityType.ClrType))
+            .Where(entityType => IsOwnedByUser(entityType.ClrType)
+                && (entityType.BaseType is null || !IsOwnedByUser(entityType.BaseType.ClrType)))
             .ToList();
         foreach (var entityType in owned)
         {
@@ -44,6 +47,8 @@ public abstract class ServiceDbContext(DbContextOptions options, ICurrentUser cu
     protected virtual void ConfigureModel(ModelBuilder modelBuilder)
     {
     }
+
+    private static bool IsOwnedByUser(Type type) => typeof(IOwnedByUser).IsAssignableFrom(type);
 
     // e => e.OwnerId == this.CurrentUserId. EF swaps "this" for the context that runs the query.
     private LambdaExpression OwnerIsCurrentUser(Type entityType)

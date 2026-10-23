@@ -64,6 +64,33 @@ public sealed class NatsTransportTests(NatsTestServer nats) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Consumer_GetsTheTraceParentOfTheMessage()
+    {
+        const string traceParent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+        await transport.EnsureStreamAsync(Stream, TestContext.Current.CancellationToken);
+        var traced = new OutgoingMessage("sender.greeted", Guid.NewGuid(), "{}", traceParent);
+        var untraced = new OutgoingMessage("sender.greeted", Guid.NewGuid(), "{}");
+        await transport.PublishAsync(traced, TestContext.Current.CancellationToken);
+        await transport.PublishAsync(untraced, TestContext.Current.CancellationToken);
+
+        var received = await ConsumeAsync(2);
+
+        Assert.Equal([traceParent, null], received.Select(message => message.TraceParent));
+    }
+
+    // The sender hasn't created its stream yet.
+    [Fact]
+    public async Task Consumer_OfAStreamThatDoesNotExist_ReportsTheMissingStream()
+    {
+        var missing = await Assert.ThrowsAsync<StreamMissingException>(() => transport.ConsumeAsync(
+            new Subscription(Stream.Name, "receiver-handler", "sender.greeted"),
+            (_, _) => Task.CompletedTask,
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(Stream.Name, missing.Stream);
+    }
+
+    [Fact]
     public async Task Consumer_GetsTheMessagesWithTheirMessageId_InOrder()
     {
         await transport.EnsureStreamAsync(Stream, TestContext.Current.CancellationToken);
@@ -97,5 +124,31 @@ public sealed class NatsTransportTests(NatsTestServer nats) : IAsyncLifetime
         }
 
         Assert.Equal([new IncomingMessage(first.MessageId, first.Payload), new IncomingMessage(second.MessageId, second.Payload)], received);
+    }
+
+    private async Task<IReadOnlyList<IncomingMessage>> ConsumeAsync(int count)
+    {
+        var received = new ConcurrentQueue<IncomingMessage>();
+        using var stop = new CancellationTokenSource();
+        var running = transport.ConsumeAsync(
+            new Subscription(Stream.Name, "receiver-handler", "sender.greeted"),
+            (message, _) =>
+            {
+                received.Enqueue(message);
+                return Task.CompletedTask;
+            },
+            stop.Token);
+
+        await Wait.UntilAsync(() => received.Count == count, "The consumer did not get the messages.");
+        await stop.CancelAsync();
+        try
+        {
+            await running;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        return [.. received];
     }
 }
