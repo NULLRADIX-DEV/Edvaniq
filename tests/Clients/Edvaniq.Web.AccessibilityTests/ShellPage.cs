@@ -2,7 +2,8 @@ using Microsoft.Playwright;
 
 namespace Edvaniq.Web.AccessibilityTests;
 
-// One page in a browser context of its own. Remembers what the browser logged, so a shell that did not start says why.
+// One page in a browser context of its own. Remembers what the browser logged, so a shell that did not start says why,
+// and every address the page requested.
 public sealed class ShellPage : IAsyncDisposable
 {
     private const int LoadAttempts = 3;
@@ -11,6 +12,7 @@ public sealed class ShellPage : IAsyncDisposable
 
     private readonly IBrowserContext context;
     private readonly List<string> log = [];
+    private readonly List<string> requests = [];
 
     public ShellPage(IBrowserContext context, IPage page)
     {
@@ -19,9 +21,27 @@ public sealed class ShellPage : IAsyncDisposable
         page.Console += (_, message) => Remember($"console {message.Type}: {message.Text}");
         page.PageError += (_, error) => Remember($"page error: {error}");
         page.RequestFailed += (_, request) => Remember($"request failed: {request.Url} {request.Failure}");
+        page.Request += (_, request) =>
+        {
+            lock (requests)
+            {
+                requests.Add(request.Url);
+            }
+        };
     }
 
     public IPage Page { get; }
+
+    public IReadOnlyList<string> Requests
+    {
+        get
+        {
+            lock (requests)
+            {
+                return [.. requests];
+            }
+        }
+    }
 
     // Opens the address and waits until the shell is interactive. Only then the prerendered page has turned into the
     // one the client runs, with the menu button, the check of the backend and everything else a visitor can use.
