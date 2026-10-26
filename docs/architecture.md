@@ -166,6 +166,8 @@ Fehlerantworten nennen die Kennung im Feld `traceId` eines Problems nach RFC 945
 - Der Web-Host macht aus den eigenen Fehlern unter `/api` und `/session` Probleme (`ApiProblems`). Probleme aus dem Backend reicht er unverändert durch, sie nennen dieselbe Kennung.
 - Bei einer Seite zeigt der Web-Host im Fehlerfall `ServerError` mit derselben Kennung. Ein gescheiterter Ping auf `/systemstatus` nennt die Kennung seines Problems, `HttpPing` reicht sie dafür an die Seite durch.
 
+Ins Log kommt nichts, womit jemand hineinkommt: kein Client-Secret, kein Signierschlüssel, kein Connection String, kein Token und kein Session-Cookie. Auch die Werte von SQL-Parametern stehen nicht darin, weil kein Service `EnableSensitiveDataLogging` einschaltet. Die `LoggingTests` von Web-Host, Gateway, Identity und Planning schneiden das Log eines Durchlaufs mit Token-Abruf und Ping mit und suchen darin nach diesen Werten, auch nach abgelehnten Secrets und Tokens. Wie viel Log ein Container behält, begrenzt der Server, das Älteste fällt zuerst weg.
+
 ## Tokens
 
 Jeder Service prüft das Token selbst und muss dem Aussteller deshalb trauen, ohne ein Geheimnis mit ihm zu teilen. Identity signiert jedes Token mit seinem privaten Schlüssel (ES256), den nur Identity kennt. Den öffentlichen Teil holt sich ein Service über seine `Authority` direkt bei Identity, aus dem Discovery-Dokument unter `/.well-known/openid-configuration` und dem Key-Set, auf das es zeigt. Das Gateway leitet von Identity nur den Token-Endpunkt weiter.

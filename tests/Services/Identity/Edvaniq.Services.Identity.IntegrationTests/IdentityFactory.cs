@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.Services.Identity.IntegrationTests;
 
@@ -19,6 +20,9 @@ public sealed class IdentityFactory(IReadOnlyDictionary<string, string?>? settin
     public const string ClientId = "web";
 
     public string ClientSecret { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+
+    // What Identity logs.
+    public TestLogs Logs { get; } = new();
 
     public static string NewSigningKey()
     {
@@ -66,9 +70,13 @@ public sealed class IdentityFactory(IReadOnlyDictionary<string, string?>? settin
             builder.UseSetting(key, value ?? "");
         }
 
-        if (time is not null)
+        builder.ConfigureTestServices(services =>
         {
-            builder.ConfigureTestServices(services => services.AddSingleton(time));
-        }
+            services.AddSingleton<ILoggerProvider>(Logs);
+            if (time is not null)
+            {
+                services.AddSingleton(time);
+            }
+        });
     }
 }
