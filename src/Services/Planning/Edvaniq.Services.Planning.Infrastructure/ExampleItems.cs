@@ -1,17 +1,22 @@
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.Services.Planning.Application;
+using Edvaniq.Services.Planning.Contracts;
 using Edvaniq.Services.Planning.Domain;
+
 using Microsoft.EntityFrameworkCore;
 
 namespace Edvaniq.Services.Planning.Infrastructure;
 
 // No query here mentions the owner: the filter of ServiceDbContext adds it to every one of them.
-internal sealed class ExampleItems(PlanningDbContext db, ICurrentUser currentUser) : IExampleItems
+internal sealed class ExampleItems(PlanningDbContext db, ICurrentUser currentUser, IEventOutbox outbox) : IExampleItems
 {
     public async Task<ExampleItem> AddAsync(string text, CancellationToken cancellationToken)
     {
         var item = new ExampleItem(currentUser.Id, text);
         db.ExampleItems.Add(item);
+
+        // Stored by the same SaveChanges: the event exists exactly when the item does.
+        outbox.Add(new ExampleItemCreated(item.Id, item.OwnerId));
         await db.SaveChangesAsync(cancellationToken);
 
         return item;

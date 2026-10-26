@@ -1,12 +1,12 @@
-using System.Diagnostics;
-
 using Edvaniq.ServiceDefaults;
+
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.ServiceDiscovery;
+
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
@@ -72,7 +72,8 @@ public static class Extensions
             })
             .WithTracing(tracing =>
             {
-                tracing.AddSource(builder.Environment.ApplicationName)
+                // Edvaniq.Messaging: MessageTrace.SourceName, the consumers' activities
+                tracing.AddSource(builder.Environment.ApplicationName, "Edvaniq.Messaging")
                     .AddAspNetCoreInstrumentation(tracing =>
                         // Exclude health check requests from tracing
                         tracing.Filter = context =>
@@ -96,8 +97,7 @@ public static class Extensions
     public static TBuilder AddTraceIds<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
         builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
-            context.ProblemDetails.Extensions["traceId"] =
-                Activity.Current?.TraceId.ToHexString() ?? context.HttpContext.TraceIdentifier);
+            context.ProblemDetails.Extensions["traceId"] = context.HttpContext.GetTraceId());
 
         if (!builder.Environment.IsDevelopment())
         {

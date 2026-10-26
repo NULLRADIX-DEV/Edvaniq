@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Edvaniq.Services.Planning.Infrastructure;
 
 // The service's own database. ServiceDbContext limits every entity that belongs to a user to the current user. Every
-// change to the model needs a migration (docs/service-template.md#datenbank-und-migrationen).
+// change to the model needs a migration (docs/service-internals.md#datenbank-und-migrationen).
 public sealed class PlanningDbContext(DbContextOptions<PlanningDbContext> options, ICurrentUser currentUser)
     : ServiceDbContext(options, currentUser)
 {

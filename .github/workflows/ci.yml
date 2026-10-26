@@ -52,6 +52,9 @@ jobs:
       - name: Build
         run: dotnet build Edvaniq.slnx -c Release --no-restore
 
+      - name: Install Chromium
+        run: pwsh tests/Clients/Edvaniq.Web.AccessibilityTests/bin/Release/net10.0/playwright.ps1 install --with-deps --only-shell chromium
+
       - name: Architecture tests
         run: dotnet test --project tests/Edvaniq.ArchitectureTests -c Release --no-build
 
@@ -68,6 +71,11 @@ jobs:
             dotnet test --project "tests/Services/Sample/Edvaniq.Services.Sample.$project" -c Release -- --ignore-exit-code 8
           done
           dotnet test --project tests/Edvaniq.ArchitectureTests -c Release -- --filter-class "*Rule2ContractsTests" --filter-class "*Rule3LayerTests" --filter-class "*Rule4IntegrationTests" --filter-class "*Rule6CycleTests"
+
+      - name: Check service template image
+        run: |
+          dotnet publish src/Services/Sample/Edvaniq.Services.Sample.Api/Edvaniq.Services.Sample.Api.csproj -c Release --os linux --arch x64 -t:PublishContainer -p:ContainerImageTag=template-check
+          bash deploy/check-template-image.sh sample nullradix-dev/edvaniq/sample-api:template-check
 
   secret-scan:
     name: Secret scan

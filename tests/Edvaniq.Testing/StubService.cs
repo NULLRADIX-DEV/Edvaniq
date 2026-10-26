@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -9,7 +11,8 @@ namespace Edvaniq.Testing;
 // Stands in for a process behind a proxy, the gateway or a service. A real Kestrel on a free port, because YARP
 // forwards over the network and not into a TestServer. Answers every request with what arrived, with SetsCookie also
 // trying to set a cookie in the browser. /slow answers only after 30 seconds. POST /identity/connect/token answers like
-// Identity behind the gateway, with the tokens stub-token-1, stub-token-2 and so on.
+// Identity behind the gateway, with the tokens stub-token-1, stub-token-2 and so on. Answer sets a body for a request
+// that should not be echoed.
 public sealed class StubService : IAsyncDisposable
 {
     public const string TokenPath = "/identity/connect/token";
@@ -18,6 +21,7 @@ public sealed class StubService : IAsyncDisposable
     private int requests;
     private int tokenRequests;
     private int tokenStatus = StatusCodes.Status200OK;
+    private readonly ConcurrentDictionary<(string Method, string Path), object> answers = new();
 
     private StubService()
     {
@@ -47,6 +51,10 @@ public sealed class StubService : IAsyncDisposable
         get => Volatile.Read(ref tokenStatus);
         set => Volatile.Write(ref tokenStatus, value);
     }
+
+    // Answers this request with the body as JSON instead of the echo, for a test that needs the service to answer like
+    // the real one, such as Planning with a ping.
+    public void Answer(string method, string path, object body) => answers[(method, path)] = body;
 
     public static async Task<StubService> StartAsync(string name)
     {
@@ -90,12 +98,17 @@ public sealed class StubService : IAsyncDisposable
                 response.Cookies.Append("backend", "set-by-the-backend");
             }
 
-            return new Echo(
+            if (stub.answers.TryGetValue((request.Method, request.Path.Value ?? ""), out var answer))
+            {
+                return Results.Ok(answer);
+            }
+
+            return Results.Ok(new Echo(
                 name,
                 request.Method,
                 request.Path,
                 request.Headers.Authorization.ToString(),
-                request.Headers.Cookie.ToString());
+                request.Headers.Cookie.ToString()));
         });
 
         await app.StartAsync(TestContext.Current.CancellationToken);

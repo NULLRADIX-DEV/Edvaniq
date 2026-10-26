@@ -35,6 +35,21 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         Assert.Equal(HttpStatusCode.NotFound, await GetStatusAsync(bob, $"/examples/{Guid.NewGuid()}"));
     }
 
+    // "Alice" and "alice" are two users, the id is compared byte for byte.
+    [Fact]
+    public async Task OtherUser_WithTheSameNameInOtherCase_DoesNotSeeTheItems()
+    {
+        var id = Guid.NewGuid().ToString("N");
+        using var lower = ClientFor($"alice-{id}");
+        using var upper = ClientFor($"Alice-{id}");
+
+        var item = await CreateAsync(lower, "Notiz von alice");
+
+        Assert.Empty(await ListAsync(upper));
+        Assert.Equal(HttpStatusCode.OK, await GetStatusAsync(lower, $"/examples/{item.Id}"));
+        Assert.Equal(HttpStatusCode.NotFound, await GetStatusAsync(upper, $"/examples/{item.Id}"));
+    }
+
     // Every test has its own users, so the tests of this class can share one database.
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
 

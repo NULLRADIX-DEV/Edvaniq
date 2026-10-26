@@ -7,7 +7,13 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
     <PackageReference Include="Testcontainers.MySql" />
+    <PackageReference Include="Testcontainers.Nats" />
     <PackageReference Include="xunit.v3.extensibility.core" />
+  </ItemGroup>
+
+  <!-- The grant of a service's DB user, shared with the AppHost. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\Aspire\Edvaniq.AppHost\ServiceDatabaseSql.cs" Link="ServiceDatabaseSql.cs" />
   </ItemGroup>
 
   <PropertyGroup>
