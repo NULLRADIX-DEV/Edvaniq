@@ -6,9 +6,9 @@ Du brauchst das, wenn ein Fachbereich einen eigenen Service bekommt. Für einen 
 
 ## Voraussetzungen
 
-Du brauchst einen Klon des Repos, in dem einmal `dotnet tool restore` gelaufen ist, das bringt `dotnet ef` mit. Docker Desktop muss laufen, sonst scheitern die Integrationstests und der AppHost wartet ewig auf die Datenbank. Bitte früh jemanden mit Zugang zum Server, die Datenbank des Service anzulegen, denn ohne sie darf der Pull Request nicht nach `main`.
+Du brauchst einen Klon des Repos, in dem einmal `dotnet tool restore` gelaufen ist, das bringt `dotnet ef` mit. Docker Desktop muss laufen, sonst scheitern die Integrationstests und der AppHost wartet ewig auf die Datenbank. Ohne Docker baust du lokal und lässt nur die Unit- und Architekturtests laufen. Integrationstests, Image und Health zeigt dir dann erst die CI, stell den Pull Request deshalb früh als Entwurf. Bitte früh jemanden mit Zugang zum Server, die Datenbank des Service anzulegen, denn ohne sie darf der Pull Request nicht nach `main`.
 
-Den Namen schreibst du in PascalCase, etwa `LearningEngine`. Daraus werden die Projekte `Edvaniq.Services.LearningEngine.*`, die Datenbank `learningenginedb` und der Name `learningengine-api` in AppHost und Compose. Unten steht `<Name>` für die PascalCase-Form und `<name>` für die kleingeschriebene.
+Den Namen schreibst du in PascalCase, etwa `LearningEngine`. Daraus werden die Projekte `Edvaniq.Services.LearningEngine.*`, die Datenbank `learningenginedb` und der Name `learningengine-api` in AppHost und Compose. Unten steht `<Name>` für die PascalCase-Form und `<name>` für die kleingeschriebene. Die Vorlage prüft die Schreibweise nicht: Aus `-n learningengine` entstehen Klassen wie `learningengineDbContext`.
 
 ## Schritte
 
@@ -34,13 +34,15 @@ Den Namen schreibst du in PascalCase, etwa `LearningEngine`. Daraus werden die P
       dotnet ef migrations add <Migration> --project src/Services/<Name>/Edvaniq.Services.<Name>.Infrastructure
       ```
 
-   5. Die Tests umstellen. `IsolationTests` prüft die eigenen Endpunkte, der Test „Nutzer A sieht B nicht“ bleibt Pflicht. `UserDeletionTests` legt statt der Items die eigenen Daten an. `MessagingTests` zeigt auf das erste eigene Event. Sendet der Service noch keins, löschst du `MessagingTests` und legst ihn mit dem ersten Event wieder an, denn den Baustein selbst prüfen die Tests in `tests/BuildingBlocks`.
+   5. Die Tests umstellen. `IsolationTests` prüft die eigenen Endpunkte, der Test „Nutzer A sieht B nicht“ bleibt Pflicht. `UserDeletionTests` legt statt der Items die eigenen Daten an. `ProblemTests` fragt einen eigenen Endpunkt mit einer unbekannten ID ab, statt `/examples/{id}`. `MessagingTests` zeigt auf das erste eigene Event. Sendet der Service noch keins, löschst du `MessagingTests` und legst ihn mit dem ersten Event wieder an, denn den Baustein selbst prüfen die Tests in `tests/BuildingBlocks`.
 
 4. Die Tests laufen lassen. Grün heißt, Token-Prüfung, Datenbank, Nachrichten und das Löschen eines Nutzers funktionieren auch mit der eigenen Entity:
 
    ```
    dotnet test --project tests/Services/<Name>/Edvaniq.Services.<Name>.IntegrationTests
    ```
+
+   Ohne Docker laufen sie erst in der CI des Pull Request.
 
 5. Den Service im AppHost eintragen. Die Api kommt als `ProjectReference` in `Edvaniq.AppHost.csproj`. In `AppHost.cs` kommt jede der drei Zeilen in ihren Block, also zu den Datenbanken, den Migrationen und den Services, und das Gateway bekommt `WithReference(<name>Api)`:
 
@@ -52,9 +54,9 @@ Den Namen schreibst du in PascalCase, etwa `LearningEngine`. Daraus werden die P
        .WithMessaging(nats);
    ```
 
-   `WithMessaging(nats)` gibt dem Service die Adresse von NATS. Ein Service, der nichts sendet oder empfängt, lässt es weg.
+   Die Variablen schreibst du in camelCase wie die übrigen im AppHost, für LearningEngine also `learningEngineDb`. `WithMessaging(nats)` gibt dem Service die Adresse von NATS. Ein Service, der nichts sendet oder empfängt, lässt es weg.
 
-6. Lokal prüfen. Starte den AppHost mit `dotnet run --project src/Aspire/Edvaniq.AppHost`. Den Port des Service zeigt das Aspire-Dashboard, er steht auch im Profil `http` von `Properties/launchSettings.json` der Api. `curl -i http://localhost:<port>/health` antwortet mit 200 `Healthy`, sobald der Service seine Datenbank erreicht. Mit einem [Dev-Token](service-internals.md#token-prüfung) antwortet `curl -i -H "Authorization: Bearer <token>" http://localhost:<port>/me` mit dem Nutzer aus dem Token.
+6. Lokal prüfen. Starte den AppHost mit `dotnet run --project src/Aspire/Edvaniq.AppHost`. Den Port des Service zeigt das Aspire-Dashboard, er steht auch im Profil `http` von `Properties/launchSettings.json` der Api. `curl -i http://localhost:<port>/health` antwortet mit 200 `Healthy`, sobald der Service seine Datenbank erreicht. Mit einem [Dev-Token](service-internals.md#token-prüfung) antwortet `curl -i -H "Authorization: Bearer <token>" http://localhost:<port>/me` mit dem Nutzer aus dem Token. Ohne Docker entfällt dieser Schritt, dasselbe prüfen `HealthTests` und `TokenTests` in der CI.
 
 7. Den Service in `deploy/compose.yml` eintragen, mit einem Anker `x-<name>`, darauf dem Dienst `<name>-api` und dem Migrationsschritt `<name>-migrate`. Vorbild ist Planning:
 
@@ -107,7 +109,9 @@ Die meisten Services stammen noch aus dem ersten Skelett: fünf Projekte ohne In
 ## Wenn es nicht klappt
 
 - Heißt der neue Service `Edvaniq.Services.Edvaniq.*`, fehlte `-n`, und die Vorlage hat den Namen des aktuellen Ordners genommen. Außerhalb des Repos findet sie keine `Edvaniq.slnx` und endet mit Exit-Code 105, in einem Unterordner wie `src/` landet alles eine Ebene zu tief.
+- Heißen die Klassen etwa `learningengineDbContext`, stand der Name nicht in PascalCase. Erzeug den Service neu.
 - Wird `Ports_AreUniqueAcrossProcesses` in `Edvaniq.ArchitectureTests` rot, hat die Vorlage einen Port gezogen, den schon ein anderer Prozess hat. Lösch den neuen Service und erzeug ihn neu, solange du noch nichts an ihm geändert hast. Sonst setz den Port in seiner `launchSettings.json` auf einen freien.
+- Zum Neu-Erzeugen trägst du die sieben Projekte mit `dotnet sln Edvaniq.slnx remove …` aus, löschst `src/Services/<Name>/` und `tests/Services/<Name>/` und rufst `dotnet new edvaniq-service -n <Name>` noch einmal auf. Prüf vorher, dass beide Ordner wirklich weg sind. Hält die IDE oder ein laufender Build noch Dateien darin, bleibt der Ordner stehen, und Windows behält beim neuen Erzeugen seine alte Schreibweise. Lokal baut dann alles, aber in der CI auf Linux passen die Pfade in `Edvaniq.slnx` nicht mehr zu den Ordnern.
 - Meldet der CI-Job „Container images“ „deploy/compose.yml does not match the processes in AppHost.cs“ oder „The migration steps in deploy/compose.yml do not match AddMigration in AppHost.cs“, steht ein Prozess oder Migrationsschritt nur in einer der beiden Dateien. Darüber listet der Lauf mit `<`, was in Compose fehlt, und mit `>`, was dort zu viel ist.
 
 Fehler, die erst ein laufender Service zeigt, stehen bei den [Stolperfallen](service-internals.md#stolperfallen).
