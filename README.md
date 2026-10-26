@@ -36,7 +36,8 @@ Hängt der Start oder bricht er ab, hilft meist einer dieser Punkte:
 | [docs/spec/object-model.md](docs/spec/object-model.md) | Kernobjekte und der Service, dem jedes gehört |
 | [docs/spec/modes.md](docs/spec/modes.md) | Was in Übung, Einstufung und Prüfungsmodus gilt |
 | [docs/architecture.md](docs/architecture.md) | Services, Kommunikation, Aufbau eines Service |
-| [docs/service-template.md](docs/service-template.md) | Neuer Service aus der Vorlage, Datenbank, Migrationen, Tests |
+| [docs/service-template.md](docs/service-template.md) | Einen neuen Service aus der Vorlage anlegen, Schritt für Schritt |
+| [docs/service-internals.md](docs/service-internals.md) | Was ein Service aus der Vorlage mitbringt: Token, Datenbank, Nachrichten, Tests, Image |
 | [docs/deploy.md](docs/deploy.md) | Ausrollen, Rollback, Migrationen, Speicher und Health im Deploy |
 | [docs/secrets.md](docs/secrets.md) | Umgang mit Secrets und wie sie geprüft werden |
 | [docs/branch-protection.md](docs/branch-protection.md) | Regeln für `main` und Pull Requests |
