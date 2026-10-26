@@ -205,7 +205,7 @@ Ein Thema gilt als Schwäche bei Mastery unter 50 % oder hoher Fehlerquote zulet
 
 ### MVP15 Mastery
 
-Die Mastery von 0 bis 100 % je Nutzer und Thema entsteht aus den Lern-Nachweisen. Neuere und schwerere Antworten zählen stärker, Karten schwächer als Fragen, ohne Wiederholung wirkt ein einfacher Zeitverfall, und die Mastery lässt sich jederzeit neu berechnen (M3, M4).
+Die Mastery von 0 bis 100 % je Nutzer und Thema entsteht aus den Lern-Nachweisen. Neuere und schwerere Antworten zählen stärker, Karten schwächer als Fragen, ohne Wiederholung wirkt ein einfacher Zeitverfall, und die Mastery lässt sich innerhalb der Aufbewahrungsfrist der Lern-Nachweise neu berechnen (M3, M4).
 
 | Nicht im MVP | Wohin |
 |---|---|

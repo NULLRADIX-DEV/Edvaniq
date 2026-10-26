@@ -2,7 +2,7 @@
 
 Jedes fachliche Objekt von Edvaniq gehört genau einem Service, seinem Owner. Nur der Owner legt es an, ändert und löscht es, und nur seine Datenbank enthält seinen Inhalt. Alle anderen Services kennen höchstens den Schlüssel des Objekts und bekommen den Rest als Ereignis oder fragen ihn beim Owner ab. Was die Begriffe bedeuten, steht im [Glossar](glossary.md), hier steht, wo sie wohnen. Die Datei beschreibt den Zielzustand des MVP, ein Objekt zieht also erst in seinen Service ein, wenn das Feature dazu gebaut wird. Datenbankschemata gehören nicht hierher, sie entstehen mit den Migrationen der Services.
 
-Die Aufteilung folgt den [Service-Regeln](../architecture.md#service-regeln). Von Daten eines anderen Service speichert ein Service nur den Schlüssel und Werte, die er selbst daraus berechnet (Regel 5). Hört Service A auf Ereignisse von B, bekommt B Daten von A nur per HTTP-Abfrage (Regel 6). Welche Ereignisse es gibt, welche Felder sie tragen und wer sie empfängt, legt der Ereigniskatalog fest (#176). Hier steht nur, welche Ereignisse der Owner eines Objekts sendet. Begriffe, die das Glossar noch nicht kennt, etwa die aktive Lernzeit oder die Einstellungen eines Kontos, kommen mit ihrem Feature ins Glossar und danach hierher.
+Die Aufteilung folgt den [Service-Regeln](../architecture.md#service-regeln). Von Daten eines anderen Service speichert ein Service nur den Schlüssel und Werte, die er selbst daraus berechnet (Regel 5). Hört Service A auf Ereignisse von B, bekommt B Daten von A nur per HTTP-Abfrage (Regel 6). Welche Ereignisse es gibt, welche Felder sie tragen und wer sie empfängt, legt der [Ereigniskatalog](events.md) fest. Hier steht nur, welche Ereignisse der Owner eines Objekts sendet. Begriffe, die das Glossar noch nicht kennt, etwa die aktive Lernzeit oder die Einstellungen eines Kontos, kommen mit ihrem Feature ins Glossar und danach hierher.
 
 ## Services im MVP
 
@@ -93,7 +93,7 @@ Planning besitzt, was Zeit und Ablauf betrifft: Lernziele, Plan und Sessions. Es
 | [Tagesplan](glossary.md#tagesplan) (`DayPlan`) mit [Tagesziel](glossary.md#tagesziel) (`DailyGoal`) | `userId` und [Lerntag](glossary.md#lerntag) | Kein anderer Service braucht ihn. Das Tagesziel ergibt sich aus den Blöcken des Tages. |
 | [Tagesbudget](glossary.md#tagesbudget) (`DailyBudget`) | `userId` | Kein anderer Service braucht es. |
 | [Block](glossary.md#block) (`Block`) | `blockId` | Kein anderer Service braucht ihn. Ein Block nennt die Themen, um die es geht, als `topicId`. |
-| [Session](glossary.md#session) (`Session`) | `sessionId` | Assessment, Flashcards und LearningEngine speichern die `sessionId` an Antworten und Lern-Nachweisen als Verweis. Mit dem Abschluss sendet Planning `SessionCompleted`, und LearningEngine erfährt daraus, welche Themen die Session eingeführt hat (Ereignis). |
+| [Session](glossary.md#session) (`Session`) | `sessionId` | Assessment, Flashcards und LearningEngine speichern die `sessionId` an Antworten und Lern-Nachweisen als Verweis. Endet die Session, sendet Planning `SessionCompleted`, auch bei einem Abbruch (Vorschlag), und LearningEngine erfährt daraus, welche Themen die Session eingeführt hat (Ereignis). |
 | [Lerneinheit „Neues Thema“](glossary.md#lerneinheit-neues-thema) (`IntroductionUnit`) | `sessionId`, denn die Einheit ist ein Schritt der Session | Kein anderer Service braucht sie. Die Zusammenfassung kommt von Content, die Checkfragen kommen von Assessment, der Client setzt beides zusammen. |
 | [Wiederholung](glossary.md#wiederholung) (`Review`) | `sessionId`, denn die Wiederholung ist ein Schritt der Session | Kein anderer Service braucht sie. Planning stellt sie beim Start aus Abfragen zusammen: fällige Karten bei Flashcards, zuletzt falsch beantwortete Fragen bei Assessment, Themen mit zerfallener Mastery bei LearningEngine. |
 
@@ -127,7 +127,7 @@ Assessment besitzt die Fragen und alles, was beim Beantworten entsteht. Erzeugt 
 | [Frage](glossary.md#frage) (`Question`), in der Rolle als [Checkfrage](glossary.md#checkfrage) (`CheckQuestion`) | `itemId` | Assessment speichert zu jeder Frage die `topicId` als Verweis, dazu `sectionId` und `documentId`, wenn die Frage aus Material entstand. Eine Checkfrage ist keine eigene Art, sondern eine Frage in der Lerneinheit „Neues Thema“. Meldet ein Nutzer eine Frage, pausiert Assessment sie und sendet `ItemFlagged`, und LearningEngine nimmt ihre Antworten aus der Mastery (Ereignis). |
 | [Fragenpool](glossary.md#fragenpool) (`QuestionPool`) | `topicId`, je Nutzer | Content und Planning fragen ab, wie viele nutzbare Fragen ein Thema hat und ob sein Pool bereit ist (Abfrage). Content erzeugt bei knappem Pool Fragen nach. |
 | [Quiz](glossary.md#quiz) (`Quiz`) mit [Modus](glossary.md#modus) (`Mode`) | keiner | Kein anderer Service braucht es. Der Kurztest der Einstufung ist ein Quiz im Modus `Placement`. Der Prüfungsmodus `MockExam` gehört zum MVP-Plus. |
-| [Antwort](glossary.md#antwort) (`Answer`) auf eine Frage | `itemId` und `sessionId` | Assessment speichert jede Antwort sofort und sendet `AnswerRecorded`. LearningEngine macht daraus einen Lern-Nachweis (Ereignis). |
+| [Antwort](glossary.md#antwort) (`Answer`) auf eine Frage | `answerId` | Assessment speichert jede Antwort sofort und sendet `AnswerRecorded`. LearningEngine macht daraus einen Lern-Nachweis (Ereignis). |
 
 ### Flashcards
 
@@ -136,7 +136,7 @@ Flashcards besitzt die Karten und ihren Wiederholungsverlauf. Es übernimmt erze
 | Objekt | Schlüssel | Andere Services |
 |---|---|---|
 | [Karte](glossary.md#karte) (`Card`) | `itemId` | Flashcards speichert zu jeder Karte die `topicId` als Verweis, dazu `sectionId` und `documentId`, wenn die Karte aus Material entstand. Planning fragt die fälligen Karten je Thema ab (Abfrage). Meldet ein Nutzer eine Karte, pausiert Flashcards sie und sendet `ItemFlagged`. |
-| [Antwort](glossary.md#antwort) (`Answer`) auf eine Karte | `itemId` und `sessionId` | Flashcards speichert die Bewertung sofort und sendet `CardReviewed`. LearningEngine macht daraus einen Lern-Nachweis (Ereignis). |
+| [Antwort](glossary.md#antwort) (`Answer`) auf eine Karte | `answerId` | Flashcards speichert die Bewertung sofort und sendet `CardReviewed`. LearningEngine macht daraus einen Lern-Nachweis (Ereignis). |
 
 ### LearningEngine
 
@@ -144,17 +144,17 @@ LearningEngine besitzt, was aus den Antworten über den Lernstand folgt. Es send
 
 | Objekt | Schlüssel | Andere Services |
 |---|---|---|
-| [Lern-Nachweis](glossary.md#lern-nachweis) (`LearningRecord`) | `userId`, `topicId`, `itemId`, `sessionId` und der Schlüssel gegen doppeltes Zählen | Kein anderer Service liest ihn. Er entsteht aus `AnswerRecorded` und `CardReviewed`. |
-| [Mastery](glossary.md#mastery) (`Mastery`) | `userId` und `topicId` | Planning und Client fragen sie ab (Abfrage). Sie lässt sich jederzeit aus den Lern-Nachweisen neu berechnen. |
+| [Lern-Nachweis](glossary.md#lern-nachweis) (`LearningRecord`) | `answerId`, denn jede Antwort hinterlässt genau einen Nachweis | Kein anderer Service liest ihn. Er entsteht aus `AnswerRecorded` und `CardReviewed` und trägt dazu `userId`, `topicId`, `itemId` und `sessionId`. |
+| [Mastery](glossary.md#mastery) (`Mastery`) | `userId` und `topicId` | Planning und Client fragen sie ab (Abfrage). Sie lässt sich aus den Lern-Nachweisen innerhalb ihrer Aufbewahrungsfrist neu berechnen. |
 | [Themenzustand](glossary.md#themenzustand) (`TopicState`) | `userId` und `topicId` | Planning und Client fragen ihn ab und rechnen ihn nicht selbst (Abfrage). |
 | [eingeführt](glossary.md#eingeführt) (`Introduced`) | `userId` und `topicId` | LearningEngine erfährt aus `SessionCompleted`, dass die Lerneinheit zu einem Thema abgeschlossen ist. Planning erkennt neue Themen am Themenzustand (Abfrage). |
 | [Einstufung](glossary.md#einstufung) (`Placement`) | `userId` und `topicId` | LearningEngine speichert die Selbsteinschätzung je Thema und leitet daraus den Startwert der Mastery ab. Der Kurztest läuft als Quiz bei Assessment, seine Antworten erreichen LearningEngine als Lern-Nachweise mit der Quelle Einstufung. |
 
 ## Begriffe ohne eigenen Owner
 
-[Item](glossary.md#item) (`Item`) und [Antwort](glossary.md#antwort) (`Answer`) sind Oberbegriffe. Ein einzelnes Item ist immer eine Frage oder eine Karte und gehört damit genau einem Service, Assessment oder Flashcards. Eine Antwort gehört dem Service, dem ihr Item gehört. Die `itemId` ist über Fragen und Karten hinweg eindeutig, damit LearningEngine ein Item an der Kennung allein erkennt. Content vergibt sie, wenn es ein Item erzeugt, damit eine doppelte Zustellung von `ItemsGenerated` kein zweites Item anlegt, und der übernehmende Service behält sie. Karten, die ein Nutzer selbst anlegt, bekommen ihre `itemId` in Flashcards.
+[Item](glossary.md#item) (`Item`) und [Antwort](glossary.md#antwort) (`Answer`) sind Oberbegriffe. Ein einzelnes Item ist immer eine Frage oder eine Karte und gehört damit genau einem Service, Assessment oder Flashcards. Eine Antwort gehört dem Service, dem ihr Item gehört. Die `itemId` ist über Fragen und Karten hinweg eindeutig, damit LearningEngine ein Item an der Kennung allein erkennt. Aus demselben Grund ist auch die `answerId` über Fragen und Karten hinweg eindeutig. Content vergibt sie, wenn es ein Item erzeugt, damit eine doppelte Zustellung von `ItemsGenerated` kein zweites Item anlegt, und der übernehmende Service behält sie. Karten, die ein Nutzer selbst anlegt, bekommen ihre `itemId` in Flashcards.
 
-[Lerntag](glossary.md#lerntag) (`StudyDay`) ist eine Rechenregel und kein Objekt. Jeder Service speichert Zeitpunkte in UTC und bestimmt den Lerntag selbst mit der Tagesgrenze aus dem Glossar, übertragen wird er nie.
+[Lerntag](glossary.md#lerntag) (`StudyDay`) ist eine Rechenregel und kein Objekt. Jeder Service speichert Zeitpunkte in UTC und bestimmt den Lerntag selbst mit der Tagesgrenze aus dem Glossar, zwischen Services wird er nie übertragen.
 
 ## Entscheidungen
 
@@ -172,7 +172,7 @@ Die Analyse in Content schlägt vor, welcher Abschnitt zu welchem Thema gehört.
 
 ### Antwort und Lern-Nachweis sind zwei Objekte
 
-Die Antwort mit den gewählten Optionen und dem Bezug zur Frage bleibt bei Assessment oder Flashcards. Der Lern-Nachweis bei LearningEngine enthält dagegen keinen Fragetext, keine Optionen und keine Lösung. Er trägt nur Schlüssel und die Werte, die LearningEngine für die Mastery verrechnet, also richtig oder falsch, Schwierigkeit, Antwortzeit, Confidence, Quelle und Zeitpunkt. Damit ist er kein Abbild der Antwort, wie Regel 5 es verbietet, sondern die Eingabe einer Berechnung, die nur LearningEngine macht.
+Die Antwort mit den gewählten Optionen und dem Bezug zur Frage bleibt bei Assessment oder Flashcards. Der Lern-Nachweis bei LearningEngine enthält dagegen keinen Fragetext, keine Optionen und keine Lösung. Er trägt nur Schlüssel und die Werte, die LearningEngine für die Mastery verrechnet oder mitspeichert, die Felder stehen im [Ereigniskatalog](events.md#lern-nachweis). Damit ist er kein Abbild der Antwort, wie Regel 5 es verbietet, sondern die Eingabe einer Berechnung, die nur LearningEngine macht.
 
 ### Eine Fehlerkarte ist eine neue Karte
 
@@ -200,4 +200,5 @@ Jede Zeile dieser Tabelle ist ein Verweis nach Regel 5: Der speichernde Service 
 | `sectionId` | Content | Knowledge, Assessment, Flashcards |
 | `topicId` | Knowledge | Planning, Content, Assessment, Flashcards, LearningEngine |
 | `itemId` | Assessment bei Fragen, Flashcards bei Karten | LearningEngine |
+| `answerId` | Assessment bei Fragen, Flashcards bei Karten | LearningEngine |
 | `sessionId` | Planning | Assessment, Flashcards, LearningEngine |

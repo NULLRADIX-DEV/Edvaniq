@@ -2,7 +2,7 @@
 
 Jeder Begriff steht hier einmal, mit genau einer Definition und seinem Namen im Code. Docs, Issues und Code benutzen diese Begriffe und keine anderen. Wo früher andere Wörter dasselbe meinten, nennt sie die Zeile „Nicht“, und sie gelten nicht mehr.
 
-Die Namen im Code sind englisch und in PascalCase, passend zu `topicId`, `itemId` und `sessionId` und zu den Ereignissen `AnswerRecorded` und `CardReviewed`. Welcher Service welches Objekt besitzt, legt das Objektmodell fest (#170). Wie sich die Modi unterscheiden, legen die Modusregeln fest (#175).
+Die Namen im Code sind englisch und in PascalCase, passend zu `topicId`, `itemId` und `sessionId` und zu den Ereignissen `AnswerRecorded` und `CardReviewed`. Welcher Service welches Objekt besitzt, legt das [Objektmodell](object-model.md) fest. Wie sich die Modi unterscheiden, legen die [Modusregeln](modes.md) fest. Welche Ereignisse es gibt und was der Lern-Nachweis trägt, legt der [Ereigniskatalog](events.md) fest.
 
 ## Lernziel und Material
 
@@ -148,7 +148,7 @@ Nicht: Fragenkatalog
 
 Was ein Nutzer auf ein Item gibt: die gewählten Optionen einer Frage oder die Bewertung einer Karte. Jede Antwort wird sofort gespeichert und hinterlässt einen Lern-Nachweis.
 
-Im Code: `Answer`, als Ereignis `AnswerRecorded` bei Fragen und `CardReviewed` bei Karten
+Im Code: `Answer`, die Kennung heißt `answerId`, gemeldet wird sie mit `AnswerRecorded` bei Fragen und `CardReviewed` bei Karten
 
 ### Lern-Nachweis
 
@@ -214,7 +214,7 @@ Der Fortschritt eines Nutzers hängt am Thema.
 
 ### Mastery
 
-Ein Wert von 0 bis 100 % je Nutzer und Thema, der sagt, wie gut er das Thema beherrscht. Er entsteht aus den Lern-Nachweisen, bei denen neuere und schwerere Antworten stärker zählen und ohne Wiederholung ein einfacher Zeitverfall wirkt, und lässt sich daraus jederzeit neu berechnen.
+Ein Wert von 0 bis 100 % je Nutzer und Thema, der sagt, wie gut er das Thema beherrscht. Er entsteht aus den Lern-Nachweisen, bei denen neuere und schwerere Antworten stärker zählen und ohne Wiederholung ein einfacher Zeitverfall wirkt, und lässt sich daraus innerhalb der Aufbewahrungsfrist der Lern-Nachweise neu berechnen.
 
 Im Code: `Mastery`
 
