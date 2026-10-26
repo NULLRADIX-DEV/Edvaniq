@@ -18,6 +18,7 @@
     <ProjectReference Include="..\..\Services\Gamification\Edvaniq.Services.Gamification.Api\Edvaniq.Services.Gamification.Api.csproj" />
     <ProjectReference Include="..\..\Services\Analytics\Edvaniq.Services.Analytics.Api\Edvaniq.Services.Analytics.Api.csproj" />
     <ProjectReference Include="..\..\Services\Notifications\Edvaniq.Services.Notifications.Api\Edvaniq.Services.Notifications.Api.csproj" />
+    <ProjectReference Include="..\..\Services\TestService\Edvaniq.Services.TestService.Api\Edvaniq.Services.TestService.Api.csproj" />
     <ProjectReference Include="..\..\Services\Content\Edvaniq.Services.Content.Worker\Edvaniq.Services.Content.Worker.csproj" />
     <ProjectReference Include="..\..\Services\Notifications\Edvaniq.Services.Notifications.Worker\Edvaniq.Services.Notifications.Worker.csproj" />
     <ProjectReference Include="..\..\Gateway\Edvaniq.Gateway\Edvaniq.Gateway.csproj" />

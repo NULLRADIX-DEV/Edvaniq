@@ -43,6 +43,18 @@ x-planning: &planning
     db:
       condition: service_healthy
 
+x-testservice: &testservice
+  <<: *app
+  env_file:
+    - path: app.env
+      required: true
+    - path: testservice.env
+      required: true
+  networks: [inner, data]
+  depends_on:
+    db:
+      condition: service_healthy
+
 services:
   db:
     image: mysql:9.7
@@ -99,6 +111,17 @@ services:
     restart: "no"
     healthcheck:
       disable: true
+  testservice-api:
+    <<: *testservice
+    image: ghcr.io/nullradix-dev/edvaniq/testservice-api:sha-${APP_COMMIT:?}
+  testservice-migrate:
+    <<: *testservice
+    image: ghcr.io/nullradix-dev/edvaniq/testservice-api:sha-${APP_COMMIT:?}
+    command: ["migrate"]
+    profiles: [migrate]
+    restart: "no"
+    healthcheck:
+      disable: true
   content-api:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/content-api:sha-${APP_COMMIT:?}
@@ -143,6 +166,7 @@ services:
       <<: *app-environment
       services__planning-api__http__0: http://planning-api:8080
       services__identity-api__http__0: http://identity-api:8080
+      services__testservice-api__http__0: http://testservice-api:8080
   web:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/web:sha-${APP_COMMIT:?}

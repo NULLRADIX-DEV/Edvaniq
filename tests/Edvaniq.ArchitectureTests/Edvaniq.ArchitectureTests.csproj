@@ -80,6 +80,11 @@
     <ProjectReference Include="..\..\src\Services\Planning\Edvaniq.Services.Planning.Contracts\Edvaniq.Services.Planning.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Services\Planning\Edvaniq.Services.Planning.Domain\Edvaniq.Services.Planning.Domain.csproj" />
     <ProjectReference Include="..\..\src\Services\Planning\Edvaniq.Services.Planning.Infrastructure\Edvaniq.Services.Planning.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Services\TestService\Edvaniq.Services.TestService.Api\Edvaniq.Services.TestService.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\TestService\Edvaniq.Services.TestService.Application\Edvaniq.Services.TestService.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\TestService\Edvaniq.Services.TestService.Contracts\Edvaniq.Services.TestService.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Services\TestService\Edvaniq.Services.TestService.Domain\Edvaniq.Services.TestService.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\TestService\Edvaniq.Services.TestService.Infrastructure\Edvaniq.Services.TestService.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Services\Tutor\Edvaniq.Services.Tutor.Api\Edvaniq.Services.Tutor.Api.csproj" />
     <ProjectReference Include="..\..\src\Services\Tutor\Edvaniq.Services.Tutor.Application\Edvaniq.Services.Tutor.Application.csproj" />
     <ProjectReference Include="..\..\src\Services\Tutor\Edvaniq.Services.Tutor.Contracts\Edvaniq.Services.Tutor.Contracts.csproj" />

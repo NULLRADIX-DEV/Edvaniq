@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Edvaniq.Services.TestService.Application\Edvaniq.Services.TestService.Application.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Edvaniq.BuildingBlocks.Infrastructure\Edvaniq.BuildingBlocks.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Edvaniq.BuildingBlocks.Messaging\Edvaniq.BuildingBlocks.Messaging.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Only for dotnet ef. PrivateAssets keeps it out of the Api and its image. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

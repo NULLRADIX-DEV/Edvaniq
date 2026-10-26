@@ -28,9 +28,11 @@ var tutorDb = mysql.AddServiceDatabase("tutor");
 var gamificationDb = mysql.AddServiceDatabase("gamification");
 var analyticsDb = mysql.AddServiceDatabase("analytics");
 var notificationsDb = mysql.AddServiceDatabase("notifications");
+var testServiceDb = mysql.AddServiceDatabase("testservice");
 
 // Migrations (one step per service from the template, its API waits until it has finished)
 var planningMigrate = builder.AddMigration<Projects.Edvaniq_Services_Planning_Api>("planning-migrate", planningDb);
+var testServiceMigrate = builder.AddMigration<Projects.Edvaniq_Services_TestService_Api>("testservice-migrate", testServiceDb);
 
 // Token issuer: Identity signs the tokens, every service checks them with the public key it gets from Identity
 var signingKey = builder.AddSigningKey("identity-signing-key");
@@ -52,6 +54,9 @@ var tutorApi = AddService<Projects.Edvaniq_Services_Tutor_Api>("tutor-api", tuto
 var gamificationApi = AddService<Projects.Edvaniq_Services_Gamification_Api>("gamification-api", gamificationDb);
 var analyticsApi = AddService<Projects.Edvaniq_Services_Analytics_Api>("analytics-api", analyticsDb);
 var notificationsApi = AddService<Projects.Edvaniq_Services_Notifications_Api>("notifications-api", notificationsDb);
+var testServiceApi = AddService<Projects.Edvaniq_Services_TestService_Api>("testservice-api", testServiceDb)
+    .WaitForCompletion(testServiceMigrate)
+    .WithMessaging(nats);
 
 // Workers (share the database of their service)
 AddService<Projects.Edvaniq_Services_Content_Worker>("content-worker", contentDb);
@@ -70,7 +75,8 @@ var gateway = builder.AddProject<Projects.Edvaniq_Gateway>("gateway")
     .WithReference(tutorApi)
     .WithReference(gamificationApi)
     .WithReference(analyticsApi)
-    .WithReference(notificationsApi);
+    .WithReference(notificationsApi)
+    .WithReference(testServiceApi);
 
 // Frontend
 builder.AddProject<Projects.Edvaniq_Web>("web")

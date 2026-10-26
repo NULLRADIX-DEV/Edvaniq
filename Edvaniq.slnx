@@ -97,6 +97,13 @@
     <Project Path="src/Services/Planning/Edvaniq.Services.Planning.Domain/Edvaniq.Services.Planning.Domain.csproj" />
     <Project Path="src/Services/Planning/Edvaniq.Services.Planning.Infrastructure/Edvaniq.Services.Planning.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Services/TestService/">
+    <Project Path="src/Services/TestService/Edvaniq.Services.TestService.Api/Edvaniq.Services.TestService.Api.csproj" />
+    <Project Path="src/Services/TestService/Edvaniq.Services.TestService.Application/Edvaniq.Services.TestService.Application.csproj" />
+    <Project Path="src/Services/TestService/Edvaniq.Services.TestService.Contracts/Edvaniq.Services.TestService.Contracts.csproj" />
+    <Project Path="src/Services/TestService/Edvaniq.Services.TestService.Domain/Edvaniq.Services.TestService.Domain.csproj" />
+    <Project Path="src/Services/TestService/Edvaniq.Services.TestService.Infrastructure/Edvaniq.Services.TestService.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/src/Services/Tutor/">
     <Project Path="src/Services/Tutor/Edvaniq.Services.Tutor.Api/Edvaniq.Services.Tutor.Api.csproj" />
     <Project Path="src/Services/Tutor/Edvaniq.Services.Tutor.Application/Edvaniq.Services.Tutor.Application.csproj" />
@@ -161,6 +168,10 @@
   <Folder Name="/tests/Services/Planning/">
     <Project Path="tests/Services/Planning/Edvaniq.Services.Planning.IntegrationTests/Edvaniq.Services.Planning.IntegrationTests.csproj" />
     <Project Path="tests/Services/Planning/Edvaniq.Services.Planning.UnitTests/Edvaniq.Services.Planning.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Services/TestService/">
+    <Project Path="tests/Services/TestService/Edvaniq.Services.TestService.IntegrationTests/Edvaniq.Services.TestService.IntegrationTests.csproj" />
+    <Project Path="tests/Services/TestService/Edvaniq.Services.TestService.UnitTests/Edvaniq.Services.TestService.UnitTests.csproj" />
   </Folder>
   <Folder Name="/tests/Services/Tutor/">
     <Project Path="tests/Services/Tutor/Edvaniq.Services.Tutor.IntegrationTests/Edvaniq.Services.Tutor.IntegrationTests.csproj" />
