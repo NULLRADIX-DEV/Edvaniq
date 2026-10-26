@@ -20,6 +20,7 @@ public sealed class SecurityHeaderTests
         ("Referrer-Policy", "strict-origin-when-cross-origin"),
         ("Cross-Origin-Opener-Policy", "same-origin"),
         ("Permissions-Policy", "camera=(), microphone=(), geolocation=()"),
+        ("X-Robots-Tag", "noindex, nofollow"),
     ];
 
     [Theory]
