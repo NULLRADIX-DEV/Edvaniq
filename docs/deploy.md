@@ -90,6 +90,50 @@ Jeder Container hat eine feste Speichergrenze ohne Swap (`mem_limit` und `memswa
 
 Braucht ein Container mehr als seine Grenze, beendet der Kernel nur ihn, und Docker startet ihn neu. .NET kennt die Grenze und hält seinen Heap bei 75 % davon. Jeder Prozess schreibt beim Start `GC memory limit: <n> MiB` ins Log, bei 256 MB sind das 192 MiB. Braucht ein Prozess dauerhaft mehr, überschreibst du seine Grenze im Dienst. Die Summe muss dann weiter unter 6 GB bleiben.
 
+### Verbrauch im Ruhebetrieb
+
+Gemessen am 26.10.2026 mit Commit `c50cd86`, gut zehn Minuten nach dem Deploy und ohne Nutzer, zweimal im Abstand von drei Minuten mit `docker stats`. Die Werte änderten sich dazwischen um weniger als 1 MB, die Tabelle nennt den höheren. `docker stats` zählt den Speicher der Prozesse ohne den Dateicache, den der Kernel bei Bedarf freigibt.
+
+| Container | Grenze | Verbrauch | Anteil |
+|---|---:|---:|---:|
+| `db` | 1536 MB | 573 MB | 37 % |
+| `planning-api` | 256 MB | 64 MB | 25 % |
+| `web` | 256 MB | 47 MB | 18 % |
+| `gateway` | 256 MB | 31 MB | 12 % |
+| `identity-api` | 256 MB | 29 MB | 11 % |
+| `content-api` | 256 MB | 23 MB | 9 % |
+| `assessment-api` | 256 MB | 22 MB | 9 % |
+| `flashcards-api` | 256 MB | 22 MB | 9 % |
+| `knowledge-api` | 256 MB | 22 MB | 9 % |
+| `learningengine-api` | 256 MB | 22 MB | 9 % |
+| `content-worker` | 256 MB | 15 MB | 6 % |
+| `gamification-api` | 128 MB | 22 MB | 17 % |
+| `analytics-api` | 128 MB | 22 MB | 17 % |
+| `notifications-api` | 128 MB | 22 MB | 17 % |
+| `tutor-api` | 128 MB | 22 MB | 17 % |
+| `notifications-worker` | 128 MB | 15 MB | 12 % |
+| Summe | 4736 MB | 975 MB | 21 % |
+
+Kein Container kommt über 37 % seiner Grenze, [Q15](spec/quality.md#speicher-und-last) erlaubt 80 %. Planning braucht mehr als die anderen Services, weil es als einziger schon mit seiner Datenbank arbeitet. Die übrigen sind noch Gerüst ohne Fachcode. Der InnoDB-Cache von MySQL wächst mit den Daten bis auf 1 GB.
+
+Der Server zeigt für die ganze App mehr, am selben Tag 3,4 GB, weil er Docker selbst und den Dateicache mitzählt. Den Cache gibt der Kernel frei, bevor er einen Prozess beendet.
+
+### Hochrechnung auf 10 Prozesse
+
+Im MVP laufen 10 Prozesse: die sieben Services Identity, Planning, Content, Knowledge, Assessment, Flashcards und LearningEngine, der Content-Worker, das Gateway und der Web-Host. Dazu kommen MySQL und der Broker. Tutor, Gamification, Analytics und Notifications laufen heute als Gerüst mit, gehören aber nicht zum MVP und fehlen deshalb in der Rechnung.
+
+Gateway, Web-Host und MySQL zählen mit ihrem Messwert. Die sieben Services und der Content-Worker zählen je mit dem Wert von Planning, weil erst Planning mit seiner Datenbank arbeitet. Für den Broker gilt bis zu seiner Einführung (#198) eine angenommene Grenze von 256 MB, sein Verbrauch ist noch offen.
+
+| | Ruhebetrieb | Grenze |
+|---|---:|---:|
+| 7 Services und Content-Worker | 8 × 64 = 512 MB | 8 × 256 = 2048 MB |
+| Gateway und Web-Host | 78 MB | 512 MB |
+| MySQL | 573 MB | 1536 MB |
+| Broker | offen | 256 MB |
+| Summe | 1163 MB | 4352 MB |
+
+Bis zur Obergrenze von 6 GB bleiben 1792 MB. Davon braucht Docker selbst etwa 160 MB und ein laufender Migrationsschritt 256 MB, als Reserve bleiben also knapp 1,4 GB. Im Ruhebetrieb belegen die Prozesse gut ein Viertel ihrer Grenzen. Ein Service darf gut das Dreifache von Planning brauchen, bevor er die 80 % aus Q15 erreicht. Erneut gemessen wird unter Last (#243), nach dem siebten Service (#502) und vor dem Pilot (#576).
+
 ## Health
 
 Jeder Prozess mit HTTP meldet `/alive` (der Prozess lebt) und `/health` (er ist bereit). Services aus der Vorlage sind erst bereit, wenn sie ihre eigene Datenbank erreichen ([Aufbau eines Service](service-internals.md#health)). Außerhalb von Development antworten beide nur auf dem internen Port 8081, den nur der Container selbst und das Netz der App erreichen. Auf dem App-Port 8080 gibt es für beide Pfade 404, bei Services mit Token-Prüfung ohne Token 401. Das gilt auch mit einem gefälschten Header `Host: …:8081`, denn es zählt der Port, auf dem die Verbindung ankommt. Die Antwort ist nur `Healthy`, `Degraded` oder `Unhealthy`, ohne Namen der Checks und ohne Fehlermeldungen.
