@@ -108,12 +108,18 @@ public sealed class ShellLayoutTests : BunitContext
         Assert.Equal("Systemstatus", shell.Find("nav#shell-nav a[href='systemstatus']").TextContent);
     }
 
+    // Imprint, privacy notice and open source notices are one click away from every page, before the runtime has
+    // loaded too.
     [Fact]
-    public void Navigation_LeadsToTheOpenSourceNotices()
+    public void Footer_LeadsToTheLegalPages()
     {
+        SetRendererInfo(new RendererInfo("Static", isInteractive: false));
+
         var shell = RenderShell();
 
-        Assert.Equal("Open Source", shell.Find("nav#shell-nav a[href='open-source']").TextContent);
+        var links = shell.FindAll("footer a");
+        Assert.Equal(["Impressum", "Datenschutz", "Open Source"], links.Select(link => link.TextContent));
+        Assert.Equal([Imprint.Url, "datenschutz", "open-source"], links.Select(link => link.GetAttribute("href")));
     }
 
     [Fact]

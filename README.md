@@ -45,5 +45,6 @@ Hängt der Start oder bricht er ab, hilft meist einer dieser Punkte:
 | [docs/licenses.md](docs/licenses.md) | Erlaubte Lizenzen, Liste der Drittkomponenten, Aufnahme neuer Komponenten |
 | [docs/dependencies.md](docs/dependencies.md) | Update-Vorschläge, Schwachstellenprüfung und Umgang mit Funden |
 | [docs/spec/quality.md](docs/spec/quality.md) | Qualitätsziele mit Zielwert und Messweise |
+| [docs/spec/acceptance.md](docs/spec/acceptance.md) | Akzeptanzkriterien mit Testfall je Kernpunkt |
 | [docs/decisions/outbox.md](docs/decisions/outbox.md) | Warum jeder Service eine eigene Outbox-Tabelle hat |
 | [docs/decisions/broker.md](docs/decisions/broker.md) | Warum NATS JetStream die Integration Events verteilt |

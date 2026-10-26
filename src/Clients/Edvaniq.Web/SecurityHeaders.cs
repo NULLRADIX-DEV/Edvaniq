@@ -12,6 +12,10 @@ public static class SecurityHeaders
         ["Referrer-Policy"] = "strict-origin-when-cross-origin",
         ["Cross-Origin-Opener-Policy"] = "same-origin",
         ["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()",
+
+        // Until the start with real users, search engines keep the shell out of their index. A robots.txt that forbids
+        // crawling would do the opposite: the crawler never sees this header and may list a linked address anyway.
+        ["X-Robots-Tag"] = "noindex, nofollow",
     };
 
     // Added when the response starts, so an answer that something resets on its way, like the error page, gets them too.
