@@ -19,8 +19,12 @@ updates:
       - dependency-name: Microsoft.IdentityModel.JsonWebTokens
 
   # The images in deploy/compose.yml that are not our own, such as MySQL. The tests and the AppHost use the same MySQL
-  # image, MySqlImageTests turns the pull request red until they follow.
+  # image, MySqlImageTests turns the pull request red until they follow. MySQL stays on its LTS line: a new major is an
+  # Innovation release or the next LTS and upgrades the data directory with no way back, so that move is made by hand.
   - package-ecosystem: docker-compose
     directory: /deploy
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: mysql
+        update-types: ["version-update:semver-major"]
