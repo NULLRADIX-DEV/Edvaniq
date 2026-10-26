@@ -50,20 +50,26 @@ internal static partial class AcceptanceRule
         return sections;
     }
 
-    // Every core point the milestone works on needs a section with a criterion that holds by then. Every section belongs
-    // to a core point and has two or three criteria, each with an ID of its own, a test case in the form Gegeben, Wenn,
-    // Dann and a milestone it holds from.
+    // Every core point needs a section, and every section belongs to a core point. A section has two or three criteria,
+    // each with an ID of its own, a test case in the form Gegeben, Wenn, Dann and a milestone the core point is built in.
     public static IEnumerable<string> Violations(
-        IReadOnlyList<(string Name, string[] Milestones)> corePoints, string milestone,
+        IReadOnlyList<(string Name, string[] Milestones)> corePoints,
         IReadOnlyList<(string Name, List<(string Id, string TestCase, string From)> Rows)> criteria)
     {
-        var names = corePoints.Select(point => point.Name).ToHashSet();
+        var milestones = corePoints.GroupBy(point => point.Name).ToDictionary(name => name.Key, name => name.First().Milestones);
         var sections = criteria.Select(section => section.Name).ToHashSet();
+        var pointTwice = corePoints
+            .GroupBy(point => point.Name)
+            .Where(name => name.Count() > 1)
+            .Select(name => $"{name.Key} is {name.Count()} times in docs/spec/non-goals.md");
+        var noMilestone = corePoints
+            .Where(point => point.Milestones.Length == 0)
+            .Select(point => $"{point.Name} names no milestone in docs/spec/non-goals.md");
         var missing = corePoints
-            .Where(point => point.Milestones.Contains(milestone) && !sections.Contains(point.Name))
-            .Select(point => $"{point.Name} has no criteria, but {milestone} works on it");
+            .Where(point => !sections.Contains(point.Name))
+            .Select(point => $"{point.Name} has no criteria");
         var unknown = criteria
-            .Where(section => !names.Contains(section.Name))
+            .Where(section => !milestones.ContainsKey(section.Name))
             .Select(section => $"{section.Name} is no core point in docs/spec/non-goals.md");
         var twice = criteria
             .GroupBy(section => section.Name)
@@ -72,18 +78,19 @@ internal static partial class AcceptanceRule
         var count = criteria
             .Where(section => section.Rows.Count is < 2 or > 3)
             .Select(section => $"{section.Name} needs two or three criteria, not {section.Rows.Count}");
-        var late = corePoints
-            .Where(point => point.Milestones.Contains(milestone))
-            .Join(criteria, point => point.Name, section => section.Name, (_, section) => section)
-            .Where(section => section.Rows.Count > 0 && !section.Rows.Any(row => HoldsBy(row.From, milestone)))
-            .Select(section => $"{section.Name} has no criterion that holds by {milestone}");
+        var outside = criteria
+            .Where(section => milestones.ContainsKey(section.Name))
+            .SelectMany(section => section.Rows
+                .Where(row => MilestoneId().IsMatch(row.From) && !milestones[section.Name].Contains(row.From))
+                .Select(row => $"{row.Id} holds from {row.From}, but {section.Name} is built in {string.Join(", ", milestones[section.Name])}"));
         var rows = criteria.SelectMany(section => section.Rows).ToList();
         var badRows = rows.SelectMany(row => RowViolations(row.Id, row.TestCase, row.From));
         var duplicate = rows
             .GroupBy(row => row.Id)
             .Where(id => id.Count() > 1)
             .Select(id => $"{id.Key} is used {id.Count()} times");
-        return missing.Concat(unknown).Concat(twice).Concat(count).Concat(late).Concat(badRows).Concat(duplicate);
+        return pointTwice.Concat(noMilestone).Concat(missing).Concat(unknown).Concat(twice).Concat(count).Concat(outside)
+            .Concat(badRows).Concat(duplicate);
     }
 
     private static IEnumerable<string> RowViolations(string id, string testCase, string from)
@@ -103,9 +110,6 @@ internal static partial class AcceptanceRule
             yield return $"{id} holds from '{from}', which is no milestone like M2";
         }
     }
-
-    private static bool HoldsBy(string from, string milestone) =>
-        MilestoneId().IsMatch(from) && int.Parse(from[1..]) <= int.Parse(milestone[1..]);
 
     private static string[] MilestonesOf(string scope) =>
         Milestones().Matches(scope).SelectMany(match => match.Groups[1].Value.Split(", ")).Distinct().ToArray();
