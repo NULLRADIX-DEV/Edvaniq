@@ -107,11 +107,37 @@
     outline: none;
 }
 
+.shell-footer {
+    padding: var(--space-4);
+    border-top: 1px solid var(--color-line);
+}
+
+.shell-footer ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-6);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+/* Small print, but still a target a finger can hit. */
+.shell-footer ::deep a {
+    display: inline-block;
+    padding: var(--space-2) 0;
+    color: var(--color-ink-muted);
+    font-size: 0.875rem;
+}
+
+.shell-footer ::deep a:hover {
+    color: var(--color-accent);
+}
+
 @media (min-width: 48rem) {
     .shell {
         display: grid;
         grid-template-columns: var(--shell-nav-width) 1fr;
-        grid-template-rows: auto 1fr;
+        grid-template-rows: auto 1fr auto;
     }
 
     .shell-header {
@@ -130,7 +156,7 @@
     .shell-nav.open {
         display: block;
         grid-column: 1;
-        grid-row: 2;
+        grid-row: 2 / span 2;
         border-bottom: 0;
         border-right: 1px solid var(--color-line);
     }
@@ -144,5 +170,11 @@
         grid-row: 1 / span 2;
         padding: var(--space-8) var(--space-8) var(--space-8);
         max-width: calc(var(--content-width) + 2 * var(--space-8));
+    }
+
+    .shell-footer {
+        grid-column: 2;
+        grid-row: 3;
+        padding: var(--space-4) var(--space-8);
     }
 }

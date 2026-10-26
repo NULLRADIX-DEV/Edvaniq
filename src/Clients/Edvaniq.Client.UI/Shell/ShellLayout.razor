@@ -23,7 +23,6 @@
         <ul>
             <li><NavLink href="" Match="NavLinkMatch.All"><span>Start</span></NavLink></li>
             <li><NavLink href="systemstatus"><span>Systemstatus</span></NavLink></li>
-            <li><NavLink href="open-source"><span>Open Source</span></NavLink></li>
         </ul>
     </nav>
 
@@ -36,6 +35,15 @@
         }
         @Body
     </main>
+
+    @* Imprint and privacy notice are one click away from every page, without a login. *@
+    <footer class="shell-footer">
+        <ul>
+            <li><a href="@Imprint.Url">Impressum</a></li>
+            <li><NavLink href="datenschutz">Datenschutz</NavLink></li>
+            <li><NavLink href="open-source">Open Source</NavLink></li>
+        </ul>
+    </footer>
 </div>
 
 @code {

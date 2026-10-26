@@ -1,0 +1,9 @@
+/* A sticky note on the page: the text is a draft and will be replaced. */
+.draft-note {
+    margin-bottom: var(--space-6);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    border-left: 4px solid var(--color-highlight);
+    border-radius: 0 var(--radius) var(--radius) 0;
+}

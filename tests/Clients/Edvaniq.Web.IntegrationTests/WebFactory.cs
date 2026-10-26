@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.Web.IntegrationTests;
 
@@ -17,6 +18,9 @@ public sealed class WebFactory(
     : WebApplicationFactory<App>
 {
     public string ClientSecret { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+
+    // What the web host logs.
+    public TestLogs Logs { get; } = new();
 
     // The session cookie is Secure, so a client only sends it back over HTTPS.
     public HttpClient CreateBrowser(bool handleCookies = true) =>
@@ -33,10 +37,14 @@ public sealed class WebFactory(
         builder.UseSetting("BackendToken:TokenEndpoint", gatewayAddress + StubService.TokenPath);
         builder.UseSetting("BackendToken:ClientSecret", withClientSecret ? ClientSecret : "");
 
-        if (time is not null)
+        builder.ConfigureTestServices(services =>
         {
-            builder.ConfigureTestServices(services => services.AddSingleton(time));
-        }
+            services.AddSingleton<ILoggerProvider>(Logs);
+            if (time is not null)
+            {
+                services.AddSingleton(time);
+            }
+        });
 
         configure?.Invoke(builder);
     }

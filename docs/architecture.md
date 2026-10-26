@@ -114,7 +114,7 @@ Edvaniq.App (MAUI Blazor Hybrid) ───────────────�
 
 Seiten und Features entstehen einmal in `Client.UI` und laufen dann im Browser und in der App.
 
-Auch die Shell liegt dort: `ShellLayout` mit Kopfzeile, Navigation und dem Hinweis, wenn der Server nicht antwortet, dazu `Routes`. `Edvaniq.Web.Client` und die App binden nur `Routes` ein und registrieren `IBackendStatus` und `IPing` aus `Client.Core`. Die Seite `/systemstatus` schickt den Ping über Web-Host, Gateway und Planning in dessen Datenbank und zeigt, was dort gespeichert wurde. Ohne Sitzung startet `HttpPing` selbst eine Gast-Sitzung und versucht es einmal neu. Farben, Abstände und Grundstile stehen als CSS-Variablen in `Client.DesignSystem/wwwroot/edvaniq.css`. Ein Test prüft jedes Paar aus Text- und Hintergrundfarbe gegen WCAG AA, eine neue Farbe bekommt dort ihr Paar.
+Auch die Shell liegt dort: `ShellLayout` mit Kopfzeile, Navigation, Fußzeile und dem Hinweis, wenn der Server nicht antwortet, dazu `Routes`. Die Fußzeile führt von jeder Seite ohne Login zu Impressum, Datenschutzhinweis (`/datenschutz`) und Open-Source-Hinweisen. Ein eigenes Impressum hat Edvaniq noch nicht, der Link geht auf das von nullradix.de. Der Datenschutzhinweis ist bis zum Start mit echten Nutzern als vorläufig gekennzeichnet. `Edvaniq.Web.Client` und die App binden nur `Routes` ein und registrieren `IBackendStatus` und `IPing` aus `Client.Core`. Die Seite `/systemstatus` schickt den Ping über Web-Host, Gateway und Planning in dessen Datenbank und zeigt, was dort gespeichert wurde. Ohne Sitzung startet `HttpPing` selbst eine Gast-Sitzung und versucht es einmal neu. Farben, Abstände und Grundstile stehen als CSS-Variablen in `Client.DesignSystem/wwwroot/edvaniq.css`. Ein Test prüft jedes Paar aus Text- und Hintergrundfarbe gegen WCAG AA, eine neue Farbe bekommt dort ihr Paar.
 
 Eine unbekannte Adresse zeigt `NotFound`. Bei einem unerwarteten Fehler auf dem Server zeigt der Web-Host `ServerError`, auch aus `Client.UI`. Die Seite sagt kurz und ohne Details, dass etwas schiefgegangen ist, und nennt die Kennung der Anfrage. „Erneut versuchen“ holt dieselbe Seite noch einmal, ein zweiter Link führt zur Startseite. `ServerError` kommt fertig gerendert vom Server und braucht die Laufzeit im Browser nicht, weil die Seite auch bei einer langsamen Verbindung da sein soll. Aus demselben Grund sagt `/systemstatus`, bis die Laufzeit geladen ist, „Wird geladen …“, als Statusmeldung, die ein Screenreader vorliest.
 
@@ -132,12 +132,15 @@ Jede Antwort des Web-Hosts trägt die Header aus der Tabelle, auch Fehlerantwort
 | `Referrer-Policy` | `strict-origin-when-cross-origin` |
 | `Cross-Origin-Opener-Policy` | `same-origin` |
 | `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` |
+| `X-Robots-Tag` | `noindex, nofollow` |
 
 Damit lässt sich die Shell in keiner fremden Seite einbetten. Das Basis-Element und Formulare zeigen nur auf die eigene Seite, Plug-in-Inhalte sind gesperrt, und der Browser errät keinen Inhaltstyp. Kamera, Mikrofon und Standort sind für die Seite ausgeschaltet.
 
+Bis zum Start mit echten Nutzern soll keine Suchmaschine die Shell aufnehmen. Das sagt `X-Robots-Tag`, und jede Seite wiederholt es als `<meta name="robots">`. Eine `robots.txt`, die das Crawlen verbietet, gibt es bewusst nicht: Dann käme der Crawler nie bis zu dieser Bitte und könnte eine verlinkte Adresse trotzdem listen.
+
 ## Barrierefreiheits-Check
 
-Grundlegende Fehler in der Shell sollen auffallen, bevor ein Nutzer darüber stolpert. `Edvaniq.Web.AccessibilityTests` startet dafür den echten Web-Host mit einem Stub als Gateway, lädt die Shell in Chromium und wartet, bis der Client läuft. Dann prüft axe-core jede Seite gegen WCAG 2.2 Level A und AA, darunter Kontrast, Beschriftungen, die Namen von Links und Schaltflächen, die Sprache des Dokuments und die Größe der Ziele. Gescannt werden `/`, `/systemstatus`, `/open-source` und die Seite für eine unbekannte Adresse, jede mit 375 px und mit 1280 px Breite. Dazu kommen die Shell mit geöffnetem Menü und `/systemstatus` bei ausgefallenem Server, weil nur dort die Warnfarben vorkommen.
+Grundlegende Fehler in der Shell sollen auffallen, bevor ein Nutzer darüber stolpert. `Edvaniq.Web.AccessibilityTests` startet dafür den echten Web-Host mit einem Stub als Gateway, lädt die Shell in Chromium und wartet, bis der Client läuft. Dann prüft axe-core jede Seite gegen WCAG 2.2 Level A und AA, darunter Kontrast, Beschriftungen, die Namen von Links und Schaltflächen, die Sprache des Dokuments und die Größe der Ziele. Gescannt werden `/`, `/systemstatus`, `/datenschutz`, `/open-source` und die Seite für eine unbekannte Adresse, jede mit 375 px und mit 1280 px Breite. Dazu kommen die Shell mit geöffnetem Menü und `/systemstatus` bei ausgefallenem Server, weil nur dort die Warnfarben vorkommen. Im selben Aufbau prüft `ThirdPartyTests`, dass keine Seite etwas von einem fremden Host lädt, also weder Tracker noch Schriften oder Skripte, so wie es der Datenschutzhinweis zusagt.
 
 Jede einzelne Verletzung macht den Test rot. Die Meldung nennt Regel, Auswirkung, betroffenes Element und die Seite von Deque, die erklärt, wie man es behebt. Die Tastatur sieht axe nicht, dafür gibt es eigene Tests: Der Skip-Link ist der erste Stopp und setzt den Fokus auf den Inhalt, das Menü öffnet und schließt sich mit Enter, Leertaste und Escape, und jeder Stopp zeigt einen sichtbaren Fokusrahmen. Ein weiterer Test lässt denselben Scan auf eine Seite mit absichtlichen Fehlern los (ein Bild ohne Alternativtext, ein Feld ohne Beschriftung, zu blasser Text) und verlangt, dass er sie meldet. So fällt auf, wenn der Check stumm wird.
 
@@ -162,6 +165,8 @@ Fehlerantworten nennen die Kennung im Feld `traceId` eines Problems nach RFC 945
 - Das Gateway schreibt seine Probleme selbst.
 - Der Web-Host macht aus den eigenen Fehlern unter `/api` und `/session` Probleme (`ApiProblems`). Probleme aus dem Backend reicht er unverändert durch, sie nennen dieselbe Kennung.
 - Bei einer Seite zeigt der Web-Host im Fehlerfall `ServerError` mit derselben Kennung. Ein gescheiterter Ping auf `/systemstatus` nennt die Kennung seines Problems, `HttpPing` reicht sie dafür an die Seite durch.
+
+Ins Log kommt nichts, womit jemand hineinkommt: kein Client-Secret, kein Signierschlüssel, kein Connection String, kein Token und kein Session-Cookie. Auch die Werte von SQL-Parametern stehen nicht darin, weil kein Service `EnableSensitiveDataLogging` einschaltet. Die `LoggingTests` von Web-Host, Gateway, Identity und Planning schneiden das Log eines Durchlaufs mit Token-Abruf und Ping mit und suchen darin nach diesen Werten, auch nach abgelehnten Secrets und Tokens. Wie viel Log ein Container behält, begrenzt der Server, das Älteste fällt zuerst weg.
 
 ## Tokens
 
