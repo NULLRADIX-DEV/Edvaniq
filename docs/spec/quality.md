@@ -38,7 +38,7 @@ Die Obergrenze für die ganze App und die Grenzen je Container stehen in `deploy
 | ID | Ziel | Zielwert | Messweise | Ab |
 |---|---|---|---|---|
 | Q14 | Die ganze App bleibt in ihrem Speicherbudget, und jeder Container hat eine feste Grenze ohne Swap. | 6 GB als Summe aller Grenzen | Summe der `mem_limit` in `deploy/compose.yml`, im Review jeder Änderung daran von Hand geprüft. Der Server lehnt eine Compose-Datei ohne Grenzen ab. | M0 |
-| Q15 | Jeder Container hat im Normalbetrieb Luft nach oben. | höchstens 80 % seiner Grenze (Vorschlag) | RAM-Messung je Container im Ruhezustand (#165) und unter Durchstich-Last (#243), erneut nach dem siebten Service (#502) und nach der Abstimmung der Grenzen vor dem Pilot (#576). | M0 |
+| Q15 | Jeder Container hat im Normalbetrieb Luft nach oben. | höchstens 80 % seiner Grenze (Vorschlag) | RAM-Messung je Container im Ruhezustand ([#165](../deploy.md#verbrauch-im-ruhebetrieb)) und unter Durchstich-Last (#243), erneut nach dem siebten Service (#502) und nach der Abstimmung der Grenzen vor dem Pilot (#576). | M0 |
 | Q16 | Die App hält Last aus, ohne dass ein Container wegen Speichermangel beendet wird. | 5 parallele Sessions neben einer Analyse, später 20 gleichzeitig aktive Nutzer (Vorschlag), jeweils 0 Beendigungen durch Speichermangel | Lasttest-Stichprobe (#415). Danach ein wiederholbares Szenario mit simulierten Pilotnutzern und KI-Test-Double (#578, #579), dessen Nutzerzahl aus der Pilotplanung kommt. | M3 |
 | Q17 | Der Plattenplatz reicht, und das Team erfährt früh, wenn er knapp wird. | Alarm bei 80 % belegtem Platz (Vorschlag) | Testweise ausgelöster Alarm (#231). Das Logvolumen je Container ist begrenzt und wird rotiert (#167). | M1 |
 
