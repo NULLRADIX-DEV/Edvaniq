@@ -48,3 +48,4 @@ Hängt der Start oder bricht er ab, hilft meist einer dieser Punkte:
 | [docs/spec/acceptance.md](docs/spec/acceptance.md) | Akzeptanzkriterien mit Testfall je Kernpunkt |
 | [docs/decisions/outbox.md](docs/decisions/outbox.md) | Warum jeder Service eine eigene Outbox-Tabelle hat |
 | [docs/decisions/broker.md](docs/decisions/broker.md) | Warum NATS JetStream die Integration Events verteilt |
+| [docs/decisions/android-app.md](docs/decisions/android-app.md) | Die App mit der gemeinsamen UI auf einem Android-Gerät starten, Hindernisse und Grenzen |
