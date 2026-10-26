@@ -35,6 +35,7 @@ Hängt der Start oder bricht er ab, hilft meist einer dieser Punkte:
 | [docs/spec/non-goals.md](docs/spec/non-goals.md) | Was je Kernpunkt bewusst nicht gebaut wird |
 | [docs/spec/object-model.md](docs/spec/object-model.md) | Kernobjekte und der Service, dem jedes gehört |
 | [docs/spec/modes.md](docs/spec/modes.md) | Was in Übung, Einstufung und Prüfungsmodus gilt |
+| [docs/spec/events.md](docs/spec/events.md) | Die Ereignisse zwischen den Services und der Vertrag des Lern-Nachweises |
 | [docs/architecture.md](docs/architecture.md) | Services, Kommunikation, Aufbau eines Service |
 | [docs/service-template.md](docs/service-template.md) | Einen neuen Service aus der Vorlage anlegen, Schritt für Schritt |
 | [docs/service-internals.md](docs/service-internals.md) | Was ein Service aus der Vorlage mitbringt: Token, Datenbank, Nachrichten, Tests, Image |

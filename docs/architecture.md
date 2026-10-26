@@ -69,7 +69,7 @@ Diese sechs Regeln halten die Services auseinander. Zu jeder gehört eine Prüff
    - Test: `Rule5ProjectionTests` baut das Modell jedes DbContext über seine Design-Time-Factory, wie `dotnet ef`, ohne Datenbank. Kein Entity-Typ, kein Complex Type und kein Property-Typ darin stammt aus einem anderen Service, auch nicht als generisches Argument. Ein DbContext ohne Factory ist ein Verstoß, ebenso ein Projekt eines Service, das `Edvaniq.ArchitectureTests` nicht referenziert. Keine Domain referenziert ein `.Contracts`. Wer fremden Inhalt in eine eigene Spalte kopiert, etwa einen Text als `string`, fällt nur im Review auf.
 6. **Zyklen per Abfrage.** Die Integration Events bilden keinen Kreis: Hört A auf Events von B, hört B weder direkt noch über andere Services auf Events von A. Braucht B trotzdem Daten von A, fragt B sie per HTTP ab. Die Typen für Anfrage und Antwort legt B selbst an, so entsteht keine Referenz auf A.
    - Prüffrage: Hat der Graph „Service referenziert `.Contracts` von“ einen Kreis?
-   - Test: `Rule6CycleTests` sucht Kreise in den Projektreferenzen zwischen den Services und in der Tabelle unten.
+   - Test: `Rule6CycleTests` sucht Kreise in den Projektreferenzen zwischen den Services und in der Tabelle unten. `EventCatalogTests` prüft, dass jedes Paar aus Sender und Empfänger im [Ereigniskatalog](spec/events.md) in dieser Tabelle steht.
 
 Weitere Regeln:
 
@@ -78,8 +78,10 @@ Weitere Regeln:
 - Paketversionen stehen nur in `Directory.Packages.props`.
 - Neue Services entstehen nur aus der Vorlage in `templates/service/`, nie von Hand ([Einen neuen Service anlegen](service-template.md)).
 - Jede Anfrage an einen Service braucht ein gültiges Token. Der Nutzer kommt nur aus dem Token (`sub`), nie aus der Anfrage ([Aufbau eines Service](service-internals.md#token-prüfung)).
+- Zeitpunkte speichert jeder Service in UTC. Den [Lerntag](spec/glossary.md#lerntag) bestimmt jeder Service selbst mit der Tagesgrenze 04:00 Uhr Europe/Berlin, die in UTC im Sommer bei 02:00 und im Winter bei 03:00 liegt. Zwischen Services wird der Lerntag nie übertragen, weder in Ereignissen noch in Abfragen. Dem Client nennt Planning den Lerntag seiner Pläne.
+- Ereignisse ändern sich nur additiv, und es gibt keine Sagas ([Ereigniskatalog](spec/events.md#regeln-für-ereignisse)).
 
-Wer auf wessen Integration Events hört, nach Regel 6 ohne Kreis. Planning holt die Mastery per Abfrage bei LearningEngine, weil LearningEngine schon auf Planning hört.
+Wer auf wessen Integration Events hört, nach Regel 6 ohne Kreis. Planning holt die Mastery per Abfrage bei LearningEngine, weil LearningEngine schon auf Planning hört. Welche Ereignisse auf diesen Wegen laufen, steht im [Ereigniskatalog](spec/events.md).
 
 | Consumer | konsumiert von |
 |---|---|
@@ -87,7 +89,7 @@ Wer auf wessen Integration Events hört, nach Regel 6 ohne Kreis. Planning holt 
 | Content | Identity |
 | Knowledge | Identity, Content |
 | Assessment | Identity, Content, Knowledge |
-| Flashcards | Identity, Content, Knowledge, Assessment |
+| Flashcards | Identity, Content, Knowledge |
 | LearningEngine | Identity, Planning, Knowledge, Assessment, Flashcards |
 | Tutor | Identity, Content, Knowledge |
 | Gamification | Identity, Planning, Assessment, Flashcards, LearningEngine |
@@ -179,7 +181,7 @@ Das Schema ändert sich nur über EF-Core-Migrationen, und Migrieren ist ein eig
 
 ## Nachrichten
 
-Services melden sich Ereignisse über NATS JetStream. Damit ein Ereignis weder verloren geht noch ohne seine Änderung hinausgeht, schreibt ein Service es mit der Änderung in die Tabelle `outbox_messages` seiner eigenen Datenbank, im selben `SaveChanges`. Ein Dispatcher im Prozess des Service schickt die Zeilen von dort an den Broker. Jeder Service hat beim Broker einen eigenen Stream, der nach ihm heißt, und seine Ereignisse liegen darunter. Wer ein Ereignis hören will, braucht nur dessen Typ aus den `.Contracts` des Absenders, Stream und Subject ergeben sich aus dem Namensraum.
+Services melden sich Ereignisse über NATS JetStream. Damit ein Ereignis weder verloren geht noch ohne seine Änderung hinausgeht, schreibt ein Service es mit der Änderung in die Tabelle `outbox_messages` seiner eigenen Datenbank, im selben `SaveChanges`. Ein Dispatcher im Prozess des Service schickt die Zeilen von dort an den Broker. Jeder Service hat beim Broker einen eigenen Stream, der nach ihm heißt, und seine Ereignisse liegen darunter. Wer ein Ereignis hören will, braucht nur dessen Typ aus den `.Contracts` des Absenders, Stream und Subject ergeben sich aus dem Namensraum. Welche Ereignisse es gibt und was sie tragen, steht im [Ereigniskatalog](spec/events.md).
 
 Ein Consumer trägt jede Nachricht, die er behandelt, in seine Tabelle `inbox_messages` ein, im selben `SaveChanges` wie die Wirkung, und bestätigt sie erst danach beim Broker. Stellt der Broker eine Nachricht mehrmals zu, hat sie so nur eine Wirkung. Zugestellt wird mindestens einmal und ohne feste Reihenfolge. Beide Tabellen legt `ServiceDbContext` an, kein Service kann sie vergessen. Wie ein Service senden und empfangen kann, steht im [Aufbau eines Service](service-internals.md#nachrichten), warum es so gebaut ist, in den Entscheidungen zu [Outbox](decisions/outbox.md) und [Broker](decisions/broker.md).
 
