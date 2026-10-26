@@ -76,7 +76,8 @@ Weitere Regeln:
 - Clients kennen kein Backend-Projekt. `Client.Core` spricht nur mit dem Gateway, im Browser über den Web-Host. Die API-Clients entstehen per OpenAPI.
 - BuildingBlocks enthalten nur technische Bausteine, keine Fachbegriffe.
 - Paketversionen stehen nur in `Directory.Packages.props`.
-- Jede Anfrage an einen Service braucht ein gültiges Token. Der Nutzer kommt nur aus dem Token (`sub`), nie aus der Anfrage ([Service-Vorlage](service-template.md#token-prüfung)).
+- Neue Services entstehen nur aus der Vorlage in `templates/service/`, nie von Hand ([Einen neuen Service anlegen](service-template.md)).
+- Jede Anfrage an einen Service braucht ein gültiges Token. Der Nutzer kommt nur aus dem Token (`sub`), nie aus der Anfrage ([Aufbau eines Service](service-internals.md#token-prüfung)).
 
 Wer auf wessen Integration Events hört, nach Regel 6 ohne Kreis. Planning holt die Mastery per Abfrage bei LearningEngine, weil LearningEngine schon auf Planning hört.
 
@@ -172,17 +173,17 @@ Bis dahin steht in jedem Token derselbe Client statt eines Nutzers, für alle Si
 
 Alle Services nutzen MySQL, einen Server mit einer Datenbank pro Service (`identitydb`, `planningdb` und so weiter). Ein Worker nutzt die Datenbank seines Service. Lokal startet Aspire MySQL als Container mit persistentem Volume und phpMyAdmin und legt die Datenbanken selbst an.
 
-Den Connection String bekommt ein Service von Aspire als `ConnectionStrings:<service>db`, mit einem eigenen DB-Benutzer, der nur auf die eigene Datenbank darf (`AddServiceDatabase` im AppHost). Daten eines Nutzers (`IOwnedByUser`) sieht nur dieser Nutzer, weil der DbContext jedes Service von `ServiceDbContext` erbt. Der schränkt jede Abfrage auf den Nutzer aus dem Token ein ([Service-Vorlage](service-template.md#daten-je-nutzer)).
+Den Connection String bekommt ein Service von Aspire als `ConnectionStrings:<service>db`, mit einem eigenen DB-Benutzer, der nur auf die eigene Datenbank darf (`AddServiceDatabase` im AppHost). Daten eines Nutzers (`IOwnedByUser`) sieht nur dieser Nutzer, weil der DbContext jedes Service von `ServiceDbContext` erbt. Der schränkt jede Abfrage auf den Nutzer aus dem Token ein ([Aufbau eines Service](service-internals.md#daten-je-nutzer)).
 
-Das Schema ändert sich nur über EF-Core-Migrationen, und Migrieren ist ein eigener Schritt (`<Api>.dll migrate`), nie Teil des Starts ([Service-Vorlage](service-template.md#datenbank-und-migrationen)). Als Provider dient `MySql.EntityFrameworkCore` von Oracle, weil er EF Core 10 kann. `Pomelo.EntityFrameworkCore.MySql` gibt es bisher nur bis EF Core 9.
+Das Schema ändert sich nur über EF-Core-Migrationen, und Migrieren ist ein eigener Schritt (`<Api>.dll migrate`), nie Teil des Starts ([Aufbau eines Service](service-internals.md#datenbank-und-migrationen)). Als Provider dient `MySql.EntityFrameworkCore` von Oracle, weil er EF Core 10 kann. `Pomelo.EntityFrameworkCore.MySql` gibt es bisher nur bis EF Core 9.
 
 ## Nachrichten
 
 Services melden sich Ereignisse über NATS JetStream. Damit ein Ereignis weder verloren geht noch ohne seine Änderung hinausgeht, schreibt ein Service es mit der Änderung in die Tabelle `outbox_messages` seiner eigenen Datenbank, im selben `SaveChanges`. Ein Dispatcher im Prozess des Service schickt die Zeilen von dort an den Broker. Jeder Service hat beim Broker einen eigenen Stream, der nach ihm heißt, und seine Ereignisse liegen darunter. Wer ein Ereignis hören will, braucht nur dessen Typ aus den `.Contracts` des Absenders, Stream und Subject ergeben sich aus dem Namensraum.
 
-Ein Consumer trägt jede Nachricht, die er behandelt, in seine Tabelle `inbox_messages` ein, im selben `SaveChanges` wie die Wirkung, und bestätigt sie erst danach beim Broker. Stellt der Broker eine Nachricht mehrmals zu, hat sie so nur eine Wirkung. Zugestellt wird mindestens einmal und ohne feste Reihenfolge. Beide Tabellen legt `ServiceDbContext` an, kein Service kann sie vergessen. Wie ein Service senden und empfangen kann, steht in der [Service-Vorlage](service-template.md#nachrichten), warum es so gebaut ist, in den Entscheidungen zu [Outbox](decisions/outbox.md) und [Broker](decisions/broker.md).
+Ein Consumer trägt jede Nachricht, die er behandelt, in seine Tabelle `inbox_messages` ein, im selben `SaveChanges` wie die Wirkung, und bestätigt sie erst danach beim Broker. Stellt der Broker eine Nachricht mehrmals zu, hat sie so nur eine Wirkung. Zugestellt wird mindestens einmal und ohne feste Reihenfolge. Beide Tabellen legt `ServiceDbContext` an, kein Service kann sie vergessen. Wie ein Service senden und empfangen kann, steht im [Aufbau eines Service](service-internals.md#nachrichten), warum es so gebaut ist, in den Entscheidungen zu [Outbox](decisions/outbox.md) und [Broker](decisions/broker.md).
 
-Löscht Identity einen Nutzer, sendet es `UserDeleted`, und jeder Service aus der Vorlage entfernt alle Zeilen dieses Nutzers ([Nutzer löschen](service-template.md#nutzer-löschen)).
+Löscht Identity einen Nutzer, sendet es `UserDeleted`, und jeder Service aus der Vorlage entfernt alle Zeilen dieses Nutzers ([Nutzer löschen](service-internals.md#nutzer-löschen)).
 
 Lokal startet der AppHost NATS und gibt Services aus der Vorlage die Adresse als `ConnectionStrings:nats`. Auf dem Server läuft noch kein NATS: Ein Service ohne diese Adresse sendet und empfängt nichts und verhält sich wie vorher, seine Ereignisse bleiben in der Outbox.
 
@@ -192,11 +193,4 @@ Wie du das Backend und die Web-Shell lokal mit einem Befehl startest, steht in d
 
 ## Neuen Service anlegen
 
-Neue Services entstehen nur aus der Vorlage in `templates/service/`. Im Repo-Root:
-
-```
-dotnet new install ./templates/service --force   # einmalig und nach jeder Änderung an der Vorlage
-dotnet new edvaniq-service -n <Name>
-```
-
-Was dabei entsteht und was du danach von Hand erledigst, steht in der [Service-Vorlage](service-template.md).
+Wie ein Service aus der Vorlage entsteht und auf den Server kommt, steht Schritt für Schritt in [Einen neuen Service anlegen](service-template.md). Was er mitbringt, steht im [Aufbau eines Service](service-internals.md).

@@ -18,7 +18,7 @@ public static partial class DatabaseExtensions
             provider.GetRequiredService<IConfiguration>().GetConnectionString(connectionName)
             ?? throw new InvalidOperationException($"Connection string '{connectionName}' is missing.")).ConnectionString));
 
-    // For the UserDeleted handler (docs/service-template.md).
+    // For the UserDeleted handler (docs/service-internals.md#nutzer-löschen).
     public static IServiceCollection AddUserDataRemover<TContext>(this IServiceCollection services)
         where TContext : ServiceDbContext =>
         services.AddScoped<IUserDataRemover, UserDataRemover<TContext>>();
