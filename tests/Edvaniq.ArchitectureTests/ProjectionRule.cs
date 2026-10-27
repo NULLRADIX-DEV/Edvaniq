@@ -1,5 +1,3 @@
-using System.Reflection;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -14,7 +12,7 @@ namespace Edvaniq.ArchitectureTests;
 internal static class ProjectionRule
 {
     public static IEnumerable<string> Violations(IEnumerable<ServiceProject> projects) =>
-        projects.SelectMany(project => Load(project) is { } assembly
+        projects.SelectMany(project => project.Load() is { } assembly
             ? Check(project.Service, assembly.GetTypes())
             : [$"{project.Name} is not referenced by Edvaniq.ArchitectureTests, so its DbContexts stay unchecked"]);
 
@@ -65,18 +63,6 @@ internal static class ProjectionRule
                 Types(complex.ComplexType).Prepend((Type: complex.ClrType, Where: $"{type.DisplayName()}.{complex.Name}"))));
 
     // A type with its generic arguments and element types, so List<T>, T[] and T? all show T.
-    private static IEnumerable<Type> Parts(Type type) =>
+    public static IEnumerable<Type> Parts(Type type) =>
         type.HasElementType ? Parts(type.GetElementType()!) : type.GenericTypeArguments.SelectMany(Parts).Prepend(type);
-
-    private static Assembly? Load(ServiceProject project)
-    {
-        try
-        {
-            return Assembly.Load(new AssemblyName(project.Name));
-        }
-        catch (FileNotFoundException)
-        {
-            return null;
-        }
-    }
 }
