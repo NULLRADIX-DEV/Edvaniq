@@ -194,6 +194,14 @@ Löscht Identity einen Nutzer, sendet es `UserDeleted`, und jeder Service aus de
 
 Lokal startet der AppHost NATS und gibt Services aus der Vorlage die Adresse als `ConnectionStrings:nats`. Auf dem Server läuft noch kein NATS: Ein Service ohne diese Adresse sendet und empfängt nichts und verhält sich wie vorher, seine Ereignisse bleiben in der Outbox.
 
+## KI-Zugang
+
+Ein Service spricht mit der KI über `IChatClient` aus `Microsoft.Extensions.AI`: Nachrichten gehen hin, Text kommt zurück. Welcher Anbieter dahintersteht, legt `Ai:Provider` fest, und `AddAi()` aus `BuildingBlocks.AI` registriert ihn. Fehlt der Wert oder ist er unbekannt, startet der Prozess nicht. So wechselt der Anbieter per Konfiguration, ohne dass sich der Code eines Service ändert.
+
+Bisher gibt es nur `Simulated`, einen Anbieter ohne Netz und ohne Schlüssel. Tests, die lokale Entwicklung und der Durchstich auf dem Server laufen damit. Er antwortet auf denselben Prompt immer gleich, auch in einem anderen Prozess, denn seine Zufallszahlen hängen nur vom Prompt ab. Was er antwortet, bestimmt der Service, der den Prompt schickt: Er registriert für jede Aufgabe ein `ISimulatedAnswer`. Content erkennt seine Aufgaben an der ersten Zeile der Systemnachricht, `edvaniq:topics` für Themen und `edvaniq:questions` für Fragen, und jeder echte Prompt dieser Aufgaben beginnt ebenso.
+
+Für die Fehlerwege lässt sich der simulierte Anbieter absichtlich scheitern lassen, mit `Ai:Simulated:Fault` oder in Tests über `SimulatedChatClient.Fault`. `Outage` antwortet wie ein Anbieter mit 503, `Timeout` wartet, bis der Aufrufer aufgibt, und `InvalidOutput` liefert eine halbe Antwort, die kein gültiges JSON ist. Einen Schalter im eingefügten Material gibt es bewusst nicht, denn Material ist nur Daten und steuert nie, was die KI tut.
+
 ## Starten
 
 Wie du das Backend und die Web-Shell lokal mit einem Befehl startest, steht in der [README](../README.md#lokal-starten).
