@@ -96,6 +96,21 @@ public class DocumentTests
     }
 
     [Fact]
+    public void FinishAnalysis_MakesTheDocumentReady()
+    {
+        var document = Document.Paste("alice", null, "Licht spaltet Wasser.", Now);
+        document.Split();
+
+        document.FinishAnalysis();
+
+        Assert.Equal(DocumentStatus.Ready, document.Status);
+    }
+
+    [Fact]
+    public void FinishAnalysis_BeforeTheSplit_IsRefused() =>
+        Assert.Throws<InvalidOperationException>(() => Document.Paste("alice", null, "Licht spaltet Wasser.", Now).FinishAnalysis());
+
+    [Fact]
     public void Fail_CutsALongReason()
     {
         var document = Document.Paste("alice", null, "Licht spaltet Wasser.", Now);
