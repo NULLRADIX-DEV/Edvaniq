@@ -3,8 +3,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Edvaniq.Services.Content.Domain\Edvaniq.Services.Content.Domain.csproj" />
     <ProjectReference Include="..\Edvaniq.Services.Content.Contracts\Edvaniq.Services.Content.Contracts.csproj" />
-    <ProjectReference Include="..\..\..\BuildingBlocks\Edvaniq.BuildingBlocks.Application\Edvaniq.BuildingBlocks.Application.csproj" />
     <ProjectReference Include="..\..\Identity\Edvaniq.Services.Identity.Contracts\Edvaniq.Services.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Edvaniq.BuildingBlocks.Application\Edvaniq.BuildingBlocks.Application.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
