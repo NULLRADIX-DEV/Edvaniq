@@ -1,0 +1,3 @@
+# Every field of every integration event that may have gone out, as <Service>.<Type>.<Field>: <type>, sorted by name.
+# Lines are only ever added. Changing or deleting one breaks a contract (docs/spec/events.md, "Der Vertrag im Code").
+Identity.UserDeleted.UserId: string

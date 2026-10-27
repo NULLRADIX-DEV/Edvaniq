@@ -2,25 +2,25 @@
 
 Services melden einander Änderungen als Ereignisse über den Broker ([Nachrichten](../architecture.md#nachrichten)). Wem ein Objekt gehört, legt das [Objektmodell](object-model.md) fest, was die Begriffe bedeuten, das [Glossar](glossary.md). Im MVP bleibt es bei diesen neun Ereignissen ([Nicht-Ziele](non-goals.md#plattform-fundament)).
 
-Die Liste, die Felder und der Vertrag des Lern-Nachweises sind ein Entwurf. Verbindlich werden sie in Meilenstein M1, jeweils mit einem Test (#185, #190). Steht hinter einer Angabe „(Vorschlag)“, ist sie noch nicht beschlossen. Die [Regeln für Ereignisse](#regeln-für-ereignisse) gelten dagegen schon jetzt.
+Die Liste ist verbindlich. Ein zehntes Ereignis braucht erst eine Entscheidung und dann eine Zeile hier, vorher lässt `EventCatalogTests` keins zu. Die Felder eines Ereignisses werden verbindlich, sobald es als Typ im Code steht, bis dahin sind sie ein Entwurf. Der Vertrag des Lern-Nachweises bleibt ein Entwurf, bis er mit einem eigenen Test festgelegt wird (#190). Steht hinter einer Angabe „(Vorschlag)“, ist sie noch nicht beschlossen. Die [Regeln für Ereignisse](#regeln-für-ereignisse) gelten für alle Ereignisse.
 
 ## Die neun Ereignisse
 
-| Ereignis | Sender | Auslöser | Empfänger | Empfänger im MVP-Plus |
-|---|---|---|---|---|
-| `UserDeleted` | Identity | Ein Nutzer löscht sein Konto. | Planning, Content, Knowledge, Assessment, Flashcards, LearningEngine | Gamification, Tutor |
-| `DocumentAnalyzed` | Content | Die Analyse eines Dokuments ist erfolgreich abgeschlossen. | Knowledge, Planning | – |
-| `DocumentDeleted` | Content | Ein Nutzer löscht ein Dokument. | Knowledge, Assessment, Flashcards | – |
-| `TopicsChanged` | Knowledge | Knowledge übernimmt Themen aus einer Analyse, oder der Nutzer ändert die Themen eines Lernziels. | Planning, Assessment, Flashcards, LearningEngine | Tutor |
-| `ItemsGenerated` | Content | Der Worker von Content hat Fragen oder Karten zu einem Thema erzeugt und geprüft. | Assessment, Flashcards | – |
-| `ItemFlagged` | Assessment, Flashcards | Ein Nutzer meldet eine Frage oder Karte als falsch oder unangemessen. | LearningEngine | – |
-| `AnswerRecorded` | Assessment | Ein Nutzer beantwortet eine Frage. | LearningEngine | Gamification |
-| `CardReviewed` | Flashcards | Ein Nutzer bewertet eine Karte. | LearningEngine | Gamification |
-| `SessionCompleted` | Planning | Eine Session endet. | LearningEngine | Gamification |
+| Ereignis | Sender | Auslöser | Zweck | Empfänger | Empfänger im MVP-Plus |
+|---|---|---|---|---|---|
+| `UserDeleted` | Identity | Ein Nutzer löscht sein Konto. | Jeder Empfänger löscht alle Daten des Nutzers. | Planning, Content, Knowledge, Assessment, Flashcards, LearningEngine | Gamification, Tutor |
+| `DocumentAnalyzed` | Content | Die Analyse eines Dokuments ist erfolgreich abgeschlossen. | Knowledge übernimmt die Themen, Planning plant neu. | Knowledge, Planning | – |
+| `DocumentDeleted` | Content | Ein Nutzer löscht ein Dokument. | Die Empfänger entfernen, was aus dem Dokument entstanden ist. | Knowledge, Assessment, Flashcards | – |
+| `TopicsChanged` | Knowledge | Knowledge übernimmt Themen aus einer Analyse, oder der Nutzer ändert die Themen eines Lernziels. | Die Empfänger gleichen ihre Verweise auf Themen an den neuen Stand an. | Planning, Assessment, Flashcards, LearningEngine | Tutor |
+| `ItemsGenerated` | Content | Der Worker von Content hat Fragen oder Karten zu einem Thema erzeugt und geprüft. | Assessment übernimmt die Fragen, Flashcards die Karten, ab dann gehören sie ihnen. | Assessment, Flashcards | – |
+| `ItemFlagged` | Assessment, Flashcards | Ein Nutzer meldet eine Frage oder Karte als falsch oder unangemessen. | LearningEngine nimmt die Antworten auf das Item aus der Mastery. | LearningEngine | – |
+| `AnswerRecorded` | Assessment | Ein Nutzer beantwortet eine Frage. | LearningEngine legt einen Lern-Nachweis an und rechnet die Mastery neu. | LearningEngine | Gamification |
+| `CardReviewed` | Flashcards | Ein Nutzer bewertet eine Karte. | LearningEngine legt einen Lern-Nachweis an und rechnet die Mastery neu. | LearningEngine | Gamification |
+| `SessionCompleted` | Planning | Eine Session endet. | LearningEngine erfährt, welche Themen die Session eingeführt hat. | LearningEngine | Gamification |
 
 Flashcards kommt mit Meilenstein M4 dazu. Bis dahin gibt es keine Karten, also auch kein `CardReviewed`. Analytics und Notifications empfangen im MVP nichts, weil sie keine Nutzerdaten speichern. Ihre Zeilen in der Event-Tabelle der [Architektur](../architecture.md#service-regeln) halten den Weg für später frei.
 
-Ein Ereignis liegt in den `.Contracts` seines Senders, und aus diesem Namensraum ergeben sich Stream und Subject beim Broker. `ItemFlagged` gibt es deshalb zweimal, in `Edvaniq.Services.Assessment.Contracts` und in `Edvaniq.Services.Flashcards.Contracts`, mit demselben Namen und denselben Feldern. LearningEngine hört auf beide, und im Katalog zählt es als ein Ereignis. Das Beispiel `ExampleItemCreated` aus der Vorlage gehört nicht dazu, es verschwindet, sobald ein Service das Beispiel durch seine erste echte Entity ersetzt ([Einen neuen Service anlegen](../service-template.md#schritte)).
+Ein Ereignis gehört seinem Sender, nur er legt seine Felder fest. Es liegt in den `.Contracts` des Senders, und aus diesem Namensraum ergeben sich Stream und Subject beim Broker. `ItemFlagged` gibt es deshalb zweimal, in `Edvaniq.Services.Assessment.Contracts` und in `Edvaniq.Services.Flashcards.Contracts`, mit demselben Namen und denselben Feldern. LearningEngine hört auf beide, und im Katalog zählt es als ein Ereignis. Das Beispiel `ExampleItemCreated` aus der Vorlage gehört nicht dazu, es verschwindet, sobald ein Service das Beispiel durch seine erste echte Entity ersetzt ([Einen neuen Service anlegen](../service-template.md#schritte)).
 
 Für das Löschen eines Lernziels gibt es kein eigenes Ereignis. Auf welchem Weg Content und Knowledge davon erfahren und was nach dem Löschen eines Dokuments mit Themen und Mastery passiert, ist noch offen und wird vor dem Löschen von Lernzielen entschieden (#518).
 
@@ -64,7 +64,7 @@ Ein Lern-Nachweis bleibt 12 Monate nach `answeredAt` gespeichert und wird danach
 
 Ein Ereignis meldet eine Änderung, die beim Sender schon gespeichert ist, und heißt deshalb nach dem, was passiert ist, etwa `DocumentDeleted`. Es ist kein Auftrag: Der Sender wartet auf keine Antwort und weiß nicht, wer zuhört.
 
-Ereignisse ändern sich nur additiv. Ein neues Feld ist optional, damit ein Empfänger mit dem alten Stand weiterläuft und ältere Nachrichten ohne das Feld lesbar bleiben. Ein Feld wird nie umbenannt, entfernt oder umgedeutet, und sein Typ bleibt. Eine Änderung, die nicht additiv geht, ist im MVP nicht vorgesehen.
+Ereignisse ändern sich nur additiv. Ein neues Feld ist optional, damit ein Empfänger mit dem alten Stand weiterläuft und ältere Nachrichten ohne das Feld lesbar bleiben. Ein Feld wird nie umbenannt, entfernt oder umgedeutet, und sein Typ bleibt. Eine Änderung, die nicht additiv geht, ist im MVP nicht vorgesehen. Das prüft `EventContractTests` ([Der Vertrag im Code](#der-vertrag-im-code)).
 
 Es gibt keine Sagas, also keinen Ablauf über mehrere Services, der Schritt für Schritt weiterreicht und bei einem Fehler zurückrollt. Jeder Empfänger handelt für sich. Eine Bestätigung zurück an den Sender gibt es auch nicht, denn sie wäre ein Ereignis in die Gegenrichtung und damit ein Kreis. Dass ein Empfänger ein Ereignis behandelt hat, zeigen seine Inbox und eine Zeile in seinem Log mit der Trace-ID ([Nachverfolgung](../architecture.md#nachverfolgung)).
 
@@ -75,3 +75,13 @@ Der Broker stellt mindestens einmal und ohne feste Reihenfolge zu. Ein Empfänge
 Ein Ereignis trägt Schlüssel und die Werte, die seine Empfänger brauchen. Inhalte trägt es nur für einen Empfänger, der sie übernimmt und ab dann besitzt, also die Themenvorschläge in `DocumentAnalyzed` für Knowledge und die Items in `ItemsGenerated`. Andere Empfänger desselben Ereignisses lesen nur die Schlüssel und speichern keinen Inhalt (Regel 5). Texte von Abschnitten verlassen Content nie, und kein Ereignis trägt den Namen, die E-Mail-Adresse oder andere Kontodaten eines Nutzers.
 
 Alle Zeitpunkte in Ereignissen sind UTC. Den [Lerntag](glossary.md#lerntag) rechnet jeder Empfänger selbst aus, er steht in keinem Ereignis.
+
+## Der Vertrag im Code
+
+Katalog und Code bilden zusammen den Vertrag zwischen den Services. Diese Seite legt fest, welche Ereignisse es gibt, wem sie gehören und wer sie empfängt. Die Typen in den `.Contracts` der Sender legen die Felder fest, und `tests/Edvaniq.ArchitectureTests/EventContracts.txt` hält jedes Feld fest, das schon einmal verschickt worden sein kann. Zwei Tests in `Edvaniq.ArchitectureTests` halten beides zusammen.
+
+`EventCatalogTests` prüft, dass diese Seite genau die neun Ereignisse nennt und dass jeder Typ mit `IIntegrationEvent` in einem Service hier steht, und zwar in den `.Contracts` eines Senders aus seiner Zeile. Ein Service kann also kein Ereignis außerhalb des Katalogs senden. Ausgenommen ist nur `ExampleItemCreated`, das Beispiel aus der Vorlage. Außerdem prüft der Test jedes Paar aus Sender und Empfänger gegen die Event-Tabelle der Architektur.
+
+`EventContractTests` vergleicht die Felder im Code mit `EventContracts.txt`, auch die Felder der Records, die ein Ereignis enthält. Bei einem Enum zählt jeder Wert mit seiner Zahl als Feld, denn über den Broker geht die Zahl. Fehlt ein Feld oder hat es einen anderen Typ, ist der Test rot. Ein neues Feld an einem Typ, der schon in der Datei steht, muss optional sein, also nullable, nur neue Werte eines Enums brauchen das nicht.
+
+Sendest du ein Ereignis zum ersten Mal oder gibst ihm ein neues Feld, nennt dir `EventContractTests` die Zeilen, die in `EventContracts.txt` fehlen. Trag sie ein, die Datei ist nach Namen sortiert. Zeilen kommen nur dazu. Ändert ein Pull Request eine bestehende Zeile oder löscht sie, bricht er einen Vertrag.

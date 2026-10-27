@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Xml.Linq;
 
 namespace Edvaniq.ArchitectureTests;
@@ -15,6 +16,19 @@ internal sealed record ServiceProject(string Service, string? Layer, string Name
                 .Select(file => Read(Path.GetFileName(service), file)))
             .OrderBy(project => project.Name, StringComparer.Ordinal)
             .ToList();
+
+    // The built project from the output of this test project, or null if the tests don't reference it.
+    public Assembly? Load()
+    {
+        try
+        {
+            return Assembly.Load(new AssemblyName(Name));
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+    }
 
     // Service and layer of a referenced project, or null if it is no project of a service.
     public static (string Service, string Layer)? Parse(string name)

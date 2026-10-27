@@ -13,7 +13,7 @@ dotnet run --project src/Aspire/Edvaniq.AppHost
 
 Beim ersten Mal dauert das länger, weil Docker die Images für MySQL, phpMyAdmin und NATS lädt und .NET die Aspire-CLI holt. Zugangsdaten legst du nicht an. Der AppHost erzeugt die Passwörter der Datenbank-Benutzer, den Signierschlüssel von Identity und das Client-Secret des Web-Hosts beim ersten Start selbst und legt sie in seinen User Secrets ab ([docs/secrets.md](docs/secrets.md#lokal)).
 
-Ob alles läuft, zeigt die Web-App. Öffne sie im Dashboard über den Link in der Zeile `web` und geh auf die Seite `/systemstatus`. Dort läuft ein Ping über die Web-App und das Gateway durch Planning bis in dessen Datenbank und kommt mit dem zurück, was dort gespeichert wurde. Steht dort „Alles in Ordnung.“, läuft die ganze Kette. Heißt es „Der Ping ist nicht angekommen.“, sind noch nicht alle Prozesse oben. Warte, bis sie im Dashboard laufen, und sende den Ping erneut. Nur `planning-migrate` beendet sich nach der Migration, das ist gewollt.
+Ob alles läuft, zeigt die Web-App. Öffne sie im Dashboard über den Link in der Zeile `web` und geh auf die Seite `/systemstatus`. Dort läuft ein Ping über die Web-App und das Gateway durch Planning bis in dessen Datenbank und kommt mit dem zurück, was dort gespeichert wurde. Steht dort „Alles in Ordnung.“, läuft die ganze Kette. Heißt es „Der Ping ist nicht angekommen.“, sind noch nicht alle Prozesse oben. Warte, bis sie im Dashboard laufen, und sende den Ping erneut. Nur die Migrationsschritte `planning-migrate` und `content-migrate` beenden sich nach der Migration, das ist gewollt.
 
 Hängt der Start oder bricht er ab, hilft meist einer dieser Punkte:
 

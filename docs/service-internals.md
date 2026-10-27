@@ -121,7 +121,7 @@ Jeder Service aus der Vorlage kann Ereignisse sicher senden und doppelt zugestel
 
 ### Ereignis senden
 
-Ein Integration Event ist ein Record in den `.Contracts` des Service, der `IIntegrationEvent` implementiert. Sein Namensraum `Edvaniq.Services.<Name>.Contracts` legt fest, wohin es geht: in den Stream `<NAME>` mit dem Subject `<name>.<ereignis>`, dem Typnamen in Kleinbuchstaben. `ExampleItemCreated` von Planning geht also nach `planning.exampleitemcreated`. Ein Event trägt IDs und die Werte, die ein Hörer braucht, nicht den ganzen Inhalt (Regel 5). Ein Service sendet nur eigene Events, `IEventOutbox.Add` wirft bei einem fremden Typ.
+Ein Integration Event ist ein Record in den `.Contracts` des Service, der `IIntegrationEvent` implementiert. Sein Namensraum `Edvaniq.Services.<Name>.Contracts` legt fest, wohin es geht: in den Stream `<NAME>` mit dem Subject `<name>.<ereignis>`, dem Typnamen in Kleinbuchstaben. `ExampleItemCreated` von Planning geht also nach `planning.exampleitemcreated`. Ein Event trägt IDs und die Werte, die ein Hörer braucht, nicht den ganzen Inhalt (Regel 5). Ein Service sendet nur eigene Events, `IEventOutbox.Add` wirft bei einem fremden Typ. Jedes Event außer dem Beispiel muss im [Ereigniskatalog](spec/events.md) stehen, und seine Felder kommen in `EventContracts.txt` ([Der Vertrag im Code](spec/events.md#der-vertrag-im-code)).
 
 Ein Use Case legt das Event über `IEventOutbox` aus `BuildingBlocks.Application` in die Outbox, bevor er speichert. `Add` sendet nichts, es legt eine Zeile für `outbox_messages` in den DbContext der Anfrage, und das `SaveChanges`, das die Änderung speichert, speichert sie mit. Scheitert es, fehlen Änderung und Event zusammen. So macht es `ExampleItems.AddAsync`:
 
