@@ -110,6 +110,7 @@
     <Project Path="tests/Edvaniq.Testing/Edvaniq.Testing.csproj" />
   </Folder>
   <Folder Name="/tests/BuildingBlocks/">
+    <Project Path="tests/BuildingBlocks/Edvaniq.BuildingBlocks.AI.UnitTests/Edvaniq.BuildingBlocks.AI.UnitTests.csproj" />
     <Project Path="tests/BuildingBlocks/Edvaniq.BuildingBlocks.Messaging.IntegrationTests/Edvaniq.BuildingBlocks.Messaging.IntegrationTests.csproj" />
     <Project Path="tests/BuildingBlocks/Edvaniq.BuildingBlocks.Messaging.UnitTests/Edvaniq.BuildingBlocks.Messaging.UnitTests.csproj" />
   </Folder>
