@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 
 using Edvaniq.BuildingBlocks.AI;
+using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Infrastructure.Ai;
 
 using Microsoft.Extensions.AI;
@@ -26,26 +27,34 @@ public sealed class SimulatedAiTests
         """;
 
     [Fact]
-    public async Task Topics_ComeFromTheHeadings()
+    public async Task Topics_ComeFromTheHeadings_AndTakeTheSectionsBelow()
     {
         using var host = Build();
 
-        var answer = await AskAsync(host, ContentAi.TopicsTask, Material);
+        var answer = await AskAsync(host, ContentAi.TopicsTask, TopicAnalysis.User(
+        [
+            "Vorwort ohne Überschrift.",
+            "# Photosynthese\n## Lichtreaktion\nLicht spaltet Wasser. Dabei entsteht Sauerstoff.",
+            "## Calvin-Zyklus\nCO2 wird zu Zucker.",
+            "# Zellatmung & mehr\nZucker wird zu Energie.",
+            "Noch mehr zur Zellatmung.",
+        ]));
 
+        // The first section has no heading above it, the analysis gives it a topic.
         Assert.Equal(
-            """{"topics":[{"title":"Photosynthese","subtopics":["Lichtreaktion","Calvin-Zyklus"]},{"title":"Zellatmung","subtopics":[]}]}""",
+            """{"topics":[{"title":"Photosynthese","sections":[],"subtopics":[{"title":"Lichtreaktion","sections":[2]},{"title":"Calvin-Zyklus","sections":[3]}]},{"title":"Zellatmung \u0026 mehr","sections":[4,5],"subtopics":[]}]}""",
             answer);
     }
 
     [Fact]
-    public async Task Topics_WithoutHeadings_ComeFromTheLines()
+    public async Task Topics_WithoutHeadings_ComeFromTheSections()
     {
         using var host = Build();
 
-        var answer = await AskAsync(host, ContentAi.TopicsTask, "Licht spaltet Wasser in Teile.\nZucker wird zu Energie.");
+        var answer = await AskAsync(host, ContentAi.TopicsTask, TopicAnalysis.User(["Licht spaltet Wasser in Teile.", "Zucker wird zu Energie."]));
 
         Assert.Equal(
-            """{"topics":[{"title":"Licht spaltet Wasser","subtopics":[]},{"title":"Zucker wird zu","subtopics":[]}]}""",
+            """{"topics":[{"title":"Licht spaltet Wasser","sections":[1],"subtopics":[]},{"title":"Zucker wird zu","sections":[2],"subtopics":[]}]}""",
             answer);
     }
 

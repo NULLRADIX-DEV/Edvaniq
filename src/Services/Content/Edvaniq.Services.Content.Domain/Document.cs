@@ -18,6 +18,8 @@ public sealed class Document : IOwnedByUser
 
     public const string SplitFailed = "Der Text ließ sich nicht in Abschnitte zerlegen. Füge ihn noch einmal ein.";
 
+    public const string AnalysisFailed = "Die Themen ließen sich gerade nicht erkennen. Füge den Text später noch einmal ein.";
+
     private Document(string ownerId, string title, string text, DateTime createdAt)
     {
         OwnerId = ownerId;
@@ -76,6 +78,17 @@ public sealed class Document : IOwnedByUser
         }
 
         return sections;
+    }
+
+    // The topics are known and reported, the document is ready to learn from. Only a document in analysis gets there.
+    public void FinishAnalysis()
+    {
+        if (Status != DocumentStatus.Analyzing)
+        {
+            throw new InvalidOperationException($"Document {Id} is {Status}, only a document in analysis can finish it.");
+        }
+
+        Status = DocumentStatus.Ready;
     }
 
     // The reason goes to the user as it is, so it says what happened and what they can do.

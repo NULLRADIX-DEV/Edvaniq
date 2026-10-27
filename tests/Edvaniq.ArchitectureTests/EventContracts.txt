@@ -1,3 +1,9 @@
 # Every field of every integration event that may have gone out, as <Service>.<Type>.<Field>: <type>, sorted by name.
 # Lines are only ever added. Changing or deleting one breaks a contract (docs/spec/events.md, "Der Vertrag im Code").
+Content.DocumentAnalyzed.DocumentId: Guid
+Content.DocumentAnalyzed.Topics: IReadOnlyList<TopicSuggestion>
+Content.DocumentAnalyzed.UserId: string
+Content.TopicSuggestion.Name: string
+Content.TopicSuggestion.Parent: int?
+Content.TopicSuggestion.SectionIds: IReadOnlyList<Guid>
 Identity.UserDeleted.UserId: string

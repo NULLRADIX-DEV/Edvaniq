@@ -103,6 +103,7 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("Status")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("varchar(16)");
