@@ -48,12 +48,12 @@ internal static class DocumentEndpoints
 
 internal sealed record PastedText(string? Title, string? Text);
 
-// Status goes out by name (Uploaded, Analyzing, Ready, Failed), the client words it.
-internal sealed record DocumentResponse(Guid Id, string Title, string Status, DateTime CreatedAt)
+// Status goes out by name (Uploaded, Analyzing, Ready, Failed), the client words it. A failed document says why.
+internal sealed record DocumentResponse(Guid Id, string Title, string Status, string? FailureReason, DateTime CreatedAt)
 {
     public static DocumentResponse From(Document document) =>
-        new(document.Id, document.Title, document.Status.ToString(), document.CreatedAt);
+        new(document.Id, document.Title, document.Status.ToString(), document.FailureReason, document.CreatedAt);
 
     public static DocumentResponse From(DocumentSummary document) =>
-        new(document.Id, document.Title, document.Status.ToString(), document.CreatedAt);
+        new(document.Id, document.Title, document.Status.ToString(), document.FailureReason, document.CreatedAt);
 }

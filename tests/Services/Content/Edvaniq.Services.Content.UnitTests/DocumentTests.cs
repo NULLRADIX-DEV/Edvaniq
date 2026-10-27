@@ -64,6 +64,48 @@ public class DocumentTests
         Assert.Equal("Photosynthese", Document.Paste("alice", title, "\r\n  \r\n  Photosynthese \r\nLicht wird zu Zucker.", Now).Title);
 
     [Fact]
+    public void Split_GivesSectionsOfTheDocument_AndStartsTheAnalysis()
+    {
+        var document = Document.Paste("alice", null, "# Photosynthese\nLicht spaltet Wasser.\n\n# Zellatmung\nZucker wird zu Energie.", Now);
+
+        var sections = document.Split();
+
+        Assert.Equal(DocumentStatus.Analyzing, document.Status);
+        Assert.Null(document.FailureReason);
+        Assert.Equal([(0, 0, 37), (1, 39, 36)], sections.Select(section => (section.Ordinal, section.Start, section.Length)));
+        Assert.All(sections, section => Assert.Equal((document.Id, "alice"), (section.DocumentId, section.OwnerId)));
+    }
+
+    [Fact]
+    public void Split_OfWhiteSpace_FailsTheDocumentWithAReason()
+    {
+        var document = Document.Paste("alice", "Leer", " \r\n ", Now);
+
+        Assert.Empty(document.Split());
+        Assert.Equal(DocumentStatus.Failed, document.Status);
+        Assert.Equal("Der Text enthält nichts, woraus sich lernen lässt. Füge einen anderen Text ein.", document.FailureReason);
+    }
+
+    [Fact]
+    public void Split_Twice_IsRefused()
+    {
+        var document = Document.Paste("alice", null, "Licht spaltet Wasser.", Now);
+        document.Split();
+
+        Assert.Throws<InvalidOperationException>(() => document.Split());
+    }
+
+    [Fact]
+    public void Fail_CutsALongReason()
+    {
+        var document = Document.Paste("alice", null, "Licht spaltet Wasser.", Now);
+
+        document.Fail(new string('x', Document.FailureReasonMaxLength + 1));
+
+        Assert.Equal(Document.FailureReasonMaxLength, document.FailureReason?.Length);
+    }
+
+    [Fact]
     public void PasteWithoutTitle_CutsALongFirstLine()
     {
         var line = new string('a', Document.TitleMaxLength - 1) + " und noch viel mehr";

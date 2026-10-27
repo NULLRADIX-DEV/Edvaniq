@@ -4,12 +4,19 @@ namespace Edvaniq.Services.Content.Domain;
 
 // A text the user pasted into their material (docs/spec/glossary.md#dokument). The worker picks up every uploaded
 // document from the database, so storing it is what starts the analysis. The text stays exactly as pasted, sections
-// will point into it.
+// point into it.
 public sealed class Document : IOwnedByUser
 {
     public const int TextMaxLength = 200_000;
 
     public const int TitleMaxLength = 80;
+
+    public const int FailureReasonMaxLength = 200;
+
+    // The reasons the client shows for a failed document.
+    public const string NothingToLearn = "Der Text enthält nichts, woraus sich lernen lässt. Füge einen anderen Text ein.";
+
+    public const string SplitFailed = "Der Text ließ sich nicht in Abschnitte zerlegen. Füge ihn noch einmal ein.";
 
     private Document(string ownerId, string title, string text, DateTime createdAt)
     {
@@ -29,6 +36,9 @@ public sealed class Document : IOwnedByUser
 
     public DocumentStatus Status { get; private set; } = DocumentStatus.Uploaded;
 
+    // Why the document failed, for the user. Null unless the status is Failed.
+    public string? FailureReason { get; private set; }
+
     // UTC.
     public DateTime CreatedAt { get; private set; }
 
@@ -45,6 +55,35 @@ public sealed class Document : IOwnedByUser
     // A new document in status Uploaded. Call it only with a text and a title that passed the checks.
     public static Document Paste(string ownerId, string? title, string text, DateTime createdAt) =>
         new(ownerId, string.IsNullOrWhiteSpace(title) ? FirstLine(text) : title.Trim(), text, createdAt);
+
+    // Cuts the text into sections and moves the document on to the analysis. A text with nothing but white space fails
+    // instead and has no sections. Only an uploaded document can be split.
+    public IReadOnlyList<Section> Split()
+    {
+        if (Status != DocumentStatus.Uploaded)
+        {
+            throw new InvalidOperationException($"Document {Id} is {Status}, only an uploaded document can be split.");
+        }
+
+        var sections = SectionSplitter.Split(Text).Select((span, ordinal) => Section.Of(this, ordinal, span)).ToList();
+        if (sections.Count == 0)
+        {
+            Fail(NothingToLearn);
+        }
+        else
+        {
+            Status = DocumentStatus.Analyzing;
+        }
+
+        return sections;
+    }
+
+    // The reason goes to the user as it is, so it says what happened and what they can do.
+    public void Fail(string reason)
+    {
+        Status = DocumentStatus.Failed;
+        FailureReason = reason[..Math.Min(reason.Length, FailureReasonMaxLength)];
+    }
 
     // The first line with content, cut to a title. Trim takes the '\r' of Windows line ends along.
     private static string FirstLine(string text)

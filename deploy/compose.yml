@@ -147,7 +147,7 @@ services:
     <<: *skeleton
     image: ghcr.io/nullradix-dev/edvaniq/notifications-api:sha-${APP_COMMIT:?}
   content-worker:
-    <<: *app
+    <<: *content
     image: ghcr.io/nullradix-dev/edvaniq/content-worker:sha-${APP_COMMIT:?}
     healthcheck:
       disable: true

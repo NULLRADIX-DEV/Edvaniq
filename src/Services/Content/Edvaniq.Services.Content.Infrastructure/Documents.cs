@@ -21,7 +21,7 @@ internal sealed class Documents(ContentDbContext db, ICurrentUser currentUser, T
     // Leaves the text in the database, ten documents could be two megabytes of it.
     public async Task<IReadOnlyList<DocumentSummary>> ListAsync(CancellationToken cancellationToken) =>
         await db.Documents.OrderByDescending(document => document.CreatedAt)
-            .Select(document => new DocumentSummary(document.Id, document.Title, document.Status, document.CreatedAt))
+            .Select(document => new DocumentSummary(document.Id, document.Title, document.Status, document.FailureReason, document.CreatedAt))
             .ToListAsync(cancellationToken);
 
     public Task<Document?> FindAsync(Guid id, CancellationToken cancellationToken) =>
