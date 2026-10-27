@@ -57,7 +57,8 @@ var analyticsApi = AddService<Projects.Edvaniq_Services_Analytics_Api>("analytic
 var notificationsApi = AddService<Projects.Edvaniq_Services_Notifications_Api>("notifications-api", notificationsDb);
 
 // Workers (share the database of their service)
-AddService<Projects.Edvaniq_Services_Content_Worker>("content-worker", contentDb);
+AddService<Projects.Edvaniq_Services_Content_Worker>("content-worker", contentDb)
+    .WaitForCompletion(contentMigrate);
 AddService<Projects.Edvaniq_Services_Notifications_Worker>("notifications-worker", notificationsDb);
 
 // Gateway

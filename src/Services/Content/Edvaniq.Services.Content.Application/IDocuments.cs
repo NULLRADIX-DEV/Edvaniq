@@ -15,4 +15,4 @@ public interface IDocuments
 }
 
 // A document without its text.
-public sealed record DocumentSummary(Guid Id, string Title, DocumentStatus Status, DateTime CreatedAt);
+public sealed record DocumentSummary(Guid Id, string Title, DocumentStatus Status, string? FailureReason, DateTime CreatedAt);

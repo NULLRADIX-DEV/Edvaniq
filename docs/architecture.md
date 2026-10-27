@@ -202,6 +202,16 @@ Bisher gibt es nur `Simulated`, einen Anbieter ohne Netz und ohne Schlüssel. Te
 
 Für die Fehlerwege lässt sich der simulierte Anbieter absichtlich scheitern lassen, mit `Ai:Simulated:Fault` oder in Tests über `SimulatedChatClient.Fault`. `Outage` antwortet wie ein Anbieter mit 503, `Timeout` wartet, bis der Aufrufer aufgibt, und `InvalidOutput` liefert eine halbe Antwort, die kein gültiges JSON ist. Einen Schalter im eingefügten Material gibt es bewusst nicht, denn Material ist nur Daten und steuert nie, was die KI tut.
 
+## Analyse im Worker
+
+Die API von Content speichert einen eingefügten Text als Dokument mit dem Status `Uploaded` und antwortet sofort. Den Rest erledigt `Edvaniq.Services.Content.Worker` im Hintergrund. Er nutzt dieselbe Datenbank, ein eigenes Ereignis dafür gibt es nicht. Alle 2 Sekunden holt `DocumentSplitter` bis zu 10 Dokumente mit `Uploaded`, die ältesten zuerst, und zerlegt jedes in Abschnitte. Sind es 10, folgt die nächste Runde ohne Pause.
+
+Ein Abschnitt speichert nur, wo er im Text liegt: Dokument, Reihenfolge, Start und Länge. Der Text selbst bleibt im Dokument. Absätze enden an Leerzeilen und vor Überschriften (`# `, `## `). Kurze Absätze teilen sich einen Abschnitt bis etwa 1.500 Zeichen, eine Überschrift beginnt immer einen neuen Abschnitt, und ein Absatz über 3.000 Zeichen wird am Satzende geteilt. Eine Seite haben Abschnitte erst mit PDF in M2.
+
+Die Abschnitte und der Status `Analyzing` werden zusammen gespeichert. Stoppt der Worker vorher, bleibt das Dokument `Uploaded` und kommt in der nächsten Runde wieder dran. Kommt ein Dokument später noch einmal auf `Uploaded`, ersetzen seine neuen Abschnitte die alten, und ein eindeutiger Index auf Dokument und Reihenfolge verhindert doppelte. Text ohne Inhalt oder ein Fehler beim Zerlegen setzt das Dokument auf `Failed`. Den Grund liefert die API als `failureReason`, und der Client zeigt ihn so an.
+
+Der Worker liest Dokumente aller Nutzer und fragt deshalb mit `IgnoreQueryFilters([ServiceDbContext.OwnerFilter])`. Einen angemeldeten Nutzer hat er nicht, eine Abfrage unter dem Filter scheitert deshalb, statt alle Zeilen zu zeigen. Messaging hat er noch nicht: Die Ereignisse empfängt die API, und ein zweiter Empfänger würde jedes doppelt verarbeiten. `DocumentAnalyzed` und der Status `Ready` kommen mit der Themenerkennung.
+
 ## Starten
 
 Wie du das Backend und die Web-Shell lokal mit einem Befehl startest, steht in der [README](../README.md#lokal-starten).
