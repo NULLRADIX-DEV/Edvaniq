@@ -1,3 +1,4 @@
+using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Identity.Contracts;
@@ -32,6 +33,18 @@ public static class InfrastructureExtensions
         // Ready only with a reachable database, alive without it.
         builder.Services.AddHealthChecks()
             .AddMySqlReadinessCheck(DatabaseName);
+
+        return builder;
+    }
+
+    // The worker: the same database, without a user, and the jobs that run in the background. No messaging, the API
+    // consumes the events, and the worker sends none yet. A second consumer here would handle every event twice.
+    public static TBuilder AddWorkerInfrastructure<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
+    {
+        builder.Services.AddMySqlDbContext<ContentDbContext>(DatabaseName);
+        builder.Services.TryAddSingleton(TimeProvider.System);
+        builder.Services.AddSingleton<ICurrentUser, NoUser>();
+        builder.Services.AddHostedService<DocumentSplitter>();
 
         return builder;
     }
