@@ -43,6 +43,18 @@ x-planning: &planning
     db:
       condition: service_healthy
 
+x-content: &content
+  <<: *app
+  env_file:
+    - path: app.env
+      required: true
+    - path: content.env
+      required: true
+  networks: [inner, data]
+  depends_on:
+    db:
+      condition: service_healthy
+
 services:
   db:
     image: mysql:9.7
@@ -100,8 +112,16 @@ services:
     healthcheck:
       disable: true
   content-api:
-    <<: *app
+    <<: *content
     image: ghcr.io/nullradix-dev/edvaniq/content-api:sha-${APP_COMMIT:?}
+  content-migrate:
+    <<: *content
+    image: ghcr.io/nullradix-dev/edvaniq/content-api:sha-${APP_COMMIT:?}
+    command: ["migrate"]
+    profiles: [migrate]
+    restart: "no"
+    healthcheck:
+      disable: true
   knowledge-api:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/knowledge-api:sha-${APP_COMMIT:?}
