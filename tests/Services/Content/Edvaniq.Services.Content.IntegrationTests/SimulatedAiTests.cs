@@ -42,7 +42,7 @@ public sealed class SimulatedAiTests
 
         // The first section has no heading above it, the analysis gives it a topic.
         Assert.Equal(
-            """{"topics":[{"title":"Photosynthese","sections":[],"subtopics":[{"title":"Lichtreaktion","sections":[2]},{"title":"Calvin-Zyklus","sections":[3]}]},{"title":"Zellatmung & mehr","sections":[4,5],"subtopics":[]}]}""",
+            """{"topics":[{"title":"Photosynthese","sections":[],"subtopics":[{"title":"Lichtreaktion","sections":[2]},{"title":"Calvin-Zyklus","sections":[3]}]},{"title":"Zellatmung \u0026 mehr","sections":[4,5],"subtopics":[]}]}""",
             answer);
     }
 
