@@ -55,6 +55,18 @@ x-content: &content
     db:
       condition: service_healthy
 
+x-knowledge: &knowledge
+  <<: *app
+  env_file:
+    - path: app.env
+      required: true
+    - path: knowledge.env
+      required: true
+  networks: [inner, data]
+  depends_on:
+    db:
+      condition: service_healthy
+
 services:
   db:
     image: mysql:9.7
@@ -123,8 +135,16 @@ services:
     healthcheck:
       disable: true
   knowledge-api:
-    <<: *app
+    <<: *knowledge
     image: ghcr.io/nullradix-dev/edvaniq/knowledge-api:sha-${APP_COMMIT:?}
+  knowledge-migrate:
+    <<: *knowledge
+    image: ghcr.io/nullradix-dev/edvaniq/knowledge-api:sha-${APP_COMMIT:?}
+    command: ["migrate"]
+    profiles: [migrate]
+    restart: "no"
+    healthcheck:
+      disable: true
   assessment-api:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/assessment-api:sha-${APP_COMMIT:?}
