@@ -31,6 +31,18 @@ x-skeleton: &skeleton
   mem_limit: 128m
   memswap_limit: 128m
 
+x-identity: &identity
+  <<: *app
+  env_file:
+    - path: app.env
+      required: true
+    - path: identity.env
+      required: true
+  networks: [inner, data]
+  depends_on:
+    db:
+      condition: service_healthy
+
 x-planning: &planning
   <<: *app
   env_file:
@@ -102,16 +114,26 @@ services:
       start_period: 60s
       start_interval: 2s
   identity-api:
-    <<: *app
+    <<: *identity
     image: ghcr.io/nullradix-dev/edvaniq/identity-api:sha-${APP_COMMIT:?}
     env_file:
       - path: app.env
+        required: true
+      - path: identity.env
         required: true
       - path: identity-tokens.env
         required: true
     environment:
       <<: *app-environment
       Tokens__Issuer: *issuer
+  identity-migrate:
+    <<: *identity
+    image: ghcr.io/nullradix-dev/edvaniq/identity-api:sha-${APP_COMMIT:?}
+    command: ["migrate"]
+    profiles: [migrate]
+    restart: "no"
+    healthcheck:
+      disable: true
   planning-api:
     <<: *planning
     image: ghcr.io/nullradix-dev/edvaniq/planning-api:sha-${APP_COMMIT:?}

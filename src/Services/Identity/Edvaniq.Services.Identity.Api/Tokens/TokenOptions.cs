@@ -12,7 +12,11 @@ internal sealed class TokenOptions
 
     public string Audience { get; set; } = "";
 
+    // Of a client's own token (client credentials).
     public TimeSpan Lifetime { get; set; }
+
+    // Of a token for an account (password grant). Longer, there is no refresh token yet (docs/tokens.md).
+    public TimeSpan UserLifetime { get; set; }
 
     // A P-256 private key, PKCS#8 in Base64.
     public string SigningKey { get; set; } = "";
@@ -24,6 +28,9 @@ internal sealed class TokenOptions
 internal sealed class TokenClient
 {
     public string Secret { get; set; } = "";
+
+    // Whether the client may log accounts in with their password. Only web, set in appsettings.json.
+    public bool AllowPassword { get; set; }
 }
 
 // Checked at the start, so a missing value stops Identity instead of the first token request. The messages name the
@@ -49,6 +56,11 @@ internal sealed class TokenOptionsValidation : IValidateOptions<TokenOptions>
         if (options.Lifetime <= TimeSpan.Zero)
         {
             failures.Add("Tokens:Lifetime must be longer than zero.");
+        }
+
+        if (options.UserLifetime <= TimeSpan.Zero)
+        {
+            failures.Add("Tokens:UserLifetime must be longer than zero.");
         }
 
         if (SigningKey.TryLoad(options.SigningKey, out var key))

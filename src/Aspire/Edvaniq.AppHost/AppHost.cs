@@ -30,6 +30,7 @@ var analyticsDb = mysql.AddServiceDatabase("analytics");
 var notificationsDb = mysql.AddServiceDatabase("notifications");
 
 // Migrations (one step per service from the template, its API waits until it has finished)
+var identityMigrate = builder.AddMigration<Projects.Edvaniq_Services_Identity_Api>("identity-migrate", identityDb);
 var planningMigrate = builder.AddMigration<Projects.Edvaniq_Services_Planning_Api>("planning-migrate", planningDb);
 var contentMigrate = builder.AddMigration<Projects.Edvaniq_Services_Content_Api>("content-migrate", contentDb);
 var knowledgeMigrate = builder.AddMigration<Projects.Edvaniq_Services_Knowledge_Api>("knowledge-migrate", knowledgeDb);
@@ -39,6 +40,7 @@ var signingKey = builder.AddSigningKey("identity-signing-key");
 var webClientSecret = builder.AddClientSecret("web-client-secret");
 var identityApi = builder.AddProject<Projects.Edvaniq_Services_Identity_Api>("identity-api")
     .WithDatabase(identityDb)
+    .WaitForCompletion(identityMigrate)
     .WithTokenIssuer(signingKey, webClientSecret);
 
 // Services

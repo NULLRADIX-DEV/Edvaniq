@@ -8,7 +8,7 @@ namespace Edvaniq.Services.Identity.IntegrationTests;
 
 // A service finds the public key the way OpenID Connect describes it: the discovery document under its Authority names
 // the key set. Only the public half of the key ever leaves Identity.
-public sealed class KeyTests
+public sealed class KeyTests(IdentityDatabase database) : IClassFixture<IdentityDatabase>
 {
     [Fact]
     public async Task Discovery_NamesIssuerKeysAndTokenEndpoint()
@@ -66,7 +66,7 @@ public sealed class KeyTests
     [Fact]
     public async Task Health_StillAnswers()
     {
-        await using var identity = new IdentityFactory();
+        await using var identity = new IdentityFactory(connectionString: database.ConnectionString);
         using var client = identity.CreateClient();
 
         using var response = await client.GetAsync("/health", TestContext.Current.CancellationToken);

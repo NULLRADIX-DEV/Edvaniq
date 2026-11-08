@@ -1,12 +1,15 @@
+using System.Globalization;
 using System.Text.Json.Serialization;
+
+using Edvaniq.Services.Identity.Application;
 
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace Edvaniq.Services.Identity.Api.Tokens;
 
-// Identity as the issuer of the technical token, with the endpoints a standard client and the services expect:
-// the token endpoint (OAuth 2.0 client credentials, RFC 6749), the discovery document a service reads from its
+// Identity as the issuer of all tokens (docs/tokens.md), with the endpoints a standard client and the services expect:
+// the token endpoint (OAuth 2.0 client credentials and password, RFC 6749), the discovery document a service reads from its
 // Authority, and the key set the document points to. Only the token endpoint is routed through the gateway.
 internal static class TokenEndpoints
 {
@@ -14,6 +17,7 @@ internal static class TokenEndpoints
     private const string KeySetPath = "/.well-known/jwks";
     private const string TokenPath = "/connect/token";
     private const string ClientCredentials = "client_credentials";
+    private const string Password = "password";
 
     public static TBuilder AddTokenIssuer<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
@@ -24,6 +28,7 @@ internal static class TokenEndpoints
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<SigningKey>();
         builder.Services.AddSingleton<TokenIssuer>();
+        builder.Services.AddSingleton<LoginThrottle>();
         return builder;
     }
 
@@ -37,7 +42,7 @@ internal static class TokenEndpoints
                 options.Value.Issuer,
                 baseAddress + KeySetPath,
                 baseAddress + TokenPath,
-                [ClientCredentials],
+                [ClientCredentials, Password],
                 ["client_secret_post"]);
         });
 
@@ -48,7 +53,8 @@ internal static class TokenEndpoints
         return app;
     }
 
-    private static async Task<IResult> IssueAsync(HttpContext context, TokenIssuer issuer, CancellationToken cancellationToken)
+    private static async Task<IResult> IssueAsync(
+        HttpContext context, TokenIssuer issuer, LoginThrottle throttle, CancellationToken cancellationToken)
     {
         // No answer of the token endpoint may end up in a cache (RFC 6749, section 5.1).
         context.Response.Headers.CacheControl = "no-store";
@@ -71,18 +77,51 @@ internal static class TokenEndpoints
             return Error("invalid_request");
         }
 
-        if (form["grant_type"] != ClientCredentials)
+        var grantType = form["grant_type"].ToString();
+        if (grantType is not (ClientCredentials or Password))
         {
-            return Error(string.IsNullOrEmpty(form["grant_type"]) ? "invalid_request" : "unsupported_grant_type");
+            return Error(string.IsNullOrEmpty(grantType) ? "invalid_request" : "unsupported_grant_type");
         }
 
         var clientId = form["client_id"].ToString();
-        if (!issuer.IsClient(clientId, form["client_secret"].ToString()))
+        var client = issuer.FindClient(clientId, form["client_secret"].ToString());
+        if (client is null)
         {
             return Error("invalid_client");
         }
 
-        return TypedResults.Ok(new TokenResponse(issuer.Issue(clientId), "Bearer", (int)issuer.Lifetime.TotalSeconds));
+        if (grantType == ClientCredentials)
+        {
+            return TypedResults.Ok(new TokenResponse(issuer.Issue(clientId), "Bearer", (int)issuer.Lifetime.TotalSeconds));
+        }
+
+        // The login of a team account (RFC 6749, section 4.3), only for a client that may ask for it.
+        if (!client.AllowPassword)
+        {
+            return Error("unauthorized_client");
+        }
+
+        var username = form["username"].ToString();
+        var password = form["password"].ToString();
+        if (username.Length == 0 || password.Length == 0)
+        {
+            return Error("invalid_request");
+        }
+
+        if (!throttle.TryAttempt(username, out var retryAfter))
+        {
+            context.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+            return TypedResults.Json(new TokenError("too_many_attempts"), statusCode: StatusCodes.Status429TooManyRequests);
+        }
+
+        // Resolved only here: the database comes with it, and a client's own token must not depend on it.
+        var accounts = context.RequestServices.GetRequiredService<AccountService>();
+        var accountId = await accounts.LoginAsync(username, password, cancellationToken);
+
+        // A wrong name and a wrong password get the same answer.
+        return accountId is { } id
+            ? TypedResults.Ok(new TokenResponse(issuer.IssueForAccount(id, clientId), "Bearer", (int)issuer.UserLifetime.TotalSeconds))
+            : Error("invalid_grant");
     }
 
     private static IResult Error(string error) => TypedResults.BadRequest(new TokenError(error));
