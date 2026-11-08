@@ -2,6 +2,7 @@ using System.Security.Claims;
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Edvaniq.Web;
@@ -17,8 +18,18 @@ public static class WebSession
     public const string CookieName = "__Host-edvaniq-session";
     public const string IdClaim = "sid";
 
-    public static IServiceCollection AddWebSession(this IServiceCollection services)
+    public static IServiceCollection AddWebSession(this IServiceCollection services, IConfiguration configuration)
     {
+        // The cookie lives only as long as the keys that encrypt it. On the server they sit in a directory of the
+        // operating environment, so a session survives restarts, deploys and rollbacks. Without one, as locally and in
+        // tests, the default ring applies. The fixed name keeps the ring independent of where the image puts the app.
+        var dataProtection = services.AddDataProtection().SetApplicationName("Edvaniq.Web");
+        var keys = configuration["DataProtection:KeysDirectory"];
+        if (!string.IsNullOrEmpty(keys))
+        {
+            dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keys));
+        }
+
         services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
             .AddCookie(options =>
             {

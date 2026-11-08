@@ -193,10 +193,13 @@ services:
         required: true
     ports:
       - "127.0.0.1:${APP_PORT:?}:8080"
+    volumes:
+      - ./data/web-keys:/keys
     networks: [default, inner]
     environment:
       <<: *app-environment
       services__gateway__http__0: http://gateway:8080
+      DataProtection__KeysDirectory: /keys
       ForwardedHeaders__KnownNetworks__0: ${APP_SUBNET:?}
 
 networks:
