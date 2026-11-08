@@ -32,6 +32,7 @@ var notificationsDb = mysql.AddServiceDatabase("notifications");
 // Migrations (one step per service from the template, its API waits until it has finished)
 var planningMigrate = builder.AddMigration<Projects.Edvaniq_Services_Planning_Api>("planning-migrate", planningDb);
 var contentMigrate = builder.AddMigration<Projects.Edvaniq_Services_Content_Api>("content-migrate", contentDb);
+var knowledgeMigrate = builder.AddMigration<Projects.Edvaniq_Services_Knowledge_Api>("knowledge-migrate", knowledgeDb);
 
 // Token issuer: Identity signs the tokens, every service checks them with the public key it gets from Identity
 var signingKey = builder.AddSigningKey("identity-signing-key");
@@ -47,7 +48,9 @@ var planningApi = AddService<Projects.Edvaniq_Services_Planning_Api>("planning-a
 var contentApi = AddService<Projects.Edvaniq_Services_Content_Api>("content-api", contentDb)
     .WaitForCompletion(contentMigrate)
     .WithMessaging(nats);
-var knowledgeApi = AddService<Projects.Edvaniq_Services_Knowledge_Api>("knowledge-api", knowledgeDb);
+var knowledgeApi = AddService<Projects.Edvaniq_Services_Knowledge_Api>("knowledge-api", knowledgeDb)
+    .WaitForCompletion(knowledgeMigrate)
+    .WithMessaging(nats);
 var assessmentApi = AddService<Projects.Edvaniq_Services_Assessment_Api>("assessment-api", assessmentDb);
 var flashcardsApi = AddService<Projects.Edvaniq_Services_Flashcards_Api>("flashcards-api", flashcardsDb);
 var learningEngineApi = AddService<Projects.Edvaniq_Services_LearningEngine_Api>("learningengine-api", learningEngineDb);

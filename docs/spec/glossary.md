@@ -82,7 +82,7 @@ Nicht: Skill, Bereich, Kapitel, Lernbereich
 
 Ein Thema der unteren Ebene, das zu genau einem Thema der oberen Ebene gehört. Tiefer als zwei Ebenen wird nicht gegliedert.
 
-Im Code: `Subtopic`
+Im Code: ein `Topic` mit `ParentId`, angelegt mit `AddSubtopic`, in Antworten unter `subtopics`
 
 ### Kernbegriff
 
