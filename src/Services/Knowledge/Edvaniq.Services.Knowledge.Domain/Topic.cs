@@ -9,13 +9,15 @@ public sealed class Topic : IOwnedByUser
 {
     public const int NameMaxLength = 80;
 
-    private Topic(string ownerId, Guid learningGoalId, Guid? parentId, string name, DateTime createdAt)
+    private Topic(string ownerId, Guid learningGoalId, Guid? parentId, string name, DateTime createdAt, Guid? documentId, int position)
     {
         OwnerId = ownerId;
         LearningGoalId = learningGoalId;
         ParentId = parentId;
         Name = name;
         CreatedAt = createdAt;
+        DocumentId = documentId;
+        Position = position;
     }
 
     public Guid Id { get; private set; } = Guid.NewGuid();
@@ -33,6 +35,12 @@ public sealed class Topic : IOwnedByUser
     // UTC.
     public DateTime CreatedAt { get; private set; }
 
+    // Content's document whose analysis brought the topic, only a reference. Null for a topic the user adds.
+    public Guid? DocumentId { get; private set; }
+
+    // The place in the analysis, keeps its order among topics created at the same time.
+    public int Position { get; private set; }
+
     public bool IsSubtopic => ParentId is not null;
 
     // Why the name can't stay, or null if it can. The client shows the message as it is.
@@ -42,14 +50,17 @@ public sealed class Topic : IOwnedByUser
         : null;
 
     // A topic of the upper level. Call it only with a name that passed CheckName.
-    public static Topic Create(string ownerId, Guid learningGoalId, string name, DateTime createdAt) =>
-        new(ownerId, learningGoalId, null, name.Trim(), createdAt);
+    public static Topic Create(string ownerId, Guid learningGoalId, string name, DateTime createdAt, Guid? documentId = null, int position = 0) =>
+        new(ownerId, learningGoalId, null, name.Trim(), createdAt, documentId, position);
 
     // Belongs to the same user and learning goal as this topic. Call it only with a name that passed CheckName.
-    public Topic AddSubtopic(string name, DateTime createdAt) =>
+    public Topic AddSubtopic(string name, DateTime createdAt, Guid? documentId = null, int position = 0) =>
         IsSubtopic
             ? throw new InvalidOperationException("A subtopic has no subtopics, topics have two levels.")
-            : new(OwnerId, LearningGoalId, Id, name.Trim(), createdAt);
+            : new(OwnerId, LearningGoalId, Id, name.Trim(), createdAt, documentId, position);
+
+    // Content's section belongs to this topic.
+    public TopicSection AssignSection(Guid sectionId) => new(OwnerId, Id, sectionId);
 
     // Call it only with a name that passed CheckName.
     public void Rename(string name) => Name = name.Trim();
