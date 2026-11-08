@@ -92,6 +92,9 @@ namespace Edvaniq.Services.Knowledge.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<Guid?>("DocumentId")
+                        .HasColumnType("char(36)");
+
                     b.Property<Guid>("LearningGoalId")
                         .HasColumnType("char(36)");
 
@@ -109,15 +112,41 @@ namespace Edvaniq.Services.Knowledge.Infrastructure.Migrations
                     b.Property<Guid?>("ParentId")
                         .HasColumnType("char(36)");
 
+                    b.Property<int>("Position")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("OwnerId");
 
                     b.HasIndex("ParentId");
 
+                    b.HasIndex("OwnerId", "DocumentId");
+
                     b.HasIndex("OwnerId", "LearningGoalId");
 
                     b.ToTable("Topics");
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Knowledge.Domain.TopicSection", b =>
+                {
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.HasKey("TopicId", "SectionId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("TopicSections");
                 });
 
             modelBuilder.Entity("Edvaniq.Services.Knowledge.Domain.Topic", b =>
@@ -126,6 +155,15 @@ namespace Edvaniq.Services.Knowledge.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("ParentId")
                         .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Knowledge.Domain.TopicSection", b =>
+                {
+                    b.HasOne("Edvaniq.Services.Knowledge.Domain.Topic", null)
+                        .WithMany()
+                        .HasForeignKey("TopicId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

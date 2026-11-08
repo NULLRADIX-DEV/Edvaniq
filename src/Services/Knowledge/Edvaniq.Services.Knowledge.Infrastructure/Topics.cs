@@ -16,7 +16,7 @@ internal sealed class Topics(KnowledgeDbContext db) : ITopics
             topics = topics.Where(topic => topic.LearningGoalId == goal);
         }
 
-        return await topics.OrderBy(topic => topic.CreatedAt).ThenBy(topic => topic.Name).ToListAsync(cancellationToken);
+        return await topics.OrderBy(topic => topic.CreatedAt).ThenBy(topic => topic.Position).ThenBy(topic => topic.Name).ToListAsync(cancellationToken);
     }
 
     public Task<Topic?> FindAsync(Guid id, CancellationToken cancellationToken) =>

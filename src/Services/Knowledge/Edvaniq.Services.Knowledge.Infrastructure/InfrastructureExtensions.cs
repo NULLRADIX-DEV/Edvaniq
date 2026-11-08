@@ -1,9 +1,11 @@
 using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.BuildingBlocks.Messaging;
+using Edvaniq.Services.Content.Contracts;
 using Edvaniq.Services.Identity.Contracts;
 using Edvaniq.Services.Knowledge.Application;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace Edvaniq.Services.Knowledge.Infrastructure;
@@ -20,12 +22,15 @@ public static class InfrastructureExtensions
     {
         builder.Services.AddMySqlDbContext<KnowledgeDbContext>(DatabaseName);
         builder.Services.AddScoped<ITopics, Topics>();
+        builder.Services.AddScoped<IAnalyzedTopics, AnalyzedTopics>();
+        builder.Services.TryAddSingleton(TimeProvider.System);
 
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<KnowledgeDbContext>(ServiceKey);
 
         builder.Services.AddUserDataRemover<KnowledgeDbContext>();
         builder.Services.AddIntegrationEventHandler<UserDeleted, UserDeletedHandler>();
+        builder.Services.AddIntegrationEventHandler<DocumentAnalyzed, DocumentAnalyzedHandler>();
 
         // Ready only with a reachable database, alive without it.
         builder.Services.AddHealthChecks()
