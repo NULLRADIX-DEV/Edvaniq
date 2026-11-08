@@ -10,7 +10,7 @@ Für die Entwicklung musst du keine Secrets anlegen. Aspire verwaltet die Passw�
 
 In GitHub liegen Secrets im Repo oder im Environment `production`, das nur `main` nutzen darf. Für die Container-Registry reicht das automatische `GITHUB_TOKEN`.
 
-Auf dem Server bekommt jeder Container seine Werte erst beim Start, als Umgebungsvariablen aus der Betriebsumgebung. Gemeinsame Werte sehen alle Container. Den Connection String einer Datenbank bekommt aber nur der Service, dem sie gehört, und das Passwort des DB-Admins sieht kein Service. Den Signierschlüssel der Tokens kennt nur Identity, das Client-Secret des Web-Hosts nur Identity und der Web-Host. Die Services bekommen nur den öffentlichen Schlüssel, und den holen sie sich selbst bei Identity.
+Auf dem Server bekommt jeder Container seine Werte erst beim Start, als Umgebungsvariablen aus der Betriebsumgebung. Gemeinsame Werte sehen alle Container. Den Connection String einer Datenbank bekommt aber nur der Service, dem sie gehört, und das Passwort des DB-Admins sieht kein Service. Den Signierschlüssel der Tokens kennt nur Identity, das Client-Secret des Web-Hosts nur Identity und der Web-Host. Die Services bekommen nur den öffentlichen Schlüssel, und den holen sie sich selbst bei Identity. Die Schlüssel, mit denen der Web-Host das Sitzungs-Cookie verschlüsselt, erzeugt er selbst und legt sie in einem Verzeichnis der Betriebsumgebung ab, das nur er einbindet ([Rollback](deploy.md#rollback)).
 
 Im Code liest ein Service ein Secret nur aus der Konfiguration, zum Beispiel `ConnectionStrings__planningdb`. Ein Default im Code wäre ein Secret im Repo.
 

@@ -58,6 +58,8 @@ Danach ist der kaputte Stand der „vorherige“. Ein zweiter Rollback ginge als
 
 Ein Rollback macht Migrationen nicht rückgängig. Dafür gibt es die Sicherung vor jedem Deploy, die jemand mit Server-Zugang einspielen kann.
 
+Angemeldete Nutzer bleiben bei Deploy, Rollback und Neustart angemeldet. Das Sitzungs-Cookie verschlüsselt der Web-Host mit Schlüsseln, die nicht im Image liegen, sondern in einem Verzeichnis der Betriebsumgebung, das `deploy/compose.yml` nach `/keys` einbindet. Jeder neue Container liest dort dieselben Schlüssel und erkennt die Cookies seines Vorgängers. Gesichert werden sie mit den übrigen Daten der App. Der CI-Job „Container images“ prüft, dass nur `db` seine Daten und `web` seine Schlüssel einbindet.
+
 ## Migrationen
 
 Das Schema ändert sich nur im Deploy, nie beim Start eines Service. Ein Migrationsschritt ist ein eigener Dienst in `deploy/compose.yml`, so wie lokal die Ressource `<name>-migrate` im AppHost. Er nutzt das Image der API mit dem Befehl `migrate` und gehört zum Profil `migrate`, deshalb startet ihn `compose up` nie. Dazu kommen `restart: "no"` und kein Health-Check. Die CI prüft, dass jedes `AddMigration` im AppHost so einen Dienst hat.

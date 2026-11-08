@@ -3,6 +3,8 @@ using System.Text.RegularExpressions;
 
 using Edvaniq.Testing;
 
+using Microsoft.AspNetCore.Hosting;
+
 namespace Edvaniq.Web.IntegrationTests;
 
 // The only thing the browser holds is the session cookie. Scripts cannot read it, it travels only over HTTPS and only
@@ -39,6 +41,48 @@ public sealed partial class SessionTests
         Assert.Equal(HttpStatusCode.NoContent, await StatusAsync(browser, HttpMethod.Delete));
         Assert.Equal(HttpStatusCode.Unauthorized, await StatusAsync(browser, HttpMethod.Get));
     }
+
+    // A restart, deploy or rollback starts a new web host on the same key directory. A cookie from the old one has to
+    // stay valid there, and one from a host with other keys must not.
+    [Theory]
+    [InlineData(true, HttpStatusCode.NoContent)]
+    [InlineData(false, HttpStatusCode.Unauthorized)]
+    public async Task Session_SurvivesANewHostOnTheSameKeys(bool sameKeys, HttpStatusCode expected)
+    {
+        var first = Directory.CreateTempSubdirectory("edvaniq-keys-");
+        var second = sameKeys ? first : Directory.CreateTempSubdirectory("edvaniq-keys-");
+        try
+        {
+            string cookie;
+            await using (var before = new WebFactory("http://127.0.0.1:9", configure: Keys(first)))
+            {
+                using var browser = before.CreateBrowser(handleCookies: false);
+                using var started = await browser.PostAsync("/session", content: null, TestContext.Current.CancellationToken);
+                cookie = Assert.Single(started.Headers.GetValues("Set-Cookie")).Split(';')[0];
+            }
+
+            Assert.NotEmpty(first.GetFiles("key-*.xml"));
+
+            await using var after = new WebFactory("http://127.0.0.1:9", configure: Keys(second));
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/session");
+            request.Headers.Add("Cookie", cookie);
+            using var response = await after.CreateBrowser(handleCookies: false)
+                .SendAsync(request, TestContext.Current.CancellationToken);
+
+            Assert.Equal(expected, response.StatusCode);
+        }
+        finally
+        {
+            first.Delete(recursive: true);
+            if (!sameKeys)
+            {
+                second.Delete(recursive: true);
+            }
+        }
+    }
+
+    private static Action<IWebHostBuilder> Keys(DirectoryInfo directory) =>
+        builder => builder.UseSetting("DataProtection:KeysDirectory", directory.FullName);
 
     // The cookie is encrypted by the web host. No token in readable form reaches the browser, neither in the cookie
     // nor in the page.

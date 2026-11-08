@@ -27,7 +27,7 @@ builder.Services.AddRazorComponents()
 // SecurityHeaders sends X-Frame-Options itself. Antiforgery would add SAMEORIGIN on a page with a form.
 builder.Services.AddAntiforgery(options => options.SuppressXFrameOptionsHeader = true);
 
-builder.Services.AddWebSession();
+builder.Services.AddWebSession(builder.Configuration);
 
 // The browser never talks to the gateway itself. Only the routes from the section ReverseProxy go on from here, on the
 // server side. The gateway's address comes from service discovery, like in the gateway. The cluster waits 9 seconds,
