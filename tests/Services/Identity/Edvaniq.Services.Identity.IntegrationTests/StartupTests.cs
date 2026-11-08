@@ -22,6 +22,7 @@ public sealed class StartupTests
     [InlineData("Tokens:Issuer", null, "Tokens:Issuer")]
     [InlineData("Tokens:Audience", null, "Tokens:Audience")]
     [InlineData("Tokens:Lifetime", "00:00:00", "Tokens:Lifetime")]
+    [InlineData("Tokens:UserLifetime", "00:00:00", "Tokens:UserLifetime")]
     [InlineData("Tokens:SigningKey", null, "Tokens:SigningKey")]
     [InlineData("Tokens:SigningKey", "bm90IGEga2V5", "Tokens:SigningKey")]
     [InlineData("Tokens:Clients:web:Secret", null, "Tokens:Clients")]
@@ -61,6 +62,7 @@ public sealed class StartupTests
             ["Tokens:Issuer"] = IdentityFactory.Issuer,
             ["Tokens:Audience"] = "edvaniq-api",
             ["Tokens:Lifetime"] = "00:05:00",
+            ["Tokens:UserLifetime"] = "01:00:00",
             ["Tokens:SigningKey"] = IdentityFactory.NewSigningKey(),
             [$"Tokens:Clients:{IdentityFactory.ClientId}:Secret"] = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)),
         };

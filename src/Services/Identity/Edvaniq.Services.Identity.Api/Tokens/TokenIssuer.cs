@@ -7,20 +7,30 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Edvaniq.Services.Identity.Api.Tokens;
 
-// Signs the technical tokens. There is no user behind them, so the token names the client as its subject
-// (RFC 9068, section 2.2). A real login later issues tokens of the same shape with the user as subject.
+// Signs all tokens (docs/tokens.md). A client's own token names the client as its subject, there is no user behind it
+// (RFC 9068, section 2.2). A login names the account. Both have the same shape, so a service tells them apart only by
+// the subject.
 internal sealed class TokenIssuer(IOptions<TokenOptions> options, SigningKey key, TimeProvider time)
 {
     private readonly JsonWebTokenHandler handler = new();
 
     public TimeSpan Lifetime => options.Value.Lifetime;
 
-    // Compares hashes of equal length in constant time, so the answer time tells nothing about the secret.
-    public bool IsClient(string clientId, string secret) =>
-        options.Value.Clients.TryGetValue(clientId, out var client)
-        && CryptographicOperations.FixedTimeEquals(Hash(secret), Hash(client.Secret));
+    public TimeSpan UserLifetime => options.Value.UserLifetime;
 
-    public string Issue(string clientId)
+    // The client, or null for an unknown one or a wrong secret. Compares hashes of equal length in constant time, so
+    // the answer time tells nothing about the secret.
+    public TokenClient? FindClient(string clientId, string secret) =>
+        options.Value.Clients.TryGetValue(clientId, out var client)
+        && CryptographicOperations.FixedTimeEquals(Hash(secret), Hash(client.Secret))
+            ? client
+            : null;
+
+    public string Issue(string clientId) => Issue(clientId, clientId, Lifetime);
+
+    public string IssueForAccount(Guid accountId, string clientId) => Issue(accountId.ToString("D"), clientId, UserLifetime);
+
+    private string Issue(string subject, string clientId, TimeSpan lifetime)
     {
         var now = time.GetUtcNow().UtcDateTime;
         return handler.CreateToken(new SecurityTokenDescriptor
@@ -30,10 +40,10 @@ internal sealed class TokenIssuer(IOptions<TokenOptions> options, SigningKey key
             Audience = options.Value.Audience,
             IssuedAt = now,
             NotBefore = now,
-            Expires = now + options.Value.Lifetime,
+            Expires = now + lifetime,
             Claims = new Dictionary<string, object>
             {
-                ["sub"] = clientId,
+                ["sub"] = subject,
                 ["client_id"] = clientId,
                 ["jti"] = Guid.NewGuid().ToString("N"),
             },

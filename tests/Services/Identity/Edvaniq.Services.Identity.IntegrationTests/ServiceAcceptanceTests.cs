@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Web;
@@ -16,7 +17,7 @@ namespace Edvaniq.Services.Identity.IntegrationTests;
 // The tokens from Identity pass the token check every service from the template runs, unchanged: AddTokenValidation
 // with nothing but the contract from Authentication:Schemes:Bearer, as the server sets it. The service fetches the
 // key from Identity itself, over its Authority.
-public sealed class ServiceAcceptanceTests
+public sealed class ServiceAcceptanceTests(IdentityDatabase database) : IClassFixture<IdentityDatabase>
 {
     [Fact]
     public async Task Service_AcceptsTheToken_WithTheClientAsUser()
@@ -28,6 +29,22 @@ public sealed class ServiceAcceptanceTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(IdentityFactory.ClientId, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
+    // A login's token passes the same check unchanged, and the service sees the account as its user.
+    [Fact]
+    public async Task Service_AcceptsTheTokenOfALogin_WithTheAccountAsUser()
+    {
+        await using var identity = new IdentityFactory(connectionString: database.ConnectionString);
+        await using var service = await StartServiceAsync(identity);
+        var (_, output, _) = await identity.SetAccountAsync("accepted", "a long enough password");
+        using var login = await identity.LoginAsync("accepted", "a long enough password");
+        var body = await login.Content.ReadFromJsonAsync<Dictionary<string, object>>(TestContext.Current.CancellationToken);
+
+        using var response = await GetMeAsync(service, body!["access_token"].ToString());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(output.Trim().Split(' ')[^1], await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
     // The service also takes the issuer from Identity's discovery document. So it accepts Identity's tokens even if

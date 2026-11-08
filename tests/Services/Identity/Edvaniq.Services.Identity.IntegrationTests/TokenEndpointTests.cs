@@ -72,7 +72,7 @@ public sealed class TokenEndpointTests
     {
         await using var identity = new IdentityFactory();
 
-        using var response = await identity.RequestTokenAsync(grantType: "password");
+        using var response = await identity.RequestTokenAsync(grantType: "authorization_code");
 
         await AssertErrorAsync(response, "unsupported_grant_type");
     }

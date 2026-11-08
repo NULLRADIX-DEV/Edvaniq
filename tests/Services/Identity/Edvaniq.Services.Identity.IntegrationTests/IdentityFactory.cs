@@ -1,6 +1,8 @@
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 
+using Edvaniq.Services.Identity.Api.Accounts;
+using Edvaniq.Services.Identity.Infrastructure;
 using Edvaniq.Testing;
 
 using Microsoft.AspNetCore.Hosting;
@@ -12,8 +14,10 @@ using Microsoft.Extensions.Logging;
 namespace Edvaniq.Services.Identity.IntegrationTests;
 
 // Identity as it runs, with a signing key and a client secret that exist only for this test run. Settings replaces
-// single keys, null removes one, to see how Identity reacts to a configuration that is missing something.
-public sealed class IdentityFactory(IReadOnlyDictionary<string, string?>? settings = null, TimeProvider? time = null)
+// single keys, null removes one, to see how Identity reacts to a configuration that is missing something. Without a
+// connection string there is no database: a client's own token works, a login does not (IdentityDatabase).
+public sealed class IdentityFactory(
+    IReadOnlyDictionary<string, string?>? settings = null, TimeProvider? time = null, string? connectionString = null)
     : WebApplicationFactory<Program>
 {
     public const string Issuer = "edvaniq-identity-tests";
@@ -43,6 +47,31 @@ public sealed class IdentityFactory(IReadOnlyDictionary<string, string?>? settin
         return CreateClient().PostAsync("/connect/token", new FormUrlEncodedContent(form), TestContext.Current.CancellationToken);
     }
 
+    // POST /connect/token as the web host sends it for a login: its own credentials plus the account's.
+    public Task<HttpResponseMessage> LoginAsync(
+        string username, string password, string clientId = ClientId, string? clientSecret = null)
+    {
+        var form = new Dictionary<string, string>
+        {
+            ["grant_type"] = "password",
+            ["client_id"] = clientId,
+            ["client_secret"] = clientSecret ?? ClientSecret,
+            ["username"] = username,
+            ["password"] = password,
+        };
+        return CreateClient().PostAsync("/connect/token", new FormUrlEncodedContent(form), TestContext.Current.CancellationToken);
+    }
+
+    // Sets up an account the way the operator does on the server, through the account command.
+    public async Task<(int ExitCode, string Output, string Error)> SetAccountAsync(string name, string password)
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await AccountCommand.RunAsync(
+            Services, ["account", "set", name], new StringReader(password + "\n"), output, error);
+        return (exitCode, output.ToString(), error.ToString());
+    }
+
     public async Task<string> GetTokenAsync()
     {
         using var response = await RequestTokenAsync();
@@ -59,6 +88,11 @@ public sealed class IdentityFactory(IReadOnlyDictionary<string, string?>? settin
             ["Tokens:SigningKey"] = NewSigningKey(),
             [$"Tokens:Clients:{ClientId}:Secret"] = ClientSecret,
         };
+        if (connectionString is not null)
+        {
+            defaults[$"ConnectionStrings:{InfrastructureExtensions.DatabaseName}"] = connectionString;
+        }
+
         foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
         {
             defaults[key] = value;
