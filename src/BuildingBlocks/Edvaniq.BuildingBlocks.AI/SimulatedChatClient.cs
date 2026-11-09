@@ -48,8 +48,12 @@ public sealed class SimulatedChatClient(IEnumerable<ISimulatedAnswer> answers, S
         yield return new ChatResponseUpdate(ChatRole.Assistant, response.Text) { ModelId = Provider };
     }
 
+    // The metadata names the model as a real client names the configured one.
     public object? GetService(Type serviceType, object? serviceKey = null) =>
-        serviceKey is null && serviceType.IsInstanceOfType(this) ? this : null;
+        serviceKey is not null ? null
+        : serviceType == typeof(ChatClientMetadata) ? new ChatClientMetadata(Provider, defaultModelId: Provider)
+        : serviceType.IsInstanceOfType(this) ? this
+        : null;
 
     public void Dispose()
     {

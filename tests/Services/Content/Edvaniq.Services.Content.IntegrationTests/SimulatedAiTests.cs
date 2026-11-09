@@ -64,9 +64,11 @@ public sealed class SimulatedAiTests
         using var host = Build();
         using var other = Build();
 
-        var answer = await AskAsync(host, ContentAi.QuestionsTask, Material);
+        var material = QuestionGeneration.User(["## Lichtreaktion\nLicht spaltet Wasser. Dabei entsteht Sauerstoff.", "CO2 wird zu Zucker & Stärke."]);
 
-        Assert.Equal(answer, await AskAsync(other, ContentAi.QuestionsTask, Material));
+        var answer = await AskAsync(host, ContentAi.QuestionsTask, material);
+
+        Assert.Equal(answer, await AskAsync(other, ContentAi.QuestionsTask, material));
         var questions = JsonDocument.Parse(answer).RootElement.GetProperty("questions").EnumerateArray().ToList();
         Assert.InRange(questions.Count, 15, 20);
         Assert.All(questions, question =>
@@ -75,6 +77,12 @@ public sealed class SimulatedAiTests
             Assert.InRange(question.GetProperty("difficulty").GetInt32(), 1, 3);
             Assert.Equal(0, question.GetProperty("answer").GetInt32());
         });
+
+        // A sentence per question in turn, headings left out, each with the section it comes from.
+        Assert.Equal(
+            ["Licht spaltet Wasser 1", "Dabei entsteht Sauerstoff 1", "CO2 wird zu Zucker & Stärke 2"],
+            questions.Take(3).Select(question => $"{question.GetProperty("explanation").GetString()} {question.GetProperty("section").GetInt32()}"));
+        Assert.Equal(questions.Count, QuestionGeneration.Read(answer, [Guid.NewGuid(), Guid.NewGuid()])!.Count);
     }
 
     [Fact]

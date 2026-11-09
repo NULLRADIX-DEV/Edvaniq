@@ -20,6 +20,8 @@ public sealed class Document : IOwnedByUser
 
     public const string AnalysisFailed = "Die Themen ließen sich gerade nicht erkennen. Füge den Text später noch einmal ein.";
 
+    public const string QuestionsFailed = "Zu den Themen ließen sich gerade keine Fragen erstellen. Füge den Text später noch einmal ein.";
+
     private Document(string ownerId, string title, string text, DateTime createdAt)
     {
         OwnerId = ownerId;

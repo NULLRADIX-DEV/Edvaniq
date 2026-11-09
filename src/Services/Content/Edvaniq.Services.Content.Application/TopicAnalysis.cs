@@ -1,5 +1,3 @@
-using System.Net;
-using System.Text;
 using System.Text.Json;
 
 using Edvaniq.Services.Content.Contracts;
@@ -31,17 +29,7 @@ public static class TopicAnalysis
         """;
 
     // The sections in their order, numbered from 1.
-    public static string User(IEnumerable<string> sections)
-    {
-        var text = new StringBuilder("<material>\n");
-        var number = 0;
-        foreach (var section in sections)
-        {
-            text.Append($"<section id=\"{++number}\">\n").Append(Escape(section)).Append("\n</section>\n");
-        }
-
-        return text.Append("</material>").ToString();
-    }
+    public static string User(IEnumerable<string> sections) => PromptMaterial.Of(sections);
 
     // The suggestions of the answer for the sections with these IDs, given in the order of the prompt. Null if the
     // answer is no JSON of the asked form or places no section at all. Otherwise it gets fixed up rather than refused:
@@ -158,12 +146,7 @@ public static class TopicAnalysis
     // One line, without the escapes of the prompt, cut to the length a topic name may have.
     private static string Name(string title)
     {
-        var name = string.Join(' ', WebUtility.HtmlDecode(title).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        var name = PromptMaterial.Line(title);
         return name[..Math.Min(name.Length, NameMaxLength)].TrimEnd();
     }
-
-    private static string Escape(string text) =>
-        text.Replace("&", "&amp;", StringComparison.Ordinal)
-            .Replace("<", "&lt;", StringComparison.Ordinal)
-            .Replace(">", "&gt;", StringComparison.Ordinal);
 }

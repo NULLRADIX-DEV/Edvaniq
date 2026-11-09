@@ -18,4 +18,10 @@ internal static partial class ContentLog
 
     [LoggerMessage(Level = LogLevel.Error, Message = "The AI gave no usable topics for document {DocumentId}, it is marked as failed")]
     public static partial void AnalysisAnswerUnusable(ILogger logger, Guid documentId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "The AI could not make questions for document {DocumentId}, it is marked as failed")]
+    public static partial void QuestionsFailed(ILogger logger, Exception exception, Guid documentId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "The AI gave no valid question for topic {TopicPosition} of document {DocumentId} twice, it is marked as failed")]
+    public static partial void QuestionsAnswerUnusable(ILogger logger, Guid documentId, int topicPosition);
 }
