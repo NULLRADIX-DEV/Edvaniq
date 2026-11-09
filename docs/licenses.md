@@ -59,6 +59,7 @@ Indirekte NuGet-Pakete, also Abhängigkeiten der gelisteten Pakete, stehen nicht
 | `Microsoft.Playwright` | MIT | Steuert den Browser der Barrierefreiheits-Tests, nur Tests. Bringt Playwright (Apache-2.0) und Node.js (MIT) mit. |
 | `MySql.Data` | GPL-2.0-only WITH Universal-FOSS-exception-1.0 | Vorläufige Ausnahme: DB-Verbindung der Services, siehe [Vorläufige Ausnahmen](#vorläufige-ausnahmen) |
 | `MySql.EntityFrameworkCore` | GPL-2.0-only WITH Universal-FOSS-exception-1.0 | Vorläufige Ausnahme: EF-Provider der Services, siehe [Vorläufige Ausnahmen](#vorläufige-ausnahmen) |
+| `MySqlConnector` | MIT | über den Health-Check von `Aspire.Hosting.MySql`, nur im AppHost. Fest auf eine Version ab 2.6.1 gesetzt wegen GHSA-473q-m89c-ghf8. |
 | `NATS.Net` | Apache-2.0 | Anbindung des Brokers in `BuildingBlocks.Messaging` |
 | `OpenTelemetry.Exporter.OpenTelemetryProtocol` | Apache-2.0 | ServiceDefaults |
 | `OpenTelemetry.Extensions.Hosting` | Apache-2.0 | ServiceDefaults |
