@@ -124,15 +124,15 @@ Der Server zeigt für die ganze App mehr, am selben Tag 3,4 GB, weil er Docker s
 
 Im MVP laufen 10 Prozesse: die sieben Services Identity, Planning, Content, Knowledge, Assessment, Flashcards und LearningEngine, der Content-Worker, das Gateway und der Web-Host. Dazu kommen MySQL und der Broker. Tutor, Gamification, Analytics und Notifications laufen heute als Gerüst mit, gehören aber nicht zum MVP und fehlen deshalb in der Rechnung.
 
-Gateway, Web-Host und MySQL zählen mit ihrem Messwert. Die sieben Services und der Content-Worker zählen je mit dem Wert von Planning, weil erst Planning mit seiner Datenbank arbeitet. Der Broker läuft seit #198 mit einer Grenze von 256 MB, sein Verbrauch ist noch nicht gemessen.
+Gateway, Web-Host und MySQL zählen mit ihrem Messwert. Die sieben Services und der Content-Worker zählen je mit dem Wert von Planning, weil erst Planning mit seiner Datenbank arbeitet. Der Broker läuft seit #198 mit einer Grenze von 256 MB und brauchte kurz nach seinem ersten Deploy am 09.11.2026 mit fünf leeren Streams 7 MB.
 
 | | Ruhebetrieb | Grenze |
 |---|---:|---:|
 | 7 Services und Content-Worker | 8 × 64 = 512 MB | 8 × 256 = 2048 MB |
 | Gateway und Web-Host | 78 MB | 512 MB |
 | MySQL | 573 MB | 1536 MB |
-| Broker | offen | 256 MB |
-| Summe | 1163 MB | 4352 MB |
+| Broker | 7 MB | 256 MB |
+| Summe | 1170 MB | 4352 MB |
 
 Bis zur Obergrenze von 6 GB bleiben 1792 MB. Davon braucht Docker selbst etwa 160 MB und ein laufender Migrationsschritt 256 MB, als Reserve bleiben also knapp 1,4 GB. Im Ruhebetrieb belegen die Prozesse gut ein Viertel ihrer Grenzen. Ein Service darf gut das Dreifache von Planning brauchen, bevor er die 80 % aus Q15 erreicht. Erneut gemessen wird unter Last (#243), nach dem siebten Service (#502) und vor dem Pilot (#576).
 
