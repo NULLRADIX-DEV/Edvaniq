@@ -196,7 +196,7 @@ Ein Consumer trägt jede Nachricht, die er behandelt, in seine Tabelle `inbox_me
 
 Löscht Identity einen Nutzer, sendet es `UserDeleted`, und jeder Service aus der Vorlage entfernt alle Zeilen dieses Nutzers ([Nutzer löschen](service-internals.md#nutzer-löschen)).
 
-Lokal startet der AppHost NATS und gibt Services aus der Vorlage die Adresse als `ConnectionStrings:nats`. Auf dem Server läuft noch kein NATS: Ein Service ohne diese Adresse sendet und empfängt nichts und verhält sich wie vorher, seine Ereignisse bleiben in der Outbox.
+Lokal startet der AppHost NATS und gibt Services aus der Vorlage die Adresse als `ConnectionStrings:nats`, auf dem Server macht das `deploy/compose.yml`. Ein Service ohne diese Adresse sendet und empfängt nichts und verhält sich wie vorher, seine Ereignisse bleiben in der Outbox.
 
 ## KI-Zugang
 

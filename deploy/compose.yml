@@ -31,6 +31,20 @@ x-skeleton: &skeleton
   mem_limit: 128m
   memswap_limit: 128m
 
+x-messaging-environment: &messaging-environment
+  <<: *app-environment
+  ConnectionStrings__nats: nats://nats:4222
+
+x-db-only: &db-only
+  db:
+    condition: service_healthy
+
+x-db-and-broker: &db-and-broker
+  db:
+    condition: service_healthy
+  nats:
+    condition: service_healthy
+
 x-identity: &identity
   <<: *app
   env_file:
@@ -51,9 +65,8 @@ x-planning: &planning
     - path: planning.env
       required: true
   networks: [inner, data]
-  depends_on:
-    db:
-      condition: service_healthy
+  environment: *messaging-environment
+  depends_on: *db-and-broker
 
 x-content: &content
   <<: *app
@@ -63,9 +76,8 @@ x-content: &content
     - path: content.env
       required: true
   networks: [inner, data]
-  depends_on:
-    db:
-      condition: service_healthy
+  environment: *messaging-environment
+  depends_on: *db-and-broker
 
 x-knowledge: &knowledge
   <<: *app
@@ -75,9 +87,8 @@ x-knowledge: &knowledge
     - path: knowledge.env
       required: true
   networks: [inner, data]
-  depends_on:
-    db:
-      condition: service_healthy
+  environment: *messaging-environment
+  depends_on: *db-and-broker
 
 x-assessment: &assessment
   <<: *app
@@ -87,9 +98,8 @@ x-assessment: &assessment
     - path: assessment.env
       required: true
   networks: [inner, data]
-  depends_on:
-    db:
-      condition: service_healthy
+  environment: *messaging-environment
+  depends_on: *db-and-broker
 
 x-learningengine: &learningengine
   <<: *app
@@ -99,9 +109,8 @@ x-learningengine: &learningengine
     - path: learningengine.env
       required: true
   networks: [inner, data]
-  depends_on:
-    db:
-      condition: service_healthy
+  environment: *messaging-environment
+  depends_on: *db-and-broker
 
 services:
   db:
@@ -137,6 +146,32 @@ services:
       retries: 12
       start_period: 60s
       start_interval: 2s
+  nats:
+    image: nats:2.15-alpine
+    command: ["--jetstream", "--store_dir", "/data", "--http_port", "8222"]
+    user: "65534:65534"
+    environment:
+      GOMEMLIMIT: 200MiB
+    volumes:
+      - ./nats:/data
+    networks: [data]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 64
+    cpus: 1
+    mem_limit: 256m
+    memswap_limit: 256m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8222/healthz?js-enabled-only=true"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+      start_interval: 2s
   identity-api:
     <<: *identity
     image: ghcr.io/nullradix-dev/edvaniq/identity-api:sha-${APP_COMMIT:?}
@@ -165,6 +200,7 @@ services:
     <<: *planning
     image: ghcr.io/nullradix-dev/edvaniq/planning-api:sha-${APP_COMMIT:?}
     command: ["migrate"]
+    depends_on: *db-only
     profiles: [migrate]
     restart: "no"
     healthcheck:
@@ -176,6 +212,7 @@ services:
     <<: *content
     image: ghcr.io/nullradix-dev/edvaniq/content-api:sha-${APP_COMMIT:?}
     command: ["migrate"]
+    depends_on: *db-only
     profiles: [migrate]
     restart: "no"
     healthcheck:
@@ -187,6 +224,7 @@ services:
     <<: *knowledge
     image: ghcr.io/nullradix-dev/edvaniq/knowledge-api:sha-${APP_COMMIT:?}
     command: ["migrate"]
+    depends_on: *db-only
     profiles: [migrate]
     restart: "no"
     healthcheck:
@@ -198,6 +236,7 @@ services:
     <<: *assessment
     image: ghcr.io/nullradix-dev/edvaniq/assessment-api:sha-${APP_COMMIT:?}
     command: ["migrate"]
+    depends_on: *db-only
     profiles: [migrate]
     restart: "no"
     healthcheck:
@@ -212,6 +251,7 @@ services:
     <<: *learningengine
     image: ghcr.io/nullradix-dev/edvaniq/learningengine-api:sha-${APP_COMMIT:?}
     command: ["migrate"]
+    depends_on: *db-only
     profiles: [migrate]
     restart: "no"
     healthcheck:

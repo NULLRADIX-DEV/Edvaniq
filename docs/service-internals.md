@@ -153,7 +153,7 @@ Die Vorlage hört auf ihr eigenes `ExampleItemCreated`, damit der Weg von der Ou
 
 ### Ohne Broker und in Tests
 
-Die Adresse von NATS kommt nur von außen, als `ConnectionStrings:nats`. Lokal setzt sie der AppHost mit `WithMessaging(nats)`, auf dem Server läuft noch kein NATS. Fehlt die Adresse, starten weder Dispatcher noch Consumer, und der Service verhält sich, als gäbe es keine Nachrichten: Die Events bleiben in der Outbox, bis ein Broker da ist. Gesendete Outbox-Zeilen und Inbox-Einträge löscht der Service nach 14 Tagen (`Messaging:Retention`), ungesendete bleiben.
+Die Adresse von NATS kommt nur von außen, als `ConnectionStrings:nats`. Lokal setzt sie der AppHost mit `WithMessaging(nats)`, auf dem Server der Anker `x-messaging-environment` in `deploy/compose.yml`. Fehlt die Adresse, starten weder Dispatcher noch Consumer, und der Service verhält sich, als gäbe es keine Nachrichten: Die Events bleiben in der Outbox, bis ein Broker da ist. Gesendete Outbox-Zeilen und Inbox-Einträge löscht der Service nach 14 Tagen (`Messaging:Retention`), ungesendete bleiben.
 
 `ServiceFactory` tauscht den Broker mit `AddInMemoryTransport()` gegen `InMemoryTransport` aus, die Tests der Services brauchen also kein NATS. `MessagingTests` legt ein Item an und wartet, bis das Event gesendet ist und der Handler es in die Inbox eingetragen hat. Die Garantien des Bausteins selbst prüfen die Tests in `tests/BuildingBlocks`: Outbox, Inbox und ein Event zwischen zwei Services über NATS. `Edvaniq.BuildingBlocks.Messaging.UnitTests` laufen ohne Docker, die `IntegrationTests` brauchen Docker für MySQL und NATS.
 

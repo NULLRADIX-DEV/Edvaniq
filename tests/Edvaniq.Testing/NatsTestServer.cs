@@ -4,13 +4,13 @@ using Xunit;
 
 namespace Edvaniq.Testing;
 
-// One NATS container per test run, in the version the AppHost uses. The module starts it with JetStream switched on. Tests
-// that share it use streams of their own or clear theirs first, as a stream outlives the test that made it. Needs Docker,
-// like the AppHost. Register it once per test project: [assembly: AssemblyFixture(typeof(NatsTestServer))].
+// One NATS container per test run, in the image the AppHost and the server use. The module starts it with JetStream
+// switched on. Tests that share it use streams of their own or clear theirs first, as a stream outlives the test that
+// made it. Needs Docker, like the AppHost. Register it once per test project: [assembly: AssemblyFixture(typeof(NatsTestServer))].
 public sealed class NatsTestServer : IAsyncLifetime
 {
-    // Same image as the AppHost (Aspire.Hosting.Nats), NatsImageTests checks it.
-    private const string Image = "nats:2.15";
+    // Same image as the AppHost and the server, NatsImageTests checks it.
+    private const string Image = "nats:2.15-alpine";
 
     private readonly NatsContainer container = new NatsBuilder(Image).Build();
 

@@ -113,7 +113,7 @@ Diese Pakete kommen über ein gelistetes Paket dazu und haben keine erlaubte SPD
 | `mcr.microsoft.com/dotnet/aspnet` | MIT | Basis der Edvaniq-Images mit ASP.NET Core. Die Pakete des Betriebssystems darin stehen unter ihren eigenen Lizenzen. |
 | `mcr.microsoft.com/dotnet/runtime` | MIT | Basis der Images der Worker. Die Pakete des Betriebssystems darin stehen unter ihren eigenen Lizenzen. |
 | `mysql` | GPL-2.0-only | Server-Software: Datenbank auf dem Server, lokal und in Integrationstests, läuft unverändert als eigener Prozess. |
-| `nats` | Apache-2.0 | Broker lokal im AppHost und in Integrationstests, läuft unverändert als eigener Prozess. |
+| `nats` | Apache-2.0 | Server-Software: Broker auf dem Server, lokal und in Integrationstests, läuft unverändert als eigener Prozess. Variante `-alpine`, weil der Health-Check auf dem Server `wget` braucht. Die Pakete von Alpine darin stehen unter ihren eigenen Lizenzen. |
 | `phpmyadmin` | GPL-2.0-only | Server-Software: nur lokal über Aspire, läuft unverändert als eigener Prozess. |
 
 ## Vorläufige Ausnahmen
