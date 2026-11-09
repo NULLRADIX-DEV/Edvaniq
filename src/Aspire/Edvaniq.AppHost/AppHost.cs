@@ -70,6 +70,7 @@ AddService<Projects.Edvaniq_Services_Notifications_Worker>("notifications-worker
 // Gateway
 var gateway = builder.AddProject<Projects.Edvaniq_Gateway>("gateway")
     .WithExternalHttpEndpoints()
+    .WithTokenValidation(identityApi)
     .WithReference(identityApi)
     .WithReference(planningApi)
     .WithReference(contentApi)

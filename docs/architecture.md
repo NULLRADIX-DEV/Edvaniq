@@ -100,9 +100,11 @@ Wer auf wessen Integration Events hört, nach Regel 6 ohne Kreis. Planning holt 
 
 Clients sprechen nie direkt mit einem Service, sondern immer mit dem Gateway, und das reicht die Anfrage weiter. Welcher Pfad zu welchem Service führt, steht nur in der Konfiguration, im Abschnitt `ReverseProxy` der `appsettings.json` des Gateways. Jeder Service hat dort einen eigenen Pfad, den das Gateway vor dem Weiterreichen abschneidet. `POST /planning/ping` kommt bei Planning also als `POST /ping` an.
 
-Als Ziel steht dort ein Name der Service Discovery, etwa `https+http://planning-api`. Lokal löst Aspire ihn auf, auf dem Server die Variable `services__planning-api__http__0` beim Dienst `gateway` in `deploy/compose.yml`. Das Token reicht das Gateway unverändert durch, geprüft wird es im Service.
+Als Ziel steht dort ein Name der Service Discovery, etwa `https+http://planning-api`. Lokal löst Aspire ihn auf, auf dem Server die Variable `services__planning-api__http__0` beim Dienst `gateway` in `deploy/compose.yml`. Ein Test prüft, dass jedes Ziel dort steht. Erreichbar sind so Planning, Content, Knowledge, Assessment und LearningEngine, jeweils unter ihrem Namen als Pfad (`/content/…`, `/learningengine/…`), dazu der Token-Endpunkt von Identity.
 
-Kennt das Gateway einen Pfad nicht, antwortet es mit 404. Ist der Service nicht erreichbar, kommt 502. Bleibt er länger stumm, als `HttpRequest:ActivityTimeout` am Cluster erlaubt, kommt 504. Der Wert liegt unter den 10 Sekunden, die ein Aufrufer mit der Standard-Resilience je Versuch wartet, sonst gäbe der vorher auf. In allen drei Fällen steht im Body ein Problem nach RFC 9457 (`application/problem+json`), das den Grund nennt. Eine gescheiterte Anfrage wiederholt das Gateway nicht von selbst, weil ein `POST` sonst doppelt ankommen könnte. Ob das Gateway selbst läuft, sagt `GET /status` mit 204.
+Das Gateway prüft das Token nach demselben Vertrag wie die Services (`AddTokenValidation`, Abschnitt `Authentication:Schemes:Bearer`). Ohne gültiges Token antwortet es mit 401 und reicht nichts weiter. Eine Route, die ohne Token auskommen soll, muss das in ihrer Konfiguration ausdrücklich sagen, ein Test geht dafür alle Routen durch. Kommt das Gateway nicht an die Schlüssel von Identity, antwortet es mit 503, denn das Token kann trotzdem gültig sein. Das Token reicht das Gateway unverändert weiter, und der Service prüft es noch einmal selbst.
+
+Kennt das Gateway einen Pfad nicht, antwortet es mit 404. Ist der Service nicht erreichbar, kommt 502. Bleibt er länger stumm, als `HttpRequest:ActivityTimeout` am Cluster erlaubt, kommt 504. Der Wert liegt unter den 10 Sekunden, die ein Aufrufer mit der Standard-Resilience je Versuch wartet, sonst gäbe der vorher auf. Antwortet der Service selbst mit 5xx, aber ohne Problem, etwa mit einer Fehlerseite oder leer, ersetzt das Gateway Body und Header durch ein eigenes Problem mit demselben Status. Ein Problem des Service kommt unverändert an. In allen Fällen steht im Body ein Problem nach RFC 9457 (`application/problem+json`), das den Grund nennt. Eine gescheiterte Anfrage wiederholt das Gateway nicht von selbst, weil ein `POST` sonst doppelt ankommen könnte. Ob das Gateway selbst läuft, sagt `GET /status` mit 204.
 
 ## Clients
 
@@ -162,7 +164,7 @@ Jede Anfrage hat eine Kennung, die W3C-Trace-ID. Der Server vergibt sie selbst: 
 
 Fehlerantworten nennen die Kennung im Feld `traceId` eines Problems nach RFC 9457, als 32 Hex-Zeichen. Über das Innere verraten sie sonst nichts: keine Exception, keinen Stacktrace, keine Adresse.
 - Services aus der Vorlage rufen dafür als Erstes `app.UseProblems()` aus BuildingBlocks.Web auf. Eine unbehandelte Exception wird so zu einem nackten 500, ein 401 der Token-Prüfung und ein 404 ohne Body bekommen ebenfalls ein Problem.
-- Das Gateway schreibt seine Probleme selbst.
+- Das Gateway schreibt seine Probleme selbst, auch für 401, 403 und 503 der Token-Prüfung und für einen Service, der ohne Problem scheitert.
 - Der Web-Host macht aus den eigenen Fehlern unter `/api` und `/session` Probleme (`ApiProblems`). Probleme aus dem Backend reicht er unverändert durch, sie nennen dieselbe Kennung.
 - Bei einer Seite zeigt der Web-Host im Fehlerfall `ServerError` mit derselben Kennung. Ein gescheiterter Ping auf `/systemstatus` nennt die Kennung seines Problems, `HttpPing` reicht sie dafür an die Seite durch.
 
@@ -170,7 +172,7 @@ Ins Log kommt nichts, womit jemand hineinkommt: kein Client-Secret, kein Signier
 
 ## Tokens
 
-Jeder Service prüft das Token selbst und muss dem Aussteller deshalb trauen, ohne ein Geheimnis mit ihm zu teilen. Identity signiert jedes Token mit seinem privaten Schlüssel (ES256), den nur Identity kennt. Den öffentlichen Teil holt sich ein Service über seine `Authority` direkt bei Identity, aus dem Discovery-Dokument unter `/.well-known/openid-configuration` und dem Key-Set, auf das es zeigt. Das Gateway leitet von Identity nur den Token-Endpunkt weiter.
+Jeder Service prüft das Token selbst, das Gateway ebenso, und jeder muss dem Aussteller deshalb trauen, ohne ein Geheimnis mit ihm zu teilen. Identity signiert jedes Token mit seinem privaten Schlüssel (ES256), den nur Identity kennt. Den öffentlichen Teil holt sich ein Service über seine `Authority` direkt bei Identity, aus dem Discovery-Dokument unter `/.well-known/openid-configuration` und dem Key-Set, auf das es zeigt. Das Gateway leitet von Identity nur den Token-Endpunkt weiter.
 
 Was ein Token enthält, wie lange es gilt und wie man es bekommt, steht im [Token-Vertrag](tokens.md). Teamkonten melden sich dort mit Name und Passwort an und bekommen ein Token mit ihrer Konto-ID als `sub`. Der Web-Host reicht diesen Login noch nicht weiter, das kommt mit dem Login in der Web-Shell.
 
