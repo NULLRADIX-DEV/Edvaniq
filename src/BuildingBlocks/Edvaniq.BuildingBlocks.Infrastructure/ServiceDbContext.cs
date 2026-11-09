@@ -14,9 +14,21 @@ namespace Edvaniq.BuildingBlocks.Infrastructure;
 // A. Code that must see all users says so with IgnoreQueryFilters([OwnerFilter]), the UserDataRemover drops every
 // filter. It also maps
 // the outbox and inbox tables, so no service can forget them.
-public abstract class ServiceDbContext(DbContextOptions options, ICurrentUser currentUser) : DbContext(options)
+public abstract class ServiceDbContext : DbContext
 {
     public const string OwnerFilter = "Owner";
+
+    private readonly ICurrentUser currentUser;
+
+    // EF starts its own transaction only when it thinks a save needs one. MySQL gets an update and the inserts after it
+    // as one command, and a failed concurrency check only shows once that command ran, so without a transaction the
+    // outbox rows of a lost save would stay. Every save runs in a transaction.
+    protected ServiceDbContext(DbContextOptions options, ICurrentUser currentUser)
+        : base(options)
+    {
+        this.currentUser = currentUser;
+        Database.AutoTransactionBehavior = AutoTransactionBehavior.Always;
+    }
 
     // A user id from the issuer. Bounded so MySQL can index it.
     public const int OwnerIdMaxLength = 128;
