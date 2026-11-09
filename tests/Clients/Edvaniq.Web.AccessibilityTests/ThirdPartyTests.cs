@@ -5,7 +5,7 @@ namespace Edvaniq.Web.AccessibilityTests;
 // host. A link to another site, like the imprint, is not a request until someone follows it.
 public sealed class ThirdPartyTests(WebShell shell)
 {
-    public static TheoryData<string> Pages { get; } = ["/", "/systemstatus", "/datenschutz", "/open-source", "/there-is-no-such-page"];
+    public static TheoryData<string> Pages { get; } = ["/", "/login", "/datenschutz", "/open-source", "/there-is-no-such-page"];
 
     [Theory]
     [MemberData(nameof(Pages))]
@@ -13,6 +13,19 @@ public sealed class ThirdPartyTests(WebShell shell)
     {
         await using var page = await shell.OpenAsync(shell.Address, path, WebShell.DesktopWidth);
 
+        AssertOnlyTheHost(page);
+    }
+
+    [Fact]
+    public async Task SignedInSystemStatus_LoadsNothingFromAnotherHost()
+    {
+        await using var page = await shell.OpenSignedInAsync("/systemstatus", WebShell.DesktopWidth);
+
+        AssertOnlyTheHost(page);
+    }
+
+    private void AssertOnlyTheHost(ShellPage page)
+    {
         var host = new Uri(shell.Address).Authority;
         var elsewhere = page.Requests
             .Select(url => new Uri(url))

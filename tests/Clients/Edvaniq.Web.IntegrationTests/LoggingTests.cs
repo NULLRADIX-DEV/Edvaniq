@@ -48,6 +48,27 @@ public sealed class LoggingTests
         Assert.Empty(web.Logs.Containing(web.ClientSecret, "stub-token-1", session));
     }
 
+    // A login, a ping with the user's token and the logout: the password, the user's token and the cookie with it stay
+    // out of the log, also when a wrong password is tried first.
+    [Fact]
+    public async Task Login_LogsNoPasswordNoTokenAndNoCookie()
+    {
+        await using var gateway = await StubService.StartAsync("gateway-stub");
+        await using var web = new WebFactory(gateway.Address, configure: builder => builder.UseEnvironment("Production"));
+        using var browser = web.CreateBrowser(handleCookies: false);
+
+        using var wrong = await LoginTests.LoginAsync(browser, password: "ein-falsches-passwort");
+        var cookie = await LoginTests.LoginCookieAsync(browser);
+        browser.DefaultRequestHeaders.Add("Cookie", cookie);
+        using var ping = await browser.PostAsync("/api/planning/ping", content: null, TestContext.Current.CancellationToken);
+        using var logout = await browser.DeleteAsync("/session", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, ping.StatusCode);
+        Assert.NotEmpty(web.Logs.Containing(StubService.TokenPath));
+        Assert.Empty(web.Logs.Containing(
+            StubService.Password, "ein-falsches-passwort", StubService.UserToken, web.ClientSecret, cookie.Split('=', 2)[1]));
+    }
+
     // Without a token the browser gets a problem. The warning names its trace and why, still without a secret.
     [Fact]
     public async Task NoToken_TheWarningNamesTheTraceOfTheProblem_AndNoSecret()

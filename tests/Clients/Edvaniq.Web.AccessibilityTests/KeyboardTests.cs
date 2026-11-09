@@ -40,7 +40,7 @@ public sealed class KeyboardTests(WebShell shell)
     [Fact]
     public async Task SkipLink_IsTheFirstStop_AndMovesFocusToMain()
     {
-        await using var page = await shell.OpenAsync(shell.Address, "/systemstatus", WebShell.DesktopWidth);
+        await using var page = await shell.OpenSignedInAsync("/systemstatus", WebShell.DesktopWidth);
 
         // Where the very first Tab lands depends on whether FocusOnNavigate has put the focus on the heading yet, so
         // the order comes from the page and the link gets the focus directly.

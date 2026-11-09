@@ -16,4 +16,8 @@
     <ProjectReference Include="..\..\Aspire\Edvaniq.ServiceDefaults\Edvaniq.ServiceDefaults.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Edvaniq.Web.IntegrationTests" />
+  </ItemGroup>
+
 </Project>

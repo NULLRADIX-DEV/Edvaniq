@@ -178,3 +178,19 @@
         padding: var(--space-4) var(--space-8);
     }
 }
+
+/* Signing out is no page to go to, so it is a button, but it sits in the list like the links. */
+.shell-nav ::deep .shell-nav-action {
+    display: block;
+    width: 100%;
+    padding: var(--space-3) var(--space-2);
+    border: 0;
+    background: none;
+    color: var(--color-ink);
+    font-weight: 600;
+    text-align: left;
+}
+
+.shell-nav ::deep .shell-nav-action:hover {
+    color: var(--color-accent);
+}

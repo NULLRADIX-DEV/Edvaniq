@@ -37,6 +37,7 @@ Indirekte NuGet-Pakete, also Abhängigkeiten der gelisteten Pakete, stehen nicht
 | `bunit` | MIT | Komponententests der Clients |
 | `Deque.AxeCore.Playwright` | MIT | axe-core in den Barrierefreiheits-Tests der Web-Shell, nur Tests |
 | `Microsoft.AspNetCore.Authentication.JwtBearer` | MIT | Token-Prüfung der Services |
+| `Microsoft.AspNetCore.Components.Authorization` | MIT | Geschützte Seiten der UI-Bibliothek |
 | `Microsoft.AspNetCore.Components.Web` | MIT | UI-Bibliothek |
 | `Microsoft.AspNetCore.Components.WebAssembly` | MIT | Web-Client |
 | `Microsoft.AspNetCore.Components.WebAssembly.Server` | MIT | Web-Host |

@@ -1,0 +1,9 @@
+@inject NavigationManager Navigation
+
+@* A page that wants a login sends the user there, with the way back. While prerendering the web host has already
+   redirected, so this only runs in the client. *@
+
+@code {
+    protected override void OnInitialized() =>
+        Navigation.NavigateTo(ReturnUrl.LoginFor("/" + Navigation.ToBaseRelativePath(Navigation.Uri)));
+}

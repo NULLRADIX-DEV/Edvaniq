@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
@@ -8,11 +9,11 @@ using Yarp.ReverseProxy.Transforms;
 
 namespace Edvaniq.Web;
 
-// The token the backend sees for a call from the browser. There is no login yet, so it is the web host's own technical
-// token from Identity. Only routes with the metadata BackendToken=true carry it: what the browser sent as
-// Authorization has already been removed there, the token takes its place. The browser never gets to see it.
-//
-// A real login will put the user's token here instead. The services do not notice the difference.
+// The token the backend sees for a call from the browser. Only routes with the metadata BackendToken=true carry it: what
+// the browser sent as Authorization has already been removed there, the token takes its place. The browser never gets
+// to see it. With a login it is the user's token from the session cookie. With a guest session it is the web host's own
+// technical token from Identity, which only the ping of the smoke test needs. A route that wants a user says so with
+// AuthorizationPolicy "user".
 public static class BackendToken
 {
     public const string MetadataKey = "BackendToken";
@@ -79,7 +80,14 @@ public static class BackendToken
         var context = transform.HttpContext;
         try
         {
-            var token = await context.RequestServices.GetRequiredService<BackendTokens>().GetAsync(context.RequestAborted);
+            var token = WebSession.IsUser(context.User)
+                ? await context.GetTokenAsync(WebSession.TokenName)
+                : await context.RequestServices.GetRequiredService<BackendTokens>().GetAsync(context.RequestAborted);
+            if (string.IsNullOrEmpty(token))
+            {
+                throw new InvalidOperationException("The login carries no token.");
+            }
+
             transform.ProxyRequest.Headers.Authorization = new("Bearer", token);
         }
         catch (Exception exception) when (!context.RequestAborted.IsCancellationRequested)

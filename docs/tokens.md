@@ -27,7 +27,7 @@ Das Token eines Logins gilt eine Stunde, ein Client-Token fünf Minuten (`Tokens
 
 Beide Wege laufen über `POST /connect/token` mit einem Formular (`application/x-www-form-urlencoded`) nach RFC 6749. Das Gateway leitet den Endpunkt als `POST /identity/connect/token` weiter, der Browser erreicht ihn nie. Jede Anfrage trägt `client_id` und `client_secret` des Clients.
 
-Der Login eines Teamkontos nutzt den Password-Grant: `grant_type=password` mit `username` und `password`. Erlaubt ist er nur einem Client, der in der Konfiguration `AllowPassword` hat, heute nur dem Web-Host `web`. Groß- und Kleinschreibung und Leerzeichen am Rand des Namens zählen nicht, „Ben“ und „ben“ sind dasselbe Konto. Ein Client-Token holt der Web-Host mit `grant_type=client_credentials`.
+Der Login eines Teamkontos nutzt den Password-Grant: `grant_type=password` mit `username` und `password`. Erlaubt ist er nur einem Client, der in der Konfiguration `AllowPassword` hat, heute nur dem Web-Host `web`. Der Web-Host fragt ihn für den Login in der Web-Shell an und behält das Token bei sich, der Browser bekommt es nie zu sehen ([Architektur](architecture.md#tokens)). Groß- und Kleinschreibung und Leerzeichen am Rand des Namens zählen nicht, „Ben“ und „ben“ sind dasselbe Konto. Ein Client-Token holt der Web-Host mit `grant_type=client_credentials`.
 
 Eine erfolgreiche Antwort ist `200` mit `access_token`, `token_type` (`Bearer`) und `expires_in` in Sekunden. Keine Antwort darf in einen Cache, deshalb steht in jeder `Cache-Control: no-store`.
 
