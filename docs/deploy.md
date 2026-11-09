@@ -88,7 +88,7 @@ Hinter dem Proxy übernimmt der Web-Host Schema und Client-Adresse aus `X-Forwar
 
 ## Speicher
 
-Jeder Container hat eine feste Speichergrenze ohne Swap (`mem_limit` und `memswap_limit`). Produktive Prozesse haben 256 MB, die Skelett-Prozesse 128 MB und MySQL 1536 MB, davon 1 GB InnoDB-Cache. Zusammen sind das 4736 MB, und das liegt unter der Obergrenze von 6 GB für die ganze App. Den Rest brauchen Docker selbst und ein laufender Migrationsschritt.
+Jeder Container hat eine feste Speichergrenze ohne Swap (`mem_limit` und `memswap_limit`). Produktive Prozesse und der Broker haben 256 MB, die Skelett-Prozesse 128 MB und MySQL 1536 MB, davon 1 GB InnoDB-Cache. Zusammen sind das 4992 MB, und das liegt unter der Obergrenze von 6 GB für die ganze App. Den Rest brauchen Docker selbst und ein laufender Migrationsschritt.
 
 Braucht ein Container mehr als seine Grenze, beendet der Kernel nur ihn, und Docker startet ihn neu. .NET kennt die Grenze und hält seinen Heap bei 75 % davon. Jeder Prozess schreibt beim Start `GC memory limit: <n> MiB` ins Log, bei 256 MB sind das 192 MiB. Braucht ein Prozess dauerhaft mehr, überschreibst du seine Grenze im Dienst. Die Summe muss dann weiter unter 6 GB bleiben.
 
@@ -124,7 +124,7 @@ Der Server zeigt für die ganze App mehr, am selben Tag 3,4 GB, weil er Docker s
 
 Im MVP laufen 10 Prozesse: die sieben Services Identity, Planning, Content, Knowledge, Assessment, Flashcards und LearningEngine, der Content-Worker, das Gateway und der Web-Host. Dazu kommen MySQL und der Broker. Tutor, Gamification, Analytics und Notifications laufen heute als Gerüst mit, gehören aber nicht zum MVP und fehlen deshalb in der Rechnung.
 
-Gateway, Web-Host und MySQL zählen mit ihrem Messwert. Die sieben Services und der Content-Worker zählen je mit dem Wert von Planning, weil erst Planning mit seiner Datenbank arbeitet. Für den Broker gilt bis zu seiner Einführung (#198) eine angenommene Grenze von 256 MB, sein Verbrauch ist noch offen.
+Gateway, Web-Host und MySQL zählen mit ihrem Messwert. Die sieben Services und der Content-Worker zählen je mit dem Wert von Planning, weil erst Planning mit seiner Datenbank arbeitet. Der Broker läuft seit #198 mit einer Grenze von 256 MB, sein Verbrauch ist noch nicht gemessen.
 
 | | Ruhebetrieb | Grenze |
 |---|---:|---:|

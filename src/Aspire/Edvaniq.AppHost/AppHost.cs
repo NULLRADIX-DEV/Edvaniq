@@ -8,11 +8,11 @@ var mysql = builder.AddMySql("mysql")
     .WithLifetime(ContainerLifetime.Persistent)
     .WithPhpMyAdmin();
 
-// Message broker for the integration events: NATS with JetStream. Only the AppHost starts it so far. A service gets its
-// address as ConnectionStrings:nats (WithMessaging), and without it runs without a broker. The image tag is the one of
-// the tests (NatsImageTests).
+// Message broker for the integration events: NATS with JetStream. A service gets its address as ConnectionStrings:nats
+// (WithMessaging), and without it runs without a broker. The image is the one of the tests and the server
+// (NatsImageTests), alpine because the server's health check needs wget.
 var nats = builder.AddNats("nats")
-    .WithImageTag("2.15")
+    .WithImageTag("2.15-alpine")
     .WithJetStream()
     .WithDataVolume();
 
