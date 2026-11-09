@@ -98,9 +98,8 @@ x-assessment: &assessment
     - path: assessment.env
       required: true
   networks: [inner, data]
-  depends_on:
-    db:
-      condition: service_healthy
+  environment: *messaging-environment
+  depends_on: *db-and-broker
 
 x-learningengine: &learningengine
   <<: *app
@@ -237,6 +236,7 @@ services:
     <<: *assessment
     image: ghcr.io/nullradix-dev/edvaniq/assessment-api:sha-${APP_COMMIT:?}
     command: ["migrate"]
+    depends_on: *db-only
     profiles: [migrate]
     restart: "no"
     healthcheck:
