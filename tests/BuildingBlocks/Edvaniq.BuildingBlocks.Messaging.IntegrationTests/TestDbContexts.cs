@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Edvaniq.BuildingBlocks.Messaging.IntegrationTests;
 
 // The DbContext of the sending service. ServiceDbContext adds the outbox and inbox tables. A document with a title that
-// exists already fails the whole SaveChanges.
+// exists already fails the whole SaveChanges, and so does one whose status someone else changed first.
 public sealed class SenderDbContext(DbContextOptions<SenderDbContext> options) : ServiceDbContext(options, new NoUser())
 {
     public DbSet<Document> Documents => Set<Document>();
@@ -16,6 +16,7 @@ public sealed class SenderDbContext(DbContextOptions<SenderDbContext> options) :
         {
             document.Property(d => d.Title).HasMaxLength(200);
             document.HasIndex(d => d.Title).IsUnique();
+            document.Property(d => d.Status).HasMaxLength(16).IsConcurrencyToken();
         });
 }
 
@@ -33,6 +34,8 @@ public sealed class Document
     public Guid Id { get; set; }
 
     public required string Title { get; set; }
+
+    public string Status { get; set; } = "New";
 }
 
 public sealed class Notification
