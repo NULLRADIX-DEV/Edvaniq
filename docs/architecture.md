@@ -224,6 +224,12 @@ Das Ereignis trägt die Themen als flache Liste. `Parent` ist der Index eines Vo
 
 Der Worker liest Dokumente aller Nutzer und fragt deshalb mit `IgnoreQueryFilters([ServiceDbContext.OwnerFilter])`. Einen angemeldeten Nutzer hat er nicht, eine Abfrage unter dem Filter scheitert deshalb, statt alle Zeilen zu zeigen. Ereignisse sendet er über die Outbox, empfängt aber keine: Die empfängt die API, und ein zweiter Empfänger würde jedes doppelt verarbeiten. Die Outbox leeren API und Worker beide, jeder nimmt andere Zeilen.
 
+## Fragen in Assessment
+
+Assessment übernimmt die Fragen aus `ItemsGenerated` und besitzt sie ab dann (`ItemsGeneratedHandler`). Eine `Question` gehört dem Nutzer aus dem Ereignis und hat als Schlüssel die `itemId`, die Content vergeben hat. Kommt dieselbe Nachricht noch einmal, verwirft sie die Inbox. Kommen dieselben Items unter einer neuen Nachrichten-ID, findet der Handler sie schon in der Tabelle und legt nur fehlende an. Karten überspringt er, die gehören Flashcards. Ein Item, das den Vertrag verletzt, etwa mit einer Lösung außerhalb der Optionen, lässt er mit einer Logzeile weg, die nur die IDs nennt. Die übrigen Fragen des Themas kommen trotzdem an.
+
+Bis #214 trägt das Ereignis keine Themen-ID. Das Thema einer Frage sind deshalb `DocumentId` und `TopicPosition`, die Stelle des Themas in der Analyse dieses Dokuments. #214 ergänzt die Spalte `TopicId` und füllt sie für die schon übernommenen Fragen über Dokument und Position bei Knowledge nach.
+
 ## Starten
 
 Wie du das Backend und die Web-Shell lokal mit einem Befehl startest, steht in der [README](../README.md#lokal-starten).

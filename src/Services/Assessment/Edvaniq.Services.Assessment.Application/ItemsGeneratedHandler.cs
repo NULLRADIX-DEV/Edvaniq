@@ -1,0 +1,59 @@
+using Edvaniq.BuildingBlocks.Application;
+using Edvaniq.Services.Assessment.Domain;
+using Edvaniq.Services.Content.Contracts;
+
+using Microsoft.Extensions.Logging;
+
+namespace Edvaniq.Services.Assessment.Application;
+
+// Takes over the questions of one topic (docs/spec/events.md). The inbox drops a redelivered message, this skips items
+// stored already, so the same items under a new message id add nothing. If two arrive at once, the key makes the later
+// save fail, the broker delivers it again and this finds the questions. Cards belong to Flashcards (M4). An item that
+// breaks the contract is left out with a log line, so the rest of the topic still arrives. A newer PromptVersion is
+// only where the question came from, it's taken as is.
+public sealed partial class ItemsGeneratedHandler(IQuestions questions, TimeProvider time, ILogger<ItemsGeneratedHandler> logger)
+    : IIntegrationEventHandler<ItemsGenerated>
+{
+    public async Task HandleAsync(ItemsGenerated integrationEvent, CancellationToken cancellationToken)
+    {
+        var items = integrationEvent.Items
+            .Where(item => item.Kind == ItemKind.Question)
+            .DistinctBy(item => item.ItemId)
+            .ToList();
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        var known = await questions.KnownAsync([.. items.Select(item => item.ItemId)], cancellationToken);
+        var now = time.GetUtcNow().UtcDateTime;
+        foreach (var item in items.Where(item => !known.Contains(item.ItemId)))
+        {
+            if (item.Question is not { } question
+                || !Question.IsValid(question.Text, question.Options, question.Answer, question.Explanation, question.Difficulty, item.ModelId, item.PromptVersion))
+            {
+                LogInvalidItem(item.ItemId, integrationEvent.DocumentId);
+                continue;
+            }
+
+            questions.Add(Question.Create(
+                item.ItemId,
+                integrationEvent.UserId,
+                integrationEvent.DocumentId,
+                integrationEvent.TopicPosition,
+                item.SectionId,
+                question.Text,
+                question.Options,
+                question.Answer,
+                question.Explanation,
+                question.Difficulty,
+                item.ModelId,
+                item.PromptVersion,
+                now));
+        }
+    }
+
+    // Ids only, never the content of a question.
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Item {ItemId} of document {DocumentId} is no valid question and was left out")]
+    private partial void LogInvalidItem(Guid itemId, Guid documentId);
+}
