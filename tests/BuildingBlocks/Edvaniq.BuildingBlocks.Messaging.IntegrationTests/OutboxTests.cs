@@ -54,6 +54,34 @@ public sealed class OutboxTests(MySqlTestServer mysql) : IAsyncLifetime
         Assert.Equal(1, sender.Query(db => db.Set<OutboxMessage>().Count()));
     }
 
+    // Two workers load the same document, the first one saves. The second fails on the concurrency token, and its event
+    // must not stay behind. MySQL gets the update and the inserts after it as one command, and a failed concurrency
+    // check only shows after that command ran, so the save needs its own transaction.
+    [Fact]
+    public void ConcurrencyConflict_StoresNoEventOfTheLoser()
+    {
+        var id = CreateDocument("Skript Kapitel 1");
+
+        using var first = sender.Scope();
+        using var second = sender.Scope();
+        var firstDb = first.ServiceProvider.GetRequiredService<SenderDbContext>();
+        var secondDb = second.ServiceProvider.GetRequiredService<SenderDbContext>();
+        var firstDocument = firstDb.Documents.Single(d => d.Id == id);
+        var secondDocument = secondDb.Documents.Single(d => d.Id == id);
+
+        firstDocument.Status = "Ready";
+        first.ServiceProvider.GetRequiredService<IEventOutbox>().Add(new Greeted(id, "first"));
+        firstDb.SaveChanges();
+
+        secondDocument.Status = "Ready";
+        second.ServiceProvider.GetRequiredService<IEventOutbox>().Add(new Greeted(id, "second"));
+        Assert.Throws<DbUpdateConcurrencyException>(() => secondDb.SaveChanges());
+
+        Assert.DoesNotContain(
+            sender.Query(db => db.Set<OutboxMessage>().Select(message => message.Payload).ToList()),
+            payload => payload.Contains("second"));
+    }
+
     [Fact]
     public void RolledBackTransaction_StoresNeitherChangeNorEvent()
     {
