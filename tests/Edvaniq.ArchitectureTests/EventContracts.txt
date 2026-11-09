@@ -1,5 +1,20 @@
 # Every field of every integration event that may have gone out, as <Service>.<Type>.<Field>: <type>, sorted by name.
 # Lines are only ever added. Changing or deleting one breaks a contract (docs/spec/events.md, "Der Vertrag im Code").
+Assessment.AnswerRecorded.AnswerId: Guid
+Assessment.AnswerRecorded.AnsweredAt: DateTime
+Assessment.AnswerRecorded.Confidence: int?
+Assessment.AnswerRecorded.Correct: bool
+Assessment.AnswerRecorded.Difficulty: int?
+Assessment.AnswerRecorded.ItemId: Guid
+Assessment.AnswerRecorded.ResponseTimeMs: int
+Assessment.AnswerRecorded.SessionId: Guid?
+Assessment.AnswerRecorded.Source: Mode
+Assessment.AnswerRecorded.TopicId: Guid
+Assessment.AnswerRecorded.UserId: string
+Assessment.AnswerRecorded.Version: int
+Assessment.Mode.MockExam: = 2
+Assessment.Mode.Placement: = 1
+Assessment.Mode.Practice: = 0
 Content.DocumentAnalyzed.DocumentId: Guid
 Content.DocumentAnalyzed.Topics: IReadOnlyList<TopicSuggestion>
 Content.DocumentAnalyzed.UserId: string

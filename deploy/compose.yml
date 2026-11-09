@@ -79,6 +79,18 @@ x-knowledge: &knowledge
     db:
       condition: service_healthy
 
+x-learningengine: &learningengine
+  <<: *app
+  env_file:
+    - path: app.env
+      required: true
+    - path: learningengine.env
+      required: true
+  networks: [inner, data]
+  depends_on:
+    db:
+      condition: service_healthy
+
 services:
   db:
     image: mysql:9.7
@@ -174,8 +186,16 @@ services:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/flashcards-api:sha-${APP_COMMIT:?}
   learningengine-api:
-    <<: *app
+    <<: *learningengine
     image: ghcr.io/nullradix-dev/edvaniq/learningengine-api:sha-${APP_COMMIT:?}
+  learningengine-migrate:
+    <<: *learningengine
+    image: ghcr.io/nullradix-dev/edvaniq/learningengine-api:sha-${APP_COMMIT:?}
+    command: ["migrate"]
+    profiles: [migrate]
+    restart: "no"
+    healthcheck:
+      disable: true
   tutor-api:
     <<: *skeleton
     image: ghcr.io/nullradix-dev/edvaniq/tutor-api:sha-${APP_COMMIT:?}

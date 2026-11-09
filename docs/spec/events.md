@@ -2,7 +2,7 @@
 
 Services melden einander Änderungen als Ereignisse über den Broker ([Nachrichten](../architecture.md#nachrichten)). Wem ein Objekt gehört, legt das [Objektmodell](object-model.md) fest, was die Begriffe bedeuten, das [Glossar](glossary.md). Im MVP bleibt es bei diesen neun Ereignissen ([Nicht-Ziele](non-goals.md#plattform-fundament)).
 
-Die Liste ist verbindlich. Ein zehntes Ereignis braucht erst eine Entscheidung und dann eine Zeile hier, vorher lässt `EventCatalogTests` keins zu. Die Felder eines Ereignisses werden verbindlich, sobald es als Typ im Code steht, bis dahin sind sie ein Entwurf. Der Vertrag des Lern-Nachweises bleibt ein Entwurf, bis er mit einem eigenen Test festgelegt wird (#190). Steht hinter einer Angabe „(Vorschlag)“, ist sie noch nicht beschlossen. Die [Regeln für Ereignisse](#regeln-für-ereignisse) gelten für alle Ereignisse.
+Die Liste ist verbindlich. Ein zehntes Ereignis braucht erst eine Entscheidung und dann eine Zeile hier, vorher lässt `EventCatalogTests` keins zu. Die Felder eines Ereignisses werden verbindlich, sobald es als Typ im Code steht, bis dahin sind sie ein Entwurf. Steht hinter einer Angabe „(Vorschlag)“, ist sie noch nicht beschlossen. Die [Regeln für Ereignisse](#regeln-für-ereignisse) gelten für alle Ereignisse.
 
 ## Die neun Ereignisse
 
@@ -42,10 +42,11 @@ Jedes Ereignis trägt die `userId` des Nutzers, dem die Änderung gehört, denn 
 
 ## Lern-Nachweis
 
-`AnswerRecorded` und `CardReviewed` tragen denselben Vertrag, den [Lern-Nachweis](glossary.md#lern-nachweis). LearningEngine legt aus jedem einen Eintrag an und berechnet aus diesen Einträgen die Mastery. Der Nachweis enthält keinen Fragetext, keine Optionen und keine Lösung, nur Schlüssel und die Werte, die LearningEngine verrechnet oder mitspeichert.
+`AnswerRecorded` und `CardReviewed` tragen denselben Vertrag, den [Lern-Nachweis](glossary.md#lern-nachweis). Er ist festgelegt, seit `AnswerRecorded` in `Edvaniq.Services.Assessment.Contracts` steht (#190). `CardReviewed` bekommt mit Flashcards dieselben Felder in dessen `.Contracts`, so wie `ItemFlagged`. LearningEngine legt aus jedem einen Eintrag an und berechnet aus diesen Einträgen die Mastery. Der Nachweis enthält keinen Fragetext, keine Optionen und keine Lösung, nur Schlüssel und die Werte, die LearningEngine verrechnet oder mitspeichert.
 
 | Feld | Bedeutung |
 |---|---|
+| `version` | Die Version des Vertrags beim Sender, derzeit 1. |
 | `userId` | Der Nutzer, der geantwortet hat. |
 | `topicId` | Das Thema, zu dem das Item beim Antworten gehörte. |
 | `itemId` | Die Frage oder Karte. |
@@ -58,7 +59,9 @@ Jedes Ereignis trägt die `userId` des Nutzers, dem die Änderung gehört, denn 
 | `source` | Der Modus, in dem die Antwort zählt, also `Practice`, `Placement` oder `MockExam` ([Modusregeln](modes.md)). |
 | `answeredAt` | Der Zeitpunkt der Antwort in UTC. Ihn setzt der Server des Owners beim Speichern, nicht das Gerät des Nutzers. |
 
-Ein Lern-Nachweis bleibt 12 Monate nach `answeredAt` gespeichert und wird danach gelöscht (Vorschlag, Q27 in den [Qualitätszielen](quality.md#datenaufbewahrung-und-löschung)). Neuere Antworten zählen für die Mastery ohnehin stärker, und weil viele Nutzer minderjährig sind, hält LearningEngine nicht länger als nötig fest, wie jemand gelernt hat. Löscht ein Nutzer sein Konto, wartet LearningEngine die Frist nicht ab und löscht seine Nachweise, sobald `UserDeleted` ankommt. Wie die Mastery konsistent bleibt, wenn alte Nachweise wegfallen, ist noch offen und wird mit der Frist umgesetzt (#365).
+Die Version steigt nur mit einer additiven Änderung, also wenn ein optionales Feld dazukommt. Sie sagt dem Empfänger, welche Felder der Sender schon kannte. Ein Empfänger verarbeitet auch eine höhere Version, als er kennt, und liest daraus die Felder, die er kennt. Eine Änderung, die nicht additiv ist, gibt es auch mit einer neuen Version nicht ([Regeln für Ereignisse](#regeln-für-ereignisse)).
+
+Ein Lern-Nachweis bleibt 12 Monate nach `answeredAt` gespeichert und wird danach gelöscht (Q27 in den [Qualitätszielen](quality.md#datenaufbewahrung-und-löschung)). Die Frist deckt ein Schuljahr samt Prüfungszeit ab, und innerhalb der Frist lässt sich die Mastery aus den Nachweisen neu berechnen (A41 in den [Abnahmekriterien](acceptance.md)). Ältere Antworten tragen dazu kaum noch etwas bei, weil neuere stärker zählen. Weil viele Nutzer minderjährig sind, hält LearningEngine außerdem nicht länger als nötig fest, wie jemand gelernt hat. Löscht ein Nutzer sein Konto, wartet LearningEngine die Frist nicht ab und löscht seine Nachweise, sobald `UserDeleted` ankommt. Die Löschung nach Ablauf der Frist und wie die Mastery dabei konsistent bleibt, kommen mit #365.
 
 ## Regeln für Ereignisse
 
