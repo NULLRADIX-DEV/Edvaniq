@@ -1,0 +1,23 @@
+@page "/login"
+
+<PageTitle>Anmelden – Edvaniq</PageTitle>
+
+<h1>Anmelden</h1>
+
+@* Only the client can send the login. While the page is prerendered on the server, there is no IWebSession to send it
+   with. *@
+@if (RendererInfo.IsInteractive)
+{
+    <LoginForm ReturnTo="@ReturnTo" />
+}
+else
+{
+    <div role="status">
+        <p>Wird geladen …</p>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    private string? ReturnTo { get; set; }
+}

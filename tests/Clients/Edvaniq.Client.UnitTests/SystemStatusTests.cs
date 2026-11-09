@@ -113,6 +113,17 @@ public sealed class SystemStatusTests : BunitContext
         Assert.Equal(TraceId, page.Find("[role=status] .request-id code").TextContent);
     }
 
+    // The login ran out or ended elsewhere. There is nothing to try again, the way back is a new login.
+    [Fact]
+    public void SignedOut_LeadsToANewLogin()
+    {
+        var page = RenderPage(new FakePing(PingOutcome.SignedOut));
+
+        Assert.Contains("Du bist nicht mehr angemeldet.", page.Find("[role=status]").TextContent);
+        Assert.Equal("login?returnUrl=%2Fsystemstatus", page.Find("[role=status] a").GetAttribute("href"));
+        Assert.Empty(page.FindAll("button"));
+    }
+
     [Fact]
     public void Failure_WithoutATrace_NamesNone()
     {

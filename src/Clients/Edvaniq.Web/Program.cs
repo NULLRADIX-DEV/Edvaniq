@@ -29,6 +29,9 @@ builder.Services.AddAntiforgery(options => options.SuppressXFrameOptionsHeader =
 
 builder.Services.AddWebSession(builder.Configuration);
 
+// Pages with [Authorize] want a login. While a page is prerendered, the session cookie of the request tells.
+builder.Services.AddCascadingAuthenticationState();
+
 // The browser never talks to the gateway itself. Only the routes from the section ReverseProxy go on from here, on the
 // server side. The gateway's address comes from service discovery, like in the gateway. The cluster waits 9 seconds,
 // one more than the gateway waits for a service, so the gateway's own 504 problem gets through to the browser. Routes

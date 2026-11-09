@@ -70,6 +70,32 @@ public sealed class WebShell : IAsyncLifetime
         }
     }
 
+    // A page that wants a login, opened by a team member who has signed in. The login goes to the web host from the
+    // page's own browser context, so the context keeps the session cookie for the page.
+    public async Task<ShellPage> OpenSignedInAsync(string path, int width)
+    {
+        var page = await NewPageAsync(width);
+        try
+        {
+            var login = await page.Page.Context.APIRequest.PostAsync(Address + "/session/login", new APIRequestContextOptions
+            {
+                DataObject = new { name = StubService.UserName, password = StubService.Password },
+            });
+            if (login.Status != (int)HttpStatusCode.NoContent)
+            {
+                throw new InvalidOperationException($"The login answered {login.Status}.");
+            }
+
+            await page.LoadAsync(Address + path);
+            return page;
+        }
+        catch
+        {
+            await page.DisposeAsync();
+            throw;
+        }
+    }
+
     // A page that does not belong to the shell, to try the scan on.
     public async Task<ShellPage> OpenHtmlAsync(string html, int width = DesktopWidth)
     {

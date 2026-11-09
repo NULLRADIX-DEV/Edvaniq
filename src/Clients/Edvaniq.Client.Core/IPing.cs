@@ -12,7 +12,10 @@ public sealed record PingResult(int Id, DateTimeOffset PingedAt);
 
 // A ping that did not get through names the trace of the failed request when the host answered with a problem, so the
 // user can pass the id on.
-public sealed record PingOutcome(PingResult? Result, string? TraceId = null)
+public sealed record PingOutcome(PingResult? Result, string? TraceId = null, bool IsSignedOut = false)
 {
+    // Nobody is signed in any more, the login ran out or ended elsewhere.
+    public static readonly PingOutcome SignedOut = new(null, IsSignedOut: true);
+
     public static PingOutcome Failed(string? traceId = null) => new(null, traceId);
 }

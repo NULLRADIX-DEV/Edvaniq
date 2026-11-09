@@ -14,6 +14,16 @@
             <strong>Alles in Ordnung.</strong> Ping Nr. @result.Id wurde am @Stored(result) Uhr in der Datenbank gespeichert.
         </p>
     }
+    else if (signedOut)
+    {
+        @* The login ran out or ended in another tab. Until #197 the way back is simply a new login. *@
+        <div class="ping-result ping-failed">
+            <p>
+                <strong>Du bist nicht mehr angemeldet.</strong> Melde dich neu an, dann geht es hier weiter.
+            </p>
+            <p><a href="@ReturnUrl.LoginFor("/systemstatus")">Neu anmelden</a></p>
+        </div>
+    }
     else if (failed)
     {
         <div class="ping-result ping-failed">
@@ -39,6 +49,7 @@
     private PingResult? result;
     private string? traceId;
     private bool failed;
+    private bool signedOut;
     private bool pinging;
 
     protected override Task OnInitializedAsync() => SendAsync();
@@ -55,7 +66,8 @@
         var outcome = await Ping.SendAsync();
         result = outcome.Result;
         traceId = outcome.TraceId;
-        failed = result is null;
+        signedOut = outcome.IsSignedOut;
+        failed = result is null && !signedOut;
         pinging = false;
     }
 

@@ -1,4 +1,5 @@
 using Bunit;
+using Bunit.TestDoubles;
 
 using Edvaniq.Client.Core;
 using Edvaniq.Client.UI.Shell;
@@ -13,13 +14,55 @@ namespace Edvaniq.Client.UnitTests;
 // navigation is open, Escape to close it again.
 public sealed class ShellLayoutTests : BunitContext
 {
+    private readonly FakeWebSession session = new();
+    private readonly BunitAuthorizationContext authorization;
     private FakeBackendStatus backend = new(true);
 
     public ShellLayoutTests()
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
         Services.AddSingleton<IBackendStatus>(_ => backend);
+        Services.AddSingleton<IWebSession>(session);
+        authorization = AddAuthorization();
         SetRendererInfo(new RendererInfo("WebAssembly", isInteractive: true));
+    }
+
+    [Fact]
+    public void SignedOut_TheNavigationLeadsToTheLogin()
+    {
+        var shell = RenderShell();
+
+        Assert.Equal("Anmelden", shell.Find("nav#shell-nav a[href='login']").TextContent);
+        Assert.Empty(shell.FindAll("nav#shell-nav button"));
+    }
+
+    // After the logout the client loads afresh from the start page, so nothing of the signed-in pages stays.
+    [Fact]
+    public void SignedIn_TheNavigationSignsOut()
+    {
+        authorization.SetAuthorized("signed-in");
+        var shell = RenderShell();
+        Assert.Empty(shell.FindAll("nav#shell-nav a[href='login']"));
+
+        shell.Find("nav#shell-nav button.shell-nav-action").Click();
+
+        Assert.Equal(1, session.Logouts);
+        var navigation = Services.GetRequiredService<BunitNavigationManager>();
+        var last = navigation.History.First();
+        Assert.Equal("", last.Uri);
+        Assert.True(last.Options.ForceLoad);
+    }
+
+    // Until the runtime has loaded, a button would do nothing.
+    [Fact]
+    public void SignedIn_WhilePrerendering_ShowsNoButton()
+    {
+        authorization.SetAuthorized("signed-in");
+        SetRendererInfo(new RendererInfo("Static", isInteractive: false));
+
+        var shell = RenderShell();
+
+        Assert.Empty(shell.FindAll("nav#shell-nav button"));
     }
 
     [Fact]

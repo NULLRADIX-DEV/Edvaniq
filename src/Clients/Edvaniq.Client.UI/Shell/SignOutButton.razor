@@ -1,0 +1,15 @@
+@inject IWebSession Session
+@inject AuthenticationStateProvider Authentication
+@inject NavigationManager Navigation
+
+<button type="button" class="shell-nav-action" @onclick="SignOutAsync">Abmelden</button>
+
+@code {
+    // A fresh load after the logout, so nothing of the signed-in pages stays in the client.
+    private async Task SignOutAsync()
+    {
+        await Session.SignOutAsync();
+        (Authentication as SessionAuthenticationState)?.Refresh();
+        Navigation.NavigateTo("", forceLoad: true);
+    }
+}

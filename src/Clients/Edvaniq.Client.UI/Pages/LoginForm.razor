@@ -1,0 +1,96 @@
+@inject IWebSession Session
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider Authentication
+
+<form class="login-form" @onsubmit="SignInAsync" novalidate>
+    <div class="login-field">
+        <label for="login-name">Name</label>
+        <input id="login-name" name="username" type="text" autocomplete="username" autocapitalize="none"
+               spellcheck="false" required @bind="name" />
+    </div>
+    <div class="login-field">
+        <label for="login-password">Passwort</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required
+               @bind="password" />
+    </div>
+
+    @* Always there, so a screen reader announces each hint. *@
+    <div role="alert">
+        @if (hint is not null)
+        {
+            <div class="login-hint">
+                <p>@hint</p>
+                <RequestId Value="@traceId" />
+            </div>
+        }
+    </div>
+
+    @* Stays enabled while a login runs: a disabled button would lose the keyboard focus. *@
+    <button type="submit" class="button">@(signingIn ? "Anmeldung läuft …" : "Anmelden")</button>
+</form>
+
+@code {
+    // Where to go once signed in, only a path of this site (ReturnUrl).
+    [Parameter]
+    public string? ReturnTo { get; set; }
+
+    private string name = "";
+    private string password = "";
+    private string? hint;
+    private string? traceId;
+    private bool signingIn;
+
+    private async Task SignInAsync()
+    {
+        if (signingIn)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrEmpty(password))
+        {
+            Show("Gib deinen Namen und dein Passwort ein.");
+            return;
+        }
+
+        signingIn = true;
+        var outcome = await Session.SignInAsync(name.Trim(), password);
+        signingIn = false;
+
+        if (outcome.Result == SignInResult.SignedIn)
+        {
+            (Authentication as SessionAuthenticationState)?.Refresh();
+            Navigation.NavigateTo(ReturnUrl.Target(ReturnTo));
+            return;
+        }
+
+        password = "";
+        Show(Hint(outcome), outcome.TraceId);
+    }
+
+    private void Show(string text, string? trace = null)
+    {
+        hint = text;
+        traceId = trace;
+    }
+
+    // One hint for a wrong name and a wrong password: nobody learns whether an account exists.
+    private static string Hint(SignInOutcome outcome) => outcome.Result switch
+    {
+        SignInResult.WrongCredentials => "Name oder Passwort stimmen nicht. Prüf beides und versuch es noch einmal.",
+        SignInResult.TooManyAttempts => $"Zu viele Versuche. Warte {Wait(outcome.RetryAfter)} und versuch es dann noch einmal.",
+        _ => "Die Anmeldung ist gerade nicht möglich. Versuch es in ein paar Minuten noch einmal.",
+    };
+
+    private static string Wait(TimeSpan? retryAfter)
+    {
+        var seconds = (int)Math.Ceiling((retryAfter ?? TimeSpan.FromMinutes(1)).TotalSeconds);
+        return seconds switch
+        {
+            <= 1 => "einen Moment",
+            < 60 => $"{seconds} Sekunden",
+            60 => "eine Minute",
+            _ => $"{(int)Math.Ceiling(seconds / 60.0)} Minuten",
+        };
+    }
+}

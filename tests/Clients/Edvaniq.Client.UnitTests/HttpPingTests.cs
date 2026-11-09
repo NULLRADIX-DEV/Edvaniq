@@ -5,8 +5,8 @@ using Edvaniq.Client.Core;
 
 namespace Edvaniq.Client.UnitTests;
 
-// The ping either comes back with the value Planning read from its database or it did not get through. A missing session
-// is the one failure the client mends itself, and only once.
+// The ping either comes back with the value Planning read from its database, or it did not get through, or nobody is
+// signed in.
 public sealed class HttpPingTests
 {
     private const string Answer = """{"id":42,"pingedAt":"2026-10-13T09:07:14.043846Z"}""";
@@ -35,40 +35,17 @@ public sealed class HttpPingTests
         Assert.Equal(new Uri("https://edvaniq.test/api/planning/ping"), request.RequestUri);
     }
 
+    // The ping wants a login. Without one it says so and starts no session of its own.
     [Fact]
-    public async Task WithoutASession_StartsOne_AndTriesOnceMore()
+    public async Task WithoutALogin_SaysSignedOut_AndTriesNothingElse()
     {
         var requests = new List<HttpRequestMessage>();
-        var ping = Ping(requests, Status(HttpStatusCode.Unauthorized), Status(HttpStatusCode.NoContent), Json(Answer));
+        var ping = Ping(requests, Problem(HttpStatusCode.Unauthorized, TraceBody(TraceId)));
 
-        var result = await ping.SendAsync(TestContext.Current.CancellationToken);
+        var outcome = await ping.SendAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(42, result.Result?.Id);
-        Assert.Collection(requests,
-            request => Assert.Equal("POST /api/planning/ping", Line(request)),
-            request => Assert.Equal("POST /session", Line(request)),
-            request => Assert.Equal("POST /api/planning/ping", Line(request)));
-    }
-
-    [Fact]
-    public async Task StillWithoutASession_DidNotGetThrough_AndDoesNotTryAgain()
-    {
-        var requests = new List<HttpRequestMessage>();
-        var ping = Ping(requests, Status(HttpStatusCode.Unauthorized), Status(HttpStatusCode.NoContent),
-            Status(HttpStatusCode.Unauthorized));
-
-        Assert.Null((await ping.SendAsync(TestContext.Current.CancellationToken)).Result);
-        Assert.Equal(3, requests.Count);
-    }
-
-    [Fact]
-    public async Task SessionNotStarted_DidNotGetThrough()
-    {
-        var requests = new List<HttpRequestMessage>();
-        var ping = Ping(requests, Status(HttpStatusCode.Unauthorized), Status(HttpStatusCode.ServiceUnavailable));
-
-        Assert.Null((await ping.SendAsync(TestContext.Current.CancellationToken)).Result);
-        Assert.Equal(2, requests.Count);
+        Assert.Equal(PingOutcome.SignedOut, outcome);
+        Assert.Single(requests);
     }
 
     [Theory]
@@ -123,40 +100,6 @@ public sealed class HttpPingTests
         var outcome = await Ping(Json(Answer)).SendAsync(TestContext.Current.CancellationToken);
 
         Assert.Null(outcome.TraceId);
-    }
-
-    // The trace of the last answer counts: the one the user saw fail, not the 401 before the guest session.
-    [Fact]
-    public async Task StillWithoutASession_NamesTheTraceOfTheLastAnswer()
-    {
-        var ping = Ping(Problem(HttpStatusCode.Unauthorized, TraceBody("a" + TraceId[1..])), Status(HttpStatusCode.NoContent),
-            Problem(HttpStatusCode.Unauthorized, TraceBody(TraceId)));
-
-        var outcome = await ping.SendAsync(TestContext.Current.CancellationToken);
-
-        Assert.Equal(PingOutcome.Failed(TraceId), outcome);
-    }
-
-    [Fact]
-    public async Task SessionNotStarted_NamesTheTraceOfTheSessionAnswer()
-    {
-        var ping = Ping(Status(HttpStatusCode.Unauthorized), Problem(HttpStatusCode.ServiceUnavailable, TraceBody(TraceId)));
-
-        var outcome = await ping.SendAsync(TestContext.Current.CancellationToken);
-
-        Assert.Equal(PingOutcome.Failed(TraceId), outcome);
-    }
-
-    // The 401 before it belonged to another request, so its trace does not stand in for a failure without one.
-    [Fact]
-    public async Task LastAnswerWithoutATrace_NamesNone()
-    {
-        var ping = Ping(Problem(HttpStatusCode.Unauthorized, TraceBody(TraceId)), Status(HttpStatusCode.NoContent),
-            Status(HttpStatusCode.BadGateway));
-
-        var outcome = await ping.SendAsync(TestContext.Current.CancellationToken);
-
-        Assert.Equal(PingOutcome.Failed(), outcome);
     }
 
     // Only the id of a problem as the host writes it counts: 32 lower-case hex digits and nothing else.
@@ -254,8 +197,6 @@ public sealed class HttpPingTests
         new(code) { Content = new StringContent(body, Encoding.UTF8, "application/problem+json") };
 
     private static string TraceBody(string traceId) => $$"""{"status":500,"traceId":"{{traceId}}"}""";
-
-    private static string Line(HttpRequestMessage request) => $"{request.Method} {request.RequestUri?.AbsolutePath}";
 
     private sealed class Handler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> answer)
         : HttpMessageHandler

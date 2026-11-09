@@ -1,4 +1,7 @@
+using System.Buffers.Text;
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -11,16 +14,23 @@ namespace Edvaniq.Testing;
 // Stands in for a process behind a proxy, the gateway or a service. A real Kestrel on a free port, because YARP
 // forwards over the network and not into a TestServer. Answers every request with what arrived, with SetsCookie also
 // trying to set a cookie in the browser. /slow answers only after 30 seconds. POST /identity/connect/token answers like
-// Identity behind the gateway, with the tokens stub-token-1, stub-token-2 and so on. Answer sets a body for a request
-// that should not be echoed.
+// Identity behind the gateway, with the tokens stub-token-1, stub-token-2 and so on for a client and UserToken for the
+// login of UserName with Password. Answer sets a body for a request that should not be echoed.
 public sealed class StubService : IAsyncDisposable
 {
     public const string TokenPath = "/identity/connect/token";
+    public const string UserName = "ben";
+    public const string Password = "richtig-langes-passwort";
+
+    // Shaped and sized like a token of Identity for a login, so a test can look for it in cookie, page and log.
+    public static readonly string UserToken = BuildUserToken();
 
     private WebApplication? app;
     private int requests;
     private int tokenRequests;
+    private int loginRequests;
     private int tokenStatus = StatusCodes.Status200OK;
+    private int loginStatus = StatusCodes.Status200OK;
     private readonly ConcurrentDictionary<(string Method, string Path), object> answers = new();
     private readonly ConcurrentDictionary<(string Method, string Path), Failure> failures = new();
 
@@ -35,6 +45,19 @@ public sealed class StubService : IAsyncDisposable
     public int Requests => Volatile.Read(ref requests);
 
     public int TokenRequests => Volatile.Read(ref tokenRequests);
+
+    // Logins of a team member (password grant). They do not count as token requests.
+    public int LoginRequests => Volatile.Read(ref loginRequests);
+
+    public IReadOnlyDictionary<string, string> LastLoginRequest { get; private set; } = new Dictionary<string, string>();
+
+    // How logins are answered: 200 lets UserName with Password in and refuses everything else like Identity, 429 says
+    // too many attempts with Retry-After 42, any other status comes without a body.
+    public int LoginStatus
+    {
+        get => Volatile.Read(ref loginStatus);
+        set => Volatile.Write(ref loginStatus, value);
+    }
 
     // The form of the last token request.
     public IReadOnlyDictionary<string, string> LastTokenRequest { get; private set; } = new Dictionary<string, string>();
@@ -80,10 +103,33 @@ public sealed class StubService : IAsyncDisposable
             await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
             return Results.Ok();
         });
-        app.MapPost(TokenPath, async (HttpRequest request) =>
+        app.MapPost(TokenPath, async (HttpRequest request, HttpResponse response) =>
         {
-            var number = Interlocked.Increment(ref stub.tokenRequests);
             var form = await request.ReadFormAsync();
+            if (form["grant_type"] == "password")
+            {
+                Interlocked.Increment(ref stub.loginRequests);
+                stub.LastLoginRequest = form.ToDictionary(field => field.Key, field => field.Value.ToString());
+                switch (stub.LoginStatus)
+                {
+                    case StatusCodes.Status200OK when form["username"] == UserName && form["password"] == Password:
+                        return Results.Ok(new Dictionary<string, object>
+                        {
+                            ["access_token"] = UserToken,
+                            ["token_type"] = "Bearer",
+                            ["expires_in"] = 3600,
+                        });
+                    case StatusCodes.Status200OK:
+                        return Results.BadRequest(new Dictionary<string, string> { ["error"] = "invalid_grant" });
+                    case StatusCodes.Status429TooManyRequests:
+                        response.Headers.RetryAfter = "42";
+                        return Results.Json(new Dictionary<string, string> { ["error"] = "too_many_attempts" }, statusCode: 429);
+                    case var status:
+                        return Results.StatusCode(status);
+                }
+            }
+
+            var number = Interlocked.Increment(ref stub.tokenRequests);
             stub.LastTokenRequest = form.ToDictionary(field => field.Key, field => field.Value.ToString());
             return stub.TokenStatus switch
             {
@@ -131,6 +177,17 @@ public sealed class StubService : IAsyncDisposable
     }
 
     public ValueTask DisposeAsync() => app?.DisposeAsync() ?? ValueTask.CompletedTask;
+
+    private static string BuildUserToken()
+    {
+        static string Part(string json) => Base64Url.EncodeToString(Encoding.UTF8.GetBytes(json));
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var header = Part("""{"alg":"ES256","kid":"6c2f3e0b9a1d4c7e8f5a2b3c4d5e6f70","typ":"at+jwt"}""");
+        var payload = Part(
+            $$"""{"iss":"https://edvaniq.example.org/identity","aud":"edvaniq-api","sub":"{{Guid.NewGuid()}}","client_id":"web","jti":"{{Guid.NewGuid():N}}","iat":{{now}},"nbf":{{now}},"exp":{{now + 3600}}}""");
+        return $"{header}.{payload}.{Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(64))}";
+    }
 
     private sealed record Failure(int Status, string? ContentType, string Body);
 }

@@ -1,4 +1,6 @@
 ﻿using Edvaniq.Client.Core;
+using Edvaniq.Client.UI.Shell;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.App;
@@ -24,13 +26,19 @@ public static class MauiProgram
 			Timeout = TimeSpan.FromSeconds(5),
 		}));
 
-		// The host answers within 9 seconds, its wait for a token included, with an error of its own if need be. The
-		// default handler keeps the session cookie.
-		builder.Services.AddSingleton<IPing>(new HttpPing(new HttpClient
+		// Login and ping share one client, so the ping carries the session cookie of the login. The host answers within
+		// 9 seconds, its wait for a token or for Identity included, with an error of its own if need be.
+		var session = new HttpClient
 		{
 			BaseAddress = new Uri("https://edvaniq.nullradix.de/"),
 			Timeout = TimeSpan.FromSeconds(20),
-		}));
+		};
+		builder.Services.AddSingleton<IPing>(new HttpPing(session));
+		builder.Services.AddSingleton<IWebSession>(new HttpWebSession(session));
+
+		builder.Services.AddAuthorizationCore();
+		builder.Services.AddCascadingAuthenticationState();
+		builder.Services.AddScoped<AuthenticationStateProvider, SessionAuthenticationState>();
 
 #if DEBUG
 		builder.Services.AddBlazorWebViewDeveloperTools();

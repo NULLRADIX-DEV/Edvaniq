@@ -23,6 +23,18 @@
         <ul>
             <li><NavLink href="" Match="NavLinkMatch.All"><span>Start</span></NavLink></li>
             <li><NavLink href="systemstatus"><span>Systemstatus</span></NavLink></li>
+            @* Signing out needs the runtime. Until it has loaded, a signed-in user simply sees no button yet. *@
+            <AuthorizeView>
+                <Authorized>
+                    @if (RendererInfo.IsInteractive)
+                    {
+                        <li><SignOutButton /></li>
+                    }
+                </Authorized>
+                <NotAuthorized>
+                    <li><NavLink href="login"><span>Anmelden</span></NavLink></li>
+                </NotAuthorized>
+            </AuthorizeView>
         </ul>
     </nav>
 
