@@ -3,6 +3,23 @@
 Content.DocumentAnalyzed.DocumentId: Guid
 Content.DocumentAnalyzed.Topics: IReadOnlyList<TopicSuggestion>
 Content.DocumentAnalyzed.UserId: string
+Content.GeneratedItem.DocumentId: Guid
+Content.GeneratedItem.ItemId: Guid
+Content.GeneratedItem.Kind: ItemKind
+Content.GeneratedItem.ModelId: string
+Content.GeneratedItem.PromptVersion: string
+Content.GeneratedItem.Question: GeneratedQuestion?
+Content.GeneratedItem.SectionId: Guid
+Content.GeneratedQuestion.Answer: int
+Content.GeneratedQuestion.Difficulty: int
+Content.GeneratedQuestion.Explanation: string
+Content.GeneratedQuestion.Options: IReadOnlyList<string>
+Content.GeneratedQuestion.Text: string
+Content.ItemKind.Question: = 0
+Content.ItemsGenerated.DocumentId: Guid
+Content.ItemsGenerated.Items: IReadOnlyList<GeneratedItem>
+Content.ItemsGenerated.TopicPosition: int
+Content.ItemsGenerated.UserId: string
 Content.TopicSuggestion.Name: string
 Content.TopicSuggestion.Parent: int?
 Content.TopicSuggestion.SectionIds: IReadOnlyList<Guid>

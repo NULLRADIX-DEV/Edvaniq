@@ -114,6 +114,14 @@ public class SimulatedChatClientTests
         Assert.StartsWith("""{"echo":"Photosynthese",""", Assert.Single(updates).Text);
     }
 
+    [Fact]
+    public void Metadata_NamesTheModel_LikeARealClient()
+    {
+        var metadata = new SimulatedChatClient([new Echo()]).GetService<ChatClientMetadata>();
+
+        Assert.Equal((SimulatedChatClient.Provider, SimulatedChatClient.Provider), (metadata?.ProviderName, metadata?.DefaultModelId));
+    }
+
     // Echoes the user message with a number from the prompt's randomness.
     private sealed class Echo : ISimulatedAnswer
     {

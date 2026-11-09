@@ -13,7 +13,7 @@ public static class ContentAi
     // real prompt for the task starts with it too.
     public const string TopicsTask = TopicAnalysis.Task;
 
-    public const string QuestionsTask = "edvaniq:questions";
+    public const string QuestionsTask = QuestionGeneration.Task;
 
     public static TBuilder AddContentAi<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
