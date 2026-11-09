@@ -49,6 +49,7 @@ Indirekte NuGet-Pakete, also Abhängigkeiten der gelisteten Pakete, stehen nicht
 | `Microsoft.Extensions.Diagnostics.HealthChecks` | MIT | DB-Prüfung für Health |
 | `Microsoft.Extensions.Hosting` | MIT | Worker |
 | `Microsoft.Extensions.Http.Resilience` | MIT | ServiceDefaults |
+| `Microsoft.Extensions.Logging.Abstractions` | MIT | Logzeilen in der Application-Schicht eines Service |
 | `Microsoft.Extensions.Logging.Debug` | MIT | MAUI-App |
 | `Microsoft.Extensions.ServiceDiscovery` | MIT | ServiceDefaults |
 | `Microsoft.Extensions.ServiceDiscovery.Yarp` | MIT | Gateway, Web-Host |

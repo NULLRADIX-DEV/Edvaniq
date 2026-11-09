@@ -34,6 +34,7 @@ var identityMigrate = builder.AddMigration<Projects.Edvaniq_Services_Identity_Ap
 var planningMigrate = builder.AddMigration<Projects.Edvaniq_Services_Planning_Api>("planning-migrate", planningDb);
 var contentMigrate = builder.AddMigration<Projects.Edvaniq_Services_Content_Api>("content-migrate", contentDb);
 var knowledgeMigrate = builder.AddMigration<Projects.Edvaniq_Services_Knowledge_Api>("knowledge-migrate", knowledgeDb);
+var assessmentMigrate = builder.AddMigration<Projects.Edvaniq_Services_Assessment_Api>("assessment-migrate", assessmentDb);
 var learningEngineMigrate = builder.AddMigration<Projects.Edvaniq_Services_LearningEngine_Api>("learningengine-migrate", learningEngineDb);
 
 // Token issuer: Identity signs the tokens, every service checks them with the public key it gets from Identity
@@ -54,7 +55,9 @@ var contentApi = AddService<Projects.Edvaniq_Services_Content_Api>("content-api"
 var knowledgeApi = AddService<Projects.Edvaniq_Services_Knowledge_Api>("knowledge-api", knowledgeDb)
     .WaitForCompletion(knowledgeMigrate)
     .WithMessaging(nats);
-var assessmentApi = AddService<Projects.Edvaniq_Services_Assessment_Api>("assessment-api", assessmentDb);
+var assessmentApi = AddService<Projects.Edvaniq_Services_Assessment_Api>("assessment-api", assessmentDb)
+    .WaitForCompletion(assessmentMigrate)
+    .WithMessaging(nats);
 var flashcardsApi = AddService<Projects.Edvaniq_Services_Flashcards_Api>("flashcards-api", flashcardsDb);
 var learningEngineApi = AddService<Projects.Edvaniq_Services_LearningEngine_Api>("learningengine-api", learningEngineDb)
     .WaitForCompletion(learningEngineMigrate)

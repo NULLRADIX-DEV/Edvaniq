@@ -3,10 +3,13 @@
   <ItemGroup>
     <ProjectReference Include="..\Edvaniq.Services.Assessment.Domain\Edvaniq.Services.Assessment.Domain.csproj" />
     <ProjectReference Include="..\Edvaniq.Services.Assessment.Contracts\Edvaniq.Services.Assessment.Contracts.csproj" />
-    <ProjectReference Include="..\..\..\BuildingBlocks\Edvaniq.BuildingBlocks.Application\Edvaniq.BuildingBlocks.Application.csproj" />
     <ProjectReference Include="..\..\Identity\Edvaniq.Services.Identity.Contracts\Edvaniq.Services.Identity.Contracts.csproj" />
     <ProjectReference Include="..\..\Content\Edvaniq.Services.Content.Contracts\Edvaniq.Services.Content.Contracts.csproj" />
-    <ProjectReference Include="..\..\Knowledge\Edvaniq.Services.Knowledge.Contracts\Edvaniq.Services.Knowledge.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Edvaniq.BuildingBlocks.Application\Edvaniq.BuildingBlocks.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <PropertyGroup>

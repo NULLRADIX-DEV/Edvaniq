@@ -79,6 +79,18 @@ x-knowledge: &knowledge
     db:
       condition: service_healthy
 
+x-assessment: &assessment
+  <<: *app
+  env_file:
+    - path: app.env
+      required: true
+    - path: assessment.env
+      required: true
+  networks: [inner, data]
+  depends_on:
+    db:
+      condition: service_healthy
+
 x-learningengine: &learningengine
   <<: *app
   env_file:
@@ -180,8 +192,16 @@ services:
     healthcheck:
       disable: true
   assessment-api:
-    <<: *app
+    <<: *assessment
     image: ghcr.io/nullradix-dev/edvaniq/assessment-api:sha-${APP_COMMIT:?}
+  assessment-migrate:
+    <<: *assessment
+    image: ghcr.io/nullradix-dev/edvaniq/assessment-api:sha-${APP_COMMIT:?}
+    command: ["migrate"]
+    profiles: [migrate]
+    restart: "no"
+    healthcheck:
+      disable: true
   flashcards-api:
     <<: *app
     image: ghcr.io/nullradix-dev/edvaniq/flashcards-api:sha-${APP_COMMIT:?}
