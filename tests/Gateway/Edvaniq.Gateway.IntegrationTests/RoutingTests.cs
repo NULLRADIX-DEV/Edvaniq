@@ -15,19 +15,44 @@ namespace Edvaniq.Gateway.IntegrationTests;
 // bare status.
 public sealed class RoutingTests
 {
+    private static readonly string Token = TestTokens.Create("alice");
+
+    // Every active service has its own prefix, which the gateway cuts off. The token arrives as the caller sent it.
+    // Assessment and LearningEngine have no endpoints yet, so a stub proves the way.
+    [Theory]
+    [InlineData("planning")]
+    [InlineData("content")]
+    [InlineData("knowledge")]
+    [InlineData("assessment")]
+    [InlineData("learningengine")]
+    public async Task ServiceRoute_ReachesItsService_WithoutPrefix_WithTheToken(string service)
+    {
+        await using var stub = await StubService.StartAsync($"{service}-stub");
+        await using var gateway = new GatewayFactory(
+            "http://127.0.0.1:9", services: new Dictionary<string, string> { [service] = stub.Address });
+        using var client = gateway.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+
+        using var response = await client.GetAsync($"/{service}/items/1", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var echo = await response.Content.ReadFromJsonAsync<Echo>(TestContext.Current.CancellationToken);
+        Assert.Equal(new Echo($"{service}-stub", "GET", "/items/1", $"Bearer {Token}", Cookie: ""), echo);
+    }
+
     [Fact]
     public async Task PlanningRoute_ReachesTheConfiguredTarget_WithoutPrefix()
     {
         await using var planning = await StubService.StartAsync("planning-stub");
         await using var gateway = new GatewayFactory(planning.Address);
         using var client = gateway.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "token");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
 
         using var response = await client.PostAsync("/planning/ping", content: null, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var echo = await response.Content.ReadFromJsonAsync<Echo>(TestContext.Current.CancellationToken);
-        Assert.Equal(new Echo("planning-stub", "POST", "/ping", "Bearer token", Cookie: ""), echo);
+        Assert.Equal(new Echo("planning-stub", "POST", "/ping", $"Bearer {Token}", Cookie: ""), echo);
     }
 
     // The web host gets its token from Identity through here.
@@ -102,7 +127,7 @@ public sealed class RoutingTests
         }
 
         await using var gateway = new GatewayFactory(address);
-        using var client = gateway.CreateClient();
+        using var client = AuthorizedClient(gateway);
 
         using var response = await client.PostAsync("/planning/ping", content: null, TestContext.Current.CancellationToken);
 
@@ -114,7 +139,7 @@ public sealed class RoutingTests
     {
         await using var planning = await StubService.StartAsync("planning-stub");
         await using var gateway = new GatewayFactory(planning.Address, planningTimeout: TimeSpan.FromMilliseconds(200));
-        using var client = gateway.CreateClient();
+        using var client = AuthorizedClient(gateway);
 
         using var response = await client.GetAsync("/planning/slow", TestContext.Current.CancellationToken);
 
@@ -135,7 +160,14 @@ public sealed class RoutingTests
             Assert.True(cluster.Model.Config.HttpRequest?.ActivityTimeout < TimeSpan.FromSeconds(10), cluster.ClusterId));
     }
 
-    private static async Task AssertProblemAsync(HttpResponseMessage response, HttpStatusCode status, string detail)
+    internal static HttpClient AuthorizedClient(GatewayFactory gateway)
+    {
+        var client = gateway.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+        return client;
+    }
+
+    internal static async Task<JsonElement> AssertProblemAsync(HttpResponseMessage response, HttpStatusCode status, string detail)
     {
         Assert.Equal(status, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
@@ -143,5 +175,6 @@ public sealed class RoutingTests
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         Assert.Equal((int)status, problem.GetProperty("status").GetInt32());
         Assert.Equal(detail, problem.GetProperty("detail").GetString());
+        return problem;
     }
 }

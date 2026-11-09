@@ -22,6 +22,7 @@ public sealed class StubService : IAsyncDisposable
     private int tokenRequests;
     private int tokenStatus = StatusCodes.Status200OK;
     private readonly ConcurrentDictionary<(string Method, string Path), object> answers = new();
+    private readonly ConcurrentDictionary<(string Method, string Path), Failure> failures = new();
 
     private StubService()
     {
@@ -55,6 +56,11 @@ public sealed class StubService : IAsyncDisposable
     // Answers this request with the body as JSON instead of the echo, for a test that needs the service to answer like
     // the real one, such as Planning with a ping.
     public void Answer(string method, string path, object body) => answers[(method, path)] = body;
+
+    // Answers this request with the status and body as they are, an empty body without a content type, and with headers
+    // that tell how the service is built, like a service that fails on its own.
+    public void Fail(string method, string path, int status, string? contentType = null, string body = "") =>
+        failures[(method, path)] = new Failure(status, contentType, body);
 
     public static async Task<StubService> StartAsync(string name)
     {
@@ -93,6 +99,14 @@ public sealed class StubService : IAsyncDisposable
         });
         app.Map("{**path}", (HttpRequest request, HttpResponse response) =>
         {
+            if (stub.failures.TryGetValue((request.Method, request.Path.Value ?? ""), out var failure))
+            {
+                response.Headers["X-Powered-By"] = "stub-framework";
+                return failure.ContentType is null
+                    ? Results.StatusCode(failure.Status)
+                    : Results.Text(failure.Body, failure.ContentType, statusCode: failure.Status);
+            }
+
             if (stub.SetsCookie)
             {
                 response.Cookies.Append("backend", "set-by-the-backend");
@@ -117,6 +131,8 @@ public sealed class StubService : IAsyncDisposable
     }
 
     public ValueTask DisposeAsync() => app?.DisposeAsync() ?? ValueTask.CompletedTask;
+
+    private sealed record Failure(int Status, string? ContentType, string Body);
 }
 
 public sealed record Echo(string Service, string Method, string Path, string Authorization, string Cookie);

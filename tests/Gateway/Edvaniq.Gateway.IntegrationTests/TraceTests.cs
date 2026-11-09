@@ -58,7 +58,7 @@ public sealed class TraceTests
     // The web host as caller, in the middle of its own trace.
     private static HttpClient Client(GatewayFactory gateway)
     {
-        var client = gateway.CreateClient();
+        var client = RoutingTests.AuthorizedClient(gateway);
         client.DefaultRequestHeaders.Add("traceparent", $"00-{TraceId}-00f067aa0ba902b7-01");
         return client;
     }

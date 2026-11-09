@@ -15,7 +15,7 @@ public sealed class LoggingTests
     [Fact]
     public async Task Forwarding_LogsNeitherTokenNorClientSecret()
     {
-        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var token = TestTokens.Create(Convert.ToHexString(RandomNumberGenerator.GetBytes(16)));
         var secret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         await using var planning = await StubService.StartAsync("planning-stub");
         await using var identity = await StubService.StartAsync("identity-stub");
