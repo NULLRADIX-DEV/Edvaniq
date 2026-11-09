@@ -16,8 +16,8 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         var alice = NewUser("alice");
         var record = await service.AddRecordAsync(alice);
 
-        Assert.Equal([record.AnswerId], AnswerIdsSeenBy(alice));
-        Assert.Empty(AnswerIdsSeenBy(NewUser("bob")));
+        Assert.Equal([record.AnswerId], await AnswerIdsSeenByAsync(alice));
+        Assert.Empty(await AnswerIdsSeenByAsync(NewUser("bob")));
     }
 
     [Fact]
@@ -26,8 +26,8 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         var alice = NewUser("alice");
         var record = await service.AddRecordAsync(alice);
 
-        using var asBob = ContextFor(NewUser("bob"));
-        Assert.Null(await asBob.LearningRecords.FindAsync([record.AnswerId], TestContext.Current.CancellationToken));
+        var found = await AsUserAsync(NewUser("bob"), db => db.LearningRecords.FindAsync([record.AnswerId], TestContext.Current.CancellationToken).AsTask());
+        Assert.Null(found);
     }
 
     // "Alice" and "alice" are two users, the id is compared byte for byte.
@@ -37,23 +37,23 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         var id = Guid.NewGuid().ToString("N");
         var record = await service.AddRecordAsync($"alice-{id}");
 
-        Assert.Equal([record.AnswerId], AnswerIdsSeenBy($"alice-{id}"));
-        Assert.Empty(AnswerIdsSeenBy($"Alice-{id}"));
+        Assert.Equal([record.AnswerId], await AnswerIdsSeenByAsync($"alice-{id}"));
+        Assert.Empty(await AnswerIdsSeenByAsync($"Alice-{id}"));
     }
 
     // Every test has its own users, so the tests of this class can share one database.
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
 
-    private Guid[] AnswerIdsSeenBy(string user)
-    {
-        using var db = ContextFor(user);
-        return [.. db.LearningRecords.Select(record => record.AnswerId)];
-    }
+    private Task<Guid[]> AnswerIdsSeenByAsync(string user) =>
+        AsUserAsync(user, db => db.LearningRecords.Select(record => record.AnswerId).ToArrayAsync(TestContext.Current.CancellationToken));
 
-    private LearningEngineDbContext ContextFor(string user)
+    // The options hold on to their scope, so the scope lives as long as the context.
+    private async Task<T> AsUserAsync<T>(string user, Func<LearningEngineDbContext, Task<T>> query)
     {
         using var scope = service.Services.CreateScope();
-        return new(scope.ServiceProvider.GetRequiredService<DbContextOptions<LearningEngineDbContext>>(), new FixedUser(user));
+        await using var db = new LearningEngineDbContext(
+            scope.ServiceProvider.GetRequiredService<DbContextOptions<LearningEngineDbContext>>(), new FixedUser(user));
+        return await query(db);
     }
 
     private sealed class FixedUser(string id) : ICurrentUser

@@ -18,5 +18,9 @@ public sealed class LearningEngineDbContext(DbContextOptions<LearningEngineDbCon
         var record = modelBuilder.Entity<LearningRecord>();
         record.HasKey(entry => entry.AnswerId);
         record.Property(entry => entry.AnswerId).ValueGeneratedNever();
+
+        // MySQL keeps no kind, the column only ever holds UTC.
+        record.Property(entry => entry.AnsweredAt)
+            .HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
     }
 }
