@@ -11,6 +11,7 @@ public static class UploadLimit
 {
     public const string MetadataKey = "MaxRequestBodySize";
 
+    // Same words as FeedbackTexts.Upload.TooLarge and Content's FileCheck.TooLarge.
     public const string TooLarge = "Die Datei ist zu groß. Erlaubt sind höchstens 20 MB.";
 
     public static IApplicationBuilder UseUploadLimit(this IApplicationBuilder app) =>

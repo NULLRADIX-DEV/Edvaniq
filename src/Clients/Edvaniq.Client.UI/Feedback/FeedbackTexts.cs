@@ -92,6 +92,7 @@ public static class FeedbackTexts
 
         public const string NothingChosen = "Wähl zuerst eine Datei aus.";
 
+        // Same words as the web host's UploadLimit.TooLarge and Content's FileCheck.TooLarge.
         public const string TooLarge = "Die Datei ist zu groß. Erlaubt sind höchstens 20 MB.";
 
         public const string Unsupported =
