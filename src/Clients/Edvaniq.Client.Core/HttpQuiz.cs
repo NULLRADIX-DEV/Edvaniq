@@ -27,6 +27,16 @@ public sealed class HttpQuiz(HttpClient http) : IQuiz
             QuizJson.Default.GradedAnswer,
             cancellationToken);
 
+    // Same path as an answer, the host needs no route of its own.
+    public Task<CallOutcome<GradedAnswer>> RevealAsync(Guid attemptId, int responseTimeMs, CancellationToken cancellationToken = default) =>
+        CallAsync(
+            token => http.PostAsync(
+                $"{AttemptsPath}/{attemptId:D}/answer",
+                JsonContent.Create(new RevealBody(true, responseTimeMs), QuizJson.Default.RevealBody),
+                token),
+            QuizJson.Default.GradedAnswer,
+            cancellationToken);
+
     private static Task<CallOutcome<T>> CallAsync<T>(
         Func<CancellationToken, Task<HttpResponseMessage>> send, JsonTypeInfo<T> answer, CancellationToken cancellationToken) =>
         HostCall.GuardAsync(
@@ -52,10 +62,11 @@ public sealed class HttpQuiz(HttpClient http) : IQuiz
             cancellationToken);
 
     // A question the page couldn't show as single choice, or a grade pointing at no option, didn't really get through.
+    // Only a shown solution has no option.
     private static bool Valid<T>(T value) => value switch
     {
         AskedQuestion question => question.Options.Count >= 2,
-        GradedAnswer graded => graded.Option >= 0 && graded.Answer >= 0,
+        GradedAnswer graded => (graded.Option is { } option ? option >= 0 : graded.Revealed) && graded.Answer >= 0,
         _ => true,
     };
 }
@@ -64,10 +75,13 @@ internal sealed record AskBody(Guid TopicId);
 
 internal sealed record AnswerBody(int Option, int ResponseTimeMs);
 
+internal sealed record RevealBody(bool ShowSolution, int ResponseTimeMs);
+
 // Source-generated for the trimmed browser app. An answer without the fields that make a question or a grade fails.
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, RespectRequiredConstructorParameters = true)]
 [JsonSerializable(typeof(AskBody))]
 [JsonSerializable(typeof(AnswerBody))]
+[JsonSerializable(typeof(RevealBody))]
 [JsonSerializable(typeof(AskedQuestion))]
 [JsonSerializable(typeof(GradedAnswer))]
 internal sealed partial class QuizJson : JsonSerializerContext;

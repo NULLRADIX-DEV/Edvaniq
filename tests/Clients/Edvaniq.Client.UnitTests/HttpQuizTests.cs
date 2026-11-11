@@ -55,6 +55,36 @@ public sealed class HttpQuizTests
         Assert.Equal(new GradedAnswer(Guid.Parse(AttemptId), 0, false, 1, "Weil.", 4200), outcome.Value);
     }
 
+    // Showing the solution goes the same way as an answer, the grade has no option then.
+    [Fact]
+    public async Task Reveal_PostsShowSolutionAndTime_ToTheAttempt()
+    {
+        var requests = new List<(HttpRequestMessage Request, string? Body)>();
+        var revealed = $$"""
+            {"id":"{{AttemptId}}","topicId":"{{TopicId}}","questionId":"{{QuestionId}}","option":null,"options":null,"revealed":true,
+             "correct":false,"answer":1,"answers":[1],"explanation":"Weil.","responseTimeMs":4200,"answeredAt":"2026-11-11T09:00:00.123456Z"}
+            """;
+        var quiz = Quiz(requests, Answer(HttpStatusCode.OK, revealed));
+
+        var outcome = await quiz.RevealAsync(Guid.Parse(AttemptId), 4200, TestContext.Current.CancellationToken);
+
+        var (request, body) = Assert.Single(requests);
+        Assert.Equal(new Uri($"https://edvaniq.test/api/assessment/attempts/{AttemptId}/answer"), request.RequestUri);
+        Assert.Equal("""{"showSolution":true,"responseTimeMs":4200}""", body);
+        Assert.Equal(new GradedAnswer(Guid.Parse(AttemptId), null, false, 1, "Weil.", 4200, Revealed: true), outcome.Value);
+    }
+
+    // A grade with no option is only fine when the solution was shown.
+    [Fact]
+    public async Task GradeWithoutOption_AndNotRevealed_Fails()
+    {
+        var quiz = Quiz([], Answer(HttpStatusCode.OK, GradedJson.Replace("\"option\":0", "\"option\":null", StringComparison.Ordinal)));
+
+        var outcome = await quiz.AnswerAsync(Guid.Parse(AttemptId), 0, 1, TestContext.Current.CancellationToken);
+
+        Assert.Equal(CallResult.Failed, outcome.Result);
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized, CallResult.SignedOut)]
     [InlineData(HttpStatusCode.NotFound, CallResult.NotFound)]
