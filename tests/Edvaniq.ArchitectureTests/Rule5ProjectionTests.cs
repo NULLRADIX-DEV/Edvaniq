@@ -25,9 +25,12 @@ public class Rule5ProjectionTests
 
         Assert.Equal(
             [
+                "PlanningDbContext maps Edvaniq.Services.Planning.Domain.ExamType from Planning at LearningGoal.ExamType",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.ExampleItem from Planning at ExampleItem",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.KnownTopic from Planning at KnownTopic",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.LearningGoal from Planning at LearningGoal",
+                "PlanningDbContext maps Edvaniq.Services.Planning.Domain.LearningGoalKind from Planning at LearningGoal.Kind",
+                "PlanningDbContext maps Edvaniq.Services.Planning.Domain.LearningLevel from Planning at LearningGoal.Level",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.PingRecord from Planning at PingRecord",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.TopicsSnapshot from Planning at TopicsSnapshot",
             ],

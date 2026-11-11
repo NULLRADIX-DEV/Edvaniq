@@ -5,9 +5,10 @@ using Edvaniq.BuildingBlocks.Domain;
 
 namespace Edvaniq.Services.Planning.Domain;
 
-// What a user learns towards (docs/spec/glossary.md#lernziel). Until the assistant comes in M2 every user has exactly one,
-// the default goal, and it has no fields of its own yet. M2 adds name, kind and exam to this class, so the default goal
-// becomes a real one under the same id and nothing that points at it has to change.
+// What a user learns towards (docs/spec/glossary.md#lernziel). Every user has a default goal without fields, so Content
+// has somewhere to put a text before the user created a goal. The first goal the user creates takes over the default
+// goal's id, so everything that already points at it now belongs to that goal. The fields are null only on a default
+// goal nobody has taken over yet.
 public sealed class LearningGoal : IOwnedByUser
 {
     private LearningGoal(Guid id, string ownerId, DateTime createdAt)
@@ -24,8 +25,35 @@ public sealed class LearningGoal : IOwnedByUser
     // UTC.
     public DateTime CreatedAt { get; private set; }
 
+    public LearningGoalKind? Kind { get; private set; }
+
+    public string? Name { get; private set; }
+
+    public ExamType? ExamType { get; private set; }
+
+    public DateOnly? ExamDate { get; private set; }
+
+    public LearningLevel? Level { get; private set; }
+
+    public string? OutputLanguage { get; private set; }
+
+    public string? Goal { get; private set; }
+
     public static LearningGoal CreateDefault(string ownerId, DateTime createdAt) =>
         new(DefaultIdFor(ownerId), ownerId, createdAt);
+
+    public static LearningGoal Create(Guid id, string ownerId, LearningGoalFields fields, DateTime createdAt)
+    {
+        var goal = new LearningGoal(id, ownerId, createdAt);
+        goal.Kind = fields.Kind;
+        goal.Name = fields.Name;
+        goal.ExamType = fields.ExamType;
+        goal.ExamDate = fields.ExamDate;
+        goal.Level = fields.Level;
+        goal.OutputLanguage = fields.OutputLanguage;
+        goal.Goal = fields.Goal;
+        return goal;
+    }
 
     // A name-based UUID (RFC 9562, version 8) from the user id, so two requests at once insert the same key and only one
     // of them gets through. Anyone who knows the user id can work it out, so it must never guard anything: who sees a
