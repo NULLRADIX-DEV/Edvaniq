@@ -289,7 +289,7 @@ public sealed class TopicsTests : BunitContext
     }
 
     [Fact]
-    public void AnalysisTakingLong_SaysSo_AndWaitingOnFollowsAgain()
+    public async Task AnalysisTakingLong_SaysSo_AndWaitingOnFollowsAgain()
     {
         var material = new FakeLearningMaterial()
             .Documents(Document(DocumentStatus.Analyzing))
@@ -299,7 +299,8 @@ public sealed class TopicsTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("dauert länger als gedacht", Status(page)), Wait);
         var calls = material.DocumentCalls;
 
-        page.Find("button.button:not([type=submit])").Click();
+        // The click may come while the page still renders the end of its polling, so it waits for its handler.
+        await page.Find("button.button:not([type=submit])").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
 
         Assert.Contains("wird analysiert", Status(page));
         page.WaitForAssertion(() => Assert.True(material.DocumentCalls > calls), Wait);
