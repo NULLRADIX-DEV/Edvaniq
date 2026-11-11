@@ -25,7 +25,7 @@ internal sealed class EventSubscription<TEvent, THandler>() : EventSubscription(
 {
     public override Task HandleAsync(IServiceProvider scope, string payload, CancellationToken cancellationToken)
     {
-        var integrationEvent = JsonSerializer.Deserialize<TEvent>(payload, MessageJson.Options)
+        var integrationEvent = JsonSerializer.Deserialize<TEvent>(payload, EventJson.Options)
             ?? throw new JsonException($"The message is no {typeof(TEvent).Name}.");
 
         return scope.GetRequiredService<THandler>().HandleAsync(integrationEvent, cancellationToken);

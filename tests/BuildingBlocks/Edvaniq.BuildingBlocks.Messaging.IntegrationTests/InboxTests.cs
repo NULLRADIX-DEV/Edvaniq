@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 
+using Edvaniq.BuildingBlocks.Contracts;
 using Edvaniq.Services.Sender.Contracts;
 using Edvaniq.Testing;
 
@@ -174,7 +175,7 @@ public sealed class InboxTests(MySqlTestServer mysql) : IAsyncLifetime
     private async Task<Guid> PublishAsync(string text, Guid? messageId = null, Guid? greetingId = null, string? traceParent = null)
     {
         var id = messageId ?? Guid.NewGuid();
-        var payload = JsonSerializer.Serialize(new Greeted(greetingId ?? Guid.NewGuid(), text), MessageJson.Options);
+        var payload = JsonSerializer.Serialize(new Greeted(greetingId ?? Guid.NewGuid(), text), EventJson.Options);
         await transport.PublishAsync(new OutgoingMessage("sender.greeted", id, payload, traceParent), TestContext.Current.CancellationToken);
         return id;
     }
