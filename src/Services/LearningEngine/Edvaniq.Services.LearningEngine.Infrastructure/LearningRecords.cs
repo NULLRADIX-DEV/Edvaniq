@@ -13,5 +13,9 @@ internal sealed class LearningRecords(LearningEngineDbContext db) : ILearningRec
         db.LearningRecords.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .AnyAsync(record => record.AnswerId == answerId, cancellationToken);
 
+    public Task<bool> IsTopicKnownAsync(string ownerId, Guid topicId, CancellationToken cancellationToken) =>
+        db.KnownTopics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .AnyAsync(topic => topic.OwnerId == ownerId && topic.TopicId == topicId, cancellationToken);
+
     public void Add(LearningRecord record) => db.LearningRecords.Add(record);
 }

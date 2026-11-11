@@ -139,6 +139,32 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
         Assert.Equal(62, (await MasteryAsync(alice, topic))!.Mastery);
     }
 
+    // #205: the same answers before and after their topic end in the same mastery and state.
+    [Fact]
+    public async Task AnswersBeforeOrAfterTheirTopic_EndTheSame()
+    {
+        var (inOrder, reversed) = (NewUser("alice"), NewUser("bob"));
+        (bool Correct, TimeSpan Ago, int Difficulty)[] answers =
+            [(true, TimeSpan.FromMinutes(5), 3), (false, TimeSpan.FromMinutes(4), 1), (true, TimeSpan.FromMinutes(3), 2)];
+
+        var first = await KnowAsync(inOrder);
+        foreach (var (correct, ago, difficulty) in answers)
+        {
+            await DeliverAsync(Answer(inOrder, first, correct, ago, difficulty));
+        }
+
+        var second = Guid.NewGuid();
+        foreach (var (correct, ago, difficulty) in answers)
+        {
+            await DeliverAsync(Answer(reversed, second, correct, ago, difficulty));
+        }
+
+        await KnowAsync(reversed, second);
+
+        var (expected, actual) = (await MasteryAsync(inOrder, first), await MasteryAsync(reversed, second));
+        Assert.Equal((expected!.Mastery, expected.State), (actual!.Mastery, actual.State));
+    }
+
     [Fact]
     public async Task Request_WithoutToken_IsRejected()
     {
