@@ -174,6 +174,12 @@ Die Tabelle nennt diesen Test je Consumer als `Klasse.Methode` aus den Integrati
 | Planning | `TopicsChanged` | `KnownTopicTests.StateDeliveredTwice_SentTwice_OrOlder_ChangesNothing` |
 | Planning | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
 
+### Wenn der Broker ausfällt
+
+Ein Service arbeitet ohne Broker weiter, er sendet nur später. Jedes Event liegt mit seiner Änderung in der eigenen Datenbank, also wartet kein Speichern auf den Broker. Der Dispatcher versucht es mit wachsender Pause weiter, und der Client verbindet sich von selbst neu. Ein abgebrochener Consumer startet nach 5 Sekunden wieder. Was der Stream vor dem Ausfall schon hatte, behält der Broker über einen Neustart. Kommt er zurück, geht jedes offene Event raus und kommt genau einmal an, auch bei einem Empfänger, der während des Ausfalls gestartet ist.
+
+`/health` eines Service hängt nicht am Broker. Fällt der Broker aus, bleibt jeder Service gesund und erreichbar, und gemeldet wird der Broker selbst über seinen eigenen Health-Check, einmal statt für jeden Service. Den Ablauf prüft `BrokerOutageTests` in `tests/BuildingBlocks` mit einem eigenen NATS, der gestoppt und wieder gestartet wird oder hängt.
+
 ### Ohne Broker und in Tests
 
 Die Adresse von NATS kommt nur von außen, als `ConnectionStrings:nats`. Lokal setzt sie der AppHost mit `WithMessaging(nats)`, auf dem Server der Anker `x-messaging-environment` in `deploy/compose.yml`. Fehlt die Adresse, starten weder Dispatcher noch Consumer, und der Service verhält sich, als gäbe es keine Nachrichten: Die Events bleiben in der Outbox, bis ein Broker da ist. Gesendete Outbox-Zeilen und Inbox-Einträge löscht der Service nach 14 Tagen (`Messaging:Retention`), ungesendete bleiben.
