@@ -6,6 +6,7 @@ using System.Text.Json;
 
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Identity.Contracts;
+using Edvaniq.Services.Planning.Domain;
 using Edvaniq.Services.Planning.Infrastructure;
 using Edvaniq.Testing;
 
@@ -67,6 +68,41 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
         Assert.Equal(0, BudgetsOf(alice));
         Assert.Equal(1, BudgetsOf(bob));
+    }
+
+    // Every table with an owner holds rows of both users. A new table without a seed here fails before the deletion.
+    [Fact]
+    public async Task DeletedUser_HasNoRowInAnyTable_OthersKeepTheirs()
+    {
+        var alice = NewUser("alice");
+        var bob = NewUser("bob");
+        await SeedEveryTableAsync(alice);
+        await SeedEveryTableAsync(bob);
+        Assert.Empty(OwnedRows.Unseeded(Query(db => OwnedRows.Of(db, alice))));
+        var ofBob = Query(db => OwnedRows.Of(db, bob));
+
+        var messageId = await DeleteAsync(alice);
+
+        await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
+        Assert.All(Query(db => OwnedRows.Of(db, alice)), table => Assert.Equal(0, table.Value));
+        Assert.Equal(ofBob, Query(db => OwnedRows.Of(db, bob)));
+    }
+
+    private async Task SeedEveryTableAsync(string user)
+    {
+        await CreateItemAsync(user, "Notiz");
+        await CreateDefaultGoalAsync(user);
+        await SetDailyBudgetAsync(user);
+        using var scope = service.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PlanningDbContext>();
+        db.KnownTopics.Add(KnownTopic.Create(user, Guid.NewGuid(), Guid.Empty, hidden: false));
+        db.TopicsSnapshots.Add(TopicsSnapshot.Create(user, Guid.Empty, DateTime.UtcNow));
+        var goal = LearningGoal.DefaultIdFor(user);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var block = new Block(Guid.NewGuid(), 15);
+        db.DoneBlocks.Add(DoneBlock.Create(Guid.NewGuid(), user, goal, today, block, DateTime.UtcNow));
+        db.Sessions.Add(Session.Start(Guid.NewGuid(), user, goal, today, new DayBlock(Guid.NewGuid(), block, Done: false), DateTime.UtcNow));
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
     // "Alice" and "alice" are two users, deleting one keeps the data of the other.

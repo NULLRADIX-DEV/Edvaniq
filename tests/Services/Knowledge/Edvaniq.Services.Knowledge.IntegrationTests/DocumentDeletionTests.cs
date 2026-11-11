@@ -39,6 +39,8 @@ public sealed class DocumentDeletionTests(ServiceFactory service) : IClassFixtur
 
         Assert.Equal(["Genetik", "Zellatmung"], Query(db => db.Topics.IgnoreQueryFilters().Where(topic => topic.OwnerId == alice).Select(topic => topic.Name).OrderBy(name => name).ToList()));
         Assert.Equal(0, Query(db => db.TopicSections.IgnoreQueryFilters().Count(section => section.DocumentId == deleted.DocumentId)));
+        Assert.Equal(0, Query(db => db.Topics.IgnoreQueryFilters().Count(topic =>
+            topic.DocumentId == deleted.DocumentId && !db.TopicSections.IgnoreQueryFilters().Any(section => section.TopicId == topic.Id))));
         Assert.Equal(2, Query(db => db.TopicSections.IgnoreQueryFilters().Count(section => section.DocumentId == kept.DocumentId)));
         var changes = Events(alice);
         Assert.Equal(before + 1, changes.Count);
