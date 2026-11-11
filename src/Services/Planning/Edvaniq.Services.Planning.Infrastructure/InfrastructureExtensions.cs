@@ -26,6 +26,7 @@ public static class InfrastructureExtensions
         builder.Services.AddMySqlDbContext<PlanningDbContext>(DatabaseName);
         builder.Services.AddScoped<IExampleItems, ExampleItems>();
         builder.Services.AddScoped<IPings, Pings>();
+        builder.Services.AddScoped<ILearningGoals, LearningGoals>();
         builder.Services.TryAddSingleton(TimeProvider.System);
 
         builder.Services.AddOptions<DailyBudgetOptions>()

@@ -19,9 +19,14 @@ public sealed class PlanningDbContext(DbContextOptions<PlanningDbContext> option
 
     public DbSet<TopicsSnapshot> TopicsSnapshots => Set<TopicsSnapshot>();
 
+    public DbSet<LearningGoal> LearningGoals => Set<LearningGoal>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ExampleItem>().Property(item => item.Text).HasMaxLength(ExampleItem.TextMaxLength);
+
+        // The id of the default goal comes from the user id, the key keeps it to one per user.
+        modelBuilder.Entity<LearningGoal>().Property(goal => goal.Id).ValueGeneratedNever();
 
         // Topics of Knowledge, only ids (TopicsChanged).
         var topic = modelBuilder.Entity<KnownTopic>();

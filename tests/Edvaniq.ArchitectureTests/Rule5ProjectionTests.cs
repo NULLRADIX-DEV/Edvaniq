@@ -27,6 +27,7 @@ public class Rule5ProjectionTests
             [
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.ExampleItem from Planning at ExampleItem",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.KnownTopic from Planning at KnownTopic",
+                "PlanningDbContext maps Edvaniq.Services.Planning.Domain.LearningGoal from Planning at LearningGoal",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.PingRecord from Planning at PingRecord",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.TopicsSnapshot from Planning at TopicsSnapshot",
             ],

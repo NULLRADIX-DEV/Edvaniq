@@ -133,6 +133,27 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                     b.ToTable("KnownTopics");
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Planning.Domain.LearningGoal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("LearningGoals");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Planning.Domain.PingRecord", b =>
                 {
                     b.Property<int>("Id")
