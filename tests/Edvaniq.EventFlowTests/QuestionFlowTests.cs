@@ -20,7 +20,8 @@ namespace Edvaniq.EventFlowTests;
 // the topics their ids and sends TopicsChanged, Content asks Knowledge for the ids and sends the questions of every
 // topic with its id, Assessment takes them over for the topics it knows. Only then is the document ready, and the user
 // can practise every topic.
-public sealed class QuestionFlowTests(FlowServices services) : IClassFixture<FlowServices>, IDisposable
+[Collection(FlowCollection.Name)]
+public sealed class QuestionFlowTests(FlowServices services) : IDisposable
 {
     private const string Text = """
         # Photosynthese
