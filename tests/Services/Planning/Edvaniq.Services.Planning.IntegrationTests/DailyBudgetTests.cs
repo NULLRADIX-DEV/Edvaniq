@@ -137,12 +137,14 @@ public sealed class DailyBudgetTests(ServiceFactory service) : IClassFixture<Ser
         Assert.Equal(["Friday", "Saturday", "Sunday", "Thursday", "Tuesday", "Wednesday"], errors.Keys.Order());
     }
 
-    // A value that is no whole number never reaches the budget: 400 as a problem.
+    // A value that is no whole number never reaches the budget: 400 as a problem, with the message at its day.
     [Theory]
     [InlineData("\"abc\"")]
+    [InlineData("\"30\"")]
     [InlineData("1.5")]
     [InlineData("null")]
-    public async Task MinutesOfTheWrongType_AreABadRequest(string monday)
+    [InlineData("[]")]
+    public async Task MinutesOfTheWrongType_AreRejectedAtTheirDay(string monday)
     {
         var alice = NewUser("alice");
         using var client = ClientOf(alice);
@@ -153,8 +155,8 @@ public sealed class DailyBudgetTests(ServiceFactory service) : IClassFixture<Ser
 
         using var response = await client.PutAsync("/daily-budget", body, TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var errors = await ValidationErrorsAsync(response);
+        Assert.Equal(["Monday"], errors.Keys);
         Assert.Equal(0, RowsOf(alice));
     }
 

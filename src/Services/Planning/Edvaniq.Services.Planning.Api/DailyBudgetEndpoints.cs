@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using Edvaniq.Services.Planning.Application;
 using Edvaniq.Services.Planning.Domain;
 
@@ -34,25 +36,29 @@ internal static class DailyBudgetEndpoints
 }
 
 internal sealed record DailyBudgetRequest(
-    int? Monday,
-    int? Tuesday,
-    int? Wednesday,
-    int? Thursday,
-    int? Friday,
-    int? Saturday,
-    int? Sunday)
+    JsonElement? Monday,
+    JsonElement? Tuesday,
+    JsonElement? Wednesday,
+    JsonElement? Thursday,
+    JsonElement? Friday,
+    JsonElement? Saturday,
+    JsonElement? Sunday)
 {
     public Dictionary<DayOfWeek, int?> ToDictionary() =>
         new()
         {
-            [DayOfWeek.Monday] = Monday,
-            [DayOfWeek.Tuesday] = Tuesday,
-            [DayOfWeek.Wednesday] = Wednesday,
-            [DayOfWeek.Thursday] = Thursday,
-            [DayOfWeek.Friday] = Friday,
-            [DayOfWeek.Saturday] = Saturday,
-            [DayOfWeek.Sunday] = Sunday,
+            [DayOfWeek.Monday] = Minutes(Monday),
+            [DayOfWeek.Tuesday] = Minutes(Tuesday),
+            [DayOfWeek.Wednesday] = Minutes(Wednesday),
+            [DayOfWeek.Thursday] = Minutes(Thursday),
+            [DayOfWeek.Friday] = Minutes(Friday),
+            [DayOfWeek.Saturday] = Minutes(Saturday),
+            [DayOfWeek.Sunday] = Minutes(Sunday),
         };
+
+    // Raw JSON, so "abc" or 1.5 gets a message at its day instead of failing the whole body.
+    private static int? Minutes(JsonElement? value) =>
+        value is { ValueKind: JsonValueKind.Number } number && number.TryGetInt32(out var minutes) ? minutes : null;
 }
 
 // IsDefault: the user never stored a budget, the minutes are the configured default.
