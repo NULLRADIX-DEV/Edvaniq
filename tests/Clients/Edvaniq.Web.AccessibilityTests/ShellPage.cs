@@ -32,6 +32,9 @@ public sealed class ShellPage : IAsyncDisposable
 
     public IPage Page { get; }
 
+    // Raised before a load that broke off gets another go. What the page did during the broken load doesn't count.
+    public event Action? Reloading;
+
     public IReadOnlyList<string> Requests
     {
         get
@@ -60,6 +63,7 @@ public sealed class ShellPage : IAsyncDisposable
             }
             catch (InvalidOperationException) when (attempt < LoadAttempts && NetworkChangedSince(logged))
             {
+                Reloading?.Invoke();
             }
         }
     }
