@@ -1,3 +1,4 @@
+using Edvaniq.BuildingBlocks.AI;
 using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Infrastructure;
 using Edvaniq.Services.Content.Infrastructure.Ai;
@@ -21,4 +22,12 @@ builder.Services.AddHttpClient<IKnowledgeTopics, KnowledgeTopics>(client => clie
     .AddHttpMessageHandler<InternalTokenHandler>();
 
 var host = builder.Build();
+
+// Asks the configured AI once and stops (dotnet <worker>.dll ai-check), e.g. after a deploy. Analyses nothing.
+if (args is [AiCheck.Command])
+{
+    return await AiCheck.RunAsync(host.Services, Console.Out);
+}
+
 host.Run();
+return 0;

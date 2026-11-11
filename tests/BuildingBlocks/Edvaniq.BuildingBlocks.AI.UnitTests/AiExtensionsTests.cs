@@ -5,7 +5,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace Edvaniq.BuildingBlocks.AI.UnitTests;
 
-// Ai:Provider picks the provider. Simulated needs no key, anything else stops the start.
+// Ai:Provider picks the provider. Simulated needs no key, an unknown one stops the start.
 public class AiExtensionsTests
 {
     [Fact]
@@ -29,14 +29,14 @@ public class AiExtensionsTests
     [Fact]
     public void MissingProvider_StopsTheStart() =>
         Assert.Equal(
-            "Ai:Provider is missing. Set it to Simulated, the only provider so far.",
+            "Ai:Provider is missing. Set it to Simulated or OpenAiCompatible.",
             Assert.Throws<InvalidOperationException>(() => Build()).Message);
 
     [Fact]
     public void UnknownProvider_StopsTheStart() =>
         Assert.Equal(
-            "Ai:Provider 'OpenRouter' is unknown. The only provider so far is Simulated.",
-            Assert.Throws<InvalidOperationException>(() => Build(("Ai:Provider", "OpenRouter"))).Message);
+            "Ai:Provider 'Remote' is unknown. Set it to Simulated or OpenAiCompatible.",
+            Assert.Throws<InvalidOperationException>(() => Build(("Ai:Provider", "Remote"))).Message);
 
     private static IHost Build(params (string Key, string Value)[] settings)
     {
