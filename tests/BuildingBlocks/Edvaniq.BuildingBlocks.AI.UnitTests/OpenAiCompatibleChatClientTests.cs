@@ -40,6 +40,54 @@ public class OpenAiCompatibleChatClientTests
         Assert.False(request.ContainsKey("stream"));
     }
 
+    [Fact]
+    public async Task SchemaFormat_GoesOutAsStrictJsonSchema()
+    {
+        var stub = new AiStub().Answer(HttpStatusCode.OK, AiStub.Completion("ok"));
+        using var host = stub.Host(overrides: ("Ai:OpenAiCompatible:ExtraBody", """{"response_format":{"type":"text"}}"""));
+
+        await AiStub.Client(host).GetResponseAsync(Prompt, new ChatOptions { ResponseFormat = Schema }, TestContext.Current.CancellationToken);
+
+        Assert.True(JsonNode.DeepEquals(
+            JsonNode.Parse("""{"type":"json_schema","json_schema":{"name":"topics","strict":true,"schema":{"type":"object","required":["topics"]}}}"""),
+            JsonNode.Parse(Assert.Single(stub.Requests).Body)!["response_format"]));
+    }
+
+    [Fact]
+    public async Task JsonFormatWithoutSchema_GoesOutAsJsonObject()
+    {
+        var stub = new AiStub().Answer(HttpStatusCode.OK, AiStub.Completion("ok"));
+        using var host = stub.Host();
+
+        await AiStub.Client(host).GetResponseAsync(Prompt, new ChatOptions { ResponseFormat = ChatResponseFormat.Json }, TestContext.Current.CancellationToken);
+
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"type":"json_object"}"""), JsonNode.Parse(Assert.Single(stub.Requests).Body)!["response_format"]));
+    }
+
+    // Off for an endpoint that can't keep to a schema: without the switch every request would fail there.
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("true", true)]
+    [InlineData("False", false)]
+    public async Task SchemaOutput_SwitchesTheFormat(string? value, bool sent)
+    {
+        var stub = new AiStub().Answer(HttpStatusCode.OK, AiStub.Completion("ok"));
+        using var host = stub.Host(overrides: ("Ai:OpenAiCompatible:SchemaOutput", value));
+
+        await AiStub.Client(host).GetResponseAsync(Prompt, new ChatOptions { ResponseFormat = Schema }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(sent, JsonNode.Parse(Assert.Single(stub.Requests).Body)!.AsObject().ContainsKey("response_format"));
+    }
+
+    [Fact]
+    public void SchemaOutputNoBool_StopsTheStart() =>
+        Assert.Equal(
+            "Ai:OpenAiCompatible:SchemaOutput must be true or false.",
+            Assert.Throws<InvalidOperationException>(() => new AiStub().Host(overrides: ("Ai:OpenAiCompatible:SchemaOutput", "ja"))).Message);
+
+    private static readonly ChatResponseFormat Schema = ChatResponseFormat.ForJsonSchema(
+        System.Text.Json.JsonDocument.Parse("""{"type":"object","required":["topics"]}""").RootElement.Clone(), "topics");
+
     // The model is only configuration: another one goes out without a new build.
     [Fact]
     public async Task Model_ComesFromTheConfiguration()

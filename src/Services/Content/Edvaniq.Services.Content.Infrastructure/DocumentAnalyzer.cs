@@ -1,8 +1,10 @@
+using Edvaniq.BuildingBlocks.AI;
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Contracts;
 using Edvaniq.Services.Content.Domain;
+using Edvaniq.Services.Content.Infrastructure.Ai;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
@@ -111,33 +113,33 @@ public sealed class DocumentAnalyzer(
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    // The topics from the AI, or null if it failed, took too long or gave an answer that is no use. Retries with a pause
-    // come with the handling of provider outages (#300), until then the user pastes the text again.
+    // The topics from the AI, or null if it failed, took too long or gave no usable answer in all attempts. Retries of
+    // outages with a pause come with #300, until then the user pastes the text again.
     private async Task<IReadOnlyList<TopicSuggestion>?> TopicsAsync(
         Document document, IReadOnlyList<Section> sections, CancellationToken cancellationToken)
     {
-        try
+        IReadOnlyList<Guid> ids = [.. sections.Select(section => section.Id)];
+        var answer = await ai.AskAsync(
+            [
+                new ChatMessage(ChatRole.System, TopicAnalysis.System),
+                new ChatMessage(ChatRole.User, TopicAnalysis.User(sections.Select(section => document.Text.Substring(section.Start, section.Length)))),
+            ],
+            text => TopicAnalysis.Read(text, ids),
+            new StructuredRequest(AiTimeout, ContentAi.TopicsFormat),
+            time,
+            cancellationToken);
+        ContentLog.AiUsage(
+            logger, "topics", document.Id, answer.Attempts, answer.Usage.InputTokenCount ?? 0, answer.Usage.OutputTokenCount ?? 0,
+            ContentAi.ModelOf(ai, answer.ModelId));
+        if (answer.Failure is { } failure)
         {
-            using var timeout = new CancellationTokenSource(AiTimeout, time);
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
-            var response = await ai.GetResponseAsync(
-                [
-                    new ChatMessage(ChatRole.System, TopicAnalysis.System),
-                    new ChatMessage(ChatRole.User, TopicAnalysis.User(sections.Select(section => document.Text.Substring(section.Start, section.Length)))),
-                ],
-                cancellationToken: linked.Token);
-            var topics = TopicAnalysis.Read(response.Text, [.. sections.Select(section => section.Id)]);
-            if (topics is null)
-            {
-                ContentLog.AnalysisAnswerUnusable(logger, document.Id);
-            }
+            ContentLog.AnalysisFailed(logger, failure, document.Id);
+        }
+        else if (answer.Value is null)
+        {
+            ContentLog.AnalysisAnswerUnusable(logger, document.Id, answer.Attempts);
+        }
 
-            return topics;
-        }
-        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
-        {
-            ContentLog.AnalysisFailed(logger, exception, document.Id);
-            return null;
-        }
+        return answer.Value;
     }
 }

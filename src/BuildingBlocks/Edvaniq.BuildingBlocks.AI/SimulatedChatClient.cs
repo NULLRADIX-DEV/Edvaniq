@@ -37,7 +37,15 @@ public sealed class SimulatedChatClient(IEnumerable<ISimulatedAnswer> answers, S
             answer = answer[..(answer.Length / 2)];
         }
 
-        return new ChatResponse(new ChatMessage(ChatRole.Assistant, answer)) { ModelId = Provider };
+        return new ChatResponse(new ChatMessage(ChatRole.Assistant, answer)) { ModelId = Provider, Usage = EstimatedUsage(prompt, answer) };
+    }
+
+    // Estimated, not counted: about four characters a token, so the usage of a document shows up without a real provider.
+    internal static UsageDetails EstimatedUsage(SimulatedPrompt prompt, string answer)
+    {
+        long input = prompt.Messages.Sum(message => message.Text.Length) / 4;
+        long output = answer.Length / 4;
+        return new UsageDetails { InputTokenCount = input, OutputTokenCount = output, TotalTokenCount = input + output };
     }
 
     // The whole answer as one update, nobody streams the simulated provider.

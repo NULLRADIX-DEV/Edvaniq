@@ -16,14 +16,18 @@ internal static partial class ContentLog
     [LoggerMessage(Level = LogLevel.Error, Message = "The AI could not analyze document {DocumentId}, it is marked as failed")]
     public static partial void AnalysisFailed(ILogger logger, Exception exception, Guid documentId);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "The AI gave no usable topics for document {DocumentId}, it is marked as failed")]
-    public static partial void AnalysisAnswerUnusable(ILogger logger, Guid documentId);
+    [LoggerMessage(Level = LogLevel.Error, Message = "The AI gave no usable topics for document {DocumentId} in {Attempts} attempts, it is marked as failed")]
+    public static partial void AnalysisAnswerUnusable(ILogger logger, Guid documentId, int attempts);
+
+    // What the AI cost for one task of a document, every attempt counted, failed or not.
+    [LoggerMessage(Level = LogLevel.Information, Message = "AI usage for the {Task} of document {DocumentId}: {Attempts} attempts, {InputTokens} input tokens, {OutputTokens} output tokens, model {Model}")]
+    public static partial void AiUsage(ILogger logger, string task, Guid documentId, int attempts, long inputTokens, long outputTokens, string model);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "The AI could not make questions for document {DocumentId}, it is marked as failed")]
     public static partial void QuestionsFailed(ILogger logger, Exception exception, Guid documentId);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "The AI gave no valid question for a topic of document {DocumentId} twice, it is marked as failed")]
-    public static partial void QuestionsAnswerUnusable(ILogger logger, Guid documentId);
+    [LoggerMessage(Level = LogLevel.Error, Message = "The AI gave no valid question for a topic of document {DocumentId} in {Attempts} attempts, it is marked as failed")]
+    public static partial void QuestionsAnswerUnusable(ILogger logger, Guid documentId, int attempts);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Making question pools failed, trying again in {Delay}")]
     public static partial void PoolRoundFailed(ILogger logger, Exception exception, TimeSpan delay);

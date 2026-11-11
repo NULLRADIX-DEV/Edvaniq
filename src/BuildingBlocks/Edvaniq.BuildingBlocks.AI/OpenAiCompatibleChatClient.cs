@@ -78,8 +78,30 @@ internal sealed class OpenAiCompatibleChatClient(IHttpClientFactory httpClients,
             request["max_tokens"] = maxTokens;
         }
 
+        if (settings.SchemaOutput && ResponseFormat(options?.ResponseFormat) is { } format)
+        {
+            request["response_format"] = format;
+        }
+
         return request;
     }
+
+    // The form the answer should keep to. The caller still checks it, the schema only makes a bad answer rarer.
+    private static JsonObject? ResponseFormat(ChatResponseFormat? format) => format switch
+    {
+        ChatResponseFormatJson { Schema: { } schema } json => new JsonObject
+        {
+            ["type"] = "json_schema",
+            ["json_schema"] = new JsonObject
+            {
+                ["name"] = json.SchemaName ?? "answer",
+                ["strict"] = true,
+                ["schema"] = JsonNode.Parse(schema.GetRawText()),
+            },
+        },
+        ChatResponseFormatJson => new JsonObject { ["type"] = "json_object" },
+        _ => null,
+    };
 
     private static ChatResponse Read(JsonElement answer)
     {
