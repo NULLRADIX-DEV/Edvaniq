@@ -6,11 +6,13 @@ namespace Edvaniq.Services.Planning.Domain;
 // - Weight of a topic = size × (100 - mastery). Size 0 or mastery 100 means no time.
 // - Study days run from today up to the day before the exam. The exam day itself is no study day, so the last block
 //   lies on the day before it. An exam today or earlier gives an empty plan.
+// - Without an exam (#371) the plan is rolling: RollingDays study days from today and no final phase, as there is nothing
+//   to finish towards. A day later the same input gives the same number of days, one day later.
 // - Review (#369): every study day starts with one review block for a topic that is already introduced, either from the
 //   input (IsNew false) or because it had a learn block on an earlier day of the plan. Topics take turns: fewest review
 //   blocks so far, then the heaviest, then by id. Its size is ReviewShareInPercent of the day, see ReviewMinutes. A day
 //   with nothing introduced yet has no review block, which can only be the first day when every topic is new.
-// - Final phase (#369): the last FinalPhaseDays study days only give learn time to introduced topics, never to a new one.
+// - Final phase (#369, only with an exam): the last FinalPhaseDays study days only give learn time to introduced topics, never to a new one.
 // - The learn minutes before the final phase are shared out by weight among all topics, those of the final phase among
 //   the introduced ones, each in steps of 5 minutes (largest remainder). Whatever is left below 5 goes to the heaviest
 //   topic. So every day is full, and within new or introduced topics more weight never means fewer minutes. Review
@@ -35,7 +37,11 @@ public static class StudyPlanner
 
     public const int MinFinalPhaseDays = 2;
 
-    public static StudyPlan Plan(IReadOnlyCollection<TopicToPlan> topics, DailyBudget budget, DateOnly today, DateOnly examDay)
+    // A learning goal without an exam is planned for this many study days from today, see #371.
+    public const int RollingDays = 7;
+
+    // examDay null: no exam, so a rolling plan over RollingDays.
+    public static StudyPlan Plan(IReadOnlyCollection<TopicToPlan> topics, DailyBudget budget, DateOnly today, DateOnly? examDay)
     {
         ArgumentNullException.ThrowIfNull(topics);
         ArgumentNullException.ThrowIfNull(budget);
@@ -48,13 +54,14 @@ public static class StudyPlanner
             .ThenBy(topic => topic.TopicId)
             .ToList();
 
+        var lastDay = examDay ?? today.AddDays(RollingDays);
         var days = new List<DateOnly>();
-        for (var day = today; day < examDay; day = day.AddDays(1))
+        for (var day = today; day < lastDay; day = day.AddDays(1))
         {
             days.Add(day);
         }
 
-        var finalPhase = FinalPhaseDays(days.Count);
+        var finalPhase = examDay is null ? 0 : FinalPhaseDays(days.Count);
         var anyIntroduced = weighted.Any(topic => !topic.IsNew);
         if (weighted.Count == 0 || days.Count == 0 || (!anyIntroduced && finalPhase == days.Count))
         {

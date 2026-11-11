@@ -76,8 +76,11 @@ public class TodayPlannerTests
     {
         var plan = TodayPlanner.Plan([C, A, B], new Dictionary<Guid, int>(), Budget, Now);
 
+        // Since #371 today is the first day of the week's plan: the 25 learn minutes go to A and B, C comes up tomorrow.
         Assert.Equal(A, plan.Blocks[0].TopicId);
-        Assert.Equal([A, B, C], plan.Blocks.Where(block => block.Kind == BlockKind.Learn).Select(block => block.TopicId));
+        Assert.Equal([A, B], plan.Blocks.Where(block => block.Kind == BlockKind.Learn).Select(block => block.TopicId));
+        var week = StudyPlanner.Plan([new(C, 1, 0), new(A, 1, 0), new(B, 1, 0)], Budget, Monday, examDay: null);
+        Assert.Equal(C, week.Days[1].Blocks.First(block => block.Kind == BlockKind.Learn).TopicId);
     }
 
     [Fact]
