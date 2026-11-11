@@ -168,7 +168,8 @@ public sealed class StubService : IAsyncDisposable
                 request.Method,
                 request.Path,
                 request.Headers.Authorization.ToString(),
-                request.Headers.Cookie.ToString()));
+                request.Headers.Cookie.ToString(),
+                request.QueryString.Value ?? ""));
         });
 
         await app.StartAsync(TestContext.Current.CancellationToken);
@@ -192,4 +193,5 @@ public sealed class StubService : IAsyncDisposable
     private sealed record Failure(int Status, string? ContentType, string Body);
 }
 
-public sealed record Echo(string Service, string Method, string Path, string Authorization, string Cookie);
+// Query with "?", empty without one.
+public sealed record Echo(string Service, string Method, string Path, string Authorization, string Cookie, string Query = "");
