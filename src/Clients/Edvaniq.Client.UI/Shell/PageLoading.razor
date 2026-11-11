@@ -1,0 +1,15 @@
+@inject NavigationManager Navigation
+
+@* What a page shows until the browser app has loaded. If the connection breaks while it loads, the app never starts and
+   nothing would replace this, so a quiet line says what to do from the start. Its link is a plain one: nothing here may
+   depend on the runtime. Once the app renders, the page puts its own content in place of all this. *@
+<div role="status">
+    <Loading />
+    @if (!RendererInfo.IsInteractive)
+    {
+        <p class="page-loading-help">
+            Bleibt das so, prüf deine Internetverbindung und
+            <a href="@Navigation.Uri" data-enhance-nav="false">lade die Seite neu</a>.
+        </p>
+    }
+</div>

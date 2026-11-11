@@ -221,8 +221,8 @@ public sealed class QuizTests : BunitContext
         var quiz = new FakeQuiz().Ask(CallOutcome<AskedQuestion>.Failed(TraceId)).Ask(Question);
         var page = RenderPage(quiz);
 
-        Assert.Contains("Die Frage ließ sich gerade nicht laden.", page.Find(".quiz-alert").TextContent);
-        Assert.Contains(TraceId, page.Find(".quiz-alert").TextContent);
+        Assert.Contains("Die Frage ließ sich gerade nicht laden.", page.Find(".connection-problem").TextContent);
+        Assert.Contains(TraceId, page.Find(".connection-problem").TextContent);
 
         page.Find(".quiz-actions button").Click();
 
@@ -381,7 +381,7 @@ public sealed class QuizTests : BunitContext
 
         var page = Render<Practice>(parameters => parameters.Add(p => p.TopicId, Topic));
 
-        Assert.Equal("Wird geladen …", page.Find("[role=status]").TextContent.Trim());
+        Assert.Equal("Wird geladen …", page.Find("[role=status] .loading").TextContent);
         Assert.Empty(quiz.Asked);
     }
 

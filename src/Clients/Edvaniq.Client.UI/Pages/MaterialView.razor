@@ -26,10 +26,7 @@
             </div>
             break;
         case ViewState.LoadFailed:
-            <div class="material-note material-alert">
-                <p><strong>Der Stand ließ sich gerade nicht laden.</strong> Edvaniq ist vielleicht kurz nicht erreichbar.</p>
-                <RequestId Value="@loadTrace" />
-            </div>
+            <ConnectionProblem Title="Der Stand ließ sich gerade nicht laden." TraceId="@loadTrace" />
             break;
         case ViewState.Empty:
             <p class="material-note">

@@ -146,7 +146,7 @@ public sealed class LoginTests : BunitContext
         var page = Render<Login>();
 
         Assert.Equal("Anmelden", page.Find("h1").TextContent);
-        Assert.Equal("Wird geladen …", page.Find("[role=status]").TextContent.Trim());
+        Assert.Equal("Wird geladen …", page.Find("[role=status] .loading").TextContent);
         Assert.Empty(page.FindAll("form"));
     }
 
