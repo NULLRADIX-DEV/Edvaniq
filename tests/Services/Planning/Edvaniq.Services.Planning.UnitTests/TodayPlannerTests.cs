@@ -251,6 +251,20 @@ public class TodayPlannerTests
         Assert.All(plan.Blocks, block => Assert.Contains(block.TopicId, ids[4..]));
     }
 
+    // #909: 10 minutes a day leave 35 learn minutes in the week, room for 2 blocks. The foundation C stays although it is
+    // the lightest, and takes the place of B.
+    [Fact]
+    public void ShortOfTime_TheFoundationStays()
+    {
+        var standings = Introduced(new() { [A] = 20, [B] = 30, [C] = 90 });
+
+        var plain = TodayPlanner.Plan([A, B, C], standings, DailyBudget.Uniform(10), Now);
+        var withFoundation = TodayPlanner.Plan([A, B, C], standings, DailyBudget.Uniform(10), Now, foundations: new HashSet<Guid> { C });
+
+        Assert.Equal([C], plain.Shortened);
+        Assert.Equal([B], withFoundation.Shortened);
+    }
+
     private static Dictionary<Guid, TopicStanding> Introduced(Dictionary<Guid, int> masteries) =>
         Standings(TopicState.Building, masteries);
 

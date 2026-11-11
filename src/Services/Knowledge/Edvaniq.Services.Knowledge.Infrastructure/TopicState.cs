@@ -9,14 +9,15 @@ namespace Edvaniq.Services.Knowledge.Infrastructure;
 // Also runs in a consumer without a current user, so the query drops the owner filter and names the owner itself.
 internal sealed class TopicState(KnowledgeDbContext db) : ITopicState
 {
-    public async Task<IReadOnlyList<Guid>> TopicIdsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<TopicInState>> TopicsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken)
     {
         var stored = await db.Topics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId)
-            .Select(topic => topic.Id)
+            .Select(topic => new TopicInState(topic.Id, topic.ParentId))
             .ToListAsync(cancellationToken);
 
-        // The tracker knows what the save will change: topics added, deleted or moved to another goal.
+        // The tracker knows what the save will change: topics added, deleted, moved to another goal or hung under another
+        // parent. Its state wins over the stored one.
         var pending = db.ChangeTracker.Entries<Topic>().Where(entry => entry.Entity.OwnerId == ownerId).ToList();
         var leaving = pending
             .Where(entry => entry.State == EntityState.Deleted || entry.Entity.LearningGoalId != learningGoalId)
@@ -24,8 +25,8 @@ internal sealed class TopicState(KnowledgeDbContext db) : ITopicState
             .ToHashSet();
         var joining = pending
             .Where(entry => entry.State != EntityState.Deleted && entry.Entity.LearningGoalId == learningGoalId)
-            .Select(entry => entry.Entity.Id);
+            .Select(entry => new TopicInState(entry.Entity.Id, entry.Entity.ParentId));
 
-        return [.. stored.Concat(joining).Distinct().Where(id => !leaving.Contains(id))];
+        return [.. joining.Concat(stored).DistinctBy(topic => topic.Id).Where(topic => !leaving.Contains(topic.Id))];
     }
 }

@@ -35,6 +35,20 @@ public sealed class KnownTopicTests(ServiceFactory service) : IClassFixture<Serv
         Assert.Equal(First, Query(db => db.TopicsSnapshots.IgnoreQueryFilters().Single(snapshot => snapshot.OwnerId == alice).ChangedAt));
     }
 
+    // #909: only whether a topic is a foundation is stored, worked out from the parents, never a parent id.
+    [Fact]
+    public async Task TopicWithAnActiveSubtopic_IsStoredAsAFoundation()
+    {
+        var alice = NewUser("alice");
+        var (parent, child, flat) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        await DeliverAsync(new TopicsChanged(alice, Guid.NewGuid(), First, [parent, child, flat], [], [new(child, parent)]));
+
+        Assert.Equal(
+            [parent],
+            Query(db => db.KnownTopics.IgnoreQueryFilters().Where(topic => topic.OwnerId == alice && topic.IsFoundation).Select(topic => topic.TopicId).ToList()));
+    }
+
     // A redelivery is dropped by the inbox, the same state under a new id and an older state by the stored snapshot.
     [Fact]
     public async Task StateDeliveredTwice_SentTwice_OrOlder_ChangesNothing()

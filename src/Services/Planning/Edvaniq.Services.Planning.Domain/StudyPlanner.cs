@@ -21,11 +21,11 @@ namespace Edvaniq.Services.Planning.Domain;
 //   turns. A block is at most BlockMinutes long.
 // - Ties always go by weight, then by topic id.
 // - Short of time (#370): every topic that can get learn time needs at least MinLearnMinutesPerTopic of it in the plan.
-//   If the learn minutes of the plan don't cover that, every weakness keeps its place, then the heaviest other topics
-//   as long as there is room, at least one. The rest is shortened: no learn time in this plan, but an introduced one
-//   still takes its turn for review. The kept topics share the learn time by weight as above, so a weakness never gets
-//   less than without shortening. New topics only count when the plan has learn minutes before the final phase.
-//   The glossary has no "basics" yet and Planning knows no order of topics, so only weaknesses are protected for now.
+//   If the learn minutes of the plan don't cover that, every weakness keeps its place, then the heaviest foundations
+//   (#909) and then the heaviest other topics as long as there is room, at least one. The rest is shortened: no learn
+//   time in this plan, but an introduced one still takes its turn for review. The kept topics share the learn time by
+//   weight as above, so a weakness never gets less than without shortening. New topics only count when the plan has
+//   learn minutes before the final phase.
 //
 // Known limit: on a first day without review a budget that isn't a multiple of 5 ends with a block of 1 to 4 minutes
 // for the heaviest topic. On every other day the review block takes up those minutes.
@@ -57,7 +57,7 @@ public static class StudyPlanner
         Validate(topics);
 
         var weighted = topics
-            .Select(topic => new Weighted(topic.TopicId, (long)topic.Size * (100 - topic.Mastery), topic.IsNew, topic.IsWeakness))
+            .Select(topic => new Weighted(topic.TopicId, (long)topic.Size * (100 - topic.Mastery), topic.IsNew, topic.IsWeakness, topic.IsFoundation))
             .Where(topic => topic.Weight > 0)
             .OrderByDescending(topic => topic.Weight)
             .ThenBy(topic => topic.TopicId)
@@ -109,8 +109,9 @@ public static class StudyPlanner
         };
     }
 
-    // Which topics lose their learn time because there isn't one block for each (#370). Weaknesses never, then the
-    // lightest first (topics come sorted, heaviest first). New topics only count when there are learn minutes before the
+    // Which topics lose their learn time because there isn't one block for each (#370). Weaknesses never, foundations
+    // only when the room is used up by weaknesses and heavier foundations, then the lightest first (topics come sorted,
+    // heaviest first). New topics only count when there are learn minutes before the
     // final phase: otherwise they get nothing anyway, and keeping one would leave the final phase without a topic.
     private static bool[] Shorten(List<Weighted> topics, long learnMinutes, bool newCanLearn)
     {
@@ -122,8 +123,10 @@ public static class StudyPlanner
             return shortened;
         }
 
+        // Weaknesses first, then foundations (#909), then the rest, each heaviest first.
         var kept = (long)candidates.Count(i => topics[i].IsWeakness);
-        foreach (var i in candidates.Where(i => !topics[i].IsWeakness))
+        var others = candidates.Where(i => !topics[i].IsWeakness).OrderBy(i => topics[i].IsFoundation ? 0 : 1).ThenBy(i => i);
+        foreach (var i in others)
         {
             if (kept < room)
             {
@@ -307,5 +310,5 @@ public static class StudyPlanner
         return best;
     }
 
-    private sealed record Weighted(Guid TopicId, long Weight, bool IsNew, bool IsWeakness);
+    private sealed record Weighted(Guid TopicId, long Weight, bool IsNew, bool IsWeakness, bool IsFoundation);
 }

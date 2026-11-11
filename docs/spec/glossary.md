@@ -84,6 +84,14 @@ Ein Thema der unteren Ebene, das zu genau einem Thema der oberen Ebene gehört. 
 
 Im Code: ein `Topic` mit `ParentId`, angelegt mit `AddSubtopic`, in Antworten unter `subtopics`
 
+### Grundlage
+
+Ein Thema der oberen Ebene, das mindestens ein Unterthema hat, das nicht ausgeblendet ist. Die Unterthemen bauen darauf auf, deshalb behält der Plan eine Grundlage auch bei zu knapper Zeit, gleich nach den Schwächen. Ein Thema ohne Unterthemen ist keine Grundlage, auch wenn es zur oberen Ebene gehört, sonst wäre bei einem Material ohne Gliederung jedes Thema eine.
+
+Im Code: `IsFoundation`
+
+Nicht: Basis, Voraussetzung
+
 ### Kernbegriff
 
 Ein Begriff mit Definition, den die Analyse im Material erkennt und einem Thema zuordnet.

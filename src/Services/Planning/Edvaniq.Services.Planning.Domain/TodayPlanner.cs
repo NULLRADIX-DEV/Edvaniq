@@ -20,13 +20,15 @@ public static class TodayPlanner
     // Today is the study day of now, so 03:30 still plans yesterday. readyTopics: the topics whose question pool
     // Assessment calls ready (#374). Learn unit, quiz and check questions all draw from the pool, so any other topic
     // gets no block and doesn't take part in shortening either. Null when Assessment couldn't be asked: then every
-    // topic is planned as before, a block that can't be practised yet beats no plan.
+    // topic is planned as before, a block that can't be practised yet beats no plan. Foundations: the topics with
+    // subtopics (#909).
     public static TodayPlan Plan(
         IReadOnlyCollection<Guid> topicIds,
         IReadOnlyDictionary<Guid, TopicStanding> standings,
         DailyBudget budget,
         DateTime utcNow,
-        IReadOnlySet<Guid>? readyTopics = null)
+        IReadOnlySet<Guid>? readyTopics = null,
+        IReadOnlySet<Guid>? foundations = null)
     {
         ArgumentNullException.ThrowIfNull(topicIds);
         ArgumentNullException.ThrowIfNull(standings);
@@ -48,7 +50,7 @@ public static class TodayPlanner
 
         var topics = distinct
             .Except(notReady)
-            .Select(id => ToPlan(id, standings))
+            .Select(id => ToPlan(id, standings) with { IsFoundation = foundations?.Contains(id) == true })
             .ToList();
         var week = StudyPlanner.Plan(topics, budget, today, examDay: null);
         var blocks = week.Days.FirstOrDefault(day => day.StudyDay == today)?.Blocks ?? [];

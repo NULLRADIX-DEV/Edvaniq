@@ -404,6 +404,19 @@ public class StudyPlannerTests
         Assert.All(plan.Days, day => Assert.Equal(15, day.Blocks.Sum(block => block.Minutes)));
     }
 
+    // A38 with #909: the same input, but the lightest topic in progress is a foundation. It takes the second place.
+    [Fact]
+    public void A38_ShortOfTime_TheFoundationStaysAfterTheWeakness()
+    {
+        var w = new Guid("00000000-0000-0000-0000-00000000000d");
+        TopicToPlan[] topics = [new(w, 1, 40, IsWeakness: true), new(A, 1, 60), new(B, 1, 65), new(C, 1, 70, IsFoundation: true)];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(15), Today, Today.AddDays(3));
+
+        Assert.Equal([A, B], plan.Shortened);
+        Assert.Equal([C, w], MinutesPerTopic(plan, BlockKind.Learn).Keys.Order());
+    }
+
     // A weakness also stays when it is the lightest topic, e.g. after many wrong answers lately (A39).
     [Fact]
     public void ShortOfTime_ALightWeakness_StaysBeforeHeavierTopics()
@@ -433,6 +446,73 @@ public class StudyPlannerTests
 
         Assert.Equal([d, e], plan.Shortened);
         Assert.Equal([A, B, C], MinutesPerTopic(plan, BlockKind.Learn).Keys.Order());
+    }
+
+    // #909: room for 2 blocks as in A38. The foundation stays although it is the lightest topic, the heaviest other topic
+    // takes the second place, the two others are shortened.
+    [Fact]
+    public void ShortOfTime_TheFoundationStays_TopicsInProgressAreShortened()
+    {
+        var f = new Guid("00000000-0000-0000-0000-00000000000f");
+        TopicToPlan[] topics = [new(A, 1, 60), new(B, 1, 65), new(C, 1, 70), new(f, 1, 75, IsFoundation: true)];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(15), Today, Today.AddDays(3));
+        var unshortened = StudyPlanner.Plan(AllWeaknesses(topics), DailyBudget.Uniform(15), Today, Today.AddDays(3));
+
+        Assert.Equal([B, C], plan.Shortened);
+        var learn = MinutesPerTopic(plan, BlockKind.Learn);
+        Assert.Equal([A, f], learn.Keys.Order());
+        Assert.True(learn[f] >= MinutesPerTopic(unshortened, BlockKind.Learn).GetValueOrDefault(f));
+    }
+
+    // Weaknesses come first: with room for 2 blocks, the weakness keeps one, the heavier foundation the other. The
+    // lighter foundation is shortened like the heaviest topic, which is neither.
+    [Fact]
+    public void ShortOfTime_WeaknessBeforeFoundation_HeavierFoundationFirst()
+    {
+        var w = new Guid("00000000-0000-0000-0000-00000000000d");
+        var f = new Guid("00000000-0000-0000-0000-00000000000f");
+        TopicToPlan[] topics =
+        [
+            new(w, 1, 80, IsWeakness: true), new(A, 1, 0), new(B, 1, 50, IsFoundation: true), new(f, 1, 70, IsFoundation: true),
+        ];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(15), Today, Today.AddDays(3));
+
+        Assert.Equal([A, f], plan.Shortened);
+        Assert.Equal([B, w], MinutesPerTopic(plan, BlockKind.Learn).Keys.Order());
+    }
+
+    // A topic that is both counts as a weakness, so it doesn't take the place of a foundation.
+    [Fact]
+    public void ShortOfTime_AWeakFoundation_CountsAsAWeakness()
+    {
+        var f = new Guid("00000000-0000-0000-0000-00000000000f");
+        TopicToPlan[] topics =
+        [
+            new(A, 1, 40, IsWeakness: true, IsFoundation: true), new(B, 1, 60, IsFoundation: true), new(C, 1, 0), new(f, 1, 50),
+        ];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(15), Today, Today.AddDays(3));
+
+        Assert.Equal([C, f], plan.Shortened);
+        Assert.Equal([A, B], MinutesPerTopic(plan, BlockKind.Learn).Keys.Order());
+    }
+
+    // More foundations than room and no weakness: the heaviest foundations stay, every other topic is shortened.
+    [Fact]
+    public void ShortOfTime_MoreFoundationsThanRoom_KeepsTheHeaviest()
+    {
+        var d = new Guid("00000000-0000-0000-0000-00000000000d");
+        TopicToPlan[] topics =
+        [
+            new(A, 1, 40, IsFoundation: true), new(B, 1, 50, IsFoundation: true), new(C, 1, 60, IsFoundation: true), new(d, 1, 0),
+        ];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(15), Today, Today.AddDays(3));
+
+        Assert.Equal([C, d], plan.Shortened);
+        Assert.Equal([A, B], MinutesPerTopic(plan, BlockKind.Learn).Keys.Order());
     }
 
     // A shortened topic that is introduced gets no learn time, but still takes its turn for review.
@@ -518,11 +598,13 @@ public class StudyPlannerTests
         var today = new DateOnly(2026, 1, 1).AddDays(random.Next(730));
         DateOnly? exam = random.Next(5) == 0 ? null : today.AddDays(random.Next(-3, maxDays + 1));
         var topics = Enumerable.Range(0, random.Next(13))
-            .Select(_ => new TopicToPlan(RandomId(random), random.Next(21), random.Next(101), random.Next(3) == 0, random.Next(4) == 0))
+            .Select(_ => new TopicToPlan(
+                RandomId(random), random.Next(21), random.Next(101), random.Next(3) == 0, random.Next(4) == 0, random.Next(4) == 0))
             .ToArray();
         var weights = topics.ToDictionary(topic => topic.TopicId, topic => topic.Size * (100 - topic.Mastery));
         var isNew = topics.ToDictionary(topic => topic.TopicId, topic => topic.IsNew);
         var isWeakness = topics.ToDictionary(topic => topic.TopicId, topic => topic.IsWeakness);
+        var isFoundation = topics.ToDictionary(topic => topic.TopicId, topic => topic.IsFoundation && !topic.IsWeakness);
 
         var plan = StudyPlanner.Plan(topics, budget, today, exam);
 
@@ -581,6 +663,7 @@ public class StudyPlannerTests
                     weights[lighter] == weights[heavier]
                         || isNew[lighter] != isNew[heavier]
                         || isWeakness[lighter] != isWeakness[heavier]
+                        || isFoundation[lighter] != isFoundation[heavier]
                         || learnPerTopic.GetValueOrDefault(heavier) >= learnPerTopic.GetValueOrDefault(lighter),
                     $"{input}: more weight got fewer minutes");
             }
@@ -592,6 +675,15 @@ public class StudyPlannerTests
         Assert.True(plan.Shortened.All(id => !isWeakness[id]), $"{input}: a weakness was shortened");
         Assert.True(plan.Shortened.All(id => !learnPerTopic.ContainsKey(id)), $"{input}: a shortened topic got learn time");
         Assert.True(plan.Shortened.SequenceEqual(plan.Shortened.Order()), $"{input}: shortened topics not by id");
+
+        // #909: a foundation is only shortened when weaknesses and heavier foundations take all the room, so then no
+        // other topic and no lighter foundation got learn time.
+        foreach (var foundation in plan.Shortened.Where(id => isFoundation[id]))
+        {
+            Assert.True(
+                learnPerTopic.Keys.All(id => isWeakness[id] || (isFoundation[id] && weights[id] >= weights[foundation])),
+                $"{input}: a foundation was shortened before another topic");
+        }
         if (plan.Shortened.Count == 0)
         {
             Assert.True(Flat(plan).SequenceEqual(Flat(unshortened)), $"{input}: not shortened, but not the plan without the rule");

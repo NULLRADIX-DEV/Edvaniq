@@ -46,9 +46,12 @@ Content.TopicSuggestion.Name: string
 Content.TopicSuggestion.Parent: int?
 Content.TopicSuggestion.SectionIds: IReadOnlyList<Guid>
 Identity.UserDeleted.UserId: string
+Knowledge.TopicParent.ParentId: Guid
+Knowledge.TopicParent.TopicId: Guid
 Knowledge.TopicsChanged.ChangedAt: DateTime
 Knowledge.TopicsChanged.HiddenTopicIds: IReadOnlyList<Guid>
 Knowledge.TopicsChanged.LearningGoalId: Guid
+Knowledge.TopicsChanged.Parents: IReadOnlyList<TopicParent>?
 Knowledge.TopicsChanged.TopicIds: IReadOnlyList<Guid>
 Knowledge.TopicsChanged.UserId: string
 Planning.SessionCompleted.Completed: bool

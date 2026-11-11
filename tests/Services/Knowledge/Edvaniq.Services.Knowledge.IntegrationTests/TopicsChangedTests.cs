@@ -5,6 +5,7 @@ using System.Text.Json;
 
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Content.Contracts;
+using Edvaniq.Services.Knowledge.Application;
 using Edvaniq.Services.Knowledge.Contracts;
 using Edvaniq.Services.Knowledge.Infrastructure;
 using Edvaniq.Testing;
@@ -216,6 +217,50 @@ public sealed class TopicsChangedTests(ServiceFactory service) : IClassFixture<S
         Assert.Equal([topic], TopicIds(alice));
         Assert.Equal("Zellbiologie", Query(db => db.Topics.IgnoreQueryFilters().Single(item => item.Id == topic).Name));
         Assert.Equal(2, Events(alice).Count);
+    }
+
+    // #909: the event names every subtopic with its parent as stored, both when it is new and when a later analysis
+    // merges into it and only the stored topics carry the parent.
+    [Fact]
+    public async Task Subtopics_ComeWithTheirParent_NewAndStored()
+    {
+        var alice = NewUser();
+        TopicSuggestion[] suggestions = [new("Zelle", null, [Guid.NewGuid()]), new("Kern", 0, [Guid.NewGuid()])];
+        await DeliverAsync(new(alice, Guid.NewGuid(), suggestions));
+
+        await DeliverAsync(new(alice, Guid.NewGuid(), [.. suggestions.Select(suggestion => suggestion with { SectionIds = [Guid.NewGuid()] }), new("Membran", 0, [Guid.NewGuid()])]));
+
+        var stored = Query(db => db.Topics.IgnoreQueryFilters()
+            .Where(topic => topic.OwnerId == alice && topic.ParentId != null)
+            .Select(topic => new { topic.Id, topic.ParentId })
+            .ToList())
+            .Select(topic => new TopicParent(topic.Id, topic.ParentId!.Value))
+            .ToList();
+        var events = Events(alice);
+        Assert.Equal(2, stored.Count);
+        Assert.Single(stored.Select(link => link.ParentId).Distinct());
+        Assert.Contains(Assert.Single(events[0].Parents!), stored);
+        Assert.Equal(stored.OrderBy(link => link.TopicId), events[1].Parents!.OrderBy(link => link.TopicId));
+    }
+
+    // A stored subtopic hung under another parent in the open save: the state names the new parent, not the stored one.
+    [Fact]
+    public async Task SubtopicHungElsewhere_BeforeTheSave_ComesWithItsNewParent()
+    {
+        var alice = NewUser();
+        await DeliverAsync(new(alice, Guid.NewGuid(), [new("Zelle", null, []), new("Kern", 0, []), new("Gewebe", null, [])]));
+        using var scope = service.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<KnowledgeDbContext>();
+        var topics = db.Topics.IgnoreQueryFilters().Where(topic => topic.OwnerId == alice).ToList();
+        var child = topics.Single(topic => topic.ParentId != null);
+        var other = topics.Single(topic => topic.ParentId == null && topic.Id != child.ParentId);
+
+        db.Entry(child).Property(topic => topic.ParentId).CurrentValue = other.Id;
+        var state = await scope.ServiceProvider.GetRequiredService<ITopicState>()
+            .TopicsAsync(alice, child.LearningGoalId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(other.Id, state.Single(topic => topic.Id == child.Id).ParentId);
+        Assert.Equal(3, state.Count);
     }
 
     private static string NewUser() => $"alice-{Guid.NewGuid():N}";

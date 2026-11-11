@@ -95,8 +95,67 @@ public class TopicsChangedHandlerTests
         Assert.Contains(store.Topics, topic => (topic.OwnerId, topic.TopicId) == ("alice", ofAlice));
     }
 
-    private static TopicsChanged Changed(DateTime changedAt, Guid[] topicIds, Guid[]? hidden = null, Guid? goal = null) =>
-        new("alice", goal ?? Goal, changedAt, topicIds, hidden ?? []);
+    // #909: an active topic with an active subtopic is a foundation, the subtopic itself and a topic without one aren't.
+    [Fact]
+    public async Task TopicWithAnActiveSubtopic_IsAFoundation()
+    {
+        var store = new FakeKnownTopics();
+        var (parent, child, flat) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        await HandleAsync(store, Changed(First, [parent, child, flat], parents: [new(child, parent)]));
+
+        Assert.Equal([parent], store.Topics.Where(topic => topic.IsFoundation).Select(topic => topic.TopicId));
+    }
+
+    // A message from before #909 has no parents, so there are no foundations.
+    [Fact]
+    public async Task StateWithoutParents_HasNoFoundations()
+    {
+        var store = new FakeKnownTopics();
+        var (parent, child) = (Guid.NewGuid(), Guid.NewGuid());
+
+        await HandleAsync(store, Changed(First, [parent, child]));
+
+        Assert.DoesNotContain(store.Topics, topic => topic.IsFoundation);
+    }
+
+    // The foundation stays one while one active subtopic is left, and stops being one when the last is hidden or gone.
+    [Fact]
+    public async Task Foundation_LosesIt_WhenItsLastActiveSubtopicIsHiddenOrGone()
+    {
+        var store = new FakeKnownTopics();
+        var (parent, first, second) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        await HandleAsync(store, Changed(First, [parent, first, second], parents: [new(first, parent), new(second, parent)]));
+
+        await HandleAsync(store, Changed(First.AddSeconds(1), [parent, first], [second], [new(first, parent), new(second, parent)]));
+        var withOne = IsFoundation(store, parent);
+        await HandleAsync(store, Changed(First.AddSeconds(2), [parent], [second], [new(second, parent)]));
+        var hiddenOnly = IsFoundation(store, parent);
+        await HandleAsync(store, Changed(First.AddSeconds(3), [parent, first], parents: [new(first, parent)]));
+        var again = IsFoundation(store, parent);
+        await HandleAsync(store, Changed(First.AddSeconds(4), [parent]));
+
+        Assert.Equal((true, false, true, false), (withOne, hiddenOnly, again, IsFoundation(store, parent)));
+    }
+
+    // A hidden topic is no foundation, even with active subtopics: it isn't planned.
+    [Fact]
+    public async Task HiddenTopic_IsNoFoundation()
+    {
+        var store = new FakeKnownTopics();
+        var (parent, child) = (Guid.NewGuid(), Guid.NewGuid());
+
+        await HandleAsync(store, Changed(First, [child], [parent], [new(child, parent)]));
+
+        Assert.False(IsFoundation(store, parent));
+    }
+
+    private static TopicsChanged Changed(
+        DateTime changedAt, Guid[] topicIds, Guid[]? hidden = null, TopicParent[]? parents = null, Guid? goal = null) =>
+        new("alice", goal ?? Goal, changedAt, topicIds, hidden ?? [], parents);
+
+    private static bool IsFoundation(FakeKnownTopics store, Guid topicId) =>
+        store.Topics.Single(topic => topic.TopicId == topicId).IsFoundation;
 
     private static Task HandleAsync(FakeKnownTopics store, TopicsChanged integrationEvent) =>
         new TopicsChangedHandler(store).HandleAsync(integrationEvent, TestContext.Current.CancellationToken);
@@ -118,6 +177,10 @@ public class TopicsChangedHandlerTests
         public Task<IReadOnlyList<Guid>> ActiveAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<Guid>>(
                 [.. Topics.Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId && !topic.Hidden).Select(topic => topic.TopicId).Order()]);
+
+        public Task<IReadOnlySet<Guid>> FoundationsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlySet<Guid>>(
+                Topics.Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId && !topic.Hidden && topic.IsFoundation).Select(topic => topic.TopicId).ToHashSet());
 
         public void Add(TopicsSnapshot snapshot) => Snapshots.Add(snapshot);
 
