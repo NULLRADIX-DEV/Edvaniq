@@ -122,6 +122,9 @@ namespace Edvaniq.Services.Assessment.Infrastructure.Migrations
                     b.Property<bool>("Revealed")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("char(36)");
+
                     b.Property<Guid>("TopicId")
                         .HasColumnType("char(36)");
 

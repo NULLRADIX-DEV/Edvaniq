@@ -71,6 +71,47 @@ public sealed class CheckQuestionTests(ServiceFactory service) : IClassFixture<S
         Assert.Equal([true, false, false], ids.Select(id => Assert.Single(Records(id)).Correct));
     }
 
+    // The session of the unit goes with each answer, so LearningEngine counts the check questions once it introduced
+    // the topic. Without one, the answer has none, like a quiz answer.
+    [Fact]
+    public async Task WithASession_EachAnswerCarriesIt()
+    {
+        var alice = User.New("alice");
+        var topicId = await AddTopicAsync(alice, 1, 1, 1);
+        var session = Guid.NewGuid();
+
+        var inSession = await AnswerAllAsync(alice, await CheckAsync(alice, topicId, session));
+        var without = await AnswerAllAsync(alice, await CheckAsync(alice, topicId));
+
+        Assert.All(inSession, id => Assert.Equal(session, Stored(id).SessionId));
+        Assert.All(inSession, id => Assert.Equal(session, Assert.Single(Records(id)).SessionId));
+        Assert.All(without, id => Assert.Null(Assert.Single(Records(id)).SessionId));
+    }
+
+    // Assessment can't tell whose session an id is. Bob passing Alice's still only gives learning records of Bob's own,
+    // on his topic, and leaves Alice's alone.
+    [Fact]
+    public async Task SomeoneElsesSession_OnlyGoesWithTheUsersOwnAnswers()
+    {
+        var (alice, bob) = (User.New("alice"), User.New("bob"));
+        var aliceTopic = await AddTopicAsync(alice, 1, 1);
+        var bobTopic = await AddTopicAsync(bob, 1, 1);
+        var session = Guid.NewGuid();
+        var aliceAnswers = await AnswerAllAsync(alice, await CheckAsync(alice, aliceTopic, session));
+
+        var bobAnswers = await AnswerAllAsync(bob, await CheckAsync(bob, bobTopic, session));
+
+        Assert.All(bobAnswers, id => Assert.Equal((bob.Id, bobTopic, session), Single(id)));
+        Assert.All(aliceAnswers, id => Assert.Equal((alice.Id, aliceTopic, session), Single(id)));
+        Assert.Equal(2, Records().Count(record => record.UserId == alice.Id));
+
+        (string, Guid, Guid?) Single(Guid id)
+        {
+            var record = Assert.Single(Records(id));
+            return (record.UserId, record.TopicId, record.SessionId);
+        }
+    }
+
     // The questions come some time after the topic: a known topic without enough of them says so, nothing is asked.
     [Theory]
     [InlineData(0)]
@@ -167,22 +208,35 @@ public sealed class CheckQuestionTests(ServiceFactory service) : IClassFixture<S
         return client;
     }
 
-    private async Task<JsonElement> CheckAsync(User user, Guid topicId)
+    private async Task<JsonElement> CheckAsync(User user, Guid topicId, Guid? sessionId = null)
     {
         using var client = ClientFor(user);
-        using var response = await client.PostAsJsonAsync("/check-questions", new { topicId }, TestContext.Current.CancellationToken);
+        using var response = await client.PostAsJsonAsync("/check-questions", new { topicId, sessionId }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+    }
+
+    private async Task<List<Guid>> AnswerAllAsync(User user, JsonElement check)
+    {
+        var ids = check.GetProperty("questions").EnumerateArray().Select(question => question.GetProperty("id").GetGuid()).ToList();
+        using var client = ClientFor(user);
+        foreach (var id in ids)
+        {
+            using var response = await client.PostAsJsonAsync($"/attempts/{id}/answer", new { option = 1, responseTimeMs = 0 }, TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        return ids;
     }
 
     private Attempt Stored(Guid attemptId) =>
         Query(db => db.Attempts.IgnoreQueryFilters().AsNoTracking().Single(attempt => attempt.Id == attemptId));
 
-    private List<AnswerRecorded> Records(Guid answerId) =>
-        Query(db => db.Set<OutboxMessage>().AsNoTracking().Where(message => message.Subject == Subject).Select(message => message.Payload).ToList())
-            .Select(payload => JsonSerializer.Deserialize<AnswerRecorded>(payload, JsonSerializerOptions.Web)!)
-            .Where(record => record.AnswerId == answerId)
-            .ToList();
+    private List<AnswerRecorded> Records(Guid answerId) => [.. Records().Where(record => record.AnswerId == answerId)];
+
+    private List<AnswerRecorded> Records() =>
+        [.. Query(db => db.Set<OutboxMessage>().AsNoTracking().Where(message => message.Subject == Subject).Select(message => message.Payload).ToList())
+            .Select(payload => JsonSerializer.Deserialize<AnswerRecorded>(payload, JsonSerializerOptions.Web)!)];
 
     private T Query<T>(Func<AssessmentDbContext, T> query)
     {

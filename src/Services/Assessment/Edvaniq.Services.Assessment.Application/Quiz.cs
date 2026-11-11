@@ -31,8 +31,12 @@ public sealed class Quiz(IAttempts attempts, IEventOutbox outbox, TimeProvider t
     }
 
     // Asks the check questions in one save. Asking again brings a new set and leaves the open ones unanswered, keeping
-    // one unit together across reloads is the session's job in Planning.
-    public async Task<Checked> CheckAsync(Guid topicId, CancellationToken cancellationToken)
+    // one unit together across reloads is the session's job in Planning. The session goes with every answer, so
+    // LearningEngine counts the check questions once the session has introduced the topic.
+    public Task<Checked> CheckAsync(Guid topicId, CancellationToken cancellationToken) =>
+        CheckAsync(topicId, null, cancellationToken);
+
+    public async Task<Checked> CheckAsync(Guid topicId, Guid? sessionId, CancellationToken cancellationToken)
     {
         if (!await attempts.KnowsTopicAsync(topicId, cancellationToken))
         {
@@ -45,7 +49,7 @@ public sealed class Quiz(IAttempts attempts, IEventOutbox outbox, TimeProvider t
         }
 
         var now = time.GetUtcNow().UtcDateTime;
-        var asked = picked.Select(question => (Attempt.Ask(question, topicId, now), question)).ToList();
+        var asked = picked.Select(question => (Attempt.Ask(question, topicId, now, sessionId), question)).ToList();
         foreach (var (attempt, _) in asked)
         {
             attempts.Add(attempt);
@@ -97,7 +101,7 @@ public sealed class Quiz(IAttempts attempts, IEventOutbox outbox, TimeProvider t
             attempt.OwnerId,
             attempt.TopicId,
             question.Id,
-            SessionId: null,
+            attempt.SessionId,
             attempt.Id,
             attempt.Correct!.Value,
             question.Difficulty,
