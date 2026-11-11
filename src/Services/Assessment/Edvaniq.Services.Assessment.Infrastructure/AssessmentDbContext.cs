@@ -33,6 +33,8 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
 
     public DbSet<TopicsSnapshot> TopicsSnapshots => Set<TopicsSnapshot>();
 
+    public DbSet<DeletedDocument> DeletedDocuments => Set<DeletedDocument>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         var question = modelBuilder.Entity<Question>();
@@ -75,5 +77,9 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
         var snapshot = modelBuilder.Entity<TopicsSnapshot>();
         snapshot.HasKey(item => new { item.OwnerId, item.LearningGoalId });
         snapshot.Property(item => item.ChangedAt).IsConcurrencyToken();
+
+        var deleted = modelBuilder.Entity<DeletedDocument>();
+        deleted.HasKey(item => new { item.OwnerId, item.DocumentId });
+        deleted.Property(item => item.DocumentId).ValueGeneratedNever();
     }
 }

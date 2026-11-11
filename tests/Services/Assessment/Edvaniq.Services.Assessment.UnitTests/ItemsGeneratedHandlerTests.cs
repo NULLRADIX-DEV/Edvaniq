@@ -22,6 +22,7 @@ public class ItemsGeneratedHandlerTests
     private readonly FakeQuestions questions = new();
     private readonly TopicsChangedHandlerTests.FakeKnownTopics topics = new();
     private readonly FakeLogger logger = new();
+    private readonly FakeDeleted deleted = new();
 
     public ItemsGeneratedHandlerTests() => topics.Add(KnownTopic.Create("alice", TopicId, Guid.Empty, hidden: false));
 
@@ -237,9 +238,32 @@ public class ItemsGeneratedHandlerTests
         };
     }
 
+    // DocumentDeleted came first on its own consumer: the questions of the deleted document don't come back.
+    [Fact]
+    public async Task QuestionsOfADeletedDocument_AreNotTakenOver()
+    {
+        var generated = Event(Item(), Item());
+        deleted.Documents.Add(("alice", generated.DocumentId));
+
+        await HandleAsync(generated);
+
+        Assert.Empty(questions.Added);
+    }
+
     private Task HandleAsync(ItemsGenerated generated) =>
-        new ItemsGeneratedHandler(questions, topics, new FixedClock(), logger)
+        new ItemsGeneratedHandler(questions, topics, deleted, new FixedClock(), logger)
             .HandleAsync(generated, TestContext.Current.CancellationToken);
+
+    private sealed class FakeDeleted : IDeletedDocuments
+    {
+        public HashSet<(string OwnerId, Guid DocumentId)> Documents { get; } = [];
+
+        public Task<bool> IsDeletedAsync(string ownerId, Guid documentId, CancellationToken cancellationToken) =>
+            Task.FromResult(Documents.Contains((ownerId, documentId)));
+
+        public Task<bool> RemoveAsync(string ownerId, Guid documentId, DateTime deletedAt, CancellationToken cancellationToken) =>
+            throw new NotSupportedException("The handler never removes.");
+    }
 
     private static ItemsGenerated Event(params GeneratedItem[] items) => new("alice", Guid.NewGuid(), 3, items, TopicId);
 

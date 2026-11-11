@@ -18,6 +18,10 @@ public interface IDocuments
 
     // Starts a failed analysis again (Document.Retry). The document is null when the user has none with this id.
     Task<(RetryResult Result, Document? Document)> RetryAsync(Guid id, CancellationToken cancellationToken);
+
+    // Deletes the document with its sections and reports DocumentDeleted in the same save. False when the user has none
+    // with this id.
+    Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
 }
 
 public enum RetryResult

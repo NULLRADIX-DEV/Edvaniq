@@ -83,6 +83,26 @@ namespace Edvaniq.Services.Knowledge.Infrastructure.Migrations
                     b.ToTable("outbox_messages", (string)null);
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Knowledge.Domain.DeletedDocument", b =>
+                {
+                    b.Property<string>("OwnerId")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("DeletedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("OwnerId", "DocumentId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("DeletedDocuments");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Knowledge.Domain.Topic", b =>
                 {
                     b.Property<Guid>("Id")

@@ -24,6 +24,7 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<ITopics, Topics>();
         builder.Services.AddScoped<IAnalyzedTopics, AnalyzedTopics>();
         builder.Services.AddScoped<ITopicState, TopicState>();
+        builder.Services.AddScoped<IDeletedDocuments, DeletedDocuments>();
         builder.Services.AddScoped<TopicsChangedEvents>();
         builder.Services.TryAddSingleton(TimeProvider.System);
 
@@ -33,6 +34,7 @@ public static class InfrastructureExtensions
         builder.Services.AddUserDataRemover<KnowledgeDbContext>();
         builder.Services.AddIntegrationEventHandler<UserDeleted, UserDeletedHandler>();
         builder.Services.AddIntegrationEventHandler<DocumentAnalyzed, DocumentAnalyzedHandler>();
+        builder.Services.AddIntegrationEventHandler<DocumentDeleted, DocumentDeletedHandler>();
 
         // Ready only with a reachable database, alive without it.
         builder.Services.AddHealthChecks()
