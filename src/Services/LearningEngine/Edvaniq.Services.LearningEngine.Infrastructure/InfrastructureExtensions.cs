@@ -4,6 +4,7 @@ using Edvaniq.Services.Assessment.Contracts;
 using Edvaniq.Services.Identity.Contracts;
 using Edvaniq.Services.Knowledge.Contracts;
 using Edvaniq.Services.LearningEngine.Application;
+using Edvaniq.Services.Planning.Contracts;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -25,12 +26,14 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<ILearningRecords, LearningRecords>();
         builder.Services.AddScoped<IKnownTopics, KnownTopics>();
         builder.Services.AddScoped<IMasteries, Masteries>();
+        builder.Services.AddScoped<ITopicIntroductions, TopicIntroductions>();
         builder.Services.TryAddSingleton(TimeProvider.System);
 
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<LearningEngineDbContext>(ServiceKey);
         builder.Services.AddIntegrationEventHandler<AnswerRecorded, AnswerRecordedHandler>();
         builder.Services.AddIntegrationEventHandler<TopicsChanged, TopicsChangedHandler>();
+        builder.Services.AddIntegrationEventHandler<SessionCompleted, SessionCompletedHandler>();
 
         // Every IOwnedByUser entity, learning records included.
         builder.Services.AddUserDataRemover<LearningEngineDbContext>();

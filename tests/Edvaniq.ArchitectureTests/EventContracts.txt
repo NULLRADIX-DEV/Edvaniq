@@ -51,3 +51,8 @@ Knowledge.TopicsChanged.HiddenTopicIds: IReadOnlyList<Guid>
 Knowledge.TopicsChanged.LearningGoalId: Guid
 Knowledge.TopicsChanged.TopicIds: IReadOnlyList<Guid>
 Knowledge.TopicsChanged.UserId: string
+Planning.SessionCompleted.Completed: bool
+Planning.SessionCompleted.EndedAt: DateTime
+Planning.SessionCompleted.IntroducedTopicIds: IReadOnlyList<Guid>
+Planning.SessionCompleted.SessionId: Guid
+Planning.SessionCompleted.UserId: string
