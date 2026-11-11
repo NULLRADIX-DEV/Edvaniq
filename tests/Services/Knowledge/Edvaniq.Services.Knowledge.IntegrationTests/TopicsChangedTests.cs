@@ -218,6 +218,30 @@ public sealed class TopicsChangedTests(ServiceFactory service) : IClassFixture<S
         Assert.Equal(2, Events(alice).Count);
     }
 
+    // #909: the event names every subtopic with its parent as stored, both when it is new and when a later analysis
+    // merges into it and only the stored topics carry the parent.
+    [Fact]
+    public async Task Subtopics_ComeWithTheirParent_NewAndStored()
+    {
+        var alice = NewUser();
+        TopicSuggestion[] suggestions = [new("Zelle", null, [Guid.NewGuid()]), new("Kern", 0, [Guid.NewGuid()])];
+        await DeliverAsync(new(alice, Guid.NewGuid(), suggestions));
+
+        await DeliverAsync(new(alice, Guid.NewGuid(), [.. suggestions, new("Membran", 0, [Guid.NewGuid()])]));
+
+        var stored = Query(db => db.Topics.IgnoreQueryFilters()
+            .Where(topic => topic.OwnerId == alice && topic.ParentId != null)
+            .Select(topic => new { topic.Id, topic.ParentId })
+            .ToList())
+            .Select(topic => new TopicParent(topic.Id, topic.ParentId!.Value))
+            .ToList();
+        var events = Events(alice);
+        Assert.Equal(2, stored.Count);
+        Assert.Single(stored.Select(link => link.ParentId).Distinct());
+        Assert.Contains(Assert.Single(events[0].Parents!), stored);
+        Assert.Equal(stored.OrderBy(link => link.TopicId), events[1].Parents!.OrderBy(link => link.TopicId));
+    }
+
     private static string NewUser() => $"alice-{Guid.NewGuid():N}";
 
     private List<(Guid Topic, Guid Section)> Sections(string user, Guid documentId) =>

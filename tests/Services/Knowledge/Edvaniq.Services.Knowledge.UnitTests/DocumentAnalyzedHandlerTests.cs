@@ -157,6 +157,58 @@ public class DocumentAnalyzedHandlerTests
         Assert.Empty(outbox.Added);
     }
 
+    // #909: every subtopic comes with its parent, new or known, so receivers can tell the foundations.
+    [Fact]
+    public async Task NewDocument_AnnouncesEverySubtopicWithItsParent()
+    {
+        var topics = new FakeTopics { Stored = [Topic.Create("alice", Goal, "Alt", Now.UtcDateTime)] };
+        var outbox = new FakeOutbox();
+        var analysis = new DocumentAnalyzed("alice", Guid.NewGuid(), [new("Zelle", null, []), new("Kern", 0, []), new("Membran", 0, [])], Goal);
+
+        await Handler(topics, outbox).HandleAsync(analysis, TestContext.Current.CancellationToken);
+
+        var added = topics.Added[0].Topics;
+        Assert.Equal(
+            [new TopicParent(added[1].Id, added[0].Id), new TopicParent(added[2].Id, added[0].Id)],
+            Assert.IsType<TopicsChanged>(Assert.Single(outbox.Added)).Parents);
+    }
+
+    // A known topic the analysis merges a suggestion into keeps its place under its parent, and a new subtopic of it
+    // names the known parent.
+    [Fact]
+    public async Task MergedTopics_KeepTheirParent()
+    {
+        var parent = Topic.Create("alice", Goal, "Zelle", Now.UtcDateTime);
+        var child = parent.AddSubtopic("Kern", Now.UtcDateTime);
+        var topics = new FakeTopics { Stored = [parent, child] };
+        var outbox = new FakeOutbox();
+        var analysis = new DocumentAnalyzed("alice", Guid.NewGuid(), [new("zelle", null, []), new("Kern", 0, []), new("Membran", 0, [])], Goal);
+
+        await Handler(topics, outbox).HandleAsync(analysis, TestContext.Current.CancellationToken);
+
+        var added = Assert.Single(topics.Added[0].Topics);
+        Assert.Equal(
+            [new TopicParent(child.Id, parent.Id), new TopicParent(added.Id, parent.Id)],
+            Assert.IsType<TopicsChanged>(Assert.Single(outbox.Added)).Parents);
+    }
+
+    // Topics without a goal move with their parents, so the goal they join names them, the old goal names none.
+    [Fact]
+    public async Task MovedTopics_TakeTheirParentAlong()
+    {
+        var parent = Topic.Create("alice", DocumentAnalyzedHandler.NoLearningGoal, "Zelle", Now.UtcDateTime);
+        var child = parent.AddSubtopic("Kern", Now.UtcDateTime);
+        var topics = new FakeTopics { Stored = [parent, child] };
+        var outbox = new FakeOutbox();
+
+        await Handler(topics, outbox).HandleAsync(
+            new("alice", Guid.NewGuid(), [new("Gewebe", null, [])], Goal), TestContext.Current.CancellationToken);
+
+        var changes = outbox.Added.Cast<TopicsChanged>().ToList();
+        Assert.Equal([new TopicParent(child.Id, parent.Id)], changes[0].Parents);
+        Assert.Empty(changes[1].Parents!);
+    }
+
     [Fact]
     public async Task ChangedAt_KeepsWholeMicroseconds()
     {
@@ -197,9 +249,9 @@ public class DocumentAnalyzedHandlerTests
         public Task<IReadOnlyList<DocumentTopic>> OfDocumentAsync(Guid documentId, CancellationToken cancellationToken) =>
             throw new NotSupportedException("The handler never asks for this.");
 
-        public Task<IReadOnlyList<Guid>> TopicIdsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<Guid>>(
-                [.. All.Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId).Select(topic => topic.Id)]);
+        public Task<IReadOnlyList<TopicInState>> TopicsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<TopicInState>>(
+                [.. All.Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId).Select(topic => new TopicInState(topic.Id, topic.ParentId))]);
     }
 
     private sealed class FakeOutbox : IEventOutbox

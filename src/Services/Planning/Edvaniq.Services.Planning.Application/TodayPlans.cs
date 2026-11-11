@@ -33,9 +33,15 @@ public sealed class TodayPlans(
         }
 
         var budget = await budgets.ForUserAsync(owner, cancellationToken);
+        var foundations = await knownTopics.FoundationsAsync(owner, goal, cancellationToken);
 
         var plan = TodayPlanner.Plan(
-            topics, mastery ?? new Dictionary<Guid, TopicStanding>(), budget, time.GetUtcNow().UtcDateTime, ready);
+            topics,
+            mastery ?? new Dictionary<Guid, TopicStanding>(),
+            budget,
+            time.GetUtcNow().UtcDateTime,
+            readyTopics: ready,
+            foundations: foundations);
         return new TodayPlanResult(
             goal,
             plan,

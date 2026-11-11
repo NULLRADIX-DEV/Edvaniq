@@ -14,6 +14,9 @@ public interface IKnownTopics
     // The ids of the owner's topics of this learning goal that aren't hidden, ascending.
     Task<IReadOnlyList<Guid>> ActiveAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken);
 
+    // Those of them that are foundations (#909).
+    Task<IReadOnlySet<Guid>> FoundationsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken);
+
     void Add(TopicsSnapshot snapshot);
 
     void Add(KnownTopic topic);

@@ -115,6 +115,9 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                     b.Property<bool>("Hidden")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("IsFoundation")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<Guid>("LearningGoalId")
                         .HasColumnType("char(36)");
 
