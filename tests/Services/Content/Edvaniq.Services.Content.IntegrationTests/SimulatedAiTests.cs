@@ -46,6 +46,20 @@ public sealed class SimulatedAiTests
             answer);
     }
 
+    // Material whose headings all start at "## " has its topics there, not one topic per section.
+    [Fact]
+    public async Task Topics_WithOnlySecondLevelHeadings_ComeFromThem()
+    {
+        using var host = Build();
+
+        var answer = await AskAsync(host, ContentAi.TopicsTask, TopicAnalysis.User(
+            ["## Steigung\nDie Steigung m.", "## Nullstelle\nWo der Graph die x-Achse schneidet.", "Noch mehr dazu."]));
+
+        Assert.Equal(
+            """{"topics":[{"title":"Steigung","sections":[1],"subtopics":[]},{"title":"Nullstelle","sections":[2,3],"subtopics":[]}]}""",
+            answer);
+    }
+
     [Fact]
     public async Task Topics_WithoutHeadings_ComeFromTheSections()
     {

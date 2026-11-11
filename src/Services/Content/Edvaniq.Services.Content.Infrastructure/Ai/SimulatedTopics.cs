@@ -7,7 +7,7 @@ using Edvaniq.BuildingBlocks.AI;
 namespace Edvaniq.Services.Content.Infrastructure.Ai;
 
 // Topics from the headings of the numbered sections of TopicAnalysis.User: a line with "# " is a topic, one with "## " a
-// subtopic of the topic above. A section belongs to the last heading up to its end, a section before the first heading
+// subtopic of the topic above, or a topic of its own while no "# " came before. A section belongs to the last heading up to its end, a section before the first heading
 // to none. Material without headings gets a topic per section, named after the first three words. Five topics at most.
 internal sealed partial class SimulatedTopics : ISimulatedAnswer
 {
@@ -22,19 +22,22 @@ internal sealed partial class SimulatedTopics : ISimulatedAnswer
             .ToList();
         var topics = new List<Topic>();
         List<int>? current = null;
+        var topLevel = false;
         foreach (var (number, lines) in sections)
         {
             foreach (var line in lines)
             {
-                if (line.StartsWith("## ", StringComparison.Ordinal) && topics.Count > 0)
+                if (line.StartsWith("## ", StringComparison.Ordinal) && topLevel)
                 {
                     var subtopic = new Subtopic(Title(line[3..]), []);
                     topics[^1].Subtopics.Add(subtopic);
                     current = subtopic.Sections;
                 }
-                else if (line.StartsWith("# ", StringComparison.Ordinal))
+                else if (line.StartsWith("# ", StringComparison.Ordinal) || line.StartsWith("## ", StringComparison.Ordinal))
                 {
-                    var topic = new Topic(Title(line[2..]), [], []);
+                    // Material whose headings all start at "## " has its topics there.
+                    topLevel |= line[1] == ' ';
+                    var topic = new Topic(Title(line.TrimStart('#')), [], []);
                     topics.Add(topic);
                     current = topic.Sections;
                 }
@@ -46,7 +49,7 @@ internal sealed partial class SimulatedTopics : ISimulatedAnswer
         if (topics.Count == 0)
         {
             topics.AddRange(sections.Select(section =>
-                new Topic(Title(string.Join(' ', section.Lines[0].Split(' ').Take(3))), [section.Number], [])));
+                new Topic(Title(string.Join(' ', section.Lines[0].TrimStart('#').Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(3))), [section.Number], [])));
         }
 
         return JsonSerializer.Serialize(new { topics = topics.Take(MaxTopics) }, JsonSerializerOptions.Web);

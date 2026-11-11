@@ -46,6 +46,12 @@ Verglichen werden die Namen nach einer Normalisierung: ä, ö, ü und ß werden 
 
 Daraus ergeben sich je Dokument drei Kennzahlen: die Trefferquote (getroffene durch erwartete Themen), die Zahl der erfundenen Themen und die Quote der erfüllten Anker. Ebenenfehler werden gezählt, senken aber nicht die Trefferquote. Welche Werte reichen, legt der Lauf gegen den echten Anbieter fest, gegen den simulierten Anbieter gelten die Werte, die der Test dazu festschreibt.
 
+## Lauf in der CI
+
+`ReferenceSetRunTests` in `Edvaniq.Services.Content.IntegrationTests` schickt jedes analysierbare Dokument durch die Themenanalyse mit dem simulierten Anbieter: Abschnitte, Prompt, Antwort und die Reparatur durch `TopicAnalysis.Read`. Die Regeln 1 bis 4 rechnet `ReferenceScore`, seine eigenen Tests stehen in `ReferenceScoreTests`. Der simulierte Anbieter antwortet immer gleich, deshalb stehen seine Kennzahlen je Dokument genau im Test. Jede Abweichung macht den Lauf rot, auch eine Verbesserung. Die Fehlermeldung zeigt die alten und die neuen Werte, und wer die Änderung so will, trägt die neuen dort ein. Der Simulator liest nur Überschriften, ein Text ohne Überschriften trifft bei ihm deshalb kein Thema. Das ist gewollt, er rät nicht.
+
+Derselbe Test prüft, dass der Injection-Fall dieselben Themen und dieselben Kennzahlen ergibt wie das Dokument ohne seine eingeschleusten Absätze, und Regel 5 für die Themennamen. Für die Fragen prüft das `AnalysisTests.InjectionOfTheReferenceSet_ChangesNoQuestion`, für den Scan-Fall `ReferenceSetTests` (Regel 6).
+
 ## Ein Dokument aufnehmen
 
 Schreib den Text selbst, sachlich richtig und auf Schulniveau, ohne Namen lebender Personen und ohne Abschnitte aus fremden Quellen. Leg ihn als `.txt` hier ab, trag ihn in `reference-set.json` ein und gib jedem Thema ohne Unterthemen mindestens einen Anker. Aliase sind andere Namen, die ein Mensch für dasselbe Thema gelten lassen würde, keine Oberbegriffe anderer Themen. Danach muss `ReferenceSetTests` grün sein:
