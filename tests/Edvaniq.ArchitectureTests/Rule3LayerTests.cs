@@ -16,7 +16,7 @@ public class Rule3LayerTests
     public void ProjectsAsTheTableAllows_AreNotReported()
     {
         using var services = new FakeServices()
-            .Project("Planning", "Edvaniq.Services.Planning.Domain", "Edvaniq.BuildingBlocks.Domain")
+            .Project("Planning", "Edvaniq.Services.Planning.Domain", "Edvaniq.BuildingBlocks.Domain", "Edvaniq.SharedKernel")
             .Project("Planning", "Edvaniq.Services.Planning.Application",
                 "Edvaniq.Services.Planning.Domain", "Edvaniq.Services.Planning.Contracts", "Edvaniq.BuildingBlocks.Application",
                 "Edvaniq.Services.Content.Contracts")
@@ -54,6 +54,17 @@ public class Rule3LayerTests
         var violations = LayerRule.Violations(services.Read());
 
         Assert.Equal(["Edvaniq.Services.Planning.Infrastructure (Infrastructure) references Edvaniq.Services.Content.Contracts"], violations);
+    }
+
+    [Fact]
+    public void SharedKernelOutsideDomain_IsReported()
+    {
+        using var services = new FakeServices()
+            .Project("Planning", "Edvaniq.Services.Planning.Application", "Edvaniq.Services.Planning.Domain", "Edvaniq.SharedKernel");
+
+        var violations = LayerRule.Violations(services.Read());
+
+        Assert.Equal(["Edvaniq.Services.Planning.Application (Application) references Edvaniq.SharedKernel"], violations);
     }
 
     [Fact]

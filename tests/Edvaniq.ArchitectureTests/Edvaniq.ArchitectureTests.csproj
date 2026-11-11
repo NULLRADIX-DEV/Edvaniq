@@ -92,6 +92,7 @@
     <ProjectReference Include="..\..\src\BuildingBlocks\Edvaniq.BuildingBlocks.Infrastructure\Edvaniq.BuildingBlocks.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\Edvaniq.BuildingBlocks.Messaging\Edvaniq.BuildingBlocks.Messaging.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\Edvaniq.BuildingBlocks.Web\Edvaniq.BuildingBlocks.Web.csproj" />
+    <ProjectReference Include="..\..\src\SharedKernel\Edvaniq.SharedKernel\Edvaniq.SharedKernel.csproj" />
   </ItemGroup>
 
 </Project>

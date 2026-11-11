@@ -26,11 +26,6 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         document.Property(item => item.Status).HasConversion<string>().HasMaxLength(16).IsConcurrencyToken();
         document.Property(item => item.FailureReason).HasMaxLength(Document.FailureReasonMaxLength);
 
-        // MySQL stores no time zone, the driver reads the value back as Unspecified. Marked as UTC again, the answer
-        // carries the "Z" and a browser does not take it for local time.
-        document.Property(item => item.CreatedAt)
-            .HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
-
         // A document takes its sections along when it goes. Each place in a document exists once, so splitting the
         // same document again cannot add a section twice.
         var section = modelBuilder.Entity<Section>();

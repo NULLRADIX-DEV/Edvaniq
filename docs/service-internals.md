@@ -93,6 +93,8 @@ Lokal übernimmt das die Ressource `<name>-migrate`, und die API startet erst, w
 
 Für eine neue Migration änderst du das Modell in `<Name>DbContext` und rufst `dotnet ef migrations add <Migration> --project src/Services/<Name>/Edvaniq.Services.<Name>.Infrastructure` auf. Das braucht keine Datenbank. Vergisst du die Migration, schlägt der Test `Migrations_MatchTheModel` fehl.
 
+Zeitpunkte sind `DateTime` in UTC. MySQL speichert keine Zeitzone, deshalb gibt `ServiceDbContext` jeder `DateTime`-Spalte einen Konverter mit: Gelesene Werte gelten als UTC, eine API schreibt sie also mit „Z“ aus, und eine Ortszeit (`DateTimeKind.Local`) lehnt er beim Speichern ab. Eine neue Spalte braucht dafür keine eigene Zeile. `DateTimeOffset` und `TimeOnly` gehören nicht ins Modell, ein Tag ohne Uhrzeit ist ein `DateOnly`. Die aktuelle Zeit kommt immer aus `TimeProvider`, den Lerntag liefert `StudyDay` aus `Edvaniq.SharedKernel`. Beides prüft `TimeRuleTests`.
+
 Halte Migrationen klein. MySQL rollt Änderungen am Schema nicht zurück, eine Migration, die mittendrin abbricht, bleibt also halb angewendet. Dann hilft nur die Sicherung von vor der Migration.
 
 ## Daten je Nutzer

@@ -38,10 +38,6 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
                     options => options.Aggregate(0, (hash, option) => HashCode.Combine(hash, option.GetHashCode(StringComparison.Ordinal))),
                     options => options.ToList()));
 
-        // MySQL keeps no kind, the column only ever holds UTC.
-        question.Property(entry => entry.CreatedAt)
-            .HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
-
         question.HasIndex(entry => new { entry.OwnerId, entry.DocumentId, entry.TopicPosition });
 
         var attempt = modelBuilder.Entity<Attempt>();
@@ -49,10 +45,6 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
 
         // Two answers at once: the later one updates no row and gets the stored answer instead.
         attempt.Property(entry => entry.Answered).IsConcurrencyToken();
-        attempt.Property(entry => entry.AskedAt)
-            .HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
-        attempt.Property(entry => entry.AnsweredAt)
-            .HasConversion(value => value, value => value == null ? null : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc));
         attempt.HasIndex(entry => entry.OwnerId);
     }
 }

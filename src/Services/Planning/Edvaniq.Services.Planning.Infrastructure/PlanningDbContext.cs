@@ -17,10 +17,5 @@ public sealed class PlanningDbContext(DbContextOptions<PlanningDbContext> option
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ExampleItem>().Property(item => item.Text).HasMaxLength(ExampleItem.TextMaxLength);
-
-        // MySQL stores no time zone, the driver reads the value back as Unspecified. Marked as UTC again, the answer
-        // carries the "Z" and a browser does not take it for local time.
-        modelBuilder.Entity<PingRecord>().Property(ping => ping.PingedAt)
-            .HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
     }
 }
