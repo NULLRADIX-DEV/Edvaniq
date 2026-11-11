@@ -36,21 +36,30 @@ public static class TodayPlanner
             .Distinct()
             .Select(id => ToPlan(id, standings))
             .ToList();
-        var blocks = StudyPlanner.Plan(topics, budget, today, examDay: null)
-            .Days.FirstOrDefault(day => day.StudyDay == today)?.Blocks ?? [];
-        return new TodayPlan(today, blocks, blocks.Count == 0 ? TodayPlanEmpty.AllMastered : null);
+        var week = StudyPlanner.Plan(topics, budget, today, examDay: null);
+        var blocks = week.Days.FirstOrDefault(day => day.StudyDay == today)?.Blocks ?? [];
+        return new TodayPlan(today, blocks, blocks.Count == 0 ? TodayPlanEmpty.AllMastered : null) { Shortened = week.Shortened };
     }
 
     // Mastery kept in 0 to 100, so a wrong value from outside can't break the plan. A state Planning doesn't know is
     // one LearningEngine worked out for a topic it knows, so it isn't new.
     private static TopicToPlan ToPlan(Guid topicId, IReadOnlyDictionary<Guid, TopicStanding> standings) =>
         standings.TryGetValue(topicId, out var standing)
-            ? new TopicToPlan(topicId, Size, Math.Clamp(standing.Mastery, 0, 100), IsNew: standing.State == TopicState.New)
+            ? new TopicToPlan(
+                topicId,
+                Size,
+                Math.Clamp(standing.Mastery, 0, 100),
+                IsNew: standing.State == TopicState.New,
+                IsWeakness: standing.State == TopicState.Weakness)
             : new TopicToPlan(topicId, Size, MasteryOfATopicLearningEngineDoesNotKnow, IsNew: true);
 }
 
 // The blocks of today in the order they come up. Empty says why there are none, null while there are blocks.
-public sealed record TodayPlan(DateOnly StudyDay, IReadOnlyList<Block> Blocks, TodayPlanEmpty? Empty);
+// Shortened: the topics that got no learn time in the week because it is too short (#370), by id.
+public sealed record TodayPlan(DateOnly StudyDay, IReadOnlyList<Block> Blocks, TodayPlanEmpty? Empty)
+{
+    public IReadOnlyList<Guid> Shortened { get; init; } = [];
+}
 
 public enum TodayPlanEmpty
 {

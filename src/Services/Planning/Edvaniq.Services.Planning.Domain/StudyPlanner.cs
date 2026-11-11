@@ -20,12 +20,21 @@ namespace Edvaniq.Services.Planning.Domain;
 // - Day by day, each learn block goes to the topic with the largest share of its minutes still open, so topics take
 //   turns. A block is at most BlockMinutes long.
 // - Ties always go by weight, then by topic id.
+// - Short of time (#370): every topic that can get learn time needs at least MinLearnMinutesPerTopic of it in the plan.
+//   If the learn minutes of the plan don't cover that, every weakness keeps its place, then the heaviest other topics
+//   as long as there is room, at least one. The rest is shortened: no learn time in this plan, but an introduced one
+//   still takes its turn for review. The kept topics share the learn time by weight as above, so a weakness never gets
+//   less than without shortening. New topics only count when the plan has learn minutes before the final phase.
+//   The glossary has no "basics" yet and Planning knows no order of topics, so only weaknesses are protected for now.
 //
 // Known limit: on a first day without review a budget that isn't a multiple of 5 ends with a block of 1 to 4 minutes
 // for the heaviest topic. On every other day the review block takes up those minutes.
 public static class StudyPlanner
 {
     public const int BlockMinutes = 15;
+
+    // Less learn time than one full block per topic means the time is too short, see #370.
+    public const int MinLearnMinutesPerTopic = BlockMinutes;
 
     public const int Step = 5;
 
@@ -48,7 +57,7 @@ public static class StudyPlanner
         Validate(topics);
 
         var weighted = topics
-            .Select(topic => new Weighted(topic.TopicId, (long)topic.Size * (100 - topic.Mastery), topic.IsNew))
+            .Select(topic => new Weighted(topic.TopicId, (long)topic.Size * (100 - topic.Mastery), topic.IsNew, topic.IsWeakness))
             .Where(topic => topic.Weight > 0)
             .OrderByDescending(topic => topic.Weight)
             .ThenBy(topic => topic.TopicId)
@@ -79,13 +88,54 @@ public static class StudyPlanner
         learnMinutes[0] -= leftOnDayZero;
 
         var firstFinal = days.Count - finalPhase;
-        var before = Share(learnMinutes.Take(firstFinal).Sum(minutes => (long)minutes), weighted.Select(topic => topic.Weight).ToList());
-        var inFinal = weighted.Select((topic, i) => !topic.IsNew || before[i] > 0 || (i == 0 && leftOnDayZero > 0)).ToList();
+        var beforeMinutes = learnMinutes.Take(firstFinal).Sum(minutes => (long)minutes);
+        var shortened = Shorten(
+            weighted,
+            learnMinutes.Sum(minutes => (long)minutes) + leftOnDayZero,
+            newCanLearn: beforeMinutes > 0 || leftOnDayZero > 0);
+        var learnWeights = weighted.Select((topic, i) => shortened[i] ? 0 : topic.Weight).ToList();
+        var heaviest = learnWeights.FindIndex(weight => weight > 0);
+
+        var before = Share(beforeMinutes, learnWeights);
+        var inFinal = weighted.Select((topic, i) => !topic.IsNew || before[i] > 0 || (i == heaviest && leftOnDayZero > 0)).ToList();
         var final = Share(
             learnMinutes.Skip(firstFinal).Sum(minutes => (long)minutes),
-            weighted.Select((topic, i) => inFinal[i] ? topic.Weight : 0).ToList());
+            learnWeights.Select((weight, i) => inFinal[i] ? weight : 0).ToList());
 
-        return Fill(days, budget, weighted, hasReview, learnMinutes, leftOnDayZero, firstFinal, before, final);
+        var plan = Fill(days, budget, weighted, hasReview, learnMinutes, leftOnDayZero, heaviest, firstFinal, before, final);
+        return plan with
+        {
+            Shortened = [.. weighted.Where((_, i) => shortened[i]).Select(topic => topic.TopicId).Order()],
+        };
+    }
+
+    // Which topics lose their learn time because there isn't one block for each (#370). Weaknesses never, then the
+    // lightest first (topics come sorted, heaviest first). New topics only count when there are learn minutes before the
+    // final phase: otherwise they get nothing anyway, and keeping one would leave the final phase without a topic.
+    private static bool[] Shorten(List<Weighted> topics, long learnMinutes, bool newCanLearn)
+    {
+        var shortened = new bool[topics.Count];
+        var candidates = Enumerable.Range(0, topics.Count).Where(i => newCanLearn || !topics[i].IsNew).ToList();
+        var room = Math.Max(1, learnMinutes / MinLearnMinutesPerTopic);
+        if (candidates.Count <= room)
+        {
+            return shortened;
+        }
+
+        var kept = (long)candidates.Count(i => topics[i].IsWeakness);
+        foreach (var i in candidates.Where(i => !topics[i].IsWeakness))
+        {
+            if (kept < room)
+            {
+                kept++;
+            }
+            else
+            {
+                shortened[i] = true;
+            }
+        }
+
+        return shortened;
     }
 
     // The last rounded 20 % of the study days, at least 2, and never more days than there are. 10 days give 2, 13 give 3.
@@ -162,6 +212,7 @@ public static class StudyPlanner
         List<bool> hasReview,
         List<int> learnMinutes,
         int leftOnDayZero,
+        int heaviest,
         int firstFinal,
         long[] before,
         long[] final)
@@ -205,8 +256,8 @@ public static class StudyPlanner
 
             if (d == 0 && leftOnDayZero > 0)
             {
-                blocks.Add(new Block(topics[0].TopicId, leftOnDayZero));
-                learned.Add(0);
+                blocks.Add(new Block(topics[heaviest].TopicId, leftOnDayZero));
+                learned.Add(heaviest);
             }
 
             // Introduced once its first learn block is done, so it can come up for review from the next day on.
@@ -256,5 +307,5 @@ public static class StudyPlanner
         return best;
     }
 
-    private sealed record Weighted(Guid TopicId, long Weight, bool IsNew);
+    private sealed record Weighted(Guid TopicId, long Weight, bool IsNew, bool IsWeakness);
 }
