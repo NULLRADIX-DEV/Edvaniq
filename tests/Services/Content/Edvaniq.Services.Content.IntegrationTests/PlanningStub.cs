@@ -14,11 +14,15 @@ public sealed class PlanningStub : HttpMessageHandler
     private readonly ConcurrentDictionary<string, Guid> goals = new();
     private readonly ConcurrentDictionary<string, HttpStatusCode> down = new();
     private readonly ConcurrentDictionary<string, bool> hanging = new();
+    private readonly ConcurrentDictionary<string, (string? Level, string? OutputLanguage)> profiles = new();
 
     // Every request that came in, as it arrived.
     public ConcurrentQueue<Received> Requests { get; } = new();
 
     public Guid GoalOf(string userId) => goals.GetOrAdd(userId, _ => Guid.NewGuid());
+
+    // The user's goal has this level and output language. Without it both are null, as on a default goal nobody took over.
+    public void Profile(string userId, string? level, string? outputLanguage) => profiles[userId] = (level, outputLanguage);
 
     // Planning answers the user with this status.
     public void Down(string userId, HttpStatusCode status = HttpStatusCode.ServiceUnavailable) => down[userId] = status;
@@ -51,9 +55,13 @@ public sealed class PlanningStub : HttpMessageHandler
             return new HttpResponseMessage(status);
         }
 
-        return request.Method == HttpMethod.Post && request.RequestUri.AbsolutePath == "/learning-goals/default"
-            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { id = GoalOf(user) }) }
-            : new HttpResponseMessage(HttpStatusCode.NotFound);
+        if (request.Method != HttpMethod.Post || request.RequestUri.AbsolutePath != "/learning-goals/default")
+        {
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        }
+
+        var (level, outputLanguage) = profiles.GetValueOrDefault(user);
+        return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { id = GoalOf(user), level, outputLanguage }) };
     }
 
     // The sub of a bearer token, unchecked: the service checked it before it asked.

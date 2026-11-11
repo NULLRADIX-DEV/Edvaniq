@@ -221,8 +221,16 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.Property<Guid?>("LearningGoalId")
                         .HasColumnType("char(36)");
 
+                    b.Property<string>("Level")
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
                     b.Property<DateTime?>("NextAttemptAt")
                         .HasColumnType("datetime(6)");
+
+                    b.Property<string>("OutputLanguage")
+                        .HasMaxLength(8)
+                        .HasColumnType("varchar(8)");
 
                     b.Property<string>("OwnerId")
                         .IsRequired()

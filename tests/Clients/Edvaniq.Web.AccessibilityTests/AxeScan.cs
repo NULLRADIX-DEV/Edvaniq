@@ -18,10 +18,26 @@ public static class AxeScan
         RunOnly = new RunOnlyOptions { Type = "tag", Values = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"] },
     };
 
+    // Best practice, not WCAG, so the scan above leaves it out: headings go down one level at a time.
+    private static readonly AxeRunOptions HeadingOrder = new()
+    {
+        RunOnly = new RunOnlyOptions { Type = "rule", Values = ["heading-order"] },
+    };
+
     public static async Task<IReadOnlyList<AxeResultItem>> ViolationsAsync(IPage page)
     {
         var result = await page.RunAxe(Options);
         return result.Violations;
+    }
+
+    public static async Task AssertHeadingOrderAsync(IPage page, string where)
+    {
+        var result = await page.RunAxe(HeadingOrder);
+        Assert.NotEmpty(result.Passes);
+        if (result.Violations.Length > 0)
+        {
+            Assert.Fail(Describe(result.Violations, where));
+        }
     }
 
     public static async Task AssertNoViolationsAsync(IPage page, string where)

@@ -12,7 +12,7 @@ public static class TopicStates
 
     // "High error rate lately": at least 2 of the last 3 answers wrong, and only once there are 3. Three because the
     // introduction asks two to three check questions (modes.md), and a short window is what lets a topic with mastery
-    // still above 50 turn weak after a run of wrong answers (A39). One slip alone never counts. #452 may sharpen this.
+    // still above 50 turn weak after a run of wrong answers (A39). One slip alone never counts.
     public const int RecentAnswers = 3;
 
     public const int RecentWrongForWeakness = 2;

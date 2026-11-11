@@ -82,10 +82,56 @@ public sealed class PlainTextPageTests(WebShell shell)
 
         var feedback = page.Page.Locator(".quiz-feedback");
         await Assertions.Expect(feedback).ToContainTextAsync($"Richtige Antwort: {HostileText.Payloads[1]}");
-        await Assertions.Expect(feedback).ToContainTextAsync($"Erklärung: {All}");
+        await Assertions.Expect(feedback.Locator(".quiz-explanation .markdown")).ToHaveTextAsync(All);
         Assert.Equal(HostileText.Payloads, await page.Page.Locator(".quiz-option-text").AllTextContentsAsync());
 
         await AssertNothingRanAsync(page, watch, "h1, .quiz-form, .quiz-feedback");
+    }
+
+    // Markdown that would run script as a link, an image, raw HTML or attributes: question, options and explanation show
+    // it harmless, and the only links left go to the web or to mail.
+    [Fact]
+    public async Task QuizPage_RunsNoMarkdownAttack()
+    {
+        var watch = new Watch();
+        var explanation = string.Join("\n\n", HostileText.MarkdownPayloads);
+        await using var page = await shell.OpenSignedInAsync($"/themen/{Material.TopicId}/ueben", WebShell.DesktopWidth, prepare: async browser =>
+        {
+            watch.On(browser);
+            await Material.AnswerAsync(browser, documents: [Array.Empty<object>()], topics:
+                [new[] { new { id = Material.TopicId, learningGoalId = Guid.Empty, name = "Säuren", documentId = Material.DocumentId, position = 0, subtopics = Array.Empty<object>() } }]);
+            await browser.RouteAsync("**/api/assessment/attempts", route => FulfillAsync(route, new
+            {
+                id = AttemptId,
+                topicId = Material.TopicId,
+                questionId = Guid.NewGuid(),
+                text = explanation,
+                options = HostileText.MarkdownPayloads,
+                difficulty = 1,
+            }, 201));
+            await browser.RouteAsync("**/api/assessment/attempts/*/answer", route => FulfillAsync(route, new
+            {
+                id = AttemptId,
+                topicId = Material.TopicId,
+                questionId = Guid.NewGuid(),
+                option = 0,
+                correct = false,
+                answer = 1,
+                explanation,
+                responseTimeMs = 1000,
+                answeredAt = DateTime.UtcNow,
+            }));
+        }, reloading: watch.Reset);
+
+        await Assertions.Expect(page.Page.Locator("legend")).ToContainTextAsync("Hier klicken");
+        await page.Page.Locator("label[for=option-0]").ClickAsync();
+        await page.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Antwort prüfen" }).ClickAsync();
+
+        var shown = page.Page.Locator(".quiz-explanation .markdown");
+        await Assertions.Expect(shown).ToContainTextAsync("<script>window.__xss = 20</script>");
+        await Assertions.Expect(shown).ToContainTextAsync("Hier klicken");
+        await AssertNothingRanAsync(page, watch, "h1, .quiz-form, .quiz-feedback");
+        Assert.Equal(0, await page.Page.Locator(".quiz-form, .quiz-explanation").Locator("a, img, svg, b, div[onmouseover], [onclick]").CountAsync());
     }
 
     private static async Task AssertNothingRanAsync(ShellPage page, Watch watch, string shown)

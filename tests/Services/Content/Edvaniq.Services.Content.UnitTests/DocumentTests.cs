@@ -77,6 +77,25 @@ public class DocumentTests
         Assert.NotEqual(Guid.Empty, document.Id);
     }
 
+    [Fact]
+    public void Paste_KeepsLevelAndOutputLanguageOfTheGoal()
+    {
+        var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now, "University", "en");
+
+        Assert.Equal(("University", "en"), (document.Level, document.OutputLanguage));
+    }
+
+    // A cut name would read as another value, so one that is too long counts as none.
+    [Fact]
+    public void Paste_DropsALevelOrLanguageThatDoesntFit()
+    {
+        var document = Document.Paste(
+            "alice", Goal, null, "Licht spaltet Wasser.", Now,
+            new string('a', Document.LevelMaxLength + 1), new string('e', Document.OutputLanguageMaxLength + 1));
+
+        Assert.Equal((null, null), (document.Level, document.OutputLanguage));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("   ")]

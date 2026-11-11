@@ -134,6 +134,59 @@ a.button:hover {
     border: 0;
 }
 
+/* Markdown from the user or the AI (SafeMarkdown in Client.UI). */
+.markdown {
+    overflow-wrap: anywhere;
+}
+
+.markdown > :first-child {
+    margin-top: 0;
+}
+
+.markdown > :last-child {
+    margin-bottom: 0;
+}
+
+.markdown blockquote {
+    margin: 0 0 var(--space-4);
+    padding-left: var(--space-3);
+    border-left: 4px solid var(--color-line);
+}
+
+.markdown pre {
+    overflow-x: auto;
+    padding: var(--space-3);
+    background: var(--color-paper);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius);
+}
+
+.markdown-table {
+    overflow-x: auto;
+    margin-bottom: var(--space-4);
+}
+
+.markdown table {
+    border-collapse: collapse;
+}
+
+.markdown th,
+.markdown td {
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--color-line);
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: normal;
+}
+
+.markdown .align-center {
+    text-align: center;
+}
+
+.markdown .align-right {
+    text-align: right;
+}
+
 @media (min-width: 48rem) {
     h1 {
         font-size: 2.25rem;

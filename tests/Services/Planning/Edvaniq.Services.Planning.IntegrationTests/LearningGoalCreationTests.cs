@@ -112,6 +112,27 @@ public sealed class LearningGoalCreationTests(ServiceFactory service) : IClassFi
         Assert.Single(await GetAsync<StoredGoal[]>(alice, "/learning-goals"));
     }
 
+    // Content keeps level and output language for its prompts. A default goal nobody took over says null for both, so
+    // Content picks its own default instead of a silent German one from here.
+    [Fact]
+    public async Task DefaultGoal_GivesLevelAndOutputLanguage_NullUntilTakenOver()
+    {
+        using var alice = ClientFor(NewUser("alice"));
+
+        using (var untouched = await DefaultGoalJsonAsync(alice))
+        {
+            Assert.Equal(JsonValueKind.Null, untouched.RootElement.GetProperty("level").ValueKind);
+            Assert.Equal(JsonValueKind.Null, untouched.RootElement.GetProperty("outputLanguage").ValueKind);
+        }
+
+        await CreateAsync(alice, new NewGoal("FreeLearning", "Physik", null, null, "University", "en", null));
+
+        using var taken = await DefaultGoalJsonAsync(alice);
+        Assert.Equal(
+            ("University", "en"),
+            (taken.RootElement.GetProperty("level").GetString(), taken.RootElement.GetProperty("outputLanguage").GetString()));
+    }
+
     // Of calls at the same time exactly one takes over the default goal, the others get goals of their own.
     [Theory]
     [InlineData(false)]
@@ -187,6 +208,14 @@ public sealed class LearningGoalCreationTests(ServiceFactory service) : IClassFi
         using var response = await client.PostAsync("/learning-goals/default", content: null, cancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<DefaultGoal>(cancellationToken))!.Id;
+    }
+
+    private static async Task<JsonDocument> DefaultGoalJsonAsync(HttpClient client)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var response = await client.PostAsync("/learning-goals/default", content: null, cancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
     }
 
     private static async Task<T> GetAsync<T>(HttpClient client, string path)

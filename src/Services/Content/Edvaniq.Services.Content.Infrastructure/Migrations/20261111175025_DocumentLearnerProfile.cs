@@ -1,0 +1,40 @@
+﻿using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace Edvaniq.Services.Content.Infrastructure.Migrations
+{
+    /// <inheritdoc />
+    public partial class DocumentLearnerProfile : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.AddColumn<string>(
+                name: "Level",
+                table: "Documents",
+                type: "varchar(32)",
+                maxLength: 32,
+                nullable: true);
+
+            migrationBuilder.AddColumn<string>(
+                name: "OutputLanguage",
+                table: "Documents",
+                type: "varchar(8)",
+                maxLength: 8,
+                nullable: true);
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.DropColumn(
+                name: "Level",
+                table: "Documents");
+
+            migrationBuilder.DropColumn(
+                name: "OutputLanguage",
+                table: "Documents");
+        }
+    }
+}

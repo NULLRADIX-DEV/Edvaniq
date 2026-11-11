@@ -16,14 +16,16 @@ public sealed partial class PlanningLearningGoals(HttpClient http, ILogger<Plann
     // The longest the user waits for the goal before the text is turned away.
     public static readonly TimeSpan TotalTimeout = TimeSpan.FromSeconds(8);
 
-    public async Task<Guid> IdAsync(CancellationToken cancellationToken)
+    public async Task<DefaultLearningGoal> GetAsync(CancellationToken cancellationToken)
     {
         try
         {
             using var response = await http.PostAsync(new Uri("learning-goals/default", UriKind.Relative), null, cancellationToken);
             response.EnsureSuccessStatusCode();
             var goal = await response.Content.ReadFromJsonAsync<LearningGoal>(JsonSerializerOptions.Web, cancellationToken);
-            return goal is { Id: var id } && id != Guid.Empty ? id : throw new InvalidDataException("Planning answered without a goal.");
+            return goal is { Id: var id } && id != Guid.Empty
+                ? new DefaultLearningGoal(id, goal.Level, goal.OutputLanguage)
+                : throw new InvalidDataException("Planning answered without a goal.");
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
@@ -36,5 +38,5 @@ public sealed partial class PlanningLearningGoals(HttpClient http, ILogger<Plann
     [LoggerMessage(Level = LogLevel.Warning, Message = "Planning could not be asked for the default learning goal ({Error})")]
     private partial void LogUnavailable(string error);
 
-    private sealed record LearningGoal(Guid Id);
+    private sealed record LearningGoal(Guid Id, string? Level, string? OutputLanguage);
 }

@@ -13,6 +13,10 @@ public sealed class Document : IOwnedByUser
 
     public const int FailureReasonMaxLength = 200;
 
+    public const int LevelMaxLength = 32;
+
+    public const int OutputLanguageMaxLength = 8;
+
     // The reasons the client shows for a failed document.
     public const string NothingToLearn = "Der Text enthält nichts, woraus sich lernen lässt. Füge einen anderen Text ein.";
 
@@ -48,6 +52,12 @@ public sealed class Document : IOwnedByUser
     // Planning's learning goal the text was pasted into, only a reference. Null for a document from before the default
     // goal (#215).
     public Guid? LearningGoalId { get; private set; }
+
+    // Level and output language of the learning goal when the text came in, as Planning names them. Null if the goal had
+    // none or the document is from before #290, the prompts take their default then.
+    public string? Level { get; private set; }
+
+    public string? OutputLanguage { get; private set; }
 
     public string Title { get; private set; }
 
@@ -125,8 +135,14 @@ public sealed class Document : IOwnedByUser
         title?.Trim().Length > TitleMaxLength ? "Der Titel ist zu lang. Erlaubt sind höchstens 80 Zeichen." : null;
 
     // A new document in status Uploaded. Call it only with a text and a title that passed the checks.
-    public static Document Paste(string ownerId, Guid learningGoalId, string? title, string text, DateTime createdAt) =>
-        new(ownerId, learningGoalId, string.IsNullOrWhiteSpace(title) ? FirstLine(text) : title.Trim(), text, createdAt);
+    // Level and output language are the goal's at this moment, the prompts of this document keep to them.
+    public static Document Paste(
+        string ownerId, Guid learningGoalId, string? title, string text, DateTime createdAt, string? level = null, string? outputLanguage = null) =>
+        new(ownerId, learningGoalId, string.IsNullOrWhiteSpace(title) ? FirstLine(text) : title.Trim(), text, createdAt)
+        {
+            Level = Fitting(level, LevelMaxLength),
+            OutputLanguage = Fitting(outputLanguage, OutputLanguageMaxLength),
+        };
 
     // Cuts the text into sections and moves the document on to the analysis. A text with nothing but white space fails
     // instead and has no sections. Only an uploaded document can be split.
@@ -236,4 +252,7 @@ public sealed class Document : IOwnedByUser
         var first = text.Split('\n').Select(line => line.Trim()).First(line => line.Length > 0);
         return first[..Math.Min(first.Length, TitleMaxLength)].TrimEnd();
     }
+
+    // A cut name would be no name at all, so one that doesn't fit counts as none.
+    private static string? Fitting(string? value, int maxLength) => value?.Length <= maxLength ? value : null;
 }

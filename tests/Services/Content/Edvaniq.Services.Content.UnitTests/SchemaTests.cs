@@ -10,8 +10,8 @@ public class SchemaTests
 {
     public static TheoryData<string, string> Tasks => new()
     {
-        { TopicAnalysis.Schema, TopicAnalysis.System },
-        { QuestionGeneration.Schema, QuestionGeneration.System },
+        { TopicAnalysis.Schema, TopicAnalysis.System(LearnerProfile.Default) },
+        { QuestionGeneration.Schema, QuestionGeneration.System(LearnerProfile.Default) },
     };
 
     [Theory]
