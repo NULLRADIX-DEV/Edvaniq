@@ -11,13 +11,13 @@ namespace Edvaniq.Services.Planning.IntegrationTests;
 // the token it came with.
 public sealed class LearningEngineStub
 {
-    private readonly ConcurrentDictionary<string, ConcurrentDictionary<Guid, int>> masteries = new();
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<Guid, (int Mastery, string State)>> masteries = new();
     private readonly ConcurrentDictionary<string, Failure> failures = new();
 
     public ConcurrentQueue<(string? Token, string PathAndQuery)> Requests { get; } = new();
 
-    public void Set(string token, Guid topicId, int mastery) =>
-        masteries.GetOrAdd(token, _ => new())[topicId] = mastery;
+    public void Set(string token, Guid topicId, int mastery, string state = "building") =>
+        masteries.GetOrAdd(token, _ => new())[topicId] = (mastery, state);
 
     // Requests with this token can't connect at all.
     public void Unreachable(string token) => failures[token] = new Failure(null, "");
@@ -57,9 +57,9 @@ public sealed class LearningEngineStub
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
             }
 
-            // Shaped like LearningEngine's answer, state included: Planning reads only the mastery until #367.
+            // Shaped like LearningEngine's answer.
             var topics = learningEngine.masteries.TryGetValue(token, out var known)
-                ? known.Select(topic => new { topicId = topic.Key, mastery = topic.Value, state = "building" }).ToArray()
+                ? known.Select(topic => new { topicId = topic.Key, mastery = topic.Value.Mastery, state = topic.Value.State }).ToArray()
                 : [];
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
