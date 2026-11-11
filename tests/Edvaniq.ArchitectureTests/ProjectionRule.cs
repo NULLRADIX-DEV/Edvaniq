@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Edvaniq.ArchitectureTests;
@@ -24,22 +23,13 @@ internal static class ProjectionRule
 
     public static IEnumerable<string> Check(string service, IEnumerable<Type> types)
     {
-        var concrete = types.Where(type => !type.IsAbstract).ToList();
-        var factories = concrete
-            .Select(type => (Type: type, Interface: type.GetInterfaces().FirstOrDefault(face =>
-                face.IsGenericType && face.GetGenericTypeDefinition() == typeof(IDesignTimeDbContextFactory<>))))
-            .Where(factory => factory.Interface is not null)
+        var (withoutFactory, contexts) = DesignTimeContexts.Find(types);
+        var violations = withoutFactory
+            .Select(name => $"{name} has no IDesignTimeDbContextFactory, so its model stays unchecked")
             .ToList();
-
-        var violations = concrete
-            .Where(type => typeof(DbContext).IsAssignableFrom(type)
-                && factories.All(factory => factory.Interface!.GenericTypeArguments[0] != type))
-            .Select(type => $"{type.Name} has no IDesignTimeDbContextFactory, so its model stays unchecked")
-            .ToList();
-        foreach (var (type, face) in factories)
+        foreach (var create in contexts)
         {
-            var create = face!.GetMethod(nameof(IDesignTimeDbContextFactory<DbContext>.CreateDbContext))!;
-            using var context = (DbContext)create.Invoke(Activator.CreateInstance(type), [Array.Empty<string>()])!;
+            using var context = create();
             violations.AddRange(Check(service, context.GetType().Name, context.Model));
         }
 

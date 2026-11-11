@@ -104,6 +104,9 @@
     <Project Path="src/Services/Tutor/Edvaniq.Services.Tutor.Domain/Edvaniq.Services.Tutor.Domain.csproj" />
     <Project Path="src/Services/Tutor/Edvaniq.Services.Tutor.Infrastructure/Edvaniq.Services.Tutor.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/SharedKernel/">
+    <Project Path="src/SharedKernel/Edvaniq.SharedKernel/Edvaniq.SharedKernel.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Edvaniq.ArchitectureTests/Edvaniq.ArchitectureTests.csproj" />
     <Project Path="tests/Edvaniq.EndToEndTests/Edvaniq.EndToEndTests.csproj" />
@@ -166,5 +169,8 @@
   <Folder Name="/tests/Services/Tutor/">
     <Project Path="tests/Services/Tutor/Edvaniq.Services.Tutor.IntegrationTests/Edvaniq.Services.Tutor.IntegrationTests.csproj" />
     <Project Path="tests/Services/Tutor/Edvaniq.Services.Tutor.UnitTests/Edvaniq.Services.Tutor.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/SharedKernel/">
+    <Project Path="tests/SharedKernel/Edvaniq.SharedKernel.UnitTests/Edvaniq.SharedKernel.UnitTests.csproj" />
   </Folder>
 </Solution>

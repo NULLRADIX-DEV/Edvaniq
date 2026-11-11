@@ -17,4 +17,12 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\SharedKernel\Edvaniq.SharedKernel\Edvaniq.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Edvaniq.SharedKernel.UnitTests" />
+  </ItemGroup>
+
 </Project>

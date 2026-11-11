@@ -39,7 +39,7 @@ templates/
 
 | Projekt | Inhalt | darf referenzieren |
 |---|---|---|
-| `.Domain` | Entities, Aggregates, Value Objects, Domain Events, Geschäftsregeln | BuildingBlocks.Domain |
+| `.Domain` | Entities, Aggregates, Value Objects, Domain Events, Geschäftsregeln | BuildingBlocks.Domain, SharedKernel |
 | `.Application` | Use Cases (Commands/Queries + Handler), Ports (Interfaces), Integration-Event-Handler | eigene Domain + Contracts, BuildingBlocks.Application, fremde `.Contracts` |
 | `.Infrastructure` | EF Core DbContext/Migrationen, Repositories, Messaging, KI-Provider, externe APIs | Application, BuildingBlocks.Infrastructure/Messaging/AI |
 | `.Api` | Minimal-API-Endpoints, DI-Komposition, Startpunkt | Application, Infrastructure, BuildingBlocks.Web, ServiceDefaults |
@@ -75,10 +75,11 @@ Weitere Regeln:
 
 - Clients kennen kein Backend-Projekt. `Client.Core` spricht nur mit dem Gateway, im Browser über den Web-Host. Die API-Clients entstehen per OpenAPI.
 - BuildingBlocks enthalten nur technische Bausteine, keine Fachbegriffe.
+- `Edvaniq.SharedKernel` enthält nur Fachregeln, die die Spezifikation ausdrücklich für alle Services gleich festlegt, heute nur den Lerntag. Er hängt an keinem Projekt und keinem Paket. Nur die Domain eines Service und ServiceDefaults referenzieren ihn.
 - Paketversionen stehen nur in `Directory.Packages.props`.
 - Neue Services entstehen nur aus der Vorlage in `templates/service/`, nie von Hand ([Einen neuen Service anlegen](service-template.md)).
 - Jede Anfrage an einen Service braucht ein gültiges Token. Der Nutzer kommt nur aus dem Token (`sub`), nie aus der Anfrage ([Aufbau eines Service](service-internals.md#token-prüfung)).
-- Zeitpunkte speichert jeder Service in UTC. Den [Lerntag](spec/glossary.md#lerntag) bestimmt jeder Service selbst mit der Tagesgrenze 04:00 Uhr Europe/Berlin, die in UTC im Sommer bei 02:00 und im Winter bei 03:00 liegt. Zwischen Services wird der Lerntag nie übertragen, weder in Ereignissen noch in Abfragen. Dem Client nennt Planning den Lerntag seiner Pläne.
+- Zeitpunkte speichert jeder Service in UTC ([Datenbank und Migrationen](service-internals.md#datenbank-und-migrationen)), die aktuelle Zeit kommt aus `TimeProvider`, nie von der Uhr oder Zeitzone des Rechners. Den [Lerntag](spec/glossary.md#lerntag) bestimmt jeder Service selbst mit `StudyDay.Of` aus `Edvaniq.SharedKernel`, mit der Tagesgrenze 04:00 Uhr Europe/Berlin, die in UTC im Sommer bei 02:00 und im Winter bei 03:00 liegt. Fehlen die Zeitzonendaten, startet kein Prozess. Zwischen Services wird der Lerntag nie übertragen, weder in Ereignissen noch in Abfragen. Dem Client nennt Planning den Lerntag seiner Pläne. Geprüft von `TimeRuleTests` und `StudyDayTests`.
 - Ereignisse ändern sich nur additiv, und es gibt keine Sagas ([Ereigniskatalog](spec/events.md#regeln-für-ereignisse)).
 
 Wer auf wessen Integration Events hört, nach Regel 6 ohne Kreis. Planning holt die Mastery per Abfrage bei LearningEngine, weil LearningEngine schon auf Planning hört. Assessment fragt Knowledge per HTTP, aus welcher Analyse ein Thema stammt, um dessen Fragen zu finden. Die Abfrage trägt das Token des Nutzers, so antwortet Knowledge nur zu dessen eigenen Themen. Welche Ereignisse auf diesen Wegen laufen, steht im [Ereigniskatalog](spec/events.md).

@@ -20,11 +20,6 @@ public sealed class KnowledgeDbContext(DbContextOptions<KnowledgeDbContext> opti
         var topic = modelBuilder.Entity<Topic>();
         topic.Property(item => item.Name).HasMaxLength(Topic.NameMaxLength);
 
-        // MySQL stores no time zone, the driver reads the value back as Unspecified. Marked as UTC again, the answer
-        // carries the "Z" and a browser does not take it for local time.
-        topic.Property(item => item.CreatedAt)
-            .HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
-
         // A subtopic goes with its topic.
         topic.HasOne<Topic>().WithMany().HasForeignKey(item => item.ParentId).OnDelete(DeleteBehavior.Cascade);
         topic.HasIndex(item => new { item.OwnerId, item.LearningGoalId });

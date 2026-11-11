@@ -8,7 +8,7 @@ internal static class LayerRule
     // The column "darf referenzieren" of the table. {own} stands for Edvaniq.Services.<Service> of the same service.
     private static readonly Dictionary<string, Layer> Layers = new()
     {
-        ["Domain"] = new(["Edvaniq.BuildingBlocks.Domain"]),
+        ["Domain"] = new(["Edvaniq.BuildingBlocks.Domain", "Edvaniq.SharedKernel"]),
         ["Application"] = new(
             ["{own}.Domain", "{own}.Contracts", "Edvaniq.BuildingBlocks.Application"], ForeignContracts: true),
         ["Infrastructure"] = new(

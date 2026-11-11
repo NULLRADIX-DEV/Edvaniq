@@ -19,9 +19,5 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
         account.Property(item => item.Name).HasMaxLength(Account.NameMaxLength);
         account.Property(item => item.PasswordHash).HasMaxLength(Account.PasswordHashMaxLength);
         account.HasIndex(item => item.Name).IsUnique();
-
-        // MySQL stores no time zone, the driver reads the value back as Unspecified.
-        account.Property(item => item.CreatedAt)
-            .HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
     }
 }

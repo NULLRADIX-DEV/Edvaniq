@@ -35,6 +35,8 @@ public static class Extensions
 
         builder.Services.AddServiceDiscovery();
 
+        builder.Services.AddHostedService<StudyDayCheck>();
+
         builder.Services.AddHostedService<MemoryLimitLogger>();
 
         builder.Services.ConfigureHttpClientDefaults(http =>
