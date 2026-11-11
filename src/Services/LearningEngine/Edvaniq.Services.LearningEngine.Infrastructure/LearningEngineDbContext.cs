@@ -17,6 +17,8 @@ public sealed class LearningEngineDbContext(DbContextOptions<LearningEngineDbCon
 
     public DbSet<TopicsSnapshot> TopicsSnapshots => Set<TopicsSnapshot>();
 
+    public DbSet<TopicIntroduction> TopicIntroductions => Set<TopicIntroduction>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         var record = modelBuilder.Entity<LearningRecord>();
@@ -33,5 +35,9 @@ public sealed class LearningEngineDbContext(DbContextOptions<LearningEngineDbCon
         var snapshot = modelBuilder.Entity<TopicsSnapshot>();
         snapshot.HasKey(item => new { item.OwnerId, item.LearningGoalId });
         snapshot.Property(item => item.ChangedAt).IsConcurrencyToken();
+
+        // One per user and topic (SessionCompleted).
+        var introduction = modelBuilder.Entity<TopicIntroduction>();
+        introduction.HasKey(item => new { item.OwnerId, item.TopicId });
     }
 }

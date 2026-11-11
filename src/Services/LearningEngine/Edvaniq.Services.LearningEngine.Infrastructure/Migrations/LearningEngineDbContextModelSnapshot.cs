@@ -156,6 +156,29 @@ namespace Edvaniq.Services.LearningEngine.Infrastructure.Migrations
                     b.ToTable("LearningRecords");
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.LearningEngine.Domain.TopicIntroduction", b =>
+                {
+                    b.Property<string>("OwnerId")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("IntroducedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("OwnerId", "TopicId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("TopicIntroductions");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.LearningEngine.Domain.TopicsSnapshot", b =>
                 {
                     b.Property<string>("OwnerId")

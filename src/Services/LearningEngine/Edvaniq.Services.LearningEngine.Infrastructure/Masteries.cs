@@ -18,10 +18,12 @@ internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) :
         var records = await db.LearningRecords.AsNoTracking()
             .Where(record => record.TopicId == topicId)
             .ToListAsync(cancellationToken);
-        return Mastery.Percent(Mastery.Of(records, time.GetUtcNow().UtcDateTime));
+        var introduction = await db.TopicIntroductions.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.TopicId == topicId, cancellationToken);
+        return TopicStates.Assess(records, introduction, time.GetUtcNow().UtcDateTime).Mastery;
     }
 
-    // Two queries however many topics: the topics, then all their records at once (index on owner and topic).
+    // Three queries however many topics: the topics, then all their records and introductions at once.
     public async Task<IReadOnlyList<TopicMastery>> ListAsync(Guid? learningGoalId, CancellationToken cancellationToken)
     {
         var topics = db.KnownTopics.AsNoTracking();
@@ -40,7 +42,14 @@ internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) :
                 .Where(record => topicIds.Contains(record.TopicId))
                 .ToListAsync(cancellationToken))
             .ToLookup(record => record.TopicId);
+        var introductions = await db.TopicIntroductions.AsNoTracking()
+            .Where(item => topicIds.Contains(item.TopicId))
+            .ToDictionaryAsync(item => item.TopicId, cancellationToken);
         var now = time.GetUtcNow().UtcDateTime;
-        return [.. topicIds.Order().Select(id => new TopicMastery(id, Mastery.Percent(Mastery.Of(records[id], now))))];
+        return
+        [
+            .. topicIds.Order().Select(id => new TopicMastery(
+                id, TopicStates.Assess(records[id], introductions.GetValueOrDefault(id), now).Mastery)),
+        ];
     }
 }

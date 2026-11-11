@@ -77,12 +77,13 @@ public sealed class TopicStateTests
         Assert.False(TopicStates.HasHighRecentErrorRate(answers.AsEnumerable().Reverse()));
     }
 
+    // The transition until #395: without an introduction the first learning record introduces the topic.
     [Fact]
-    public void WithoutRecords_IsNew_AndTheFirstRecordIntroducesIt()
+    public void WithoutIntroduction_IsNew_UntilTheFirstRecordIntroducesIt()
     {
-        Assert.Equal(TopicState.New, TopicStates.Of([], Monday));
-        Assert.Equal(TopicState.Building, TopicStates.Of(Answers(true), Monday));
-        Assert.Equal(TopicState.Weakness, TopicStates.Of(Answers(false), Monday));
+        Assert.Equal(TopicState.New, State([], Monday));
+        Assert.Equal(TopicState.Building, State(Answers(true), Monday));
+        Assert.Equal(TopicState.Weakness, State(Answers(false), Monday));
     }
 
     // From the records the state follows the shown mastery: 3 right medium answers give 78.9 (79), a fourth 84.2.
@@ -93,9 +94,9 @@ public sealed class TopicStateTests
         var four = Answers(true, true, true, true);
 
         Assert.Equal(79, Mastery.Percent(Mastery.Of(three, Monday)));
-        Assert.Equal(TopicState.Building, TopicStates.Of(three, Monday));
+        Assert.Equal(TopicState.Building, State(three, Monday));
         Assert.Equal(84, Mastery.Percent(Mastery.Of(four, Monday)));
-        Assert.Equal(TopicState.Secure, TopicStates.Of(four, Monday));
+        Assert.Equal(TopicState.Secure, State(four, Monday));
     }
 
     // A39: lately only wrong, but the mastery is still above 50.
@@ -110,7 +111,7 @@ public sealed class TopicStateTests
         var now = Monday.AddMinutes(records.Count);
 
         Assert.True(Mastery.Percent(Mastery.Of(records, now)) > 50);
-        Assert.Equal(TopicState.Weakness, TopicStates.Of(records, now));
+        Assert.Equal(TopicState.Weakness, State(records, now));
     }
 
     // AK1: every mastery and every short history gives exactly one state, and New only when not introduced.
@@ -135,6 +136,9 @@ public sealed class TopicStateTests
             }
         }
     }
+
+    private static TopicState State(List<LearningRecord> records, DateTime now) =>
+        TopicStates.Assess(records, null, now).State;
 
     private static List<LearningRecord> Answers(params bool[] correct) =>
         [.. correct.Select((right, minute) => Answer(right, Monday.AddMinutes(minute)))];

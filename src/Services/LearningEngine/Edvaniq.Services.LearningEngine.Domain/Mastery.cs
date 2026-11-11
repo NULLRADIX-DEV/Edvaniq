@@ -28,9 +28,11 @@ public static class Mastery
     // 50 after about two and a half months, so a weekend off changes little but weeks without review show.
     public static readonly TimeSpan HalfLife = TimeSpan.FromDays(90);
 
-    public static double Of(IEnumerable<LearningRecord> records, DateTime now)
+    // Start is where a topic stands before its first answer. A start of the user's own (placement, M5) replaces the
+    // default and leaves every step of the rule as it is.
+    public static double Of(IEnumerable<LearningRecord> records, DateTime now, double start = Start)
     {
-        var value = Start;
+        var value = Math.Clamp(start, 0, 100);
         DateTime? last = null;
         foreach (var record in records.OrderBy(record => record.AnsweredAt).ThenBy(record => record.AnswerId))
         {

@@ -6,6 +6,7 @@
     <ProjectReference Include="..\..\Identity\Edvaniq.Services.Identity.Contracts\Edvaniq.Services.Identity.Contracts.csproj" />
     <ProjectReference Include="..\..\Assessment\Edvaniq.Services.Assessment.Contracts\Edvaniq.Services.Assessment.Contracts.csproj" />
     <ProjectReference Include="..\..\Knowledge\Edvaniq.Services.Knowledge.Contracts\Edvaniq.Services.Knowledge.Contracts.csproj" />
+    <ProjectReference Include="..\..\Planning\Edvaniq.Services.Planning.Contracts\Edvaniq.Services.Planning.Contracts.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Edvaniq.BuildingBlocks.Application\Edvaniq.BuildingBlocks.Application.csproj" />
   </ItemGroup>
 

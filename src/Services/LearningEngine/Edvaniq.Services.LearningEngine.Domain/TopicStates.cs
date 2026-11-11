@@ -17,10 +17,25 @@ public static class TopicStates
 
     public const int RecentWrongForWeakness = 2;
 
-    // Until #363 a topic counts as introduced once it has a learning record. Mastery is worked out once, by the same
-    // rule the query shows, so value and state can't disagree.
-    public static TopicState Of(IReadOnlyCollection<LearningRecord> records, DateTime now) =>
-        Of(records.Count > 0, Mastery.Percent(Mastery.Of(records, now)), records);
+    // Mastery and state of one topic from all its learning records. Both come from the same counted records and the
+    // same whole percent, so the value shown and the state can't disagree. Before the introduction no answer counts:
+    // the topic is new and stands at its start value.
+    public static TopicStanding Assess(
+        IEnumerable<LearningRecord> records, TopicIntroduction? introduction, DateTime now, double start = Mastery.Start)
+    {
+        var all = records.ToList();
+        var (introduced, counted) = introduction is null
+            ? IntroducedByFirstRecord(all)
+            : (true, all.Where(introduction.Counts).ToList());
+        var mastery = Mastery.Percent(Mastery.Of(counted, now, start));
+        return new TopicStanding(mastery, Of(introduced, mastery, counted));
+    }
+
+    // Transition until Planning sends SessionCompleted (#395): until then no topic gets an introduction, so one without
+    // counts as introduced from its first learning record on, with all its records. Practising keeps moving the mastery.
+    // Once a topic has an introduction, only that decides.
+    public static (bool Introduced, List<LearningRecord> Counted) IntroducedByFirstRecord(List<LearningRecord> records) =>
+        (records.Count > 0, records);
 
     public static TopicState Of(bool introduced, int mastery, IEnumerable<LearningRecord> records)
     {
