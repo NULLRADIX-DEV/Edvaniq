@@ -2,13 +2,18 @@
 
 public partial class App : Application
 {
-	public App()
+	private readonly WindowReturnSignal returnSignal;
+
+	public App(WindowReturnSignal returnSignal)
 	{
+		this.returnSignal = returnSignal;
 		InitializeComponent();
 	}
 
 	protected override Window CreateWindow(IActivationState? activationState)
 	{
-		return new Window(new MainPage()) { Title = "Edvaniq.App" };
+		var window = new Window(new MainPage()) { Title = "Edvaniq.App" };
+		returnSignal.Watch(window);
+		return window;
 	}
 }

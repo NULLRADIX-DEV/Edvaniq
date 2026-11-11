@@ -45,6 +45,7 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 app.UseSecurityHeaders();
+app.UseNoStore();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

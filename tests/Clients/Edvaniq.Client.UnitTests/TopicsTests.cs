@@ -142,7 +142,7 @@ public sealed class TopicsTests : BunitContext
             .Topics(NewTopic);
         var page = RenderPage(material);
 
-        page.Find("#paste-title").Change("  Skript Bio  ");
+        page.Find("#paste-title").Input("  Skript Bio  ");
         page.Find("#paste-text").Change("Die Photosynthese …");
         page.Find("form").Submit();
 
@@ -203,7 +203,7 @@ public sealed class TopicsTests : BunitContext
         var material = new FakeLearningMaterial();
         var page = RenderPage(material);
 
-        page.Find("#paste-title").Change(new string('t', 81));
+        page.Find("#paste-title").Input(new string('t', 81));
         page.Find("#paste-text").Change("Text");
         page.Find("form").Submit();
 
@@ -340,7 +340,9 @@ public sealed class TopicsTests : BunitContext
 
         Assert.Contains("Du bist nicht mehr angemeldet.", Status(page));
         Assert.Equal("login?returnUrl=%2Fthemen", page.Find("[role=status] a").GetAttribute("href"));
-        Assert.Empty(page.FindAll("form"));
+        // The form stays, so a text typed but not sent is still there (#218).
+        Assert.Single(page.FindAll("form"));
+        Assert.Empty(page.FindAll(".topic-list"));
     }
 
     // Leaving the page ends the asking.

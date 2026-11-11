@@ -3,6 +3,13 @@
 @inject ILearningMaterial Material
 @inject IServiceProvider Services
 
+@* The server is the only source: back on the page, it asks anew, the text may have changed on another device. *@
+<RefreshOnReturn OnReturn="RefreshOnReturnAsync" />
+
+@* Reloading or closing the page would throw away a text not sent yet, so the browser asks first. *@
+<NavigationLock ConfirmExternalNavigation="Unsent" />
+<TypingWatch ElementId="paste-text" OnFilledChanged="filled => typing = filled" />
+
 @* The state of the newest text lives in one live region, so a screen reader announces each step. Buttons stay outside,
    they keep the focus. Titles, topics and messages are text from the user or the analysis, Razor writes them as text. *@
 <div class="material-status" role="status">
@@ -108,13 +115,17 @@
             </ul>
         </section>
     }
+}
 
+@* Stays while signed out, so a text typed but not sent doesn't vanish with the login. *@
+@if (State is not ViewState.Loading)
+{
     <section class="material-section" aria-labelledby="paste-heading">
         <h2 id="paste-heading">@(latest is null ? "Ersten Text einfügen" : "Weiteren Text einfügen")</h2>
         <form class="paste-form" @onsubmit="SubmitAsync" novalidate>
             <div class="paste-field">
                 <label for="paste-title">Titel <span class="paste-optional">(freiwillig)</span></label>
-                <input id="paste-title" name="title" type="text" autocomplete="off" @bind="title" />
+                <input id="paste-title" name="title" type="text" autocomplete="off" @bind="title" @bind:event="oninput" />
             </div>
             <div class="paste-field">
                 <label for="paste-text">Text</label>
@@ -147,6 +158,8 @@
 
     private readonly CancellationTokenSource life = new();
     private CancellationTokenSource? follow;
+    private Task following = Task.CompletedTask;
+    private bool refreshing;
     private MaterialPolling polling = MaterialPolling.Default;
 
     private bool loading = true;
@@ -201,6 +214,12 @@
     // Content is ready only once Knowledge has the topics, but the two answers of one round may still disagree.
     private bool TopicsMissing =>
         latest is { Status: DocumentStatus.Ready } document && !topics.Any(topic => topic.CameFrom(document.Id));
+
+    // The text binds on change, a binding on input would send a long text across with every key. Until the change comes,
+    // TypingWatch tells that something is typed.
+    private bool typing;
+
+    private bool Unsent => typing || !string.IsNullOrWhiteSpace(text) || !string.IsNullOrWhiteSpace(title);
 
     private string? KeptText => kept is { } paste && paste.DocumentId == latest?.Id ? paste.Text : null;
 
@@ -290,7 +309,36 @@
         }
 
         follow = CancellationTokenSource.CreateLinkedTokenSource(life.Token);
-        _ = FollowAsync(follow.Token);
+        following = FollowAsync(follow.Token);
+    }
+
+    // Back on the page, it asks for the server's state like on opening, but quietly: no loading hint, the live region
+    // only speaks when something changed, the focus stays where it is, and the form keeps what the user typed. While the
+    // page follows an analysis anyway, or loads or sends right now, there is nothing to add.
+    private async Task RefreshOnReturnAsync()
+    {
+        if (loading || refreshing || submitting || !following.IsCompleted)
+        {
+            return;
+        }
+
+        refreshing = true;
+        try
+        {
+            if (await RefreshAsync(documents: true, life.Token))
+            {
+                // A new login in another tab counts here too.
+                signedOut = false;
+                StartFollowing();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            refreshing = false;
+        }
     }
 
     private async Task FollowAsync(CancellationToken cancellationToken)
@@ -393,6 +441,7 @@
                 kept = (latest.Id, pastedTitle, pastedText);
                 title = "";
                 text = "";
+                typing = false;
                 loadFailed = false;
                 StartFollowing();
                 break;

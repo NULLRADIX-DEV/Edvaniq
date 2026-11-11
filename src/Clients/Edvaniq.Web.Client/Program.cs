@@ -35,6 +35,8 @@ builder.Services.AddSingleton<IWebSession>(new HttpWebSession(new HttpClient
     Timeout = TimeSpan.FromSeconds(20),
 }));
 
+builder.Services.AddSingleton<IReturnSignal, BrowserReturnSignal>();
+
 builder.Services.AddAuthorizationCore();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<AuthenticationStateProvider, SessionAuthenticationState>();
