@@ -61,6 +61,10 @@
                 <p><strong>Die Analyse von „@latest!.Title“ hat nicht geklappt.</strong></p>
                 <p>@(latest.FailureReason ?? "Versuch es noch einmal.")</p>
             </div>
+            @if (retryFailed)
+            {
+                <ConnectionProblem Title="Der neue Versuch ließ sich gerade nicht starten." TraceId="@retryTrace" />
+            }
             break;
         case ViewState.Ready:
             <p class="material-note">Die Themen aus „@latest!.Title“ sind da.</p>
@@ -81,7 +85,7 @@
         break;
     case ViewState.Failed:
         <button type="button" class="button" @onclick="RetryAnalysisAsync">
-            @(KeptText is null ? "Text erneut einfügen" : "Erneut analysieren")
+            @(retrying ? "Wird gestartet …" : "Erneut analysieren")
         </button>
         break;
 }
@@ -126,7 +130,7 @@
             </div>
             <div class="paste-field">
                 <label for="paste-text">Text</label>
-                <textarea id="paste-text" name="text" rows="8" required @bind="text" @ref="textArea"></textarea>
+                <textarea id="paste-text" name="text" rows="8" required @bind="text"></textarea>
             </div>
 
             @* Always there, so a screen reader announces each hint. *@
@@ -174,11 +178,10 @@
     private bool submitting;
     private IReadOnlyList<string> formMessages = [];
     private string? formTrace;
-    private ElementReference textArea;
 
-    // What this page sent last. Content can't analyze a document again, so a retry sends the same text as a new one.
-    // After a reload of the page the text is gone, then the retry leads to the form.
-    private (Guid DocumentId, string? Title, string Text)? kept;
+    private bool retrying;
+    private bool retryFailed;
+    private string? retryTrace;
 
     private enum ViewState
     {
@@ -217,8 +220,6 @@
     private bool typing;
 
     private bool Unsent => typing || !string.IsNullOrWhiteSpace(text) || !string.IsNullOrWhiteSpace(title);
-
-    private string? KeptText => kept is { } paste && paste.DocumentId == latest?.Id ? paste.Text : null;
 
     protected override Task OnInitializedAsync()
     {
@@ -397,15 +398,49 @@
         await PasteAsync(string.IsNullOrWhiteSpace(title) ? null : title.Trim(), text);
     }
 
+    // Content starts the same document again where it failed, the page follows it like a new one. A retry that doesn't
+    // start, because the analysis runs again already for instance, asks for the newest state; only if the document is
+    // still failed after that, the page says the retry didn't get through.
     private async Task RetryAnalysisAsync()
     {
-        if (kept is { } paste && paste.DocumentId == latest?.Id)
+        if (retrying || latest is not { Status: DocumentStatus.Failed } failed)
         {
-            await PasteAsync(paste.Title, paste.Text);
             return;
         }
 
-        await textArea.FocusAsync();
+        retrying = true;
+        retryFailed = false;
+        try
+        {
+            var outcome = await Material.RetryAsync(failed.Id, life.Token);
+            switch (outcome.Result)
+            {
+                case CallResult.Ok:
+                    latest = outcome.Value!;
+                    StartFollowing();
+                    break;
+                case CallResult.SignedOut:
+                    signedOut = true;
+                    follow?.Cancel();
+                    break;
+                default:
+                    if (await RefreshAsync(documents: true, life.Token))
+                    {
+                        retryFailed = latest?.Id == failed.Id && latest.Status == DocumentStatus.Failed;
+                        retryTrace = outcome.TraceId;
+                        StartFollowing();
+                    }
+
+                    break;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            retrying = false;
+        }
     }
 
     private async Task PasteAsync(string? pastedTitle, string pastedText)
@@ -435,7 +470,7 @@
         {
             case CallResult.Ok:
                 latest = outcome.Value!;
-                kept = (latest.Id, pastedTitle, pastedText);
+                retryFailed = false;
                 title = "";
                 text = "";
                 typing = false;

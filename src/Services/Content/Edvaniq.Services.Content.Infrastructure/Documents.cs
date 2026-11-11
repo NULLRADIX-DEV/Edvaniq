@@ -26,4 +26,33 @@ internal sealed class Documents(ContentDbContext db, ICurrentUser currentUser, T
 
     public Task<Document?> FindAsync(Guid id, CancellationToken cancellationToken) =>
         db.Documents.AsNoTracking().FirstOrDefaultAsync(document => document.Id == id, cancellationToken);
+
+    // The status is a concurrency token: of two retries at once only the first save wins, the second finds the
+    // document no longer failed.
+    public async Task<(RetryResult Result, Document? Document)> RetryAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var document = await db.Documents.FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (document is null)
+        {
+            return (RetryResult.NotFound, null);
+        }
+
+        if (document.Status != DocumentStatus.Failed)
+        {
+            return (RetryResult.NotFailed, document);
+        }
+
+        document.Retry(time.GetUtcNow().UtcDateTime);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            db.ChangeTracker.Clear();
+            return (RetryResult.NotFailed, await FindAsync(id, cancellationToken));
+        }
+
+        return (RetryResult.Started, document);
+    }
 }

@@ -224,6 +224,9 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .HasColumnType("varchar(128)")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
+                    b.Property<DateTime?>("RetriedAt")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<string>("Status")
                         .IsConcurrencyToken()
                         .IsRequired()

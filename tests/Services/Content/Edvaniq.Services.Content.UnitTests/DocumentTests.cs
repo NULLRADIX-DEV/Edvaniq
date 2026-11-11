@@ -159,6 +159,56 @@ public class DocumentTests
         Assert.Equal(Document.FailureReasonMaxLength, document.FailureReason?.Length);
     }
 
+    // No topic went out yet, so the retry starts over from splitting.
+    [Fact]
+    public void Retry_BeforeTheTopicsWentOut_StartsOverFromSplitting()
+    {
+        var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
+        document.Split();
+        document.Fail(Document.AnalysisFailed);
+
+        document.Retry(Now.AddMinutes(5));
+
+        Assert.Equal((DocumentStatus.Uploaded, (string?)null, (DateTime?)Now.AddMinutes(5)), (document.Status, document.FailureReason, document.RetriedAt));
+        Assert.NotEmpty(document.Split());
+    }
+
+    // The topics are out and keep their ids at Knowledge, only the questions follow.
+    [Fact]
+    public void Retry_AfterTheTopicsWentOut_WaitsForTheQuestionsAgain()
+    {
+        var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
+        document.Split();
+        document.ReportTopics(Now.AddMinutes(1));
+        document.Fail(Document.QuestionsFailed);
+
+        document.Retry(Now.AddMinutes(30));
+
+        Assert.Equal((DocumentStatus.Analyzing, true, (DateTime?)Now.AddMinutes(1), (string?)null),
+            (document.Status, document.WaitsForQuestions, document.AnalyzedAt, document.FailureReason));
+        Assert.Equal(Now.AddMinutes(30), document.WaitsForTopicsSince);
+    }
+
+    [Fact]
+    public void WaitsForTopicsSince_WithoutRetry_IsTheAnalysis()
+    {
+        var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
+        document.Split();
+        document.ReportTopics(Now.AddMinutes(1));
+
+        Assert.Equal(Now.AddMinutes(1), document.WaitsForTopicsSince);
+    }
+
+    [Fact]
+    public void Retry_OfADocumentThatIsNotFailed_IsRefused()
+    {
+        var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
+        Assert.Throws<InvalidOperationException>(() => document.Retry(Now));
+
+        document.Split();
+        Assert.Throws<InvalidOperationException>(() => document.Retry(Now));
+    }
+
     [Fact]
     public void PasteWithoutTitle_CutsALongFirstLine()
     {

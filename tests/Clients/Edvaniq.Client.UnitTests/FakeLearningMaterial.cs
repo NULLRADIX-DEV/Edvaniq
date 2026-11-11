@@ -9,12 +9,15 @@ internal sealed class FakeLearningMaterial : ILearningMaterial
     private readonly Queue<CallOutcome<IReadOnlyList<DocumentInfo>>> documents = new();
     private readonly Queue<CallOutcome<IReadOnlyList<TopicInfo>>> topics = new();
     private readonly Queue<CallOutcome<DocumentInfo>> pastes = new();
+    private readonly Queue<CallOutcome<DocumentInfo>> retries = new();
 
     public int DocumentCalls { get; private set; }
 
     public int TopicCalls { get; private set; }
 
     public List<(string? Title, string Text)> Pasted { get; } = [];
+
+    public List<Guid> Retried { get; } = [];
 
     // While set, every paste waits until the test opens it.
     public TaskCompletionSource? PasteGate { get; set; }
@@ -62,6 +65,18 @@ internal sealed class FakeLearningMaterial : ILearningMaterial
         }
 
         return Next(pastes, CallOutcome<DocumentInfo>.Failed());
+    }
+
+    public FakeLearningMaterial Retry(CallOutcome<DocumentInfo> outcome)
+    {
+        retries.Enqueue(outcome);
+        return this;
+    }
+
+    public Task<CallOutcome<DocumentInfo>> RetryAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        Retried.Add(documentId);
+        return Task.FromResult(Next(retries, CallOutcome<DocumentInfo>.Failed()));
     }
 
     private static T Next<T>(Queue<T> queue, T otherwise) =>

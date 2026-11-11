@@ -246,46 +246,63 @@ public sealed class TopicsTests : BunitContext
         Assert.Empty(page.FindAll("form [role=alert] p"));
     }
 
-    // AC2: a failed analysis says why and offers a retry. Content can't analyze again, so the retry sends the same text
-    // as a new document.
+    // AC2: a failed analysis says why and offers a retry. The retry starts the same document again, nothing is sent
+    // anew, and the page follows it until its topics are there. Works after a reload too, the page needs no text.
     [Fact]
-    public void FailedAnalysis_ShowsTheReason_AndRetrySendsTheTextAgain()
+    public void FailedAnalysis_ShowsTheReason_AndRetryStartsTheSameDocumentAgain()
     {
         var failed = Document(DocumentStatus.Failed) with { FailureReason = "Die KI war gerade nicht erreichbar." };
         var material = new FakeLearningMaterial()
-            .Documents()
             .Documents(failed)
-            .Paste(CallOutcome<DocumentInfo>.Ok(Document(DocumentStatus.Uploaded)));
+            .Documents(Document(DocumentStatus.Ready))
+            .Topics()
+            .Topics(NewTopic)
+            .Retry(CallOutcome<DocumentInfo>.Ok(Document(DocumentStatus.Uploaded)));
         var page = RenderPage(material);
-        page.Find("#paste-text").Change("Mein Text");
-        page.Find("form").Submit();
 
-        page.WaitForAssertion(() => Assert.Contains("hat nicht geklappt", Status(page)), Wait);
+        Assert.Contains("hat nicht geklappt", Status(page));
         Assert.Contains("Die KI war gerade nicht erreichbar.", Status(page));
         var retry = page.Find("button.button:not([type=submit])");
         Assert.Equal("Erneut analysieren", retry.TextContent.Trim());
 
         retry.Click();
 
-        Assert.Equal(["Mein Text", "Mein Text"], material.Pasted.Select(paste => paste.Text));
+        Assert.Equal([Newest], material.Retried);
+        Assert.Empty(material.Pasted);
+        page.WaitForAssertion(() => Assert.Contains("sind da", Status(page)), Wait);
     }
 
-    // After a reload the text is gone: the retry leads to the form.
+    // The analysis runs again already, from another tab say: the page shows the newest state instead of an error.
     [Fact]
-    public void FailedAnalysis_AfterAReload_LeadsToTheForm()
+    public void RetryThatIsNotNeeded_FollowsTheNewestState()
     {
-        var material = new FakeLearningMaterial().Documents(Document(DocumentStatus.Failed));
+        var material = new FakeLearningMaterial()
+            .Documents(Document(DocumentStatus.Failed))
+            .Documents(Document(DocumentStatus.Analyzing))
+            .Retry(CallOutcome<DocumentInfo>.Failed(TraceId));
         var page = RenderPage(material);
 
+        page.Find("button.button:not([type=submit])").Click();
+
+        Assert.Contains("wird analysiert", Status(page));
+        Assert.Empty(page.FindAll(".request-id"));
+    }
+
+    // A retry that did not get through leaves the document failed and says so, with the trace.
+    [Fact]
+    public void RetryNotThrough_SaysSo_AndNamesTheTrace()
+    {
+        var material = new FakeLearningMaterial()
+            .Documents(Document(DocumentStatus.Failed))
+            .Retry(CallOutcome<DocumentInfo>.Failed(TraceId));
+        var page = RenderPage(material);
+
+        page.Find("button.button:not([type=submit])").Click();
+
         Assert.Contains("hat nicht geklappt", Status(page));
-        Assert.Contains("Versuch es noch einmal.", Status(page));
-        var retry = page.Find("button.button:not([type=submit])");
-        Assert.Equal("Text erneut einfügen", retry.TextContent.Trim());
-
-        retry.Click();
-
-        Assert.Empty(material.Pasted);
-        Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier.EndsWith("focus", StringComparison.Ordinal));
+        Assert.Contains("Der neue Versuch ließ sich gerade nicht starten.", Status(page));
+        Assert.Equal(TraceId, page.Find("[role=status] .request-id code").TextContent);
+        Assert.Equal("Erneut analysieren", page.Find("button.button:not([type=submit])").TextContent.Trim());
     }
 
     [Fact]

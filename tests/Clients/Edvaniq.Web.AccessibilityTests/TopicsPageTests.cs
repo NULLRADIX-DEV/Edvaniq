@@ -69,7 +69,7 @@ public sealed class TopicsPageTests(WebShell shell)
                 documents: [new[] { Material.Document("Failed", "Die Analyse ist gerade nicht möglich. Versuch es gleich noch einmal.") }],
                 topics: [Array.Empty<object>()]));
         await Assertions.Expect(page.Page.Locator(".material-status")).ToContainTextAsync("hat nicht geklappt");
-        await Assertions.Expect(page.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Text erneut einfügen" })).ToBeVisibleAsync();
+        await Assertions.Expect(page.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Erneut analysieren" })).ToBeVisibleAsync();
 
         await AssertNoSidewaysScrollAsync(page.Page);
         await AxeScan.AssertNoViolationsAsync(page.Page, $"/themen with a failed analysis at {width} px");

@@ -12,6 +12,19 @@ public interface IDocuments
     Task<IReadOnlyList<DocumentSummary>> ListAsync(CancellationToken cancellationToken);
 
     Task<Document?> FindAsync(Guid id, CancellationToken cancellationToken);
+
+    // Starts a failed analysis again (Document.Retry). The document is null when the user has none with this id.
+    Task<(RetryResult Result, Document? Document)> RetryAsync(Guid id, CancellationToken cancellationToken);
+}
+
+public enum RetryResult
+{
+    Started,
+
+    NotFound,
+
+    // Not failed, or someone else started it again first.
+    NotFailed,
 }
 
 // A document without its text.

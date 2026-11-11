@@ -44,6 +44,9 @@ public sealed class HttpLearningMaterial(HttpClient http) : ILearningMaterial
             MaterialJson.Default.DocumentInfo,
             cancellationToken);
 
+    public Task<CallOutcome<DocumentInfo>> RetryAsync(Guid documentId, CancellationToken cancellationToken = default) =>
+        CallAsync(token => http.PostAsync($"{DocumentsPath}/{documentId}/retry", content: null, token), MaterialJson.Default.DocumentInfo, cancellationToken);
+
     private static Task<CallOutcome<T>> CallAsync<T>(
         Func<CancellationToken, Task<HttpResponseMessage>> send, JsonTypeInfo<T> answer, CancellationToken cancellationToken) =>
         HostCall.GuardAsync(

@@ -285,6 +285,12 @@ Das Ereignis trägt die Themen als flache Liste. `Parent` ist der Index eines Vo
 
 Der Worker liest Dokumente aller Nutzer und fragt deshalb mit `IgnoreQueryFilters([ServiceDbContext.OwnerFilter])`. Einen angemeldeten Nutzer hat er nicht, eine Abfrage unter dem Filter scheitert deshalb, statt alle Zeilen zu zeigen. Ereignisse sendet er über die Outbox, empfängt aber keine: Die empfängt die API, und ein zweiter Empfänger würde jedes doppelt verarbeiten. Die Outbox leeren API und Worker beide, jeder nimmt andere Zeilen.
 
+### Neuer Versuch
+
+Ein Dokument mit `Failed` startet der Nutzer mit `POST /documents/{id}/retry` erneut. Es bleibt dasselbe Dokument, weil Knowledge für einen neu eingefügten Text neue Themen-IDs vergeben würde. Der Versuch macht dort weiter, wo das Dokument gescheitert ist. Ging noch kein `DocumentAnalyzed` hinaus (`AnalyzedAt` leer), kommt es zurück auf `Uploaded` und wird neu zerlegt. Dabei ersetzen die neuen Abschnitte die alten, und noch zeigt kein Thema auf sie. Sind die Themen schon gemeldet, kommt es zurück auf `Analyzing` und wartet nur auf die Fragen. `DocumentAnalyzed` geht dann nicht noch einmal hinaus, und Themen, die schon einen Fragenpool haben, bekommen keinen zweiten.
+
+Der Grund wird geleert, und das Dokument merkt sich den Zeitpunkt (`RetriedAt`). Ab diesem Zeitpunkt zählen auch die 10 Minuten, die Knowledge für die Themen hat. Nur ein Dokument mit `Failed` lässt sich neu starten, sonst antwortet Content mit 409. Weil der Status ein Concurrency-Token ist, startet von zwei gleichzeitigen Versuchen nur einer, der zweite bekommt ebenfalls 409. Frühere KI-Aufrufe bleiben mit ihren Kosten stehen, ein neuer Versuch legt nur Zeilen für seine eigenen Aufrufe an.
+
 ## Themen bei den Empfängern
 
 Ändern sich die Themen eines Lernziels in Knowledge, geht im selben Speichern genau ein `TopicsChanged` über die Outbox hinaus. Auslöser sind bisher neue Themen aus einer Analyse (`DocumentAnalyzedHandler`) und das Umbenennen eines Themas. Das Ereignis nennt alle Themen des Lernziels, die neuen und die umbenannten gehören dazu. Den Stand berechnet `TopicsChangedEvents` aus der Datenbank und den Themen, die im selben Speichern dazukommen. Jede spätere Änderung, etwa ergänzte Abschnitte aus einer erneuten Analyse (#208), ruft ihn genauso auf.

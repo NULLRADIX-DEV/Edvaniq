@@ -9,6 +9,10 @@ public interface ILearningMaterial
     // A new document in status Uploaded. A text Content refuses comes back as Rejected with Content's messages.
     Task<CallOutcome<DocumentInfo>> PasteAsync(string? title, string text, CancellationToken cancellationToken = default);
 
+    // Starts the analysis of a failed document again, the same document goes on where it failed. One that isn't failed
+    // (any more) comes back as Failed, the newest state tells what happened.
+    Task<CallOutcome<DocumentInfo>> RetryAsync(Guid documentId, CancellationToken cancellationToken = default);
+
     // All of the user's topics on both levels, oldest first.
     Task<CallOutcome<IReadOnlyList<TopicInfo>>> ListTopicsAsync(CancellationToken cancellationToken = default);
 }

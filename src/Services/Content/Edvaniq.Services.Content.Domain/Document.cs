@@ -18,11 +18,11 @@ public sealed class Document : IOwnedByUser
 
     public const string SplitFailed = "Der Text ließ sich nicht in Abschnitte zerlegen. Füge ihn noch einmal ein.";
 
-    public const string AnalysisFailed = "Die Themen ließen sich gerade nicht erkennen. Füge den Text später noch einmal ein.";
+    public const string AnalysisFailed = "Die Themen ließen sich gerade nicht erkennen. Versuch es später noch einmal.";
 
-    public const string QuestionsFailed = "Zu den Themen ließen sich gerade keine Fragen erstellen. Füge den Text später noch einmal ein.";
+    public const string QuestionsFailed = "Zu den Themen ließen sich gerade keine Fragen erstellen. Versuch es später noch einmal.";
 
-    public const string TopicsMissing = "Die Themen kamen nicht an. Füge den Text später noch einmal ein.";
+    public const string TopicsMissing = "Die Themen kamen nicht an. Versuch es später noch einmal.";
 
     private Document(string ownerId, Guid? learningGoalId, string title, string text, DateTime createdAt)
     {
@@ -57,8 +57,14 @@ public sealed class Document : IOwnedByUser
     // too, null means the topics are still to come.
     public DateTime? AnalyzedAt { get; private set; }
 
+    // When the user last started the failed analysis again, UTC. Null if they never did.
+    public DateTime? RetriedAt { get; private set; }
+
     // The topics are reported, the question pool is what's left before the document is ready.
     public bool WaitsForQuestions => Status == DocumentStatus.Analyzing && AnalyzedAt is not null;
+
+    // Since when the document waits for Knowledge's topics: the analysis, or a retry after it.
+    public DateTime? WaitsForTopicsSince => RetriedAt > AnalyzedAt ? RetriedAt : AnalyzedAt;
 
     // A word counts from this many letters in a row, so page numbers and stray marks from a scan don't.
     public const int WordMinLetters = 3;
@@ -158,6 +164,21 @@ public sealed class Document : IOwnedByUser
     {
         Status = DocumentStatus.Failed;
         FailureReason = reason[..Math.Min(reason.Length, FailureReasonMaxLength)];
+    }
+
+    // Starts a failed analysis again where it failed. Before the topics went out it starts over from splitting: no topic
+    // points at a section yet, and splitting costs nothing. After that the topics stay as Knowledge has them and only the
+    // questions follow, so DocumentAnalyzed never goes out twice. Only a failed document can be retried.
+    public void Retry(DateTime retriedAt)
+    {
+        if (Status != DocumentStatus.Failed)
+        {
+            throw new InvalidOperationException($"Document {Id} is {Status}, only a failed document can be retried.");
+        }
+
+        Status = AnalyzedAt is null ? DocumentStatus.Uploaded : DocumentStatus.Analyzing;
+        FailureReason = null;
+        RetriedAt = retriedAt;
     }
 
     // The first line with content, cut to a title. Trim takes the '\r' of Windows line ends along.
