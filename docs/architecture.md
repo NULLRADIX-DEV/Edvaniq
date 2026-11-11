@@ -207,7 +207,28 @@ Lokal startet der AppHost NATS und gibt Services aus der Vorlage die Adresse als
 
 Ein Service spricht mit der KI über `IChatClient` aus `Microsoft.Extensions.AI`: Nachrichten gehen hin, Text kommt zurück. Welcher Anbieter dahintersteht, legt `Ai:Provider` fest, und `AddAi()` aus `BuildingBlocks.AI` registriert ihn. Fehlt der Wert oder ist er unbekannt, startet der Prozess nicht. So wechselt der Anbieter per Konfiguration, ohne dass sich der Code eines Service ändert.
 
-Bisher gibt es nur `Simulated`, einen Anbieter ohne Netz und ohne Schlüssel. Tests, die lokale Entwicklung und der Durchstich auf dem Server laufen damit. Er antwortet auf denselben Prompt immer gleich, auch in einem anderen Prozess, denn seine Zufallszahlen hängen nur vom Prompt ab. Was er antwortet, bestimmt der Service, der den Prompt schickt: Er registriert für jede Aufgabe ein `ISimulatedAnswer`. Content erkennt seine Aufgaben an der ersten Zeile der Systemnachricht, `edvaniq:topics` für Themen und `edvaniq:questions` für Fragen, und jeder echte Prompt dieser Aufgaben beginnt ebenso.
+Es gibt zwei Anbieter. `Simulated` braucht weder Netz noch Schlüssel, damit laufen Tests und die lokale Entwicklung, und er ist der Rückfall, wenn der echte Anbieter nicht zur Verfügung steht. `OpenAiCompatible` spricht jeden Anbieter mit einer OpenAI-kompatiblen Chat-API an.
+
+### Echter Anbieter
+
+`OpenAiCompatible` braucht vier Werte unter `Ai:OpenAiCompatible`, alle aus der Umgebung des Servers, keiner davon steht im Repo:
+
+| Wert | Bedeutung |
+|---|---|
+| `Endpoint` | Basis-Adresse der API, nur `https` |
+| `Model` | Modell, das jede Anfrage nennt |
+| `ApiKey` | Zugangsschlüssel, ein Secret ([Secrets](secrets.md)) |
+| `ExtraBody` | optional, ein JSON-Objekt, dessen Felder in jede Anfrage kommen, etwa Vorgaben, welche Rechenzentren die Anfrage ausführen dürfen |
+
+Fehlt einer der Pflichtwerte oder ist `ExtraBody` kein JSON-Objekt, startet der Prozess nicht. Die Meldung nennt nur den Namen der Einstellung, nie ihren Wert. `ExtraBody` darf `model`, `messages`, `stream` und `user` nicht setzen: Die ersten drei setzt der Client selbst, und eine Kennung des Nutzers schicken wir nie an den Anbieter. Ein anderes Modell ist also nur ein anderer Wert für `Model`, ein anderer Anbieter mit derselben API ein anderer `Endpoint` mit seinem Schlüssel.
+
+Der Schlüssel steht nur im Header `Authorization` der Anfrage. Kein Fehler trägt Header oder den Text einer Antwort mit sich, denn eine Ablehnung kann den Schlüssel zurückspiegeln und eine Antwort Teile des Prompts. Der Client wiederholt keine Anfrage, weil jede Wiederholung eine weitere bezahlte Anfrage wäre, und er setzt selbst kein Zeitlimit. Beides bestimmt der Aufrufer, wie bisher mit seinem Zeitlimit je Antwort. Die Tests laufen gegen einen Stub der API, die CI ruft nie einen echten Anbieter auf.
+
+Ob der Anbieter antwortet, zeigt nach einem Deploy das Kommando `ai-check` des Content-Workers (`dotnet Edvaniq.Services.Content.Worker.dll ai-check`). Es stellt eine kurze Frage und gibt nur Anbieter, Modell, Dauer und Tokens aus, nie die Antwort oder den Schlüssel. Bei Erfolg endet es mit 0, sonst mit 1 und dem Statuscode. Der Content-Worker ist der einzige Prozess, der die KI aufruft, und deshalb der einzige am Netz `egress` ([Erreichbarkeit](deploy.md#erreichbarkeit)).
+
+### Simulierter Anbieter
+
+Der simulierte Anbieter Er antwortet auf denselben Prompt immer gleich, auch in einem anderen Prozess, denn seine Zufallszahlen hängen nur vom Prompt ab. Was er antwortet, bestimmt der Service, der den Prompt schickt: Er registriert für jede Aufgabe ein `ISimulatedAnswer`. Content erkennt seine Aufgaben an der ersten Zeile der Systemnachricht, `edvaniq:topics` für Themen und `edvaniq:questions` für Fragen, und jeder echte Prompt dieser Aufgaben beginnt ebenso.
 
 Für die Fehlerwege lässt sich der simulierte Anbieter absichtlich scheitern lassen, mit `Ai:Simulated:Fault` oder in Tests über `SimulatedChatClient.Fault`. `Outage` antwortet wie ein Anbieter mit 503, `Timeout` wartet, bis der Aufrufer aufgibt, und `InvalidOutput` liefert eine halbe Antwort, die kein gültiges JSON ist. Einen Schalter im eingefügten Material gibt es bewusst nicht, denn Material ist nur Daten und steuert nie, was die KI tut.
 

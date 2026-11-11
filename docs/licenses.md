@@ -46,10 +46,10 @@ Indirekte NuGet-Pakete, also Abhängigkeiten der gelisteten Pakete, stehen nicht
 | `Microsoft.EntityFrameworkCore` | MIT | EF Core, Version zentral festgelegt |
 | `Microsoft.EntityFrameworkCore.Design` | MIT | Migrationen |
 | `Microsoft.EntityFrameworkCore.Relational` | MIT | EF Core, Version zentral festgelegt |
-| `Microsoft.Extensions.AI.Abstractions` | MIT | KI-Zugang (`IChatClient`) und simulierter Anbieter |
+| `Microsoft.Extensions.AI.Abstractions` | MIT | KI-Zugang (`IChatClient`), simulierter und echter Anbieter |
 | `Microsoft.Extensions.Diagnostics.HealthChecks` | MIT | DB-Prüfung für Health |
 | `Microsoft.Extensions.Hosting` | MIT | Worker |
-| `Microsoft.Extensions.Http.Resilience` | MIT | ServiceDefaults |
+| `Microsoft.Extensions.Http.Resilience` | MIT | ServiceDefaults, KI-Zugang (ohne Wiederholungen) |
 | `Microsoft.Extensions.Logging.Abstractions` | MIT | Logzeilen in der Application-Schicht eines Service |
 | `Microsoft.Extensions.Logging.Debug` | MIT | MAUI-App |
 | `Microsoft.Extensions.ServiceDiscovery` | MIT | ServiceDefaults |

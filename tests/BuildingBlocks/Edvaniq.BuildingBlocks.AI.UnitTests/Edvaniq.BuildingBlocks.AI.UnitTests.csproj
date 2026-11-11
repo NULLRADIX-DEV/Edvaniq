@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\BuildingBlocks\Edvaniq.BuildingBlocks.AI\Edvaniq.BuildingBlocks.AI.csproj" />
+    <ProjectReference Include="..\..\Edvaniq.Testing\Edvaniq.Testing.csproj" />
   </ItemGroup>
 
 </Project>
