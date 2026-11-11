@@ -1,0 +1,20 @@
+@page "/themen"
+@attribute [Authorize]
+
+<PageTitle>Deine Themen – Edvaniq</PageTitle>
+
+<h1>Deine Themen</h1>
+
+<p>Füge einen Text ein, aus dem du lernen willst, etwa ein Skript oder eine Mitschrift. Edvaniq erkennt daraus die Themen.</p>
+
+@* Only the browser talks to Content and Knowledge. While the page is prerendered on the server there is nobody to ask. *@
+@if (RendererInfo.IsInteractive)
+{
+    <MaterialView />
+}
+else
+{
+    <div role="status">
+        <p>Wird geladen …</p>
+    </div>
+}

@@ -11,7 +11,7 @@ public sealed class ShellScanTests(WebShell shell)
 
     public static TheoryData<string, int> Pages { get; } = Combine(["/", "/login", "/datenschutz", "/open-source", NotFound]);
 
-    public static TheoryData<string, int> SignedInPages { get; } = Combine(["/", "/systemstatus"]);
+    public static TheoryData<string, int> SignedInPages { get; } = Combine(["/", "/systemstatus", "/themen"]);
 
     public static TheoryData<string, int> Login { get; } = Combine(["/login"]);
 
@@ -62,12 +62,17 @@ public sealed class ShellScanTests(WebShell shell)
         await AxeScan.AssertNoViolationsAsync(page.Page, $"{path} with a failed login without a backend at {width} px");
     }
 
-    // The status page shows the ping only once it has come back.
+    // The status page shows the ping only once it has come back, the topics page its topics.
     private static async Task WaitForContentAsync(IPage page, string path)
     {
         if (path == "/systemstatus")
         {
             await Assertions.Expect(page.Locator(".ping-result")).ToContainTextAsync("Alles in Ordnung");
+        }
+
+        if (path == "/themen")
+        {
+            await Assertions.Expect(page.Locator(".topic-list")).ToContainTextAsync("Photosynthese");
         }
     }
 

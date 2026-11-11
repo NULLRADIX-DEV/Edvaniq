@@ -35,6 +35,8 @@ public sealed class WebShell : IAsyncLifetime
     {
         gateway = await StubService.StartAsync("gateway-stub");
         gateway.Answer("POST", "/planning/ping", new { id = 42, pingedAt = new DateTimeOffset(2026, 10, 21, 8, 30, 0, TimeSpan.Zero) });
+        gateway.Answer("GET", "/content/documents", new[] { Material.Document("Ready") });
+        gateway.Answer("GET", "/knowledge/topics", Material.Topics);
 
         (healthyHost, Address) = Start(gateway.Address);
         (downHost, AddressWithoutGateway) = Start("http://127.0.0.1:9");
@@ -72,7 +74,8 @@ public sealed class WebShell : IAsyncLifetime
 
     // A page that wants a login, opened by a team member who has signed in. The login goes to the web host from the
     // page's own browser context, so the context keeps the session cookie for the page.
-    public async Task<ShellPage> OpenSignedInAsync(string path, int width)
+    // A prepare step runs before the page loads, to intercept what the page asks for.
+    public async Task<ShellPage> OpenSignedInAsync(string path, int width, Func<IPage, Task>? prepare = null)
     {
         var page = await NewPageAsync(width);
         try
@@ -84,6 +87,11 @@ public sealed class WebShell : IAsyncLifetime
             if (login.Status != (int)HttpStatusCode.NoContent)
             {
                 throw new InvalidOperationException($"The login answered {login.Status}.");
+            }
+
+            if (prepare is not null)
+            {
+                await prepare(page.Page);
             }
 
             await page.LoadAsync(Address + path);
@@ -140,13 +148,15 @@ public sealed class WebShell : IAsyncLifetime
         return new ShellPage(context, await context.NewPageAsync());
     }
 
-    // The host logs every retry against the missing gateway with a stack trace, which only buries the test results.
+    // The host logs every retry against the missing gateway with a stack trace, which only buries the test results. All
+    // signed-in pages log in from the same address within a minute, more than the login limit lets through.
     private static (WebFactory Host, string Address) Start(string gatewayAddress)
     {
         var host = new WebFactory(gatewayAddress, configure: builder =>
         {
             builder.UseSetting("Logging:LogLevel:Default", "None");
             builder.UseSetting("Logging:LogLevel:Microsoft.AspNetCore", "None");
+            builder.UseSetting("Login:PerClientPerMinute", "1000");
         });
         host.UseKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, 0));
         host.StartServer();

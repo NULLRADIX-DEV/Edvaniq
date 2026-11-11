@@ -16,10 +16,12 @@ public sealed class ThirdPartyTests(WebShell shell)
         AssertOnlyTheHost(page);
     }
 
-    [Fact]
-    public async Task SignedInSystemStatus_LoadsNothingFromAnotherHost()
+    [Theory]
+    [InlineData("/systemstatus")]
+    [InlineData("/themen")]
+    public async Task SignedInPage_LoadsNothingFromAnotherHost(string path)
     {
-        await using var page = await shell.OpenSignedInAsync("/systemstatus", WebShell.DesktopWidth);
+        await using var page = await shell.OpenSignedInAsync(path, WebShell.DesktopWidth);
 
         AssertOnlyTheHost(page);
     }
