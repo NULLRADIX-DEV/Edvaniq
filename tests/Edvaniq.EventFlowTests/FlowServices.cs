@@ -8,6 +8,7 @@ using System.Net.Http.Headers;
 
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Content.Application;
+using Edvaniq.Services.Planning.Application;
 using Edvaniq.Testing;
 
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -29,6 +30,8 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
 {
     private readonly List<IAsyncDisposable> hosts = [];
 
+    private WebApplicationFactory<learningengine::Program>? learningEngine;
+
     public WebApplicationFactory<knowledge::Program> Knowledge { get; private set; } = null!;
 
     public WebApplicationFactory<content::Program> Content { get; private set; } = null!;
@@ -42,7 +45,13 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
     public async ValueTask InitializeAsync()
     {
         Knowledge = await StartAsync<knowledge::Program, KnowledgeInfra.KnowledgeDbContext>(KnowledgeInfra.InfrastructureExtensions.DatabaseName);
-        var planningHost = await StartAsync<planning::Program, PlanningInfra.PlanningDbContext>(PlanningInfra.InfrastructureExtensions.DatabaseName);
+        // Planning asks the LearningEngine below for the mastery, with the token of the user whose plan it is. That host
+        // starts later, so the handler is only made on the first call.
+        var planningHost = await StartAsync<planning::Program, PlanningInfra.PlanningDbContext>(
+            PlanningInfra.InfrastructureExtensions.DatabaseName,
+            services => services.AddHttpClient<IMasterySource, PlanningInfra.LearningEngineMastery>()
+                .ConfigurePrimaryHttpMessageHandler(() => learningEngine!.Server.CreateHandler()),
+            new() { ["services:learningengine-api:http:0"] = "http://learningengine-api" });
         var assessmentHost = await StartAsync<assessment::Program, AssessmentInfra.AssessmentDbContext>(AssessmentInfra.InfrastructureExtensions.DatabaseName);
         Assessment = assessmentHost;
 
@@ -61,6 +70,7 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
             new() { ["services:planning-api:http:0"] = "http://planning-api" });
         Planning = planningHost;
         var learningEngineHost = await StartAsync<learningengine::Program, LearningEngineInfra.LearningEngineDbContext>(LearningEngineInfra.InfrastructureExtensions.DatabaseName);
+        learningEngine = learningEngineHost;
 
         Receivers =
         [
