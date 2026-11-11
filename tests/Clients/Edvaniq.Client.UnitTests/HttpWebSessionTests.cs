@@ -61,19 +61,32 @@ public sealed class HttpWebSessionTests
         var session = new HttpWebSession(Client((_, _) => throw new HttpRequestException("Connection refused")));
 
         Assert.Equal(new SignInOutcome(SignInResult.Unavailable), await session.SignInAsync("ben", "x", TestContext.Current.CancellationToken));
-        Assert.False(await session.IsSignedInAsync(TestContext.Current.CancellationToken));
+        Assert.Null(await session.AccountAsync(TestContext.Current.CancellationToken));
         Assert.False(await session.SignOutAsync(TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task Account_IsTheKeyTheHostNames()
+    {
+        var requests = new List<(HttpRequestMessage Request, string Body)>();
+        var answer = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"account":"k3y"}""", Encoding.UTF8, "application/json"),
+        };
+
+        Assert.Equal("k3y", await Session(requests, answer).AccountAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("GET /session/user", Line(Assert.Single(requests).Request));
+    }
+
+    // Signed in without a key counts as signed in, but tells two logins apart no more: the drafts go then.
     [Theory]
-    [InlineData(HttpStatusCode.NoContent, true)]
-    [InlineData(HttpStatusCode.Unauthorized, false)]
-    public async Task IsSignedIn_AsksForTheUser(HttpStatusCode code, bool signedIn)
+    [InlineData(HttpStatusCode.NoContent, "")]
+    [InlineData(HttpStatusCode.Unauthorized, null)]
+    public async Task Account_WithoutAKey(HttpStatusCode code, string? account)
     {
         var requests = new List<(HttpRequestMessage Request, string Body)>();
 
-        Assert.Equal(signedIn, await Session(requests, new HttpResponseMessage(code)).IsSignedInAsync(TestContext.Current.CancellationToken));
-        Assert.Equal("GET /session/user", Line(Assert.Single(requests).Request));
+        Assert.Equal(account, await Session(requests, new HttpResponseMessage(code)).AccountAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]

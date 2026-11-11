@@ -1,0 +1,56 @@
+@using Microsoft.Extensions.DependencyInjection
+@implements IDisposable
+@inject IServiceProvider Services
+@inject NavigationManager Navigation
+
+@* One hint for every page when the login ran out: a call under /api got 401 (SessionWatch). Only for someone who was
+   signed in, and not on the login page itself, which says it on its own. The page stays as it is, a text typed but not
+   sent yet goes along into the drafts when the user follows the link. *@
+<LiveRegion Urgent class="session-ended">
+    <AuthorizeView>
+        <Authorized>
+            @if (watch?.Ended == true && !OnLoginPage)
+            {
+                <Notice Kind="NoticeKind.Warning" Title="@FeedbackTexts.Session.Ended">
+                    <p>@FeedbackTexts.Session.EndedHint</p>
+                    <p><a href="@LoginLink">@FeedbackTexts.Session.SignInAgain</a></p>
+                </Notice>
+            }
+        </Authorized>
+    </AuthorizeView>
+</LiveRegion>
+
+@code {
+    private SessionWatch? watch;
+
+    private string Here => "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('#')[0];
+
+    private bool OnLoginPage => Here == "/login" || Here.StartsWith("/login?", StringComparison.Ordinal);
+
+    private string LoginLink => ReturnUrl.LoginFor(Here);
+
+    protected override void OnInitialized()
+    {
+        watch = Services.GetService<SessionWatch>();
+        if (watch is not null)
+        {
+            watch.Changed += Update;
+        }
+
+        Navigation.LocationChanged += Moved;
+    }
+
+    private void Update() => _ = InvokeAsync(StateHasChanged);
+
+    private void Moved(object? sender, LocationChangedEventArgs args) => Update();
+
+    public void Dispose()
+    {
+        if (watch is not null)
+        {
+            watch.Changed -= Update;
+        }
+
+        Navigation.LocationChanged -= Moved;
+    }
+}

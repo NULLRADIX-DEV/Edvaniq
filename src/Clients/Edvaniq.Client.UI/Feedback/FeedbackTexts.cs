@@ -47,10 +47,6 @@ public static class FeedbackTexts
     {
         public const string Loading = "Wird geladen …";
 
-        public const string SignedOut = "Du bist nicht mehr angemeldet.";
-
-        public const string SignedOutHint = "Melde dich neu an, dann geht es hier weiter.";
-
         public const string NoQuestions = "Zu diesem Thema gibt es noch keine Fragen.";
 
         public const string NoQuestionsHint =
@@ -65,6 +61,26 @@ public static class FeedbackTexts
         public const string NotThroughHint = "Schickst du sie noch einmal, zählt sie trotzdem nur einmal.";
 
         public const string NothingChosen = "Wähl zuerst eine Antwort aus.";
+    }
+
+    // When the login ran out or ended elsewhere. What was not sent yet stays (Shell/Drafts).
+    public static class Session
+    {
+        public const string Ended = "Deine Anmeldung ist abgelaufen.";
+
+        public const string EndedHint = "Melde dich neu an, dann geht es hier weiter. Was du noch nicht gesendet hast, bleibt erhalten.";
+
+        public const string SignInAgain = "Neu anmelden";
+
+        public const string OnLogin = "Nach dem Anmelden geht es dort weiter, wo du warst.";
+
+        public const string TextKept = "Dein Text ist noch nicht angekommen. Er bleibt hier, bis du dich neu angemeldet hast.";
+
+        public const string TextBack = "Dein Text von vorhin ist noch da. Schick ihn ab, wenn er fertig ist.";
+
+        public const string AnswerKept = "Deine Antwort ist noch nicht angekommen. Nach dem Anmelden kannst du sie hier noch einmal prüfen, sie zählt einmal.";
+
+        public const string AnswerBack = "Deine Frage von vorhin ist noch offen. Prüf deine Antwort, sie zählt einmal.";
     }
 
     // Starting a failed analysis again on the topics page.

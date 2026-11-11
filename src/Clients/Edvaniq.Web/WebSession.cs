@@ -1,5 +1,9 @@
+using System.Buffers.Text;
 using System.Globalization;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using System.Threading.RateLimiting;
 
 using Microsoft.AspNetCore.Authentication;
@@ -24,6 +28,7 @@ public static class WebSession
     public const string CookieName = "__Host-edvaniq-session";
     public const string IdClaim = "sid";
     public const string KindClaim = "kind";
+    public const string AccountClaim = "account";
     public const string UserKind = "user";
     public const string TokenName = "access_token";
     public const string LoginPage = "/login";
@@ -96,9 +101,11 @@ public static class WebSession
         session.MapGet("/", () => TypedResults.NoContent())
             .RequireAuthorization(Policy);
 
-        // Whether a user is signed in. A guest session is none.
+        // Whether a user is signed in, and as which account, as an opaque key. A guest session is none.
         session.MapGet("/user", (HttpContext context) =>
-            IsUser(context.User) ? Results.NoContent() : Results.StatusCode(StatusCodes.Status401Unauthorized));
+            IsUser(context.User)
+                ? Results.Ok(new SessionUser(context.User.FindFirstValue(AccountClaim) ?? ""))
+                : Results.StatusCode(StatusCodes.Status401Unauthorized));
 
         // Starting a session twice keeps the first one.
         session.MapPost("/", async (HttpContext context) =>
@@ -137,6 +144,11 @@ public static class WebSession
         var identity = new ClaimsIdentity(
             [new Claim(IdClaim, Guid.NewGuid().ToString("N")), new Claim(KindClaim, UserKind)],
             CookieAuthenticationDefaults.AuthenticationScheme);
+        if (AccountKey(token) is { } account)
+        {
+            identity.AddClaim(new Claim(AccountClaim, account));
+        }
+
         var properties = new AuthenticationProperties
         {
             IsPersistent = false,
@@ -159,6 +171,30 @@ public static class WebSession
         var until = result.Properties?.ExpiresUtc
             ?? context.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow().AddHours(8);
         context.RequestServices.GetRequiredService<EndedSessions>().End(id, until);
+    }
+
+    // Tells the client whose login this is, so it never shows one account's unsent drafts to another. A hash of the
+    // token's sub: the same for every login of an account, and nothing the client could do more with. The token comes
+    // straight from Identity, so its payload needs no check here.
+    internal static string? AccountKey(string token)
+    {
+        var parts = token.Split('.');
+        if (parts.Length != 3)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var payload = JsonDocument.Parse(Base64Url.DecodeFromChars(parts[1]));
+            return payload.RootElement.TryGetProperty("sub", out var sub) && sub.GetString() is { Length: > 0 } subject
+                ? Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes("edvaniq-account:" + subject)))
+                : null;
+        }
+        catch (Exception exception) when (exception is FormatException or JsonException or InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     private static Task Refuse(RedirectContext<CookieAuthenticationOptions> context, int status)
@@ -278,3 +314,6 @@ internal static class LoginLimit
         return services;
     }
 }
+
+// The answer of GET /session/user.
+internal sealed record SessionUser(string Account);

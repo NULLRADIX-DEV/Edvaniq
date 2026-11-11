@@ -13,20 +13,33 @@ public sealed class HttpWebSession(HttpClient http) : IWebSession
     public const string UserPath = "session/user";
     public const string LoginPath = "session/login";
 
-    public async Task<bool> IsSignedInAsync(CancellationToken cancellationToken = default)
+    // A host that says someone is signed in without naming the account still counts, with an empty key.
+    public async Task<string?> AccountAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             using var response = await http.GetAsync(UserPath, cancellationToken);
-            return response.IsSuccessStatusCode;
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            try
+            {
+                return (await response.Content.ReadFromJsonAsync(SessionJson.Default.SessionUser, cancellationToken))?.Account ?? "";
+            }
+            catch (Exception exception) when (exception is JsonException or NotSupportedException)
+            {
+                return "";
+            }
         }
         catch (HttpRequestException)
         {
-            return false;
+            return null;
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return false;
+            return null;
         }
     }
 
@@ -75,6 +88,9 @@ public sealed class HttpWebSession(HttpClient http) : IWebSession
 
 internal sealed record Credentials(string Name, string Password);
 
+internal sealed record SessionUser(string? Account);
+
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
 [JsonSerializable(typeof(Credentials))]
+[JsonSerializable(typeof(SessionUser))]
 internal sealed partial class SessionJson : JsonSerializerContext;

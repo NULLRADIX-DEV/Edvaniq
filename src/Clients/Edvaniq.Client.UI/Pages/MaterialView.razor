@@ -19,11 +19,11 @@
             <p>Wird geladen …</p>
             break;
         case ViewState.SignedOut:
-            @* The login ran out or ended in another tab. Until #197 the way back is simply a new login. *@
-            <div class="material-note material-alert">
-                <p><strong>Du bist nicht mehr angemeldet.</strong> Melde dich neu an, dann geht es hier weiter.</p>
-                <p><a href="@ReturnUrl.LoginFor("/themen")">Neu anmelden</a></p>
-            </div>
+            @* The shell says that the login ran out and leads to it (SessionEndedNotice). *@
+            @if (Unsent)
+            {
+                <p class="material-note">@FeedbackTexts.Session.TextKept</p>
+            }
             break;
         case ViewState.LoadFailed:
             <ConnectionProblem Title="Der Stand ließ sich gerade nicht laden." TraceId="@loadTrace" />
@@ -207,6 +207,13 @@
     protected override Task OnInitializedAsync()
     {
         polling = Services.GetService<MaterialPolling>() ?? MaterialPolling.Default;
+        if (Services.GetService<Drafts>()?.Take<PasteDraft>(nameof(PasteDraft)) is { } draft)
+        {
+            title = draft.Title;
+            text = draft.Text;
+            Show([FeedbackTexts.Session.TextBack]);
+        }
+
         return LoadAsync();
     }
 
@@ -471,8 +478,16 @@
         formTrace = trace;
     }
 
+    private sealed record PasteDraft(string Title, string Text);
+
+    // Leaving for the login keeps what was not sent yet, for the same account only (Drafts).
     public void Dispose()
     {
+        if (signedOut && Unsent)
+        {
+            Services.GetService<Drafts>()?.Keep(nameof(PasteDraft), new PasteDraft(title, text));
+        }
+
         life.Cancel();
         life.Dispose();
         follow?.Dispose();
