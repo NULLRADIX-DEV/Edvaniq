@@ -1,0 +1,53 @@
+# Sortierverfahren
+
+Sortieren gehört zu den häufigsten Aufgaben in der Informatik. Eine Liste von Elementen soll so umgeordnet werden, dass sie nach einem Schlüssel aufsteigend oder absteigend geordnet ist, etwa Zahlen nach ihrer Größe oder Namen nach dem Alphabet. Sortierte Daten lassen sich viel schneller durchsuchen, zum Beispiel mit der binären Suche, und viele andere Algorithmen setzen eine sortierte Eingabe voraus. Es gibt sehr viele Sortierverfahren. Sie unterscheiden sich darin, wie viele Schritte sie brauchen, wie viel zusätzlichen Speicher sie belegen und wie sie mit gleichen Schlüsseln umgehen.
+
+## Grundbegriffe
+
+Den Aufwand eines Sortierverfahrens beschreibt man meist mit der O-Notation. Sie gibt an, wie die Anzahl der Schritte mit der Anzahl n der Elemente wächst, und lässt konstante Faktoren weg. Ein Verfahren mit dem Aufwand O(n²) braucht bei doppelt so vielen Elementen etwa viermal so viele Schritte. Ein Verfahren mit O(n log n) wächst deutlich langsamer: Bei einer Million Elementen sind n² eine Billion, n log n aber nur etwa zwanzig Millionen. Man unterscheidet dabei den besten Fall, den durchschnittlichen Fall und den schlechtesten Fall, weil viele Verfahren auf bereits sortierten oder ungünstig angeordneten Daten sehr unterschiedlich schnell sind.
+
+Ein Sortierverfahren heißt stabil, wenn Elemente mit gleichem Schlüssel nach dem Sortieren in derselben Reihenfolge stehen wie vorher. Das ist wichtig, wenn man nacheinander nach mehreren Kriterien sortiert, etwa eine Klassenliste erst nach Vornamen und dann nach Nachnamen. Ein Verfahren arbeitet in-place, wenn es außer der Liste selbst nur wenig zusätzlichen Speicher braucht, also nicht eine zweite Liste derselben Größe anlegt. Die meisten hier besprochenen Verfahren sind vergleichsbasiert: Sie erfahren über die Elemente nur, ob eines kleiner, gleich oder größer als ein anderes ist.
+
+# Einfache Sortierverfahren
+
+Die einfachen Verfahren sind leicht zu verstehen und zu programmieren. Sie brauchen im schlechtesten Fall aber quadratisch viele Schritte und eignen sich deshalb nur für kleine Listen.
+
+## Bubble Sort
+
+Bubble Sort läuft wiederholt von vorn nach hinten durch die Liste und vergleicht dabei jeweils zwei benachbarte Elemente. Stehen sie in der falschen Reihenfolge, werden sie vertauscht. Nach dem ersten Durchlauf steht das größte Element ganz hinten, es ist wie eine Blase nach oben gestiegen, daher der Name. Nach dem zweiten Durchlauf steht auch das zweitgrößte an seinem Platz, und so weiter. Nach höchstens n − 1 Durchläufen ist die Liste sortiert.
+
+Im schlechtesten und im durchschnittlichen Fall braucht Bubble Sort O(n²) Vergleiche. Merkt man sich, ob in einem Durchlauf überhaupt getauscht wurde, kann man aufhören, sobald ein Durchlauf ohne Tausch bleibt. Auf einer bereits sortierten Liste genügt dann ein einziger Durchlauf, der beste Fall liegt also bei O(n). Bubble Sort ist stabil, weil nur benachbarte Elemente getauscht werden und gleiche Elemente nie die Plätze wechseln, und es arbeitet in-place. In der Praxis ist es trotzdem fast immer langsamer als Insertion Sort.
+
+## Selection Sort
+
+Selection Sort sucht im unsortierten Teil der Liste das kleinste Element und tauscht es an die erste Stelle dieses Teils. Danach ist der sortierte Teil am Anfang um ein Element länger, und die Suche beginnt im Rest von vorn. Das wiederholt sich, bis der unsortierte Teil leer ist.
+
+Für die Suche nach dem Minimum muss jedes Mal der ganze unsortierte Rest angesehen werden. Selection Sort braucht deshalb immer etwa n²/2 Vergleiche, auch wenn die Liste schon sortiert ist, sein Aufwand liegt in jedem Fall bei O(n²). Dafür vertauscht es höchstens n − 1 Mal, was sich lohnen kann, wenn Vertauschen viel teurer ist als Vergleichen. Selection Sort arbeitet in-place. In der üblichen Form auf einem Array ist es nicht stabil, weil der weite Tausch ein Element an gleichen Schlüsseln vorbei nach hinten befördern kann.
+
+## Insertion Sort
+
+Insertion Sort arbeitet so, wie viele Menschen Spielkarten auf der Hand ordnen. Der vordere Teil der Liste ist bereits sortiert, am Anfang besteht er nur aus dem ersten Element. Das nächste Element wird aus dem unsortierten Teil genommen und an der richtigen Stelle in den sortierten Teil eingefügt. Dazu werden alle größeren Elemente des sortierten Teils um eine Stelle nach hinten geschoben.
+
+Im schlechtesten Fall, einer absteigend sortierten Liste, muss jedes neue Element ganz nach vorn wandern, und der Aufwand beträgt O(n²). Ist die Liste schon sortiert, bleibt jedes Element an seinem Platz, und es genügen n − 1 Vergleiche, also O(n). Auch fast sortierte Listen sortiert Insertion Sort sehr schnell. Das Verfahren ist stabil und arbeitet in-place. Wegen seines geringen Verwaltungsaufwands nutzen viele Bibliotheken Insertion Sort für kleine Teillisten innerhalb schnellerer Verfahren.
+
+# Effiziente Sortierverfahren
+
+Effiziente Verfahren erreichen einen Aufwand von O(n log n). Beide hier vorgestellten Verfahren folgen dem Prinzip Teile und Herrsche: Sie zerlegen das Problem in kleinere Teilprobleme derselben Art, lösen diese rekursiv und setzen die Lösungen zusammen.
+
+## Mergesort
+
+Mergesort teilt die Liste in zwei etwa gleich große Hälften, sortiert jede Hälfte rekursiv mit Mergesort und verschmilzt die beiden sortierten Hälften anschließend zu einer sortierten Liste. Eine Liste mit nur einem Element ist bereits sortiert, hier endet die Rekursion. Beim Verschmelzen, englisch merge, vergleicht man jeweils die vordersten Elemente beider Hälften und übernimmt das kleinere in die Ergebnisliste, bis beide Hälften aufgebraucht sind.
+
+Weil die Liste immer halbiert wird, gibt es etwa log2 n Ebenen der Rekursion, und auf jeder Ebene werden insgesamt n Elemente verschmolzen. Daraus ergibt sich ein Aufwand von O(n log n), und zwar im besten, durchschnittlichen und schlechtesten Fall gleichermaßen. Mergesort ist stabil, wenn man beim Verschmelzen bei gleichen Schlüsseln das Element aus der linken Hälfte zuerst nimmt. Auf Arrays braucht es allerdings zusätzlichen Speicher in der Größenordnung von n für die Hilfsliste beim Verschmelzen, es arbeitet also nicht in-place. Für verkettete Listen und für Daten, die nicht in den Arbeitsspeicher passen und auf der Festplatte sortiert werden müssen, ist Mergesort besonders gut geeignet.
+
+## Quicksort
+
+Quicksort wählt ein Element der Liste als Pivotelement. Dann wird die Liste so umgeordnet, dass alle Elemente, die kleiner als das Pivot sind, links davon stehen und alle größeren rechts davon. Dieser Schritt heißt Partitionierung. Danach steht das Pivot bereits an seinem endgültigen Platz, und die linke und die rechte Teilliste werden rekursiv auf dieselbe Weise sortiert. Anders als bei Mergesort steckt die eigentliche Arbeit hier im Aufteilen und nicht im Zusammensetzen.
+
+Teilt das Pivot die Liste jedes Mal ungefähr in der Mitte, braucht Quicksort O(n log n) Schritte, und das ist auch der durchschnittliche Fall. Wählt man aber immer ungünstig, etwa stets das erste Element einer bereits sortierten Liste, entsteht jedes Mal eine leere und eine fast volle Teilliste, und der Aufwand steigt auf O(n²). Deshalb wählt man das Pivot oft zufällig oder als Median aus drei Elementen. Quicksort arbeitet in-place, es braucht nur Speicher für die Rekursion, im Mittel O(log n). Es ist nicht stabil. In der Praxis gehört Quicksort trotz des schlechten schlechtesten Falls zu den schnellsten Verfahren, weil seine innere Schleife sehr einfach ist und gut mit dem Zwischenspeicher des Prozessors zusammenarbeitet.
+
+# Untere Schranke für vergleichsbasiertes Sortieren
+
+Man kann beweisen, dass kein vergleichsbasiertes Sortierverfahren im schlechtesten Fall mit weniger als etwa n log n Vergleichen auskommt. Die Idee: Eine Liste aus n verschiedenen Elementen kann in n! verschiedenen Reihenfolgen vorliegen, und das Verfahren muss sie alle unterscheiden. Jeder Vergleich hat nur zwei mögliche Ausgänge. Stellt man alle möglichen Abläufe als Entscheidungsbaum dar, braucht dieser mindestens n! Blätter und damit eine Höhe von mindestens log2(n!), was in der Größenordnung von n log n liegt.
+
+Mergesort ist damit im schlechtesten Fall optimal. Schneller geht es nur, wenn man mehr über die Schlüssel weiß als das Ergebnis von Vergleichen. Counting Sort etwa zählt bei ganzen Zahlen aus einem kleinen Bereich von 0 bis k, wie oft jeder Wert vorkommt, und erreicht so einen Aufwand von O(n + k). Solche Verfahren funktionieren aber nur für besondere Arten von Schlüsseln.

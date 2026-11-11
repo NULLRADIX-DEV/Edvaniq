@@ -6,6 +6,8 @@ Die Seite ist ein Entwurf. Die Kriterien bis M2 sind konkret, die für spätere 
 
 Der Testfall steht in der Form Gegeben, Wenn, Dann. „Messweise“ nennt die Art des Tests und das Issue, das ihn liefert. „Ab“ nennt den Meilenstein, ab dem das Kriterium gilt, von da an zählt eine Verletzung als Fehler. Es ist immer einer der Meilensteine, die die Nicht-Ziele für den Kernpunkt nennen. Grenzen, Limits und Fristen stehen mit ihrer ID in den [Qualitätsanforderungen](quality.md), etwa Q6, und hier nur als Verweis. Die IDs A1, A2 und so weiter zählen über die ganze Seite und werden nicht neu vergeben.
 
+Wo ein Testfall vom Referenzset spricht, sind die selbst geschriebenen Dokumente in [`tests/ReferenceSet`](../../tests/ReferenceSet/README.md) gemeint. Dort steht auch, was bei den erkannten Themen als Treffer zählt.
+
 ## Kernpunkte der MVP-Liste
 
 Die Reihenfolge folgt der MVP-Liste.

@@ -1,0 +1,33 @@
+# Fotosynthese
+
+## Bedeutung und Gesamtgleichung
+
+Grüne Pflanzen, Algen und manche Bakterien bauen aus energiearmen Stoffen energiereichen Zucker auf. Die Energie dafür liefert das Sonnenlicht. Diesen Vorgang nennt man Fotosynthese. Pflanzen ernähren sich damit selbst, sie sind autotroph. Fast alle anderen Lebewesen hängen direkt oder indirekt von diesem Zucker ab, weil sie Pflanzen fressen oder Tiere, die Pflanzen gefressen haben.
+
+Als Ausgangsstoffe nimmt die Pflanze Kohlenstoffdioxid aus der Luft und Wasser aus dem Boden auf. Es entstehen Traubenzucker (Glucose) und Sauerstoff. Die Gesamtgleichung lautet: 6 CO2 + 6 H2O ergeben mit Lichtenergie C6H12O6 + 6 O2. Der Sauerstoff wird über die Spaltöffnungen der Blätter an die Luft abgegeben. Fast der gesamte Sauerstoff in unserer Atmosphäre stammt aus der Fotosynthese.
+
+## Ort der Fotosynthese: Chloroplasten
+
+Die Fotosynthese findet in den Chloroplasten statt. Das sind Zellorganellen, die vor allem in den Zellen des Palisadengewebes und des Schwammgewebes im Blatt liegen. Ein Chloroplast ist von einer Doppelmembran umgeben. Im Inneren liegen gestapelte Membranscheiben, die Thylakoide. Der flüssige Raum um die Thylakoide heißt Stroma.
+
+In den Thylakoidmembranen sitzt der grüne Farbstoff Chlorophyll. Er nimmt vor allem rotes und blaues Licht auf. Grünes Licht wird kaum aufgenommen, sondern zurückgeworfen, deshalb erscheinen Blätter grün.
+
+# Ablauf der Fotosynthese
+
+## Lichtabhängige Reaktion
+
+Der erste Teil der Fotosynthese läuft nur bei Licht ab, und zwar an den Thylakoidmembranen. Das Chlorophyll nimmt Lichtenergie auf. Mit dieser Energie wird Wasser gespalten, man spricht von der Fotolyse des Wassers. Dabei entsteht der Sauerstoff, den die Pflanze abgibt. Der Sauerstoff der Fotosynthese stammt also aus dem Wasser und nicht aus dem Kohlenstoffdioxid.
+
+Die Energie des Lichts wird in zwei Stoffen zwischengespeichert: im Energieträger ATP und im Reduktionsmittel NADPH. Beide werden im zweiten Teil der Fotosynthese gebraucht.
+
+## Calvin-Zyklus
+
+Der zweite Teil läuft im Stroma ab und braucht nicht direkt Licht. Er wird nach seinem Entdecker Calvin-Zyklus genannt. Zuerst wird Kohlenstoffdioxid an einen Zucker mit fünf Kohlenstoffatomen gebunden, das Ribulose-1,5-bisphosphat. Diesen Schritt nennt man CO2-Fixierung. Das Enzym dafür heißt Rubisco.
+
+Unter Verbrauch von ATP und NADPH aus der lichtabhängigen Reaktion entsteht daraus Schritt für Schritt Zucker. Ein Teil davon wird zu Glucose, der Rest baut das Ribulose-1,5-bisphosphat wieder auf, damit der Kreislauf weiterlaufen kann. Die Pflanze speichert Glucose oft als Stärke oder nutzt sie, um Cellulose für ihre Zellwände zu bilden.
+
+# Einflussfaktoren der Fotosynthese
+
+Wie schnell eine Pflanze Fotosynthese betreibt, hängt von äußeren Bedingungen ab. Mit steigender Lichtstärke nimmt die Fotosyntheserate zunächst zu, bis sie ab einer bestimmten Lichtstärke nicht weiter steigt. Ebenso steigt die Rate mit mehr Kohlenstoffdioxid in der Luft, auch hier bis zu einer Grenze.
+
+Die Temperatur wirkt über die Enzyme. Bis zu einem Optimum, bei vielen heimischen Pflanzen um 25 bis 30 Grad Celsius, steigt die Rate. Wird es heißer, werden die Enzyme geschädigt und die Rate sinkt stark. Den Faktor, der gerade am knappsten ist und die Rate begrenzt, nennt man Minimumfaktor. Im Gewächshaus erhöht man deshalb oft gezielt Licht, Wärme oder den Gehalt an Kohlenstoffdioxid.

@@ -1,0 +1,19 @@
+## Funktionsgleichung einer linearen Funktion
+
+Eine lineare Funktion hat die Gleichung f(x) = m·x + b. Ihr Graph ist eine Gerade. Die Zahl m heißt Steigung, die Zahl b heißt y-Achsenabschnitt. Ist m positiv, steigt die Gerade von links nach rechts, ist m negativ, fällt sie. Bei m = 0 verläuft sie parallel zur x-Achse.
+
+## Steigung und Steigungsdreieck
+
+Die Steigung gibt an, um wie viel der Funktionswert wächst, wenn x um 1 größer wird. Aus zwei Punkten P(x1|y1) und Q(x2|y2) der Geraden berechnet man sie mit m = (y2 − y1) : (x2 − x1). Zeichnerisch liest man sie an einem Steigungsdreieck ab: Man geht von einem Punkt der Geraden eine Einheit nach rechts und dann so weit nach oben oder unten, bis man wieder auf der Geraden ist. Beispiel: Durch P(1|3) und Q(3|7) ergibt sich m = (7 − 3) : (3 − 1) = 2.
+
+## y-Achsenabschnitt
+
+Der y-Achsenabschnitt b ist der Funktionswert an der Stelle x = 0. Dort schneidet die Gerade die y-Achse im Punkt (0|b). Kennt man die Steigung und einen Punkt, setzt man den Punkt in f(x) = m·x + b ein und löst nach b auf. Für m = 2 und den Punkt P(1|3) gilt 3 = 2·1 + b, also b = 1.
+
+## Nullstelle
+
+Eine Nullstelle ist die Stelle x, an der f(x) = 0 ist. Dort schneidet der Graph die x-Achse. Man setzt m·x + b = 0 und löst nach x auf: x = −b : m. Das geht nur, wenn m nicht 0 ist. Die Funktion f(x) = 2x − 4 hat ihre Nullstelle bei x = 2.
+
+## Schnittpunkt zweier Geraden
+
+Den Schnittpunkt zweier Geraden findet man, indem man ihre Funktionsterme gleichsetzt. Aus 2x + 1 = −x + 7 folgt 3x = 6, also x = 2. Setzt man x = 2 in eine der Gleichungen ein, erhält man y = 5, der Schnittpunkt ist S(2|5). Haben zwei Geraden dieselbe Steigung, aber verschiedene y-Achsenabschnitte, sind sie parallel und haben keinen Schnittpunkt.
