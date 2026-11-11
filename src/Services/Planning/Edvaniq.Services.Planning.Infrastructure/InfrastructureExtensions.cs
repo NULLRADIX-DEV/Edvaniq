@@ -4,10 +4,12 @@ using Edvaniq.Services.Identity.Contracts;
 using Edvaniq.Services.Knowledge.Contracts;
 using Edvaniq.Services.Planning.Application;
 using Edvaniq.Services.Planning.Contracts;
+using Edvaniq.Services.Planning.Domain;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace Edvaniq.Services.Planning.Infrastructure;
 
@@ -25,6 +27,15 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<IExampleItems, ExampleItems>();
         builder.Services.AddScoped<IPings, Pings>();
         builder.Services.TryAddSingleton(TimeProvider.System);
+
+        builder.Services.AddOptions<DailyBudgetOptions>()
+            .BindConfiguration(DailyBudgetOptions.Section)
+            .Validate(
+                options => options.DefaultMinutes is >= DailyBudget.MinMinutes and <= DailyBudget.MaxMinutes,
+                $"{DailyBudgetOptions.Section}:DefaultMinutes must be between {DailyBudget.MinMinutes} and {DailyBudget.MaxMinutes}.")
+            .ValidateOnStart();
+        builder.Services.AddSingleton<IDailyBudgets>(services =>
+            new DefaultDailyBudgets(services.GetRequiredService<IOptions<DailyBudgetOptions>>().Value));
 
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<PlanningDbContext>(ServiceKey);
