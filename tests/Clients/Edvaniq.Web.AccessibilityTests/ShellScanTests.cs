@@ -9,7 +9,7 @@ public sealed class ShellScanTests(WebShell shell)
 {
     private const string NotFound = "/there-is-no-such-page";
 
-    public static TheoryData<string, int> Pages { get; } = Combine(["/", "/login", "/datenschutz", "/open-source", NotFound]);
+    public static TheoryData<string, int> Pages { get; } = Combine(["/", "/login", "/datenschutz", "/open-source", "/bausteine", NotFound]);
 
     public static TheoryData<string, int> SignedInPages { get; } = Combine(["/", "/systemstatus", "/themen"]);
 

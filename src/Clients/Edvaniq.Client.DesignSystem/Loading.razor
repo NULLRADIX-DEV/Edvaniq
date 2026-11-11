@@ -1,0 +1,8 @@
+@* Only the text is read out, the spinner is decoration. It stops with reduced motion like everything else. Put it into a
+   LiveRegion so the change gets announced. *@
+<p class="loading"><span class="loading-spinner" aria-hidden="true"></span>@Text</p>
+
+@code {
+    [Parameter]
+    public string Text { get; set; } = "Wird geladen …";
+}

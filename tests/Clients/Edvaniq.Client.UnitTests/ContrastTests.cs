@@ -25,6 +25,14 @@ public sealed partial class ContrastTests
         { "--color-on-right-surface", "--color-right-surface", 4.5 },
         { "--color-right", "--color-right-surface", 3.0 },
         { "--color-right", "--color-surface", 4.5 },
+        // Building blocks (Client.DesignSystem): the error text and the frame of an invalid field, on the page and on a
+        // field, and the glyph of each symbol on its shape. The other pairs of the blocks are already above: the shapes
+        // and frames of the messages on their background, the outline of the warning, the field frame and the hints.
+        { "--color-alert", "--color-paper", 4.5 },
+        { "--color-alert", "--color-surface", 4.5 },
+        { "--color-surface", "--color-right", 3.0 },
+        { "--color-surface", "--color-alert", 3.0 },
+        { "--color-on-highlight", "--color-surface", 3.0 },
     };
 
     [Theory]

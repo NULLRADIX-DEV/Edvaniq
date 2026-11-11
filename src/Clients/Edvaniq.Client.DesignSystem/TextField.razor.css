@@ -1,0 +1,55 @@
+.field {
+    margin-bottom: var(--space-4);
+}
+
+.field label {
+    display: block;
+    margin-bottom: var(--space-1);
+    font-weight: 600;
+}
+
+.field-required {
+    font-weight: 400;
+    color: var(--color-ink-muted);
+}
+
+.field-hint {
+    margin-bottom: var(--space-2);
+    color: var(--color-ink-muted);
+}
+
+.field-input {
+    display: block;
+    width: 100%;
+    min-height: 2.75rem;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-ink-muted);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font: inherit;
+}
+
+.field-multiline {
+    min-height: 10rem;
+    resize: vertical;
+}
+
+/* Thicker and red, but the message below says it in words. */
+.field-input[aria-invalid="true"] {
+    border: 2px solid var(--color-alert);
+}
+
+.field-error {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    margin: var(--space-2) 0 0;
+    color: var(--color-alert);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.field-error ::deep .status-symbol {
+    margin-top: 0.2em;
+}

@@ -1,0 +1,82 @@
+@page "/bausteine"
+
+<PageTitle>Bausteine – Edvaniq</PageTitle>
+
+<h1>Bausteine</h1>
+
+<p>Die Grundbausteine aus der gemeinsamen UI-Bibliothek, jeder in jedem Zustand. Web und App zeigen sie gleich.</p>
+
+<section class="block-section" aria-labelledby="fields-heading">
+    <h2 id="fields-heading">Eingabefelder</h2>
+
+    <TextField Id="sample-plain" Label="Titel" @bind-Value="plain" autocomplete="off" />
+    <TextField Id="sample-required" Label="Name" Required="true" @bind-Value="required" autocomplete="off" />
+    <TextField Id="sample-hint" Label="Lernziel" Hint="Zum Beispiel: Biologie-Klausur im März." @bind-Value="hinted"
+               autocomplete="off" />
+    <TextField Id="sample-error" Label="E-Mail" Required="true" Hint="Wir schreiben dir nur, wenn du es willst."
+               Error="Die Adresse braucht ein @@-Zeichen." @bind-Value="wrong" type="email" autocomplete="off" />
+    <TextField Id="sample-text" Label="Text" Multiline="true" Rows="4" @bind-Value="longText" />
+</section>
+
+<section class="block-section" aria-labelledby="notices-heading">
+    <h2 id="notices-heading">Meldungen</h2>
+
+    <Notice Kind="NoticeKind.Info" Title="Hinweis mit Titel">
+        <p>Die Analyse kann ein paar Minuten dauern.</p>
+    </Notice>
+    <Notice Kind="NoticeKind.Success" Title="Erfolg">
+        <p>Die Themen sind da.</p>
+    </Notice>
+    <Notice Kind="NoticeKind.Warning" Title="Warnung">
+        <p>Die Analyse dauert länger als gedacht.</p>
+    </Notice>
+    <Notice Kind="NoticeKind.Error" Title="Fehler">
+        <p>Der Text ist nicht angekommen. Versuch es gleich noch einmal.</p>
+    </Notice>
+    <Notice Kind="NoticeKind.Info">
+        <p>Ein Hinweis ohne Titel.</p>
+    </Notice>
+</section>
+
+<section class="block-section" aria-labelledby="status-heading">
+    <h2 id="status-heading">Statusanzeige und Ladezustand</h2>
+
+    <p>Eine Statusanzeige ist immer da, auch leer. Ein Screenreader liest vor, was sich darin ändert.</p>
+
+    <form class="block-form" @onsubmit="Check" novalidate>
+        <TextField Id="sample-check" Label="Thema" Required="true" Error="@checkError" @bind-Value="topic"
+                   autocomplete="off" />
+        <LiveRegion>
+            @if (checkedTopic is not null)
+            {
+                <Notice Kind="NoticeKind.Success">
+                    <p>„@checkedTopic“ ist eingetragen.</p>
+                </Notice>
+            }
+        </LiveRegion>
+        <button type="submit" class="button">Prüfen</button>
+    </form>
+
+    <h3>Ladezustand</h3>
+    <LiveRegion>
+        <Loading />
+    </LiveRegion>
+</section>
+
+@code {
+    private string plain = "";
+    private string required = "";
+    private string hinted = "";
+    private string wrong = "ben.example";
+    private string longText = "";
+    private string topic = "";
+    private string? checkError;
+    private string? checkedTopic;
+
+    private void Check()
+    {
+        var empty = string.IsNullOrWhiteSpace(topic);
+        checkError = empty ? "Gib ein Thema ein." : null;
+        checkedTopic = empty ? null : topic.Trim();
+    }
+}

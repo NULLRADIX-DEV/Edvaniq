@@ -1,0 +1,11 @@
+.block-section {
+    margin-top: var(--space-8);
+}
+
+.block-form {
+    max-width: 24rem;
+}
+
+.block-form .button {
+    min-height: 2.75rem;
+}

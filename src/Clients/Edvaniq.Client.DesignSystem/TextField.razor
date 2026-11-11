@@ -1,0 +1,115 @@
+@* A text field with its label. Hint and error hang on the field via aria-describedby, so a screen reader reads them
+   with it. A required field says so in words, not only with a star. Other attributes like type, name or autocomplete
+   go straight to the input. *@
+<div class="field">
+    <label for="@Id">@Label@if (Required)
+        {
+            <span class="field-required"> (Pflichtfeld)</span>
+        }</label>
+    @if (!string.IsNullOrEmpty(Hint))
+    {
+        <p id="@HintId" class="field-hint">@Hint</p>
+    }
+    @if (Multiline)
+    {
+        if (Immediate)
+        {
+            <textarea @attributes="AdditionalAttributes" id="@Id" rows="@Rows" required="@Required" aria-invalid="@Invalid"
+                      aria-describedby="@DescribedBy" class="@InputClass" value="@Value" @oninput="ChangeAsync"
+                      @ref="element"></textarea>
+        }
+        else
+        {
+            <textarea @attributes="AdditionalAttributes" id="@Id" rows="@Rows" required="@Required" aria-invalid="@Invalid"
+                      aria-describedby="@DescribedBy" class="@InputClass" value="@Value" @onchange="ChangeAsync"
+                      @ref="element"></textarea>
+        }
+    }
+    else if (Immediate)
+    {
+        <input @attributes="AdditionalAttributes" id="@Id" required="@Required" aria-invalid="@Invalid"
+               aria-describedby="@DescribedBy" class="@InputClass" value="@Value" @oninput="ChangeAsync" @ref="element" />
+    }
+    else
+    {
+        <input @attributes="AdditionalAttributes" id="@Id" required="@Required" aria-invalid="@Invalid"
+               aria-describedby="@DescribedBy" class="@InputClass" value="@Value" @onchange="ChangeAsync" @ref="element" />
+    }
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <p id="@ErrorId" class="field-error"><StatusSymbol Kind="NoticeKind.Error" />@Error</p>
+    }
+</div>
+
+@code {
+    private ElementReference element;
+
+    // Fixed by the page, not generated: the label and the descriptions must point at the same element in the prerender
+    // and once the page runs.
+    [Parameter, EditorRequired]
+    public string Id { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = "";
+
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<string> ValueChanged { get; set; }
+
+    [Parameter]
+    public bool Required { get; set; }
+
+    // Explains what belongs into the field, before the user types.
+    [Parameter]
+    public string? Hint { get; set; }
+
+    // What is wrong with the value. Set, the field is marked invalid.
+    [Parameter]
+    public string? Error { get; set; }
+
+    [Parameter]
+    public bool Multiline { get; set; }
+
+    [Parameter]
+    public int Rows { get; set; } = 6;
+
+    // Binds on every key instead of on leaving the field. Not for long texts, each key sends the whole value across.
+    [Parameter]
+    public bool Immediate { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    public string HintId => $"{Id}-hint";
+
+    public string ErrorId => $"{Id}-error";
+
+    private string? Invalid => string.IsNullOrEmpty(Error) ? null : "true";
+
+    private string InputClass => Multiline ? "field-input field-multiline" : "field-input";
+
+    private string? DescribedBy
+    {
+        get
+        {
+            var ids = new List<string>(2);
+            if (!string.IsNullOrEmpty(Hint))
+            {
+                ids.Add(HintId);
+            }
+
+            if (!string.IsNullOrEmpty(Error))
+            {
+                ids.Add(ErrorId);
+            }
+
+            return ids.Count == 0 ? null : string.Join(' ', ids);
+        }
+    }
+
+    public ValueTask FocusAsync() => element.FocusAsync();
+
+    private Task ChangeAsync(ChangeEventArgs change) => ValueChanged.InvokeAsync(change.Value as string ?? "");
+}

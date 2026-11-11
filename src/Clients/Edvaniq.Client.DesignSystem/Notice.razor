@@ -1,0 +1,27 @@
+@* A message in the margin. It is not a live region itself: one that appears without a page change goes into a
+   LiveRegion that is there before it. *@
+<div class="notice notice-@Kind.ToString().ToLowerInvariant()" @attributes="AdditionalAttributes">
+    <StatusSymbol Kind="Kind" />
+    <div class="notice-body">
+        @if (!string.IsNullOrEmpty(Title))
+        {
+            <p class="notice-title">@Title</p>
+        }
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public NoticeKind Kind { get; set; }
+
+    // The gist in bold, the details follow in the content.
+    [Parameter]
+    public string? Title { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+}
