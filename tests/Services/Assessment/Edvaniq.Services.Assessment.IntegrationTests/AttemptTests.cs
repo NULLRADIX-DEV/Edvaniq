@@ -143,7 +143,7 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
             .Select(endpoint => endpoint.RoutePattern.RawText!.TrimEnd('/'))
             .Where(route => route is not ("/health" or "/alive" or "/me"))
             .Order();
-        Assert.Equal(["/attempts", "/attempts/{id:guid}/answer"], routes);
+        Assert.Equal(["/attempts", "/attempts/{id:guid}/answer", "/check-questions"], routes);
     }
 
     // A double click, a retry and a second answer to the same question all get the first answer back.
