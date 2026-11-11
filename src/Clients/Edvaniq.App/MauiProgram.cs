@@ -48,6 +48,7 @@ public static class MauiProgram
 		}));
 		builder.Services.AddScoped<ILearningMaterial>(services => new HttpLearningMaterial(Watched(services)));
 		builder.Services.AddScoped<IQuiz>(services => new HttpQuiz(Watched(services)));
+		builder.Services.AddScoped<ITodayPlan>(services => new HttpTodayPlan(Watched(services)));
 
 		builder.Services.AddSingleton<WindowReturnSignal>();
 		builder.Services.AddSingleton<IReturnSignal>(services => services.GetRequiredService<WindowReturnSignal>());

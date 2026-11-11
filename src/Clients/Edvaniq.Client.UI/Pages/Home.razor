@@ -4,10 +4,19 @@
 
 <h1>Start</h1>
 
-<p>Edvaniq ist noch im Aufbau. Bald planst du hier deine Lernziele und siehst, was heute dran ist.</p>
-
 <AuthorizeView>
     <Authorized>
-        <p><a class="button" href="themen">Text einfügen und Themen ansehen</a></p>
+        @* Only the browser talks to Planning. While the page is prerendered on the server there is nobody to ask. *@
+        @if (RendererInfo.IsInteractive)
+        {
+            <TodayPlanView />
+        }
+        else
+        {
+            <PageLoading />
+        }
     </Authorized>
+    <NotAuthorized>
+        <p>Edvaniq ist noch im Aufbau. Bald planst du hier deine Lernziele und siehst, was heute dran ist.</p>
+    </NotAuthorized>
 </AuthorizeView>
