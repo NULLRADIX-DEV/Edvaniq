@@ -19,6 +19,9 @@ Content.DocumentAnalyzed.DocumentId: Guid
 Content.DocumentAnalyzed.LearningGoalId: Guid?
 Content.DocumentAnalyzed.Topics: IReadOnlyList<TopicSuggestion>
 Content.DocumentAnalyzed.UserId: string
+Content.DocumentDeleted.DocumentId: Guid
+Content.DocumentDeleted.LearningGoalId: Guid?
+Content.DocumentDeleted.UserId: string
 Content.GeneratedItem.DocumentId: Guid
 Content.GeneratedItem.ItemId: Guid
 Content.GeneratedItem.Kind: ItemKind

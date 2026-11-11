@@ -174,10 +174,12 @@ Die Tabelle nennt diesen Test je Consumer als `Klasse.Methode` aus den Integrati
 
 | Service | Ereignis | Test |
 |---|---|---|
+| Assessment | `DocumentDeleted` | `DocumentDeletionTests.DeletionDeliveredTwice_OrSentTwice_ChangesNothingMore` |
 | Assessment | `ItemsGenerated` | `QuestionTests.ItemsDeliveredTwice_OrSentTwice_StoreEachQuestionOnce` |
 | Assessment | `TopicsChanged` | `KnownTopicTests.StateDeliveredTwice_SentTwice_OrOlder_ChangesNothing` |
 | Assessment | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
 | Content | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
+| Knowledge | `DocumentDeleted` | `DocumentDeletionTests.DeletionDeliveredTwice_OrSentTwice_ChangesNothingMore` |
 | Knowledge | `DocumentAnalyzed` | `AnalysisTests.AnalysisDeliveredTwice_OrSentTwice_AddsNoTopicTwice`, `TopicsChangedTests.AnalysisDeliveredTwice_OrSentTwice_StoresNoSecondEvent` |
 | Knowledge | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
 | LearningEngine | `AnswerRecorded` | `LearningRecordTests.AnswerDeliveredTwice_OrSentTwice_CountsOnce`, `MasteryTests.AnswerDeliveredTwice_OrSentTwice_MovesItOnce` |

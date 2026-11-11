@@ -18,7 +18,7 @@ namespace Edvaniq.Services.Assessment.Application;
 // the contract is left out with a log line, so the rest of the topic still arrives. A newer PromptVersion is only where
 // the question came from, it's taken as is.
 public sealed partial class ItemsGeneratedHandler(
-    IQuestions questions, IKnownTopics topics, TimeProvider time, ILogger<ItemsGeneratedHandler> logger)
+    IQuestions questions, IKnownTopics topics, IDeletedDocuments deleted, TimeProvider time, ILogger<ItemsGeneratedHandler> logger)
     : IIntegrationEventHandler<ItemsGenerated>
 {
     public async Task HandleAsync(ItemsGenerated integrationEvent, CancellationToken cancellationToken)
@@ -26,6 +26,12 @@ public sealed partial class ItemsGeneratedHandler(
         if (integrationEvent.TopicId is not { } topicId)
         {
             LogWithoutTopic(integrationEvent.DocumentId);
+            return;
+        }
+
+        // DocumentDeleted came first on its own consumer, the questions of the document must not come back.
+        if (await deleted.IsDeletedAsync(integrationEvent.UserId, integrationEvent.DocumentId, cancellationToken))
+        {
             return;
         }
 

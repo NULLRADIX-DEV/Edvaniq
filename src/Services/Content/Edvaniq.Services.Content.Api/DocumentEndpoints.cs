@@ -68,6 +68,11 @@ internal static class DocumentEndpoints
                     title: "Die Analyse dieses Textes läuft schon oder ist fertig."),
             });
 
+        // Deletes the document and everything Content made from it, the other services follow DocumentDeleted. 204, or
+        // 404 for someone else's document and one that does not exist (any more).
+        documents.MapDelete("/{id:guid}", async (Guid id, IDocuments documents, CancellationToken cancellationToken) =>
+            await documents.DeleteAsync(id, cancellationToken) ? Results.NoContent() : Results.NotFound());
+
         return app;
     }
 }

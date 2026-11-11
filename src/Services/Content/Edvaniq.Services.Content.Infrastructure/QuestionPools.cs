@@ -120,7 +120,7 @@ public sealed class QuestionPools(
 
             ContentLog.TopicsMissing(logger, documentId);
             document.Fail(Document.TopicsMissing);
-            await db.SaveChangesAsync(cancellationToken);
+            await WorkerSave.SaveAsync(db, documentId, "questions", logger, cancellationToken);
             return true;
         }
 
@@ -151,7 +151,7 @@ public sealed class QuestionPools(
                     document.Fail(Document.QuestionsFailed);
                 }
 
-                await db.SaveChangesAsync(cancellationToken);
+                await WorkerSave.SaveAsync(db, documentId, "questions", logger, cancellationToken);
                 return true;
             }
 
@@ -167,7 +167,7 @@ public sealed class QuestionPools(
         }
 
         document.FinishAnalysis();
-        await db.SaveChangesAsync(cancellationToken);
+        await WorkerSave.SaveAsync(db, documentId, "questions", logger, cancellationToken);
         return true;
     }
 

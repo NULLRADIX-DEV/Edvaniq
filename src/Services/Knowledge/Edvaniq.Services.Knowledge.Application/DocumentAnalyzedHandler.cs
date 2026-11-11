@@ -8,7 +8,8 @@ namespace Edvaniq.Services.Knowledge.Application;
 // TopicsChanged in the same save. Topics the goal has already keep their id and name and only get the document's
 // sections (TopicImport), so analysing a document again, or another one on the same topics, adds no topic twice. The
 // inbox drops a redelivered message. Only new or moved topics change the state, sections alone announce nothing.
-public sealed class DocumentAnalyzedHandler(IAnalyzedTopics topics, TopicsChangedEvents changes, TimeProvider time)
+public sealed class DocumentAnalyzedHandler(
+    IAnalyzedTopics topics, IDeletedDocuments deleted, TopicsChangedEvents changes, TimeProvider time)
     : IIntegrationEventHandler<DocumentAnalyzed>
 {
     // Topics from before the default goal (#215) belong to none. A message without a goal still lands there.
@@ -17,6 +18,13 @@ public sealed class DocumentAnalyzedHandler(IAnalyzedTopics topics, TopicsChange
     public async Task HandleAsync(DocumentAnalyzed integrationEvent, CancellationToken cancellationToken)
     {
         var owner = integrationEvent.UserId;
+
+        // DocumentDeleted came first on its own consumer, the topics of the document must not come back.
+        if (await deleted.IsDeletedAsync(owner, integrationEvent.DocumentId, cancellationToken))
+        {
+            return;
+        }
+
         var goal = integrationEvent.LearningGoalId ?? NoLearningGoal;
 
         // The user's topics without a goal join the first one there is. They keep their ids, so questions and records
