@@ -24,8 +24,63 @@ env:
   TESTINGPLATFORM_TELEMETRY_OPTOUT: true
 
 jobs:
-  build-test:
-    name: Build & test backend
+  test:
+    name: Tests (${{ matrix.part }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [services, browser-1, browser-2, browser-3]
+    env:
+      BROWSER_TESTS: tests/Clients/Edvaniq.Web.AccessibilityTests
+      BROWSER_PARTS: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Remove app project from solution
+        run: dotnet sln Edvaniq.slnx remove src/Clients/Edvaniq.App/Edvaniq.App.csproj
+
+      - name: Test services
+        if: matrix.part == 'services'
+        run: |
+          mapfile -t projects < <(dotnet sln Edvaniq.slnx list | tr '\\' '/' | grep -E '^tests/.*Tests\.csproj$' | grep -v -e "^$BROWSER_TESTS/" -e '^tests/Edvaniq.ArchitectureTests/' | sort)
+          [ "${#projects[@]}" -gt 0 ] || { echo "::error::No test projects found in Edvaniq.slnx"; exit 1; }
+          printf '%s\n' "${projects[@]}"
+          python3 -c 'import json, sys; json.dump({"solution": {"path": "Edvaniq.slnx", "projects": sys.argv[1:]}}, open("services.slnf", "w"))' "${projects[@]}"
+          dotnet build services.slnf -c Release
+          dotnet test --solution services.slnf -c Release --no-build -- --ignore-exit-code 8
+
+      - name: Test browser
+        if: startsWith(matrix.part, 'browser-')
+        env:
+          PART: ${{ matrix.part }}
+        run: |
+          part=${PART#browser-}
+          mapfile -t classes < <(grep -l -E '\[(Fact|Theory)\]' "$BROWSER_TESTS"/*.cs | xargs -n1 basename | sed 's/\.cs$//' | sort)
+          [ "${#classes[@]}" -ge "$BROWSER_PARTS" ] || { echo "::error::Expected at least $BROWSER_PARTS test classes in $BROWSER_TESTS, found ${#classes[@]}"; exit 1; }
+          filters=()
+          for i in "${!classes[@]}"; do
+            if [ $(( i % BROWSER_PARTS + 1 )) -eq "$part" ]; then filters+=(--filter-class "*.${classes[$i]}"); echo "${classes[$i]}"; fi
+          done
+          dotnet build "$BROWSER_TESTS" -c Release
+          pwsh "$BROWSER_TESTS/bin/Release/net10.0/playwright.ps1" install --only-shell chromium
+          dotnet test --project "$BROWSER_TESTS" -c Release --no-build -- "${filters[@]}"
+
+  template:
+    name: Architecture & template
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -52,14 +107,8 @@ jobs:
       - name: Build
         run: dotnet build Edvaniq.slnx -c Release --no-restore
 
-      - name: Install Chromium
-        run: pwsh tests/Clients/Edvaniq.Web.AccessibilityTests/bin/Release/net10.0/playwright.ps1 install --only-shell chromium
-
       - name: Architecture tests
         run: dotnet test --project tests/Edvaniq.ArchitectureTests -c Release --no-build
-
-      - name: Test
-        run: dotnet test --solution Edvaniq.slnx -c Release --no-build -- --ignore-exit-code 8
 
       - name: Check service template
         run: |
@@ -76,6 +125,21 @@ jobs:
         run: |
           dotnet publish src/Services/Sample/Edvaniq.Services.Sample.Api/Edvaniq.Services.Sample.Api.csproj -c Release --os linux --arch x64 -t:PublishContainer -p:ContainerImageTag=template-check
           bash deploy/check-template-image.sh sample nullradix-dev/edvaniq/sample-api:template-check
+
+  build-test:
+    name: Build & test backend
+    needs: [test, template]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check results
+        env:
+          TEST: ${{ needs.test.result }}
+          TEMPLATE: ${{ needs.template.result }}
+        run: |
+          echo "Tests: $TEST, architecture & template: $TEMPLATE"
+          [ "$TEST" = success ] && [ "$TEMPLATE" = success ]
 
   secret-scan:
     name: Secret scan
@@ -115,19 +179,38 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 2
           persist-credentials: false
 
+      - name: Find changes
+        id: changes
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" != pull_request ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only HEAD^1 HEAD | tee changed.txt | grep -qE '^(src/|deploy/|Directory\.[A-Za-z.]+$|global\.json$|nuget\.config$|\.github/workflows/ci\.yml$)'; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            cat changed.txt
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "### No shipped process changed, no images built" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        if: steps.changes.outputs.build == 'true'
         with:
           global-json-file: global.json
 
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.changes.outputs.build == 'true'
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
 
       - name: Find processes
+        if: steps.changes.outputs.build == 'true'
         run: |
           mapfile -t names < <(grep -oE 'Projects\.Edvaniq_[A-Za-z0-9_]+' src/Aspire/Edvaniq.AppHost/AppHost.cs | sort -u | sed 's/^Projects\.//; s/_/./g')
           [ "${#names[@]}" -gt 0 ] || { echo "::error::No processes found in AppHost.cs"; exit 1; }
@@ -139,6 +222,7 @@ jobs:
           cat projects.txt
 
       - name: Build images
+        if: steps.changes.outputs.build == 'true'
         run: |
           mapfile -t projects < projects.txt
           for project in "${projects[@]}"; do
@@ -146,6 +230,7 @@ jobs:
           done
 
       - name: Check images
+        if: steps.changes.outputs.build == 'true'
         run: |
           mapfile -t images < <(docker image ls --format '{{.Repository}}:{{.Tag}}' --filter "reference=nullradix-dev/edvaniq/*:$TAG" | sort)
           expected=$(wc -l < projects.txt)
@@ -192,6 +277,7 @@ jobs:
       - name: Scan base layer (web image)
         env:
           FAIL_ON: ${{ github.event_name == 'schedule' && 'high' || 'critical' }}
+        if: steps.changes.outputs.build == 'true'
         run: |
           mkdir -p "$RUNNER_TEMP/scan"
           docker save "nullradix-dev/edvaniq/web:$TAG" -o "$RUNNER_TEMP/scan/image.tar"
