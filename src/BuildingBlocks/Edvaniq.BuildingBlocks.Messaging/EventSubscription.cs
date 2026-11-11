@@ -13,6 +13,9 @@ internal abstract class EventSubscription(Type eventType, Type handlerType)
 {
     public Type HandlerType { get; } = handlerType;
 
+    // The event's type name, as the catalog names it (docs/spec/events.md).
+    public string EventName { get; } = eventType.Name;
+
     public EventRoute Route { get; } = EventRoute.For(eventType);
 
     // Reads the event from its JSON and hands it to the handler, which the scope provides.
