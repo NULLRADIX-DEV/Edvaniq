@@ -320,9 +320,18 @@ public sealed class FileUploadTests(ServiceFactory service) : IClassFixture<Serv
         return client;
     }
 
-    // The same body without Content-Length, so only the count while reading can stop it.
-    private sealed class ChunkedContent(HttpContent inner) : HttpContent
+    // The same body without Content-Length, so only the count while reading can stop it. The content type with the
+    // boundary comes along, otherwise there's no multipart to read.
+    private sealed class ChunkedContent : HttpContent
     {
+        private readonly HttpContent inner;
+
+        public ChunkedContent(HttpContent inner)
+        {
+            this.inner = inner;
+            Headers.ContentType = inner.Headers.ContentType;
+        }
+
         protected override void SerializeToStream(Stream stream, TransportContext? context, CancellationToken cancellationToken) =>
             inner.CopyTo(stream, context, cancellationToken);
 
