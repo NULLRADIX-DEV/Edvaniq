@@ -10,10 +10,10 @@ using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.Services.Content.Infrastructure.Files;
 
-// Runs in the worker, never in a request: reads the text of every uploaded PDF, text or Markdown file, page by page, and
+// Runs in the worker, never in a request: reads the text of every uploaded file page by page (FileText), and
 // hands it to its document. One file after the other, so the worker never holds two at once. Text and pages go in one
 // save, then the splitter takes the document like a pasted one. A file that can't be read fails its document with a
-// reason. Word files wait for their own issue.
+// reason. A Word file fails with the hint to save it as PDF, until Word files can be read.
 public sealed class FileTextExtractor(
     IServiceScopeFactory scopes,
     FileStore files,
@@ -23,8 +23,6 @@ public sealed class FileTextExtractor(
     private const int Batch = 10;
 
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(2);
-
-    private static readonly FileFormat[] Readable = [FileFormat.Pdf, FileFormat.Text, FileFormat.Markdown];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -70,8 +68,7 @@ public sealed class FileTextExtractor(
         using var scope = scopes.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<ContentDbContext>().Documents
             .IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
-            .Where(document => document.Status == DocumentStatus.Uploaded && document.FileId != null && document.TextExtractedAt == null
-                && document.FileFormat != null && Readable.Contains(document.FileFormat.Value))
+            .Where(document => document.Status == DocumentStatus.Uploaded && document.FileId != null && document.TextExtractedAt == null)
             .OrderBy(document => document.CreatedAt)
             .Select(document => document.Id)
             .Take(Batch)

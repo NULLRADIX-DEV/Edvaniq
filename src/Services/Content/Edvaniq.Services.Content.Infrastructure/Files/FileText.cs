@@ -22,7 +22,8 @@ public static class FileText
         {
             FileFormat.Pdf => PdfPages(content, cancellationToken),
             FileFormat.Text or FileFormat.Markdown => [PlainText(content)],
-            _ => throw new NotSupportedException($"Reading {format} files comes later."),
+            FileFormat.Docx => throw new FileRefusedException(Document.WordNotYet),
+            _ => throw new NotSupportedException($"Reading {format} files is unknown."),
         };
 
     private static List<string> PdfPages(Stream content, CancellationToken cancellationToken)
@@ -59,10 +60,30 @@ public static class FileText
         return string.Join("\n\n", blocks.Select(Paragraph).Where(paragraph => paragraph.Length > 0));
     }
 
-    // The lines of a block as one paragraph. A hyphen at the end of a line stays, "Licht- und Schattenblätter" can't be told
-    // apart from a split word, and the AI reads "Foto- synthese" well enough.
-    private static string Paragraph(TextBlock block) =>
-        string.Join(' ', block.TextLines.Select(line => line.Text.Trim()).Where(line => line.Length > 0));
+    // The lines of a block, joined to paragraphs. A block may hold several when they are close, so a gap of more than one
+    // and a half line heights starts a new one, as an empty line does. A hyphen at the end of a line stays,
+    // "Licht- und Schattenblätter" can't be told apart from a split word, and the AI reads "Foto- synthese" well enough.
+    private static string Paragraph(TextBlock block)
+    {
+        var text = new StringBuilder();
+        TextLine? previous = null;
+        foreach (var line in block.TextLines.Where(line => line.Text.Trim().Length > 0))
+        {
+            if (previous is not null)
+            {
+                var gap = previous.BoundingBox.Bottom - line.BoundingBox.Top;
+                var height = (previous.BoundingBox.Height + line.BoundingBox.Height) / 2;
+                text.Append(gap > ParagraphGap * height ? "\n\n" : " ");
+            }
+
+            text.Append(line.Text.Trim());
+            previous = line;
+        }
+
+        return text.ToString();
+    }
+
+    private const double ParagraphGap = 1.5;
 
     // UTF-8 as FileCheck accepted it, read only one character beyond the limit.
     private static string PlainText(Stream content)

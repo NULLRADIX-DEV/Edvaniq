@@ -11,7 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Edvaniq.Client.UnitTests;
 
 // The upload field on the topics page. Size and type are checked here only to spare the way up, Content decides. A file
-// waits for its text afterwards, the page says so and doesn't follow it.
+// is followed afterwards like a pasted text, the worker reads it first.
 public sealed class UploadTests : BunitContext
 {
     private static readonly Guid Uploaded = Guid.Parse("5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d");
@@ -38,13 +38,15 @@ public sealed class UploadTests : BunitContext
         Assert.Equal(FeedbackTexts.Upload.Hint, page.Find("#upload-hint").TextContent);
     }
 
+    // Since #282 the worker reads the file, so the page follows it like a pasted text until its topics are there.
     [Fact]
-    public async Task File_IsUploaded_AndShownAsWaitingForItsText_WithoutFollowing()
+    public async Task File_IsUploaded_AndFollowedUntilItsTopicsAreThere()
     {
         var material = new FakeLearningMaterial()
+            .Documents()
+            .Documents(FileDocument() with { Status = DocumentStatus.Ready })
             .Upload(CallOutcome<DocumentInfo>.Ok(FileDocument()));
         var page = RenderPage(material);
-        var calls = material.DocumentCalls;
 
         Choose(page, InputFileContent.CreateFromText("Ein kurzer Text.", "Notizen.txt"));
         await page.Find("#upload-heading ~ button").ClickAsync(new());
@@ -52,12 +54,8 @@ public sealed class UploadTests : BunitContext
         var uploaded = Assert.Single(material.Uploaded);
         Assert.Equal("Notizen.txt", uploaded.FileName);
         Assert.Equal("Ein kurzer Text."u8.ToArray(), uploaded.Content);
-        Assert.Contains($"„Notizen“ {FeedbackTexts.Upload.WaitsTitle}", Status(page));
-        Assert.Contains(FeedbackTexts.Upload.WaitsBody, Status(page));
         Assert.Empty(Alert(page).Children);
-
-        await Task.Delay(100, Xunit.TestContext.Current.CancellationToken);
-        Assert.Equal(calls, material.DocumentCalls);
+        page.WaitForAssertion(() => Assert.Contains("Die Themen aus „Notizen“ sind da.", Status(page)), TimeSpan.FromSeconds(10));
     }
 
     [Fact]

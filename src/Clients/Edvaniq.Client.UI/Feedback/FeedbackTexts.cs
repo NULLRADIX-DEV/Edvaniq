@@ -115,12 +115,6 @@ public static class FeedbackTexts
             "Dieser Dateityp wird nicht unterstützt. Lade eine Datei mit .pdf, .docx, .txt oder .md hoch.";
 
         public const string NotThrough = "Die Datei ist nicht angekommen.";
-
-        // A file stays uploaded until Edvaniq can read its text (#282), that's no failure.
-        public const string WaitsTitle = "ist hochgeladen.";
-
-        public const string WaitsBody =
-            "Themen aus Dateien erkennt Edvaniq bald. Bis dahin kannst du den Text der Datei unten einfügen, dann geht es gleich los.";
     }
 
     // When a call or the app itself didn't get through. Never the user's fault.

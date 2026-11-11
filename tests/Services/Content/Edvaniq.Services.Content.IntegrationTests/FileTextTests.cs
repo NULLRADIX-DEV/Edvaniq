@@ -127,7 +127,7 @@ public sealed class FileTextMemoryTests
                     peak = Math.Max(peak, GC.GetTotalMemory(forceFullCollection: false));
                     await Task.Delay(5, CancellationToken.None);
                 }
-            });
+            }, TestContext.Current.CancellationToken);
 
             IReadOnlyList<string> pages;
             await using (var file = File.OpenRead(path))

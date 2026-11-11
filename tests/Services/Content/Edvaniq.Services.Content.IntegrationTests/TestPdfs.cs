@@ -96,7 +96,8 @@ internal static class TestPdfs
         var pages = new List<string>();
         PdfPageBuilder? page = null;
         var column = columns.Length;
-        var y = Bottom;
+        // Below the bottom, so the first line opens the first page.
+        var y = double.MinValue;
         var written = new StringBuilder();
         foreach (var paragraph in paragraphs.Select(Ascii).Select(Words).Where(paragraph => paragraph.Length > 0))
         {

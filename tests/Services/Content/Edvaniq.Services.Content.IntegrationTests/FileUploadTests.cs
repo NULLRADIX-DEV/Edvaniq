@@ -52,7 +52,7 @@ public sealed class FileUploadTests(ServiceFactory service) : IClassFixture<Serv
         Assert.Equal(("Uploaded", "File"), (listed.GetProperty("status").GetString(), listed.GetProperty("source").GetString()));
     }
 
-    // Until #282 the worker leaves a document from a file alone, a pasted text goes on as before.
+    // Until the worker has read its text, the splitter leaves a document from a file alone.
     [Fact]
     public async Task Splitter_LeavesTheFileDocumentAlone()
     {

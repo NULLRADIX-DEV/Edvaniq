@@ -3,8 +3,8 @@ using Edvaniq.BuildingBlocks.Domain;
 namespace Edvaniq.Services.Content.Domain;
 
 // A piece of a document's text (docs/spec/glossary.md#abschnitt), the ground for topics and questions. It keeps only
-// where it lies in the text, the text itself stays in the document. Pasted text has no pages, the page comes with PDF
-// (M2).
+// where it lies in the text, the text itself stays in the document. A section of a file finds its page in DocumentPages
+// by its start.
 public sealed class Section : IOwnedByUser
 {
     private Section(Guid documentId, string ownerId, int ordinal, int start, int length)

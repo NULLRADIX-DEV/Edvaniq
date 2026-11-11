@@ -36,6 +36,9 @@ public sealed class Document : IOwnedByUser
 
     public const string TooManyPages = "Die Datei hat zu viele Seiten. Erlaubt sind höchstens 300, teile sie auf.";
 
+    // Until Word files can be read, a document from one fails with this instead of waiting forever.
+    public const string WordNotYet = "Word-Dateien kann Edvaniq noch nicht lesen. Speichere die Datei als PDF und lade sie noch einmal hoch.";
+
     // A PDF beyond this many pages is turned away before its pages are read. 300 is more than a school book chapter or a
     // script needs, and keeps reading one file within seconds and within the worker's memory.
     public const int MaxPages = 300;
