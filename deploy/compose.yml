@@ -114,7 +114,7 @@ x-learningengine: &learningengine
 
 services:
   db:
-    image: mysql:9.7
+    image: mysql:9.7@sha256:df90258da46f6e7ff8574ff84f17618aba0765cac749928299c69fd4e7cb8ad8
     command: ["--innodb-buffer-pool-size=1G", "--binlog-expire-logs-seconds=86400"]
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is missing in .env}
@@ -147,7 +147,7 @@ services:
       start_period: 60s
       start_interval: 2s
   nats:
-    image: nats:2.15-alpine
+    image: nats:2.15-alpine@sha256:afae2fdbe2e326c65e1246cb83b9d05d319188734f3bd577ac8072daae78a10f
     command: ["--jetstream", "--store_dir", "/data", "--http_port", "8222"]
     user: "65534:65534"
     environment:

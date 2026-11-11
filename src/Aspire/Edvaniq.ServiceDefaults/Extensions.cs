@@ -39,6 +39,8 @@ public static class Extensions
 
         builder.Services.AddHostedService<MemoryLimitLogger>();
 
+        builder.Services.AddHostedService<CommitLogger>();
+
         builder.Services.ConfigureHttpClientDefaults(http =>
         {
             // Turn on resilience by default

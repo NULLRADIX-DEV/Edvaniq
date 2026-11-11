@@ -45,6 +45,14 @@ Ist er rot, nennt die letzte Zeile im Log den Grund. Endet sie mit „nothing ch
 
 Alle anderen Meldungen deuten auf den Server hin, dann hilft jemand mit Server-Zugang. Das Actions-Log ist öffentlich, deshalb nennt der Server dort keine Pfade, Hosts oder Benutzer.
 
+## Welcher Stand läuft
+
+Ein Deploy bringt immer einen ganzen Commit aus, nie einzelne Prozesse. Jedes eigene Image in `deploy/compose.yml` heißt `…:sha-${APP_COMMIT}`, der Server setzt `APP_COMMIT` auf den ausgerollten Commit, und jedes Image trägt diesen Commit zusätzlich im Label `org.opencontainers.image.revision`. Fremde Images wie MySQL und NATS stehen dort mit Tag und Digest (`mysql:9.7@sha256:…`). Derselbe Commit holt also auch Monate später genau dieselben Images, auf dem alten Server wie auf einem frischen. Dependabot zieht Tag und Digest gemeinsam nach. `ComposeImageTests` lässt kein Image ohne Commit oder Digest durch.
+
+Jeder Prozess schreibt beim Start `Commit: <sha>` ins Log, auch die Worker. Ohne Commit, etwa bei einem lokalen Build außerhalb von Git, steht dort `unknown`. Nach außen gibt die App den Commit nicht preis.
+
+Ein Prozess, der nach dem Start neu startet, bricht die Auslieferung ab, auch wenn er keinen Health-Check hat. Dann läuft wieder der vorherige Stand.
+
 ## Rollback
 
 Den brauchst du, wenn der neue Stand zwar läuft, aber fachlich kaputt ist. Scheitert schon der Deploy, ist kein Rollback nötig, denn dann läuft der vorherige Stand ohnehin wieder.
