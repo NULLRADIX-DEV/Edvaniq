@@ -34,7 +34,7 @@ public sealed class QuestionPools(
     public TimeSpan AiTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
     // How long after the analysis Knowledge may take for the topics. Usually it's seconds, this covers a restart of
-    // Knowledge or the broker. After that the document fails, the user pastes it again.
+    // Knowledge or the broker. After that the document fails, a retry gives Knowledge the same time again.
     public TimeSpan TopicsTimeout { get; set; } = TimeSpan.FromMinutes(10);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -107,7 +107,7 @@ public sealed class QuestionPools(
         var topics = await TopicsAsync(scope.ServiceProvider.GetRequiredService<IKnowledgeTopics>(), documentId, cancellationToken);
         if (topics.Count == 0)
         {
-            if (time.GetUtcNow().UtcDateTime - document.AnalyzedAt < TopicsTimeout)
+            if (time.GetUtcNow().UtcDateTime - document.WaitsForTopicsSince < TopicsTimeout)
             {
                 return false;
             }

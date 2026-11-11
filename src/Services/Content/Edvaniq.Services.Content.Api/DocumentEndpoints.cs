@@ -55,6 +55,18 @@ internal static class DocumentEndpoints
                 ? Results.Ok(DocumentResponse.From(document))
                 : Results.NotFound());
 
+        // Starts the analysis of a failed document again, the worker picks it up like a new one. 202 with the document as
+        // it is now, 409 if it isn't failed (any more).
+        documents.MapPost("/{id:guid}/retry", async (Guid id, IDocuments documents, CancellationToken cancellationToken) =>
+            await documents.RetryAsync(id, cancellationToken) switch
+            {
+                (RetryResult.Started, { } document) => Results.Accepted($"/documents/{document.Id}", DocumentResponse.From(document)),
+                (RetryResult.NotFound, _) => Results.NotFound(),
+                _ => Results.Problem(
+                    statusCode: StatusCodes.Status409Conflict,
+                    title: "Die Analyse dieses Textes läuft schon oder ist fertig."),
+            });
+
         return app;
     }
 }

@@ -115,7 +115,7 @@ public sealed class DocumentAnalyzer(
     }
 
     // The topics from the AI, or null if it failed, took too long or gave no usable answer in all attempts. Retries of
-    // outages with a pause come with #300, until then the user pastes the text again.
+    // outages with a pause come with #300, until then the user starts the analysis again.
     private async Task<IReadOnlyList<TopicSuggestion>?> TopicsAsync(
         Document document, IReadOnlyList<Section> sections, CancellationToken cancellationToken)
     {

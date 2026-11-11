@@ -314,7 +314,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
 
         var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
         Assert.Equal(
-            ("Failed", "Die Themen ließen sich gerade nicht erkennen. Füge den Text später noch einmal ein."),
+            ("Failed", "Die Themen ließen sich gerade nicht erkennen. Versuch es später noch einmal."),
             (found!.Status, found.FailureReason));
         Assert.Empty(await ReportedAsync(id));
         Assert.Equal(attempts, Asked(ContentAi.TopicsTask));
@@ -431,7 +431,152 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             && entry.Message == $"The AI usage for the {AiAttempt.Topics} of document {id} could not be stored, the analysis goes on");
     }
 
+    // The AI was down for the topics. Once it answers again, a retry splits once more, reports the topics once and the
+    // document gets ready. The failed attempt stays in the cost, no section is there twice.
+    [Fact]
+    public async Task FailedTopics_Retry_SucceedsOnceTheAiAnswers_WithoutDuplicates()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        Simulated.Fault = SimulatedFault.Outage;
+        await AnalyzeAsync(id);
+        var failed = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
+        Assert.Equal(("Failed", Document.AnalysisFailed), (failed!.Status, failed.FailureReason));
+
+        Simulated.Fault = SimulatedFault.None;
+        var retried = await RetryAsync(client, id, HttpStatusCode.Accepted);
+        Assert.Equal(("Uploaded", null), (retried!.Status, retried.FailureReason));
+        await AnalyzeAsync(id, withQuestions: true);
+
+        var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
+        Assert.Equal(("Ready", null), (found!.Status, found.FailureReason));
+        var analyzed = Assert.Single(await ReportedAsync(id));
+        Assert.Equal(analyzed.Topics.Count, (await GeneratedAsync(id)).Count);
+        Assert.Equal([0, 1, 2, 3], SectionOrdinals(id));
+        Assert.Equal(
+            [AiAttemptOutcome.Answered, AiAttemptOutcome.Failed],
+            AttemptsOf(id).Where(attempt => attempt.Purpose == AiAttempt.Topics).Select(attempt => attempt.Outcome).Order());
+    }
+
+    // The topics are out and Knowledge has given them their ids. A retry after failed questions keeps them: no second
+    // DocumentAnalyzed, no second topic analysis, only the questions follow.
+    [Fact]
+    public async Task FailedQuestions_Retry_MakesOnlyTheQuestions_ForTheSameTopics()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        await AnalyzeAsync(id, new BrokenAnswers(failures: int.MaxValue, outage: true), withQuestions: true);
+        await AssertQuestionsFailedAsync(client, id);
+        var topics = await service.Knowledge.OfDocumentAsync(id, TestContext.Current.CancellationToken);
+        var sections = SectionIds(id);
+
+        var retried = await RetryAsync(client, id, HttpStatusCode.Accepted);
+        Assert.Equal(("Analyzing", null), (retried!.Status, retried.FailureReason));
+        await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(id, TestContext.Current.CancellationToken);
+        await Analyzer().AnalyzeAsync(id, TestContext.Current.CancellationToken);
+        Assert.True(await Pools().FinishAsync(id, TestContext.Current.CancellationToken));
+
+        var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
+        Assert.Equal("Ready", found!.Status);
+        Assert.Single(await ReportedAsync(id));
+        Assert.Equal(1, Asked(ContentAi.TopicsTask));
+        Assert.Equal(topics.Select(topic => topic.Id).Order(), (await GeneratedAsync(id)).Select(pool => pool.TopicId!.Value).Order());
+        Assert.Equal(topics.Select(topic => topic.Id).Order(), PooledTopics(id).Order());
+        Assert.Equal(sections, SectionIds(id));
+    }
+
+    // Knowledge didn't have the topics in time. A retry gives it the time again instead of failing at once, and the
+    // questions follow as soon as the topics are there.
+    [Fact]
+    public async Task MissingTopics_Retry_WaitsForKnowledgeAgain_ThenTheDocumentIsReady()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        await AnalyzeAsync(id);
+        var impatient = Pools();
+        impatient.TopicsTimeout = TimeSpan.Zero;
+        Assert.True(await impatient.FinishAsync(id, TestContext.Current.CancellationToken));
+
+        await RetryAsync(client, id, HttpStatusCode.Accepted);
+        var pools = Pools();
+        pools.TopicsTimeout = TimeSpan.FromMinutes(10);
+        Assert.False(await pools.FinishAsync(id, TestContext.Current.CancellationToken));
+        Assert.Equal("Analyzing", (await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken))!.Status);
+
+        service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
+        Assert.True(await pools.FinishAsync(id, TestContext.Current.CancellationToken));
+
+        Assert.Equal("Ready", (await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken))!.Status);
+        Assert.Single(await ReportedAsync(id));
+    }
+
+    // Only a failed document of one's own can be retried.
+    [Fact]
+    public async Task Retry_OfADocumentThatIsNotFailed_Conflicts_OfAnotherUsers_IsNotFound()
+    {
+        using var alice = ClientFor($"alice-{Guid.NewGuid():N}");
+        using var bob = ClientFor($"bob-{Guid.NewGuid():N}");
+        var id = await PasteAsync(alice, Text);
+
+        await RetryAsync(alice, id, HttpStatusCode.Conflict);
+        await AnalyzeAsync(id, withQuestions: true);
+        await RetryAsync(alice, id, HttpStatusCode.Conflict);
+
+        Simulated.Fault = SimulatedFault.Outage;
+        var failed = await PasteAsync(alice, Text);
+        await AnalyzeAsync(failed);
+        await RetryAsync(bob, failed, HttpStatusCode.NotFound);
+        await RetryAsync(alice, Guid.NewGuid(), HttpStatusCode.NotFound);
+        Assert.Equal("Failed", (await alice.GetFromJsonAsync<DocumentDto>($"/documents/{failed}", TestContext.Current.CancellationToken))!.Status);
+    }
+
+    // Two retries at once start the analysis once.
+    [Fact]
+    public async Task TwoRetriesAtOnce_StartTheAnalysisOnce()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        Simulated.Fault = SimulatedFault.Outage;
+        await AnalyzeAsync(id);
+
+        var codes = await Task.WhenAll(Enumerable.Range(0, 2).Select(async _ =>
+        {
+            using var response = await client.PostAsync($"/documents/{id}/retry", null, TestContext.Current.CancellationToken);
+            return response.StatusCode;
+        }));
+
+        Assert.Equal([HttpStatusCode.Accepted, HttpStatusCode.Conflict], codes.Order());
+    }
+
     public void Dispose() => ai.Dispose();
+
+    private static async Task<DocumentDto?> RetryAsync(HttpClient client, Guid id, HttpStatusCode expected)
+    {
+        using var response = await client.PostAsync($"/documents/{id}/retry", null, TestContext.Current.CancellationToken);
+        Assert.Equal(expected, response.StatusCode);
+        return expected == HttpStatusCode.Accepted
+            ? await response.Content.ReadFromJsonAsync<DocumentDto>(TestContext.Current.CancellationToken)
+            : null;
+    }
+
+    private List<int> SectionOrdinals(Guid documentId)
+    {
+        using var scope = service.Services.CreateScope();
+        return [.. scope.ServiceProvider.GetRequiredService<ContentDbContext>().Sections.IgnoreQueryFilters()
+            .Where(section => section.DocumentId == documentId)
+            .OrderBy(section => section.Ordinal)
+            .Select(section => section.Ordinal)];
+    }
+
+    // The topics point at these ids, so they must stay.
+    private List<Guid> SectionIds(Guid documentId)
+    {
+        using var scope = service.Services.CreateScope();
+        return [.. scope.ServiceProvider.GetRequiredService<ContentDbContext>().Sections.IgnoreQueryFilters()
+            .Where(section => section.DocumentId == documentId)
+            .OrderBy(section => section.Ordinal)
+            .Select(section => section.Id)];
+    }
 
     private List<AiAttempt> AttemptsOf(Guid documentId)
     {
