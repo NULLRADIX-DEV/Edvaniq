@@ -7,7 +7,8 @@ namespace Edvaniq.Services.LearningEngine.Domain;
 // newer answers weigh more twice over: later answers push out a share of everything before, and older ones have decayed.
 // A topic that was practised and then left alone can drop below the start value of a topic never practised. That's
 // on purpose: without review the value keeps sinking (A41), and the planner should bring it back.
-// Bump RuleVersion whenever a number or step here changes, so a value can tell which rule made it.
+// Bump RuleVersion whenever a number or step here or a threshold in TopicStates changes, so a value can tell which
+// rule made it.
 public static class Mastery
 {
     public const int RuleVersion = 2;
