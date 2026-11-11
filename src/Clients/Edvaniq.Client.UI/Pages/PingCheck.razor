@@ -16,13 +16,7 @@
     }
     else if (signedOut)
     {
-        @* The login ran out or ended in another tab. Until #197 the way back is simply a new login. *@
-        <div class="ping-result ping-failed">
-            <p>
-                <strong>Du bist nicht mehr angemeldet.</strong> Melde dich neu an, dann geht es hier weiter.
-            </p>
-            <p><a href="@ReturnUrl.LoginFor("/systemstatus")">Neu anmelden</a></p>
-        </div>
+        @* The shell says that the login ran out and leads to it (SessionEndedNotice). *@
     }
     else if (failed)
     {

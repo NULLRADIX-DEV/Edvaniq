@@ -59,7 +59,12 @@
 
         if (outcome.Result == SignInResult.SignedIn)
         {
-            (Authentication as SessionAuthenticationState)?.Refresh();
+            // Waits for the new state, so the drafts know whose they are before a page asks for them.
+            if (Authentication is SessionAuthenticationState state)
+            {
+                await state.Refresh();
+            }
+
             Navigation.NavigateTo(ReturnUrl.Target(ReturnTo));
             return;
         }

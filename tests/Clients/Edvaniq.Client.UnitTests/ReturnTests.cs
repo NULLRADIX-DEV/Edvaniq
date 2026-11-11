@@ -1,6 +1,7 @@
 using Bunit;
 
 using Edvaniq.Client.Core;
+using Edvaniq.Client.UI.Feedback;
 using Edvaniq.Client.UI.Pages;
 using Edvaniq.Client.UI.Shell;
 
@@ -89,8 +90,8 @@ public sealed class ReturnTests : BunitContext
             .Documents([])
             .Topics();
         var page = RenderTopics(material);
-        Assert.Contains("nicht mehr angemeldet", page.Find("[role=status]").TextContent);
         page.Find("#paste-text").Change("Noch nicht gesendet.");
+        Assert.Contains(FeedbackTexts.Session.TextKept, page.Find("[role=status]").TextContent);
 
         signal.Return();
 

@@ -1,10 +1,11 @@
 namespace Edvaniq.Client.Core;
 
 // The login of a team member at the web host. The host keeps the token, the client only learns whether someone is
-// signed in.
+// signed in and an opaque key of the account.
 public interface IWebSession
 {
-    Task<bool> IsSignedInAsync(CancellationToken cancellationToken = default);
+    // The key of the account signed in, null if nobody is. It only tells two logins apart.
+    Task<string?> AccountAsync(CancellationToken cancellationToken = default);
 
     Task<SignInOutcome> SignInAsync(string name, string password, CancellationToken cancellationToken = default);
 
