@@ -1,4 +1,5 @@
 using Edvaniq.Services.Planning.Application;
+using Edvaniq.Testing;
 
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,7 +40,7 @@ public sealed class DailyBudgetTests(ServiceFactory service) : IClassFixture<Ser
     {
         using var configured = service.WithWebHostBuilder(builder => builder.UseSetting("DailyBudget:DefaultMinutes", minutes));
 
-        var exception = Assert.ThrowsAny<OptionsValidationException>(() => configured.CreateClient());
+        var exception = StartFailure.Of<OptionsValidationException>(() => configured.CreateClient());
         Assert.Contains("DailyBudget:DefaultMinutes must be between 1 and 720", exception.Message);
     }
 }

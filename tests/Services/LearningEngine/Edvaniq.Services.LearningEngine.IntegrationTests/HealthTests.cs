@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using Edvaniq.Services.LearningEngine.Infrastructure;
+using Edvaniq.Testing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -87,7 +88,7 @@ public sealed class HealthTests(WebApplicationFactory<Program> factory, ServiceF
         // Outside Development the issuer comes only from the environment, here there is none.
         using var service = factory.WithWebHostBuilder(builder => builder.UseEnvironment(Environments.Production));
 
-        var exception = Assert.ThrowsAny<OptionsValidationException>(() => service.CreateClient());
+        var exception = StartFailure.Of<OptionsValidationException>(() => service.CreateClient());
         Assert.Contains("ValidIssuer", exception.Message);
     }
 
