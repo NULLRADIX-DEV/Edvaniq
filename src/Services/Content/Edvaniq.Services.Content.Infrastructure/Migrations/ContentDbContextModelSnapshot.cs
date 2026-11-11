@@ -218,6 +218,13 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("varchar(200)");
 
+                    b.Property<string>("FileFormat")
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)");
+
+                    b.Property<Guid?>("FileId")
+                        .HasColumnType("char(36)");
+
                     b.Property<Guid?>("LearningGoalId")
                         .HasColumnType("char(36)");
 

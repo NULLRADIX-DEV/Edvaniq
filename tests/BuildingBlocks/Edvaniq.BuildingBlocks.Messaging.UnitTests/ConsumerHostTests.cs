@@ -37,7 +37,18 @@ public class ConsumerHostTests
         Assert.Equal(2, logs.Messages(LogLevel.Information).Count(message => message.Contains("waits for the stream", StringComparison.Ordinal)));
     }
 
-    private static async Task RunAsync(IMessageTransport transport, Logs logs, Func<bool> until)
+    // #235/#203: a broker that's gone is no failure of a message, /health stays healthy. The broker has its own check.
+    [Fact]
+    public async Task BrokerGone_CountsNoFailure()
+    {
+        var transport = new MissingStream { FailDifferentlyOnAttempt = 1 };
+
+        var failures = await RunAsync(transport, new Logs(), until: () => transport.Attempts >= 2);
+
+        Assert.Empty(failures.Current());
+    }
+
+    private static async Task<ConsumerFailures> RunAsync(IMessageTransport transport, Logs logs, Func<bool> until)
     {
         var builder = Host.CreateApplicationBuilder();
         builder.Services.AddDbContext<TestDbContext>(options => options.UseMySQL(
@@ -53,6 +64,7 @@ public class ConsumerHostTests
             host.Services.GetRequiredService<MessagingStore>(),
             host.Services.GetServices<EventSubscription>(),
             transport,
+            host.Services.GetRequiredService<ConsumerFailures>(),
             host.Services.GetRequiredService<IOptions<MessagingOptions>>(),
             new NoWaiting(),
             loggers.CreateLogger<ConsumerHost>());
@@ -60,6 +72,7 @@ public class ConsumerHostTests
         await consumers.StartAsync(TestContext.Current.CancellationToken);
         await Wait.UntilAsync(until, "The consumer did not try often enough.");
         await consumers.StopAsync(TestContext.Current.CancellationToken);
+        return host.Services.GetRequiredService<ConsumerFailures>();
     }
 
     private sealed class PingedHandler : IIntegrationEventHandler<Pinged>

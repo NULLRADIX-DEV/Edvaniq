@@ -94,7 +94,7 @@ public class TodayPlansTests
     };
 
     private static TodayPlans Plans(FakeMastery mastery, FakePools pools, IReadOnlyList<Guid>? topics = null) =>
-        new(new FakeTopics(topics ?? [Ready, Pending]), mastery, pools, new FakeBudgets(), new FakeUser(), TimeProvider.System);
+        new(new FakeTopics(topics ?? [Ready, Pending]), mastery, pools, new FakeBudgets(), new NoDoneBlocks(), new FakeUser(), TimeProvider.System);
 
     // Runs the answer on the thread pool, the way an HTTP call returns, so a waiting answer doesn't hold up the other.
     private sealed class FakeMastery(Func<IReadOnlyDictionary<Guid, TopicStanding>?> answer) : IMasterySource
@@ -143,6 +143,14 @@ public class TodayPlansTests
         public void Add(KnownTopic topic) => throw new NotSupportedException();
 
         public void Remove(KnownTopic topic) => throw new NotSupportedException();
+    }
+
+    private sealed class NoDoneBlocks : IDoneBlocks
+    {
+        public Task<IReadOnlyList<DoneBlock>> OnAsync(Guid learningGoalId, DateOnly studyDay, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<DoneBlock>>([]);
+
+        public Task AddAsync(DoneBlock block, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
     private sealed class FakeBudgets : IDailyBudgets

@@ -15,6 +15,8 @@ public sealed class KnowledgeDbContext(DbContextOptions<KnowledgeDbContext> opti
 
     public DbSet<TopicSection> TopicSections => Set<TopicSection>();
 
+    public DbSet<DeletedDocument> DeletedDocuments => Set<DeletedDocument>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         var topic = modelBuilder.Entity<Topic>();
@@ -35,5 +37,9 @@ public sealed class KnowledgeDbContext(DbContextOptions<KnowledgeDbContext> opti
         section.Property(item => item.DocumentId).HasDefaultValue(Guid.Empty);
         section.HasIndex(item => item.DocumentId);
         section.HasOne<Topic>().WithMany().HasForeignKey(item => item.TopicId).OnDelete(DeleteBehavior.Cascade);
+
+        var deleted = modelBuilder.Entity<DeletedDocument>();
+        deleted.HasKey(item => new { item.OwnerId, item.DocumentId });
+        deleted.Property(item => item.DocumentId).ValueGeneratedNever();
     }
 }

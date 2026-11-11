@@ -45,7 +45,8 @@ var identityApi = builder.AddProject<Projects.Edvaniq_Services_Identity_Api>("id
     .WithDatabase(identityDb)
     .WaitForCompletion(identityMigrate)
     .WithTokenIssuer(signingKey, webClientSecret)
-    .WithEnvironment("Tokens__Clients__content__Secret", contentClientSecret);
+    .WithEnvironment("Tokens__Clients__content__Secret", contentClientSecret)
+    .WithMessaging(nats);
 
 // Services
 var planningApi = AddService<Projects.Edvaniq_Services_Planning_Api>("planning-api", planningDb)

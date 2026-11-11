@@ -18,7 +18,7 @@ builder.Services.AddTransient<ForwardUserToken>();
 // Swaps the default resilience for shorter limits. Removing it is still marked experimental, the test with a hanging
 // Planning (PlanningDown_AnswersWithin10Seconds) notices if it stops working.
 #pragma warning disable EXTEXP0001
-builder.Services.AddHttpClient<IDefaultLearningGoal, PlanningLearningGoals>(client => client.BaseAddress = PlanningLearningGoals.Address)
+builder.Services.AddHttpClient<ILearningGoals, PlanningLearningGoals>(client => client.BaseAddress = PlanningLearningGoals.Address)
     .AddHttpMessageHandler<ForwardUserToken>()
     .RemoveAllResilienceHandlers()
 #pragma warning restore EXTEXP0001

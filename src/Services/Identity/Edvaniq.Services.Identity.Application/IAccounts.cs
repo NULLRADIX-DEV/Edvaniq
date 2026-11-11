@@ -9,5 +9,7 @@ public interface IAccounts
 
     void Add(Account account);
 
+    void Remove(Account account);
+
     Task SaveAsync(CancellationToken cancellationToken);
 }

@@ -54,6 +54,36 @@ internal static class Material
 
     public static readonly Guid TopicId = Guid.Parse("5f0c4a3e-1b2d-4c5e-8f9a-0b1c2d3e4f50");
 
+    // Today's plan as Planning answers it: a review of the topic and learn time for both subtopics, one of them the
+    // long word. Without blocks it says why with emptyReason.
+    public static object Plan(string? emptyReason = null, bool masteryAvailable = true) => new
+    {
+        studyDay = new DateOnly(2026, 11, 11),
+        learningGoalId = Guid.Empty,
+        blocks = emptyReason is not null
+            ? []
+            : new[]
+            {
+                new { topicId = TopicId, minutes = 10, kind = "review" },
+                new { topicId = Guid.Parse("6a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"), minutes = 20, kind = "learn" },
+                new { topicId = Guid.Parse("7b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e"), minutes = 15, kind = "learn" },
+            },
+        emptyReason,
+        masteryAvailable,
+        shortenedTopicIds = emptyReason is not null ? Array.Empty<Guid>() : [Guid.Parse("7b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e")],
+        questionPoolsAvailable = true,
+        notReadyTopicIds = Array.Empty<Guid>(),
+    };
+
+    // Answers the plan and the topics in the browser, each call takes the next plan of the list and the last one stays.
+    public static async Task AnswerPlanAsync(IPage page, params object[] plans)
+    {
+        var calls = 0;
+        await AnswerAsync(page, documents: [new[] { Document("Ready") }], topics: [Topics]);
+        await page.RouteAsync("**/api/planning/plan/today", route =>
+            FulfillAsync(route, plans[Math.Min(Interlocked.Increment(ref calls) - 1, plans.Length - 1)]));
+    }
+
     // A question of the topic as Assessment asks it, or 409 while there are none. The answer is graded with the given
     // option against the second one being right.
     public static async Task AnswerQuizAsync(IPage page, bool ready = true, string explanation = "Die Lichtreaktion läuft an den Membranen der Thylakoide ab.")

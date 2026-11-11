@@ -68,6 +68,8 @@ public sealed class AccountServiceTests
 
         public void Add(Account account) => All.Add(account);
 
+        public void Remove(Account account) => All.Remove(account);
+
         public Task SaveAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

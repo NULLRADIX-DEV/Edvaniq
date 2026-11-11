@@ -17,6 +17,7 @@ internal sealed class ConsumerHost(
     MessagingStore store,
     IEnumerable<EventSubscription> subscriptions,
     IMessageTransport transport,
+    ConsumerFailures failures,
     IOptions<MessagingOptions> options,
     TimeProvider time,
     ILogger<ConsumerHost> logger) : BackgroundService
@@ -87,7 +88,25 @@ internal sealed class ConsumerHost(
         }
     }
 
+    // A failure counts for the health check, the transport has the message delivered again. One that isn't ready doesn't:
+    // that's the sender's event still on its way, and it's dropped on purpose after NotReadyDeliveries.
     internal async Task HandleAsync(
+        EventSubscription subscription, string consumer, IncomingMessage message, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await HandleOnceAsync(subscription, consumer, message, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not MessageNotReadyException && !cancellationToken.IsCancellationRequested)
+        {
+            failures.Failed(consumer, subscription.EventName, message.MessageId);
+            throw;
+        }
+
+        failures.Settled(consumer, message.MessageId);
+    }
+
+    private async Task HandleOnceAsync(
         EventSubscription subscription, string consumer, IncomingMessage message, CancellationToken cancellationToken)
     {
         using var activity = MessageTrace.StartConsumer(consumer, message.TraceParent);

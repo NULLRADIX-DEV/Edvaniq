@@ -37,6 +37,9 @@ public static class MessagingExtensions
             provider.GetRequiredService<IOptions<MessagingOptions>>().Value,
             provider.GetRequiredService<TimeProvider>()));
 
+        services.AddSingleton<ConsumerFailures>();
+        services.AddHealthChecks().AddCheck<ConsumerHealthCheck>(ConsumerHealthCheck.Name, tags: [ConsumerHealthCheck.DetailsTag]);
+
         services.AddHostedService<OutboxDispatcher>();
         services.AddHostedService<ConsumerHost>();
         services.AddHostedService<MessagingCleanup>();

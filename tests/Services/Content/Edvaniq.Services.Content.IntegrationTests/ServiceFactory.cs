@@ -60,7 +60,7 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
                 services.AddInMemoryTransport();
                 services.AddSingleton<ILoggerProvider>(Logs);
                 services.AddSingleton<IKnowledgeTopics>(Knowledge);
-                services.AddHttpClient<IDefaultLearningGoal, PlanningLearningGoals>().ConfigurePrimaryHttpMessageHandler(() => Planning);
+                services.AddHttpClient<ILearningGoals, PlanningLearningGoals>().ConfigurePrimaryHttpMessageHandler(() => Planning);
             });
 
     public override async ValueTask DisposeAsync()

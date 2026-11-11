@@ -22,11 +22,7 @@
             <p>@FeedbackTexts.Quiz.Loading</p>
             break;
         case ViewState.SignedOut:
-            @* The login ran out or ended in another tab. Until #197 the way back is simply a new login. *@
-            <div class="quiz-note quiz-alert">
-                <p><strong>@FeedbackTexts.Quiz.SignedOut</strong> @FeedbackTexts.Quiz.SignedOutHint</p>
-                <p><a href="@ReturnUrl.LoginFor($"/themen/{TopicId:D}/ueben")">Neu anmelden</a></p>
-            </div>
+            @* No question yet: the shell says that the login ran out and leads to it (SessionEndedNotice). *@
             break;
         case ViewState.NotReady:
             <p class="quiz-note">
@@ -205,7 +201,7 @@
 
     private ViewState State => this switch
     {
-        { signedOut: true } => ViewState.SignedOut,
+        { signedOut: true, asked: null } => ViewState.SignedOut,
         { loading: true } => ViewState.Loading,
         { askFailure: CallResult.NotReady } => ViewState.NotReady,
         { askFailure: CallResult.NotFound } => ViewState.NotFound,
@@ -233,6 +229,21 @@
 
         loadedTopic = TopicId;
         topicName = null;
+
+        // Back from the login: the same open attempt, so the answer goes to it and counts once.
+        if (Services.GetService<Drafts>()?.Take<OpenQuestion>(DraftKey) is { } open)
+        {
+            asked = open.Asked;
+            shownAt = open.ShownAt;
+            selected = open.Selected;
+            responseTimeMs = open.ResponseTimeMs;
+            answerMessage = FeedbackTexts.Session.AnswerBack;
+            loading = false;
+            focusNext = FocusTarget.Question;
+            await LoadTopicNameAsync();
+            return;
+        }
+
         await Task.WhenAll(AskAsync(focus: false), LoadTopicNameAsync());
     }
 
@@ -427,7 +438,9 @@
                 focusNext = FocusTarget.Feedback;
                 break;
             case CallResult.SignedOut:
+                // The question stays, the shell leads to the login, and the drafts bring it back afterwards.
                 signedOut = true;
+                answerMessage = FeedbackTexts.Session.AnswerKept;
                 break;
             case CallResult.NotFound:
                 asked = null;
@@ -449,8 +462,19 @@
         _ => null,
     };
 
+    private string DraftKey => $"{nameof(OpenQuestion)}:{TopicId:D}";
+
+    private sealed record OpenQuestion(AskedQuestion Asked, long ShownAt, int? Selected, int? ResponseTimeMs);
+
+    // An attempt left open because the login ran out waits for the same account (Drafts). Never sent again by itself:
+    // the user checks it once more.
     public void Dispose()
     {
+        if (signedOut && asked is not null && graded is null)
+        {
+            Services.GetService<Drafts>()?.Keep(DraftKey, new OpenQuestion(asked, shownAt, selected, responseTimeMs));
+        }
+
         life.Cancel();
         life.Dispose();
     }

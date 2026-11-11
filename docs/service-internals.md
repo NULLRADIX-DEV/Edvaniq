@@ -35,6 +35,9 @@ Ein Service meldet zwei Dinge. `/alive` sagt nur, dass der Prozess antwortet. `/
 | DB gestoppt oder nicht erreichbar | 200 `Healthy` | 503 `Unhealthy` nach etwa 2 s |
 | DB hängt (Container pausiert oder eingefroren) | 200 `Healthy` | 503 `Unhealthy` nach 2–4 s |
 | kein Connection String | 200 `Healthy` | 503 `Unhealthy` |
+| ein Consumer scheitert seit 5 Minuten an derselben Nachricht | 200 `Healthy` | 503 `Unhealthy` mit einer Zeile `messaging: …` |
+
+Die Antwort von `/health` ist der Status. Nur ein Check mit dem Tag `details` hängt eine Zeile mit Namen und Beschreibung an, heute nur der Check `messaging` ([Wenn ein Ereignis dauerhaft scheitert](#wenn-ein-ereignis-dauerhaft-scheitert)). Fehlermeldungen und Exceptions anderer Checks stehen nie darin. Der Healthcheck in `deploy/compose.yml` gibt die Antwort aus, so behält Docker sie im Zustand des Containers.
 
 Außerhalb von Development antworten beide nur auf dem internen Port 8081 ([Deploy](deploy.md#health)).
 
@@ -164,7 +167,17 @@ Der Broker hält die Reihenfolge nur innerhalb eines Stream, nicht zwischen Abse
 | LearningEngine | `SessionCompleted` vor `TopicsChanged` | Die Einführung wird gespeichert und zählt, sobald das Thema bekannt ist. |
 | Planning, Assessment, LearningEngine | ein älteres `TopicsChanged` nach einem neueren | Der Stand mit dem früheren `ChangedAt` ändert nichts (`TopicsSnapshot`). |
 
-`OrderFlowTests` in `Edvaniq.EventFlowTests` schickt dieselben Ereignisse einmal in der richtigen und einmal in umgekehrter Reihenfolge über NATS und vergleicht Fragen und Mastery. Ein Ereignis eines gelöschten Nutzers, das nach `UserDeleted` ankommt, legt heute noch Daten an; das regelt ein eigenes Issue.
+`OrderFlowTests` in `Edvaniq.EventFlowTests` schickt dieselben Ereignisse einmal in der richtigen und einmal in umgekehrter Reihenfolge über NATS und vergleicht Fragen und Mastery. Ein Ereignis eines gelöschten Nutzers, das nach `UserDeleted` ankommt, legt heute noch Daten an, das regelt [#944](https://github.com/NULLRADIX-DEV/Edvaniq/issues/944).
+
+### Wenn ein Ereignis dauerhaft scheitert
+
+Scheitert ein Handler an einer Nachricht länger als `Messaging:FailureAlarmAfter` (voreingestellt 5 Minuten), wird `/health` des Service `Unhealthy` und nennt Consumer, Ereignistyp und seit wann: `messaging: content-UserDeletedHandler cannot handle UserDeleted for 6 min`. `MessageId`, Inhalt und Exception stehen nicht darin, sie können Daten eines Nutzers enthalten und bleiben im Log, zu finden über Consumer und Zeit. Der Container gilt dann als `unhealthy`, und der Server alarmiert einmal und meldet „behoben“, sobald der Check wieder grün ist.
+
+`MessageNotReadyException` zählt nicht. Sie ist der erwartete Fall, dass ein Ereignis des Absenders noch unterwegs ist, und eine solche Nachricht wird nach `Messaging:NotReadyDeliveries` Zustellungen ohnehin bestätigt. Würde sie zählen, gäbe es nach jedem Neustart des Absenders einen Fehlalarm. Auch ein Broker, der nicht erreichbar ist, zählt nicht: Dann gibt es keine Nachricht, an der ein Handler scheitert, und den Ausfall meldet der Container `nats` selbst.
+
+Neu verarbeiten muss niemand von Hand. Der Broker stellt die Nachricht weiter alle 5 Sekunden zu. Ist der Fehler behoben und ausgerollt, gelingt die nächste Zustellung, der Check wird grün. Das gilt, solange der Stream die Nachricht noch hat, also bis zu 7 Tage (`Messaging:StreamMaxAge`). Der Zähler lebt im Prozess: Ein Neustart beginnt die Frist von vorn, die nächste gescheiterte Zustellung startet sie wieder.
+
+Consumer laufen nur in den APIs, denn Worker haben keinen Healthcheck. `WorkerConsumerTests` in `Edvaniq.ArchitectureTests` prüft, dass kein Worker einen Handler registriert, außer er hat in `deploy/compose.yml` einen Healthcheck.
 
 ### Doppelte Zustellung
 
@@ -174,10 +187,12 @@ Die Tabelle nennt diesen Test je Consumer als `Klasse.Methode` aus den Integrati
 
 | Service | Ereignis | Test |
 |---|---|---|
+| Assessment | `DocumentDeleted` | `DocumentDeletionTests.DeletionDeliveredTwice_OrSentTwice_ChangesNothingMore` |
 | Assessment | `ItemsGenerated` | `QuestionTests.ItemsDeliveredTwice_OrSentTwice_StoreEachQuestionOnce` |
 | Assessment | `TopicsChanged` | `KnownTopicTests.StateDeliveredTwice_SentTwice_OrOlder_ChangesNothing` |
 | Assessment | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
 | Content | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
+| Knowledge | `DocumentDeleted` | `DocumentDeletionTests.DeletionDeliveredTwice_OrSentTwice_ChangesNothingMore` |
 | Knowledge | `DocumentAnalyzed` | `AnalysisTests.AnalysisDeliveredTwice_OrSentTwice_AddsNoTopicTwice`, `TopicsChangedTests.AnalysisDeliveredTwice_OrSentTwice_StoresNoSecondEvent` |
 | Knowledge | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
 | LearningEngine | `AnswerRecorded` | `LearningRecordTests.AnswerDeliveredTwice_OrSentTwice_CountsOnce`, `MasteryTests.AnswerDeliveredTwice_OrSentTwice_MovesItOnce` |
@@ -187,6 +202,12 @@ Die Tabelle nennt diesen Test je Consumer als `Klasse.Methode` aus den Integrati
 | Planning | `TopicsChanged` | `KnownTopicTests.StateDeliveredTwice_SentTwice_OrOlder_ChangesNothing` |
 | Planning | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
 
+### Wenn der Broker ausfällt
+
+Ein Service arbeitet ohne Broker weiter, er sendet nur später. Jedes Event liegt mit seiner Änderung in der eigenen Datenbank, also wartet kein Speichern auf den Broker. Der Dispatcher versucht es mit wachsender Pause weiter, und der Client verbindet sich von selbst neu. Ein abgebrochener Consumer startet nach 5 Sekunden wieder. Was der Stream vor dem Ausfall schon hatte, behält der Broker über einen Neustart. Kommt er zurück, geht jedes offene Event raus und kommt genau einmal an, auch bei einem Empfänger, der während des Ausfalls gestartet ist.
+
+`/health` eines Service hängt nicht am Broker. Fällt der Broker aus, bleibt jeder Service gesund und erreichbar, und gemeldet wird der Broker selbst über seinen eigenen Health-Check, einmal statt für jeden Service. Den Ablauf prüft `BrokerOutageTests` in `tests/BuildingBlocks` mit einem eigenen NATS, der gestoppt und wieder gestartet wird oder hängt.
+
 ### Ohne Broker und in Tests
 
 Die Adresse von NATS kommt nur von außen, als `ConnectionStrings:nats`. Lokal setzt sie der AppHost mit `WithMessaging(nats)`, auf dem Server der Anker `x-messaging-environment` in `deploy/compose.yml`. Fehlt die Adresse, starten weder Dispatcher noch Consumer, und der Service verhält sich, als gäbe es keine Nachrichten: Die Events bleiben in der Outbox, bis ein Broker da ist. Gesendete Outbox-Zeilen und Inbox-Einträge löscht der Service nach 14 Tagen (`Messaging:Retention`), ungesendete bleiben.
@@ -195,7 +216,7 @@ Die Adresse von NATS kommt nur von außen, als `ConnectionStrings:nats`. Lokal s
 
 ## Nutzer löschen
 
-Wird ein Konto gelöscht, müssen die Daten des Nutzers aus jedem Service verschwinden, nicht nur aus Identity. Identity sendet dafür `UserDeleted` aus `Identity.Contracts` mit der `UserId`, also dem `sub` seiner Tokens und damit der `OwnerId` seiner Zeilen. Bis sich ein Konto löschen lässt, kommt das Ereignis nur in den Tests vor.
+Wird ein Konto gelöscht, müssen die Daten des Nutzers aus jedem Service verschwinden, nicht nur aus Identity. Identity sendet dafür `UserDeleted` aus `Identity.Contracts` mit der `UserId`, also dem `sub` seiner Tokens und damit der `OwnerId` seiner Zeilen. Heute löscht der Betreiber ein Teamkonto mit `account delete` ([Teamkonto löschen](tokens.md#teamkonto-löschen)), Identity schickt das Ereignis im selben Speichern über seine Outbox.
 
 Jeder Service aus der Vorlage hört mit dem `UserDeletedHandler` darauf, der `IUserDataRemover` aufruft. `AddInfrastructure` registriert beide:
 
@@ -204,7 +225,7 @@ builder.Services.AddUserDataRemover<ServiceNameDbContext>();
 builder.Services.AddIntegrationEventHandler<UserDeleted, UserDeletedHandler>();
 ```
 
-Der Remover geht jede Entity mit `IOwnedByUser` im Modell durch und markiert alle Zeilen des Nutzers zum Löschen, auch solche, die ein eigener Query-Filter versteckt. Eine neue Entity mit `IOwnedByUser` ist damit ohne weiteren Code dabei. Zeilen ohne `OwnerId` gehen per Cascade Delete mit, deshalb muss ihre Beziehung Pflicht sein (`IsRequired`). Bei einer optionalen Beziehung scheitert das Löschen am Fremdschlüssel, und die Nachricht kommt immer wieder.
+Der Remover geht jede Entity mit `IOwnedByUser` im Modell durch und markiert alle Zeilen des Nutzers zum Löschen, auch solche, die ein eigener Query-Filter versteckt. Eine neue Entity mit `IOwnedByUser` ist damit ohne weiteren Code dabei. Eine Entity ohne `IOwnedByUser` lässt `UserDataTests` in `Edvaniq.ArchitectureTests` nur mit einem Grund auf seiner Ausnahmeliste zu, etwa Summen ohne Nutzer. Den Weg durch alle Services prüft `UserDeletionFlowTests` in `Edvaniq.EventFlowTests`. Zeilen ohne `OwnerId` gehen per Cascade Delete mit, deshalb muss ihre Beziehung Pflicht sein (`IsRequired`). Bei einer optionalen Beziehung scheitert das Löschen am Fremdschlüssel, und die Nachricht kommt immer wieder.
 
 Gespeichert wird wie bei jedem Handler vom Consumer, zusammen mit dem Inbox-Eintrag. Ob ein Service die Daten entfernt hat, zeigen dieser Eintrag für `<name>-UserDeletedHandler` und die Logzeile „Consumer <name>-UserDeletedHandler has handled message <MessageId>“. Die Zeile trägt die `TraceId` der Anfrage, die den Nutzer gelöscht hat, aber nicht seine `UserId`. Mit dieser Kennung findet man die Bestätigung jedes Service ([Ereignis empfangen](#ereignis-empfangen)).
 

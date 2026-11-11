@@ -122,7 +122,7 @@ public sealed class DocumentAnalyzer(
             document.Fail(Document.AnalysisFailed);
         }
 
-        await db.SaveChangesAsync(cancellationToken);
+        await WorkerSave.SaveAsync(db, documentId, "analysis", logger, cancellationToken);
     }
 
     // The answer of the AI with the topics, if any. Every attempt goes into the cost log.

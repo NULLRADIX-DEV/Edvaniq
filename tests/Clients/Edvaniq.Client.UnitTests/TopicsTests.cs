@@ -341,14 +341,13 @@ public sealed class TopicsTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("sind da", Status(page)), Wait);
     }
 
-    // The login ran out. Until #197 the way back is a new login, then the page again.
+    // The login ran out. The shell says it and leads to the login (SessionExpiryTests), the page adds no second hint.
     [Fact]
-    public void SignedOut_LeadsToANewLogin()
+    public void SignedOut_LeavesTheHintToTheShell()
     {
         var page = RenderPage(new FakeLearningMaterial().Documents(CallOutcome<IReadOnlyList<DocumentInfo>>.SignedOut));
 
-        Assert.Contains("Du bist nicht mehr angemeldet.", Status(page));
-        Assert.Equal("login?returnUrl=%2Fthemen", page.Find("[role=status] a").GetAttribute("href"));
+        Assert.Equal("", Status(page).Trim());
         // The form stays, so a text typed but not sent is still there (#218).
         Assert.Single(page.FindAll("form"));
         Assert.Empty(page.FindAll(".topic-list"));

@@ -7,21 +7,33 @@ using Microsoft.AspNetCore.Components.Authorization;
 namespace Edvaniq.Client.UI.Shell;
 
 // Whether someone is signed in, as the web host sees it. Asked once, again after every login and logout. The client
-// knows nothing about the user beyond that, the token stays with the host.
-public sealed class SessionAuthenticationState(IWebSession session) : AuthenticationStateProvider
+// knows nothing about the user beyond that and an opaque key of the account, the token stays with the host. Each answer
+// tells the drafts whose they are now and ends the hint about a login that ran out.
+public sealed class SessionAuthenticationState(IWebSession session, Drafts? drafts = null, SessionWatch? watch = null)
+    : AuthenticationStateProvider
 {
+    public const string AccountClaim = "account";
+
     private static readonly AuthenticationState SignedOut = new(new ClaimsPrincipal(new ClaimsIdentity()));
-    private static readonly AuthenticationState SignedIn = new(new ClaimsPrincipal(new ClaimsIdentity("session")));
 
     private Task<AuthenticationState>? state;
 
     public override Task<AuthenticationState> GetAuthenticationStateAsync() => state ??= LoadAsync();
 
-    public void Refresh()
+    public Task<AuthenticationState> Refresh()
     {
         state = LoadAsync();
         NotifyAuthenticationStateChanged(state);
+        return state;
     }
 
-    private async Task<AuthenticationState> LoadAsync() => await session.IsSignedInAsync() ? SignedIn : SignedOut;
+    private async Task<AuthenticationState> LoadAsync()
+    {
+        var account = await session.AccountAsync();
+        drafts?.Claim(account);
+        watch?.Reset();
+        return account is null
+            ? SignedOut
+            : new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity([new Claim(AccountClaim, account)], "session")));
+    }
 }

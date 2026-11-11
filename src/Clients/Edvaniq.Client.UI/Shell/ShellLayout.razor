@@ -45,6 +45,7 @@
         @if (RendererInfo.IsInteractive)
         {
             <BackendStatusBanner OnReconnected="FocusMainAsync" />
+            <SessionEndedNotice />
         }
         @Body
     </main>

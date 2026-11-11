@@ -29,7 +29,10 @@ public sealed partial class LoginTests
         using var response = await LoginAsync(browser);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, await StatusAsync(browser, "/session/user"));
+        using var user = await browser.GetAsync("/session/user", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, user.StatusCode);
+        var account = (await user.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("account").GetString();
+        Assert.Equal(WebSession.AccountKey(StubService.UserToken), account);
         Assert.Equal(
             new Dictionary<string, string>
             {
@@ -40,6 +43,25 @@ public sealed partial class LoginTests
                 ["client_secret"] = web.ClientSecret,
             },
             gateway.LastLoginRequest);
+    }
+
+    // The client keeps an unsent draft only for the account that wrote it (#197). It learns an opaque key: the same for
+    // every token of one account, another for another account, and never the account's id itself.
+    [Fact]
+    public void AccountKey_TellsAccountsApart_WithoutNamingThem()
+    {
+        static string Token(string sub, string jti) =>
+            "e30." + System.Buffers.Text.Base64Url.EncodeToString(Encoding.UTF8.GetBytes($$"""{"sub":"{{sub}}","jti":"{{jti}}"}""")) + ".c2ln";
+
+        var alice = Guid.NewGuid().ToString();
+        var first = WebSession.AccountKey(Token(alice, "1"));
+
+        Assert.NotNull(first);
+        Assert.Equal(first, WebSession.AccountKey(Token(alice, "2")));
+        Assert.NotEqual(first, WebSession.AccountKey(Token(Guid.NewGuid().ToString(), "1")));
+        Assert.DoesNotContain(alice, first, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(WebSession.AccountKey("kein-token"));
+        Assert.Null(WebSession.AccountKey("e30.e30.c2ln"));
     }
 
     // A wrong name and a wrong password get the same answer, so nobody learns whether an account exists.
@@ -195,7 +217,7 @@ public sealed partial class LoginTests
         var after = await StatusAsync(browser, "/session/user");
         using var ping = await browser.PostAsync("/api/planning/ping", content: null, TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.NoContent, before);
+        Assert.Equal(HttpStatusCode.OK, before);
         Assert.Equal(HttpStatusCode.Unauthorized, after);
         Assert.Equal(HttpStatusCode.Unauthorized, ping.StatusCode);
     }

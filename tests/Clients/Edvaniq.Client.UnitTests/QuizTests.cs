@@ -230,15 +230,15 @@ public sealed class QuizTests : BunitContext
         Assert.NotNull(page.Find("legend"));
     }
 
+    // The shell says it and leads to the login (SessionExpiryTests), the page adds no second hint.
     [Fact]
-    public void SignedOut_LeadsToTheLogin_AndBackHere()
+    public void SignedOut_BeforeAQuestion_LeavesTheHintToTheShell()
     {
         var page = RenderPage(new FakeQuiz().Ask(CallOutcome<AskedQuestion>.SignedOut));
 
-        Assert.Contains("Du bist nicht mehr angemeldet.", page.Find("[role=status]").TextContent);
-        Assert.Equal(
-            "login?returnUrl=" + Uri.EscapeDataString($"/themen/{Topic}/ueben"),
-            page.Find("[role=status] a").GetAttribute("href"));
+        Assert.Equal("", page.Find("[role=status]").TextContent.Trim());
+        Assert.Empty(page.FindAll("form"));
+        Assert.Empty(page.FindAll(".connection-problem"));
     }
 
     // Question, options and explanation come from the AI and are shown as text, never as markup.

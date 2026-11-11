@@ -80,7 +80,7 @@ echo "Migration step of $image"
 docker run --rm "${app[@]}" "$image" migrate
 
 # The health check of compose.yml: no curl in the image, so bash talks to the internal port.
-probe='exec 3<>/dev/tcp/127.0.0.1/8081 && printf "GET /health HTTP/1.0\r\n\r\n" >&3 && head -n 1 <&3 | grep -q " 200 "'
+probe='exec 3<>/dev/tcp/127.0.0.1/8081 && printf "GET /health HTTP/1.0\r\n\r\n" >&3 && tr -d "\r" <&3 | awk "NR == 1 { ok = / 200 / } { print } END { exit !ok }"'
 docker run -d --name "$api" "${app[@]}" \
   --health-cmd "bash -c '$probe'" --health-interval 30s --health-timeout 5s --health-retries 3 \
   --health-start-period 30s --health-start-interval 2s \

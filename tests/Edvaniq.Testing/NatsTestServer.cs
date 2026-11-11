@@ -10,7 +10,7 @@ namespace Edvaniq.Testing;
 public sealed class NatsTestServer : IAsyncLifetime
 {
     // Same image as the AppHost and the server, NatsImageTests checks it.
-    private const string Image = "nats:2.15-alpine";
+    public const string Image = "nats:2.15-alpine";
 
     private readonly NatsContainer container = new NatsBuilder(Image).Build();
 

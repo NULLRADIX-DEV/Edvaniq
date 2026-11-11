@@ -27,6 +27,10 @@ public sealed class MessagingOptions
     // is still in its outbox while the sender or the broker restarts.
     public int NotReadyDeliveries { get; set; } = 360;
 
+    // How long a consumer may fail at the same message before /health turns unhealthy and the server alarms. A failure
+    // that heals by itself (a short outage of the database, a deploy of the sender) stays below it.
+    public TimeSpan FailureAlarmAfter { get; set; } = TimeSpan.FromMinutes(5);
+
     // After this time sent outbox rows and inbox rows are deleted.
     public TimeSpan Retention { get; set; } = TimeSpan.FromDays(14);
 }

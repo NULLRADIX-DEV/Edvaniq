@@ -24,6 +24,10 @@ public sealed class PlanningDbContext(DbContextOptions<PlanningDbContext> option
 
     public DbSet<DailyBudgetSetting> DailyBudgets => Set<DailyBudgetSetting>();
 
+    public DbSet<DoneBlock> DoneBlocks => Set<DoneBlock>();
+
+    public DbSet<Session> Sessions => Set<Session>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ExampleItem>().Property(item => item.Text).HasMaxLength(ExampleItem.TextMaxLength);
@@ -59,5 +63,31 @@ public sealed class PlanningDbContext(DbContextOptions<PlanningDbContext> option
 
         // One stored budget per user.
         modelBuilder.Entity<DailyBudgetSetting>().HasKey(item => item.OwnerId);
+
+        // Done blocks (#375). Their id comes from the plan. Deleting the goal deletes its blocks.
+        var done = modelBuilder.Entity<DoneBlock>();
+        done.Property(item => item.Id).ValueGeneratedNever();
+        done.Property(item => item.Kind).HasConversion<string>().HasMaxLength(16);
+        done.Property(item => item.StudyDay)
+            .HasConversion(new ValueConverter<DateOnly, DateTime>(
+                date => date.ToDateTime(TimeOnly.MinValue),
+                stored => DateOnly.FromDateTime(stored)))
+            .HasColumnType("date");
+        done.HasIndex(item => new { item.OwnerId, item.LearningGoalId, item.StudyDay });
+        done.HasOne<LearningGoal>().WithMany().HasForeignKey(item => item.LearningGoalId).OnDelete(DeleteBehavior.Cascade);
+
+        // Sessions (#376). MySQL allows any number of NULLs in a unique index, so ended sessions don't count and of the
+        // running ones there is one per user.
+        var session = modelBuilder.Entity<Session>();
+        session.Property(item => item.Id).ValueGeneratedNever();
+        session.Property(item => item.ActiveOwnerId).HasMaxLength(128).HasAnnotation(CollationAnnotation, OwnerIdCollation);
+        session.HasIndex(item => item.ActiveOwnerId).IsUnique();
+        session.Property(item => item.Kind).HasConversion<string>().HasMaxLength(16);
+        session.Property(item => item.StudyDay)
+            .HasConversion(new ValueConverter<DateOnly, DateTime>(
+                date => date.ToDateTime(TimeOnly.MinValue),
+                stored => DateOnly.FromDateTime(stored)))
+            .HasColumnType("date");
+        session.HasOne<LearningGoal>().WithMany().HasForeignKey(item => item.LearningGoalId).OnDelete(DeleteBehavior.Cascade);
     }
 }

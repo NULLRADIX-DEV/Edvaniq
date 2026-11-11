@@ -26,17 +26,29 @@ public static class MauiProgram
 			Timeout = TimeSpan.FromSeconds(5),
 		}));
 
-		// Login, ping, the learning material and the quiz share one client, so they carry the session cookie of the login. The host answers within
-		// 9 seconds, its wait for a token or for Identity included, with an error of its own if need be.
-		var session = new HttpClient
+		// Login, ping, the learning material and the quiz share one handler, so they carry the session cookie of the login. The host answers within
+		// 9 seconds, its wait for a token or for Identity included, with an error of its own if need be. Every call under /api goes past the watch.
+		var host = new Uri("https://edvaniq.nullradix.de/");
+		var cookies = new HttpClientHandler();
+		HttpClient Watched(IServiceProvider services) =>
+			new(new SessionWatchHandler(services.GetRequiredService<SessionWatch>()) { InnerHandler = cookies }, disposeHandler: false)
+			{
+				BaseAddress = host,
+				Timeout = TimeSpan.FromSeconds(20),
+			};
+
+		// What a run-out login touches: the watch that notices it and the drafts that keep what was not sent.
+		builder.Services.AddScoped<SessionWatch>();
+		builder.Services.AddScoped<Drafts>();
+		builder.Services.AddScoped<IPing>(services => new HttpPing(Watched(services)));
+		builder.Services.AddSingleton<IWebSession>(new HttpWebSession(new HttpClient(cookies, disposeHandler: false)
 		{
-			BaseAddress = new Uri("https://edvaniq.nullradix.de/"),
+			BaseAddress = host,
 			Timeout = TimeSpan.FromSeconds(20),
-		};
-		builder.Services.AddSingleton<IPing>(new HttpPing(session));
-		builder.Services.AddSingleton<IWebSession>(new HttpWebSession(session));
-		builder.Services.AddSingleton<ILearningMaterial>(new HttpLearningMaterial(session));
-		builder.Services.AddSingleton<IQuiz>(new HttpQuiz(session));
+		}));
+		builder.Services.AddScoped<ILearningMaterial>(services => new HttpLearningMaterial(Watched(services)));
+		builder.Services.AddScoped<IQuiz>(services => new HttpQuiz(Watched(services)));
+		builder.Services.AddScoped<ITodayPlan>(services => new HttpTodayPlan(Watched(services)));
 
 		builder.Services.AddSingleton<WindowReturnSignal>();
 		builder.Services.AddSingleton<IReturnSignal>(services => services.GetRequiredService<WindowReturnSignal>());

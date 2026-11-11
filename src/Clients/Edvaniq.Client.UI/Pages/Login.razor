@@ -1,4 +1,6 @@
 @page "/login"
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider Services
 
 <PageTitle>Anmelden – Edvaniq</PageTitle>
 
@@ -8,6 +10,13 @@
    with. *@
 @if (RendererInfo.IsInteractive)
 {
+    @if (Services.GetService<SessionWatch>() is { Ended: true })
+    {
+        <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.Session.Ended" class="login-ended">
+            <p>@FeedbackTexts.Session.OnLogin</p>
+        </Notice>
+    }
+
     <LoginForm ReturnTo="@ReturnTo" />
 }
 else

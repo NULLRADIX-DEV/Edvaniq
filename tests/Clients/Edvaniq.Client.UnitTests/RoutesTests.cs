@@ -91,7 +91,7 @@ public sealed class SessionAuthenticationStateTests
         var before = await state.GetAuthenticationStateAsync();
         session.SignedIn = true;
         var cached = await state.GetAuthenticationStateAsync();
-        state.Refresh();
+        await state.Refresh();
         var after = await state.GetAuthenticationStateAsync();
 
         Assert.False(before.User.Identity?.IsAuthenticated);

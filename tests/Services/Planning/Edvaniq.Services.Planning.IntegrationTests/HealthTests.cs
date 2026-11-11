@@ -1,12 +1,15 @@
 using System.Net;
 using System.Net.Sockets;
+
 using Edvaniq.Services.Planning.Infrastructure;
 using Edvaniq.Testing;
+
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
@@ -90,6 +93,37 @@ public sealed class HealthTests(WebApplicationFactory<Program> factory, ServiceF
 
         var exception = StartFailure.Of<OptionsValidationException>(() => service.CreateClient());
         Assert.Contains("ValidIssuer", exception.Message);
+    }
+
+    // #235: only a check tagged "details" adds its description to /health, so the server's alarm can name what is wrong.
+    // Any other check stays a bare status, whatever its description or exception says.
+    [Fact]
+    public async Task Health_ShowsOnlyTheDescriptionOfADetailsCheck()
+    {
+        await using var withChecks = service.WithWebHostBuilder(builder => builder.ConfigureTestServices(services => services
+            .AddHealthChecks()
+            .AddCheck("stuck", () => HealthCheckResult.Unhealthy("beta-PingedHandler cannot handle Pinged for 6 min"), ["details"])
+            .AddCheck(
+                "secret",
+                () => HealthCheckResult.Unhealthy(
+                    "Server=10.0.0.5;Password=hunter2", new InvalidOperationException("Unable to connect to 10.0.0.5")))));
+        using var client = withChecks.CreateClient();
+
+        await AssertHealthAsync(
+            client, "/health", HttpStatusCode.ServiceUnavailable, "Unhealthy\nstuck: beta-PingedHandler cannot handle Pinged for 6 min");
+    }
+
+    [Fact]
+    public async Task Health_WithoutDetails_StaysTheBareStatus()
+    {
+        await using var service = WithDatabase(UnreachableDatabase);
+        using var client = service.CreateClient();
+
+        using var response = await client.GetAsync("/health", TestContext.Current.CancellationToken);
+
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("Unhealthy", body);
+        Assert.DoesNotContain("127.0.0.1", body, StringComparison.Ordinal);
     }
 
     private WebApplicationFactory<Program> WithDatabase(string connectionString) =>

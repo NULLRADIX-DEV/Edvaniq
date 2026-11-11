@@ -2,6 +2,7 @@ using Edvaniq.ServiceDefaults;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
@@ -151,12 +152,15 @@ public static class Extensions
             Predicate = r => r.Tags.Contains("live")
         };
 
-        // Both endpoints keep the default response writer: it returns only Healthy, Degraded or Unhealthy, without check
-        // names or exceptions, so health reveals no details. Health never needs a token, Docker asks without one.
+        // Health answers Healthy, Degraded or Unhealthy, never an exception. Only a check tagged "details" that isn't
+        // healthy adds a line with its name and description, which it keeps free of user data (the messaging check of
+        // BuildingBlocks). Docker keeps the answer, so the server's alarm can name what is wrong. Alive keeps the default.
+        // Health never needs a token, Docker asks without one.
+        var healthOptions = new HealthCheckOptions { ResponseWriter = WriteHealthAsync };
         if (app.Environment.IsDevelopment())
         {
             // All health checks must pass for app to be considered ready to accept traffic after starting
-            app.MapHealthChecks(HealthEndpointPath).AllowAnonymous();
+            app.MapHealthChecks(HealthEndpointPath, healthOptions).AllowAnonymous();
 
             app.MapHealthChecks(AlivenessEndpointPath, alivenessOptions).AllowAnonymous();
         }
@@ -166,10 +170,24 @@ public static class Extensions
             // while RequireHost("*:8081") would trust the Host header, which a client can fake. On the app port both
             // paths answer 404. As middleware they are no endpoints, so the service must call UseAuthentication and
             // UseAuthorization after MapDefaultEndpoints, or the fallback policy rejects them too.
-            app.UseHealthChecks(HealthEndpointPath, InternalHealthPort);
+            app.UseHealthChecks(HealthEndpointPath, InternalHealthPort, healthOptions);
             app.UseHealthChecks(AlivenessEndpointPath, InternalHealthPort, alivenessOptions);
         }
 
         return app;
+    }
+
+    // The tag of a check whose description /health may show.
+    public const string HealthDetailsTag = "details";
+
+    internal static Task WriteHealthAsync(HttpContext context, HealthReport report)
+    {
+        context.Response.ContentType = "text/plain; charset=utf-8";
+        var details = report.Entries
+            .Where(entry => entry.Value.Status != HealthStatus.Healthy
+                && entry.Value.Tags.Contains(HealthDetailsTag)
+                && !string.IsNullOrEmpty(entry.Value.Description))
+            .Select(entry => $"{entry.Key}: {entry.Value.Description!.ReplaceLineEndings(" ")}");
+        return context.Response.WriteAsync(string.Join('\n', [report.Status.ToString(), .. details]));
     }
 }

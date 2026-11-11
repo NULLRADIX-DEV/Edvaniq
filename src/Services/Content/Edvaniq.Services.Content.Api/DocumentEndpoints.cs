@@ -10,8 +10,9 @@ internal static class DocumentEndpoints
     public static IEndpointRouteBuilder MapDocumentEndpoints(this IEndpointRouteBuilder app)
     {
         var documents = app.MapGroup("/documents");
+        documents.MapFileUpload();
 
-        documents.MapPost("/", async (PastedText request, IDefaultLearningGoal goal, IDocuments documents, CancellationToken cancellationToken) =>
+        documents.MapPost("/", async (PastedText request, ILearningGoals goal, IDocuments documents, CancellationToken cancellationToken) =>
         {
             var errors = new Dictionary<string, string[]>();
             if (Document.CheckText(request.Text) is { } text)
@@ -30,10 +31,10 @@ internal static class DocumentEndpoints
             }
 
             // The goal before the save: without Planning nothing is stored, the user just sends the text again.
-            DefaultLearningGoal learningGoal;
+            LearningGoalInfo learningGoal;
             try
             {
-                learningGoal = await goal.GetAsync(cancellationToken);
+                learningGoal = await goal.GetDefaultAsync(cancellationToken);
             }
             catch (LearningGoalUnavailableException)
             {
@@ -67,18 +68,26 @@ internal static class DocumentEndpoints
                     title: "Die Analyse dieses Textes läuft schon oder ist fertig."),
             });
 
+        // Deletes the document and everything Content made from it, the other services follow DocumentDeleted. 204, or
+        // 404 for someone else's document and one that does not exist (any more).
+        documents.MapDelete("/{id:guid}", async (Guid id, IDocuments documents, CancellationToken cancellationToken) =>
+            await documents.DeleteAsync(id, cancellationToken) ? Results.NoContent() : Results.NotFound());
+
         return app;
     }
 }
 
 internal sealed record PastedText(string? Title, string? Text);
 
-// Status goes out by name (Uploaded, Analyzing, Ready, Failed), the client words it. A failed document says why.
-internal sealed record DocumentResponse(Guid Id, string Title, string Status, string? FailureReason, DateTime CreatedAt)
+// Status goes out by name (Uploaded, Analyzing, Ready, Failed), the client words it. A failed document says why. Source
+// says where it came from, Text or File: one from a file stays Uploaded until its text is extracted (#282).
+internal sealed record DocumentResponse(Guid Id, string Title, string Status, string? FailureReason, DateTime CreatedAt, string Source)
 {
     public static DocumentResponse From(Document document) =>
-        new(document.Id, document.Title, document.Status.ToString(), document.FailureReason, document.CreatedAt);
+        new(document.Id, document.Title, document.Status.ToString(), document.FailureReason, document.CreatedAt, SourceOf(document.IsFromFile));
 
     public static DocumentResponse From(DocumentSummary document) =>
-        new(document.Id, document.Title, document.Status.ToString(), document.FailureReason, document.CreatedAt);
+        new(document.Id, document.Title, document.Status.ToString(), document.FailureReason, document.CreatedAt, SourceOf(document.IsFromFile));
+
+    private static string SourceOf(bool isFromFile) => isFromFile ? "File" : "Text";
 }
