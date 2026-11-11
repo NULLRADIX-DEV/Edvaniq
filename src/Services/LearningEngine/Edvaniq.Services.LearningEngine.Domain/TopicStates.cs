@@ -23,13 +23,38 @@ public static class TopicStates
     public static TopicStanding Assess(
         IEnumerable<LearningRecord> records, TopicIntroduction? introduction, DateTime now, double start = Mastery.Start)
     {
-        var all = records.ToList();
-        var (introduced, counted) = introduction is null
-            ? IntroducedByFirstRecord(all)
-            : (true, all.Where(introduction.Counts).ToList());
+        var (introduced, counted) = Counted(records.ToList(), introduction);
         var mastery = Mastery.Percent(Mastery.Of(counted, now, start));
         return new TopicStanding(mastery, Of(introduced, mastery, counted));
     }
+
+    // Secure at the last counted answer, not secure now (docs/spec/glossary.md#wiederholung). Since that answer only the
+    // decay has moved the value, so this is "below SecureFrom now, above it without the decay". The same Assess at two
+    // points in time, so the rule exists once. Null for any other topic.
+    public static DecayedTopic? Decayed(
+        IEnumerable<LearningRecord> records, TopicIntroduction? introduction, DateTime now, double start = Mastery.Start)
+    {
+        var all = records.ToList();
+        var (introduced, counted) = Counted(all, introduction);
+        if (!introduced || counted.Count == 0)
+        {
+            return null;
+        }
+
+        var lastAnsweredAt = counted.Max(record => record.AnsweredAt);
+        var then = Assess(all, introduction, lastAnsweredAt, start);
+        var current = Assess(all, introduction, now, start);
+        return then.State == TopicState.Secure && current.State != TopicState.Secure
+            ? new DecayedTopic(current.Mastery, then.Mastery, lastAnsweredAt)
+            : null;
+    }
+
+    // Before the introduction no answer counts.
+    private static (bool Introduced, List<LearningRecord> Counted) Counted(
+        List<LearningRecord> records, TopicIntroduction? introduction) =>
+        introduction is null
+            ? IntroducedByFirstRecord(records)
+            : (true, records.Where(introduction.Counts).ToList());
 
     // Transition until Planning sends SessionCompleted (#395): until then no topic gets an introduction, so one without
     // counts as introduced from its first learning record on, with all its records. Practising keeps moving the mastery.
