@@ -347,7 +347,7 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
         var plan = await PlanAsync(token);
 
         Assert.False(plan.QuestionPoolsAvailable);
-        var warning = Assert.Single(service.Logs.Containing("Assessment could not be asked"), entry => entry.Text.Contains("502", StringComparison.Ordinal));
+        var warning = Assert.Single(service.Logs.Containing("Assessment could not be asked"), entry => entry.Message.Contains("status 502", StringComparison.Ordinal));
         Assert.Contains(nameof(HttpRequestException), warning.Text, StringComparison.Ordinal);
         Assert.Empty(service.Logs.Containing(token, "boom"));
     }
@@ -382,7 +382,7 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
         var plan = await PlanAsync(token);
 
         Assert.False(plan.MasteryAvailable);
-        var warning = Assert.Single(service.Logs.Containing("LearningEngine could not be asked"), entry => entry.Text.Contains("500", StringComparison.Ordinal));
+        var warning = Assert.Single(service.Logs.Containing("LearningEngine could not be asked"), entry => entry.Message.Contains("status 500", StringComparison.Ordinal));
         Assert.Contains(nameof(HttpRequestException), warning.Text, StringComparison.Ordinal);
         Assert.Empty(service.Logs.Containing(token, answer));
     }
