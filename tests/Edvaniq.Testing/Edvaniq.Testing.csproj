@@ -16,6 +16,11 @@
     <Compile Include="..\..\src\Aspire\Edvaniq.AppHost\ServiceDatabaseSql.cs" Link="ServiceDatabaseSql.cs" />
   </ItemGroup>
 
+  <!-- The shipped event messages, EventSamples reads them next to each test. -->
+  <ItemGroup>
+    <Content Include="..\EventSamples\*.json" Link="EventSamples\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>

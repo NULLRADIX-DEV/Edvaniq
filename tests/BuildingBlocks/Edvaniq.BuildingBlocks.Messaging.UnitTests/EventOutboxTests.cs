@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 
+using Edvaniq.BuildingBlocks.Contracts;
 using Edvaniq.Services.Alpha.Contracts;
 
 using Microsoft.EntityFrameworkCore;
@@ -27,7 +28,7 @@ public class EventOutboxTests
         Assert.Equal(Now.UtcDateTime, message.OccurredAt);
         Assert.Null(message.SentAt);
         Assert.Equal(0, message.Attempts);
-        Assert.Equal(pinged, JsonSerializer.Deserialize<Pinged>(message.Payload, MessageJson.Options));
+        Assert.Equal(pinged, JsonSerializer.Deserialize<Pinged>(message.Payload, EventJson.Options));
     }
 
     [Fact]
