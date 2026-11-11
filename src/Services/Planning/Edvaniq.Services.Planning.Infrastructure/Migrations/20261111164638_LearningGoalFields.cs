@@ -11,7 +11,7 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<DateOnly>(
+            migrationBuilder.AddColumn<DateTime>(
                 name: "ExamDate",
                 table: "LearningGoals",
                 type: "date",

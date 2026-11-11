@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Edvaniq.Services.Planning.Infrastructure.Migrations
 {
     [DbContext(typeof(PlanningDbContext))]
-    [Migration("20261111162955_LearningGoalFields")]
+    [Migration("20261111164638_LearningGoalFields")]
     partial class LearningGoalFields
     {
         /// <inheritdoc />
@@ -144,7 +144,7 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<DateOnly?>("ExamDate")
+                    b.Property<DateTime?>("ExamDate")
                         .HasColumnType("date");
 
                     b.Property<string>("ExamType")

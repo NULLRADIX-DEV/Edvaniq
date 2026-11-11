@@ -3,6 +3,7 @@ using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.Services.Planning.Domain;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Edvaniq.Services.Planning.Infrastructure;
 
@@ -33,6 +34,13 @@ public sealed class PlanningDbContext(DbContextOptions<PlanningDbContext> option
         goal.Property(item => item.Kind).HasConversion<string>().HasMaxLength(32);
         goal.Property(item => item.Name).HasMaxLength(LearningGoalFields.NameMaxLength);
         goal.Property(item => item.ExamType).HasConversion<string>().HasMaxLength(32);
+
+        // Oracle's provider writes a DateOnly but reads a date column back as DateTime.
+        goal.Property(item => item.ExamDate)
+            .HasConversion(new ValueConverter<DateOnly, DateTime>(
+                date => date.ToDateTime(TimeOnly.MinValue),
+                stored => DateOnly.FromDateTime(stored)))
+            .HasColumnType("date");
         goal.Property(item => item.Level).HasConversion<string>().HasMaxLength(32);
         goal.Property(item => item.OutputLanguage).HasMaxLength(8);
         goal.Property(item => item.Goal).HasMaxLength(LearningGoalFields.GoalMaxLength);

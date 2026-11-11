@@ -141,7 +141,7 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<DateOnly?>("ExamDate")
+                    b.Property<DateTime?>("ExamDate")
                         .HasColumnType("date");
 
                     b.Property<string>("ExamType")
