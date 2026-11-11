@@ -182,7 +182,7 @@ Die Adresse von NATS kommt nur von außen, als `ConnectionStrings:nats`. Lokal s
 
 ## Nutzer löschen
 
-Wird ein Konto gelöscht, müssen die Daten des Nutzers aus jedem Service verschwinden, nicht nur aus Identity. Identity sendet dafür `UserDeleted` aus `Identity.Contracts` mit der `UserId`, also dem `sub` seiner Tokens und damit der `OwnerId` seiner Zeilen. Bis sich ein Konto löschen lässt, kommt das Ereignis nur in den Tests vor.
+Wird ein Konto gelöscht, müssen die Daten des Nutzers aus jedem Service verschwinden, nicht nur aus Identity. Identity sendet dafür `UserDeleted` aus `Identity.Contracts` mit der `UserId`, also dem `sub` seiner Tokens und damit der `OwnerId` seiner Zeilen. Heute löscht der Betreiber ein Teamkonto mit `account delete` ([Teamkonto löschen](tokens.md#teamkonto-löschen)), Identity schickt das Ereignis im selben Speichern über seine Outbox.
 
 Jeder Service aus der Vorlage hört mit dem `UserDeletedHandler` darauf, der `IUserDataRemover` aufruft. `AddInfrastructure` registriert beide:
 
@@ -191,7 +191,7 @@ builder.Services.AddUserDataRemover<ServiceNameDbContext>();
 builder.Services.AddIntegrationEventHandler<UserDeleted, UserDeletedHandler>();
 ```
 
-Der Remover geht jede Entity mit `IOwnedByUser` im Modell durch und markiert alle Zeilen des Nutzers zum Löschen, auch solche, die ein eigener Query-Filter versteckt. Eine neue Entity mit `IOwnedByUser` ist damit ohne weiteren Code dabei. Zeilen ohne `OwnerId` gehen per Cascade Delete mit, deshalb muss ihre Beziehung Pflicht sein (`IsRequired`). Bei einer optionalen Beziehung scheitert das Löschen am Fremdschlüssel, und die Nachricht kommt immer wieder.
+Der Remover geht jede Entity mit `IOwnedByUser` im Modell durch und markiert alle Zeilen des Nutzers zum Löschen, auch solche, die ein eigener Query-Filter versteckt. Eine neue Entity mit `IOwnedByUser` ist damit ohne weiteren Code dabei. Eine Entity ohne `IOwnedByUser` lässt `UserDataTests` in `Edvaniq.ArchitectureTests` nur mit einem Grund auf seiner Ausnahmeliste zu, etwa Summen ohne Nutzer. Den Weg durch alle Services prüft `UserDeletionFlowTests` in `Edvaniq.EventFlowTests`. Zeilen ohne `OwnerId` gehen per Cascade Delete mit, deshalb muss ihre Beziehung Pflicht sein (`IsRequired`). Bei einer optionalen Beziehung scheitert das Löschen am Fremdschlüssel, und die Nachricht kommt immer wieder.
 
 Gespeichert wird wie bei jedem Handler vom Consumer, zusammen mit dem Inbox-Eintrag. Ob ein Service die Daten entfernt hat, zeigen dieser Eintrag für `<name>-UserDeletedHandler` und die Logzeile „Consumer <name>-UserDeletedHandler has handled message <MessageId>“. Die Zeile trägt die `TraceId` der Anfrage, die den Nutzer gelöscht hat, aber nicht seine `UserId`. Mit dieser Kennung findet man die Bestätigung jedes Service ([Ereignis empfangen](#ereignis-empfangen)).
 

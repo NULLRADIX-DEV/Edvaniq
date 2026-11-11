@@ -1,4 +1,8 @@
+using System.Text.Json;
+
+using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Identity.Api.Accounts;
+using Edvaniq.Services.Identity.Contracts;
 using Edvaniq.Services.Identity.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
@@ -75,6 +79,51 @@ public sealed class AccountCommandTests(IdentityDatabase database) : IClassFixtu
 
         Assert.Equal(AccountCommand.Invalid, exitCode);
         Assert.Contains("account set <name>", error.ToString(), StringComparison.Ordinal);
+    }
+
+    // account delete removes the account and sends UserDeleted with the sub of its tokens in the same save. Other
+    // accounts stay, a second run finds nothing and sends nothing, and the output names nothing but the account name.
+    [Fact]
+    public async Task Delete_RemovesTheAccount_AndSendsUserDeletedOnce()
+    {
+        await using var identity = new IdentityFactory(connectionString: database.ConnectionString);
+        var name = $"gone-{Guid.NewGuid():N}"[..20];
+        var other = $"kept-{Guid.NewGuid():N}"[..20];
+        await identity.SetAccountAsync(name, Password);
+        await identity.SetAccountAsync(other, Password);
+        var account = await FindAsync(identity, name);
+
+        var (exitCode, output, error) = await DeleteAsync(identity, name);
+        var (again, againOutput, _) = await DeleteAsync(identity, name);
+
+        Assert.Equal((AccountCommand.Ok, AccountCommand.Ok), (exitCode, again));
+        Assert.Empty(error);
+        Assert.Equal($"deleted {name}", output.Trim());
+        Assert.Equal($"no account {name}", againOutput.Trim());
+        Assert.DoesNotContain(account.Id.ToString("D"), output, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(await FindOrNullAsync(identity, name));
+        Assert.NotNull(await FindOrNullAsync(identity, other));
+        Assert.Single(await DeletedUsersAsync(identity), user => user == account.Id.ToString("D"));
+    }
+
+    private static async Task<(int ExitCode, string Output, string Error)> DeleteAsync(IdentityFactory identity, string name)
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await AccountCommand.RunAsync(identity.Services, ["account", "delete", name], new StringReader(""), output, error);
+        return (exitCode, output.ToString(), error.ToString());
+    }
+
+    // The user ids of every UserDeleted in the outbox, sent or not.
+    private static async Task<List<string>> DeletedUsersAsync(IdentityFactory identity)
+    {
+        using var scope = identity.Services.CreateScope();
+        var subject = EventRoute.For(typeof(UserDeleted)).Subject;
+        var payloads = await scope.ServiceProvider.GetRequiredService<IdentityDbContext>().Set<OutboxMessage>()
+            .Where(message => message.Subject == subject)
+            .Select(message => message.Payload)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        return [.. payloads.Select(payload => JsonSerializer.Deserialize<UserDeleted>(payload, JsonSerializerOptions.Web)!.UserId)];
     }
 
     private static async Task<Domain.Account> FindAsync(IdentityFactory identity, string name) =>

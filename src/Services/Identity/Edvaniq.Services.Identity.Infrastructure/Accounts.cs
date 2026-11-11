@@ -12,5 +12,7 @@ internal sealed class Accounts(IdentityDbContext db) : IAccounts
 
     public void Add(Account account) => db.Accounts.Add(account);
 
+    public void Remove(Account account) => db.Accounts.Remove(account);
+
     public Task SaveAsync(CancellationToken cancellationToken) => db.SaveChangesAsync(cancellationToken);
 }
