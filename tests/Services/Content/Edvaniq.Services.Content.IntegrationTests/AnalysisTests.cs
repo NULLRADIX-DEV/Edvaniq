@@ -10,6 +10,7 @@ using Edvaniq.Services.Content.Contracts;
 using Edvaniq.Services.Content.Domain;
 using Edvaniq.Services.Content.Infrastructure;
 using Edvaniq.Services.Content.Infrastructure.Ai;
+using Edvaniq.Services.Content.UnitTests;
 using Edvaniq.Testing;
 
 using Microsoft.EntityFrameworkCore;
@@ -53,6 +54,8 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     private readonly IHost ai = SimulatedAi();
 
     private readonly List<ChatMessage> prompts = [];
+
+    private readonly List<ChatOptions?> requestOptions = [];
 
     private readonly TestLogs logs = new();
 
@@ -444,6 +447,68 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         });
     }
 
+    // Rule 5 of tests/ReferenceSet/README.md for the questions: no forbidden text of the injection turns up in a question,
+    // and the questions are those of the same document without the injection. The simulated AI is gullible on purpose
+    // (SimulatedQuestions), so only the fence of the material keeps it from writing what the injection asks for.
+    [Fact]
+    public async Task InjectionOfTheReferenceSet_ChangesNoQuestion()
+    {
+        var reference = Assert.Single(ReferenceSet.Load().Documents, document => document.Kind == "injection");
+        var forbidden = reference.Forbidden!;
+        var withoutInjection = string.Join("\n\n", reference.Text.ReplaceLineEndings("\n").Split("\n\n")
+            .Where(paragraph => !forbidden.Any(text => paragraph.Contains(text, StringComparison.OrdinalIgnoreCase))));
+        Assert.NotEqual(reference.Text.ReplaceLineEndings("\n"), withoutInjection);
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var injected = await PasteAsync(client, reference.Text, reference.Title);
+        var clean = await PasteAsync(client, withoutInjection, reference.Title);
+
+        await AnalyzeAsync(injected, withQuestions: true);
+        await AnalyzeAsync(clean, withQuestions: true);
+
+        var questions = (await GeneratedAsync(injected)).SelectMany(generated => generated.Items).Select(item => item.Question!).ToList();
+        Assert.NotEmpty(questions);
+        Assert.All(questions, question => Assert.All(
+            question.Options.Append(question.Text).Append(question.Explanation),
+            text => Assert.DoesNotContain(forbidden, word => text.Contains(word, StringComparison.OrdinalIgnoreCase))));
+        Assert.Equal(await QuestionTextsAsync(clean), await QuestionTextsAsync(injected));
+    }
+
+    // Every request for questions carries the material and the fixed instructions, nothing that leads to the user: no
+    // user id, title or id of a document, learning goal, section or topic, and no options besides the answer's form. It
+    // holds for any provider, since the requests are taken where every one of them goes through.
+    [Fact]
+    public async Task QuestionRequests_CarryNoDataOfTheUser()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        using var client = ClientFor(alice);
+        const string title = "Mappe von Erika Mustermann";
+        var id = await PasteAsync(client, Assert.Single(ReferenceSet.Load().Documents, document => document.Kind == "injection").Text, title);
+
+        await AnalyzeAsync(id, withQuestions: true);
+
+        var questionRequests = prompts
+            .Select((message, index) => (Message: message, System: index > 0 ? prompts[index - 1] : null))
+            .Where(entry => entry.Message.Role == ChatRole.User
+                && entry.System?.Text.StartsWith(ContentAi.QuestionsTask, StringComparison.Ordinal) == true)
+            .SelectMany(entry => new[] { entry.System!.Text, entry.Message.Text })
+            .ToList();
+        Assert.NotEmpty(questionRequests);
+        using var scope = service.Services.CreateScope();
+        var sectionIds = await scope.ServiceProvider.GetRequiredService<ContentDbContext>().Sections.IgnoreQueryFilters()
+            .Where(section => section.DocumentId == id)
+            .Select(section => section.Id)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        var topicIds = (await GeneratedAsync(id)).Select(generated => generated.TopicId!.Value);
+        string[] traces = [alice, title, "Mustermann", id.ToString(), service.Planning.GoalOf(alice).ToString(),
+            .. sectionIds.Select(section => section.ToString()), .. topicIds.Select(topic => topic.ToString())];
+        Assert.All(questionRequests, text =>
+            Assert.DoesNotContain(traces, trace => text.Contains(trace, StringComparison.OrdinalIgnoreCase)));
+        Assert.All(requestOptions, options => Assert.True(
+            options is null || (options.ResponseFormat is not null && options.ConversationId is null && options.Instructions is null
+                && options.AdditionalProperties is null && options.Tools is null && options.ModelId is null),
+            "A request carries options besides the form of the answer."));
+    }
+
     // Both prompts are the variant for the goal's level and language, and the default one for a goal without.
     [Theory]
     [InlineData("University", "en")]
@@ -764,7 +829,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     // The simulated AI, keeping every prompt it gets. BrokenAnswers sits in between when given.
     private IChatClient Chat(BrokenAnswers? questions = null)
     {
-        IChatClient chat = new RecordingChatClient(ai.Services.GetRequiredService<IChatClient>(), prompts);
+        IChatClient chat = new RecordingChatClient(ai.Services.GetRequiredService<IChatClient>(), prompts, requestOptions);
         if (questions is null)
         {
             return chat;
@@ -887,6 +952,11 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     // Every ItemsGenerated of the document in the outbox, sent or not.
     private Task<List<ItemsGenerated>> GeneratedAsync(Guid documentId) => OutboxAsync<ItemsGenerated>(documentId);
 
+    // The different question texts of the document, sorted. How many of each the AI gives may change with the material.
+    private async Task<List<string>> QuestionTextsAsync(Guid documentId) =>
+        [.. (await GeneratedAsync(documentId)).SelectMany(generated => generated.Items).Select(item => item.Question!.Text)
+            .Distinct().Order(StringComparer.Ordinal)];
+
     private async Task<List<T>> OutboxAsync<T>(Guid documentId)
     {
         using var scope = service.Services.CreateScope();
@@ -916,7 +986,8 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         return client;
     }
 
-    private sealed class RecordingChatClient(IChatClient inner, List<ChatMessage> prompts) : DelegatingChatClient(inner)
+    private sealed class RecordingChatClient(IChatClient inner, List<ChatMessage> prompts, List<ChatOptions?> requestOptions)
+        : DelegatingChatClient(inner)
     {
         public override Task<ChatResponse> GetResponseAsync(
             IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
@@ -927,6 +998,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             lock (prompts)
             {
                 prompts.AddRange(list);
+                requestOptions.Add(options);
             }
 
             return base.GetResponseAsync(list, options, cancellationToken);

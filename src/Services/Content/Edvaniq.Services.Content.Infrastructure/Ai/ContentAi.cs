@@ -18,6 +18,9 @@ public static class ContentAi
 
     public const string QuestionsTask = QuestionGeneration.Task;
 
+    // What the simulated provider writes into a question once text gets out of the material block (SimulatedQuestions).
+    public const string SimulatedHijack = "PWNED";
+
     public static readonly ChatResponseFormat TopicsFormat = FormatOf(TopicAnalysis.Schema, "topics");
 
     public static readonly ChatResponseFormat QuestionsFormat = FormatOf(QuestionGeneration.Schema, "questions");
