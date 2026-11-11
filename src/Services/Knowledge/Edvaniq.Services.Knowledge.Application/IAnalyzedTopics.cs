@@ -7,18 +7,19 @@ namespace Edvaniq.Services.Knowledge.Application;
 // Infrastructure implements it.
 public interface IAnalyzedTopics
 {
-    Task<bool> ExistForAsync(string ownerId, Guid documentId, CancellationToken cancellationToken);
-
-    // Only adds them to the context, the consumer saves them together with its inbox entry.
-    void Add(TopicImport import);
+    // Adds the new topics and makes the import's sections the only ones of its document. Only changes the context, the
+    // consumer saves it together with its inbox entry.
+    Task ImportAsync(TopicImport import, CancellationToken cancellationToken);
 
     // The user's topics of the learning goal, tracked, so a change goes out with the next save.
     Task<IReadOnlyList<Topic>> OfGoalAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken);
 
-    // The topics that came from the analysis of the document, in the order of the analysis. A document belongs to one
-    // user, so these are that user's topics, whoever asks.
+    // The topics the analysis of the document brought or hung sections on, in the order of the analysis that made them,
+    // each with its sections of this document. A document belongs to one user, so these are that user's topics, whoever
+    // asks.
     Task<IReadOnlyList<DocumentTopic>> OfDocumentAsync(Guid documentId, CancellationToken cancellationToken);
 }
 
-// Position is the place of the suggestion in DocumentAnalyzed, SectionIds are Content's sections of the topic.
+// Position is the place of the suggestion in the DocumentAnalyzed that made the topic, SectionIds are Content's sections
+// of the topic in the document asked for.
 public sealed record DocumentTopic(Guid Id, Guid? ParentId, int Position, IReadOnlyList<Guid> SectionIds);

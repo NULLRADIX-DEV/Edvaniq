@@ -89,6 +89,10 @@ namespace Edvaniq.Services.Knowledge.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("char(36)");
 
+                    b.Property<string>("AnalysisName")
+                        .HasMaxLength(80)
+                        .HasColumnType("varchar(80)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
@@ -136,6 +140,11 @@ namespace Edvaniq.Services.Knowledge.Infrastructure.Migrations
                     b.Property<Guid>("SectionId")
                         .HasColumnType("char(36)");
 
+                    b.Property<Guid>("DocumentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000000"));
+
                     b.Property<string>("OwnerId")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -143,6 +152,8 @@ namespace Edvaniq.Services.Knowledge.Infrastructure.Migrations
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("TopicId", "SectionId");
+
+                    b.HasIndex("DocumentId");
 
                     b.HasIndex("OwnerId");
 

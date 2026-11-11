@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\BuildingBlocks\Edvaniq.BuildingBlocks.Domain\Edvaniq.BuildingBlocks.Domain.csproj" />
+    <ProjectReference Include="..\..\..\SharedKernel\Edvaniq.SharedKernel\Edvaniq.SharedKernel.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

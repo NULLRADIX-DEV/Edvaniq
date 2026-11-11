@@ -19,16 +19,21 @@ public sealed class KnowledgeDbContext(DbContextOptions<KnowledgeDbContext> opti
     {
         var topic = modelBuilder.Entity<Topic>();
         topic.Property(item => item.Name).HasMaxLength(Topic.NameMaxLength);
+        topic.Property(item => item.AnalysisName).HasMaxLength(Topic.NameMaxLength);
 
         // A subtopic goes with its topic.
         topic.HasOne<Topic>().WithMany().HasForeignKey(item => item.ParentId).OnDelete(DeleteBehavior.Cascade);
         topic.HasIndex(item => new { item.OwnerId, item.LearningGoalId });
 
-        // Asked for every DocumentAnalyzed: are the document's topics here already?
+        // Content asks for the topics of a document.
         topic.HasIndex(item => new { item.OwnerId, item.DocumentId });
 
         var section = modelBuilder.Entity<TopicSection>();
         section.HasKey(item => new { item.TopicId, item.SectionId });
+
+        // The default lets a rollback to a version without the column still insert rows.
+        section.Property(item => item.DocumentId).HasDefaultValue(Guid.Empty);
+        section.HasIndex(item => item.DocumentId);
         section.HasOne<Topic>().WithMany().HasForeignKey(item => item.TopicId).OnDelete(DeleteBehavior.Cascade);
     }
 }
