@@ -6,19 +6,34 @@ namespace Edvaniq.Services.Planning.Domain;
 // - Weight of a topic = size × (100 - mastery). Size 0 or mastery 100 means no time.
 // - Study days run from today up to the day before the exam. The exam day itself is no study day, so the last block
 //   lies on the day before it. An exam today or earlier gives an empty plan.
-// - All minutes of all study days are shared out by weight in steps of 5 minutes (largest remainder), whatever is left
-//   below 5 goes to the heaviest topic. So every day is full, and more weight never means fewer minutes.
-// - Day by day, each block goes to the topic with the largest share of its minutes still open, so topics take turns.
-//   A block is at most BlockMinutes long.
+// - Review (#369): every study day starts with one review block for a topic that is already introduced, either from the
+//   input (IsNew false) or because it had a learn block on an earlier day of the plan. Topics take turns: fewest review
+//   blocks so far, then the heaviest, then by id. Its size is ReviewShareInPercent of the day, see ReviewMinutes. A day
+//   with nothing introduced yet has no review block, which can only be the first day when every topic is new.
+// - Final phase (#369): the last FinalPhaseDays study days only give learn time to introduced topics, never to a new one.
+// - The learn minutes before the final phase are shared out by weight among all topics, those of the final phase among
+//   the introduced ones, each in steps of 5 minutes (largest remainder). Whatever is left below 5 goes to the heaviest
+//   topic. So every day is full, and within new or introduced topics more weight never means fewer minutes. Review
+//   minutes don't count towards these shares.
+// - Day by day, each learn block goes to the topic with the largest share of its minutes still open, so topics take
+//   turns. A block is at most BlockMinutes long.
 // - Ties always go by weight, then by topic id.
 //
-// Known limit: a budget that isn't a multiple of 5 minutes can leave blocks of 1 to 4 minutes. A minimum block size
-// belongs to #369.
+// Known limit: on a first day without review a budget that isn't a multiple of 5 ends with a block of 1 to 4 minutes
+// for the heaviest topic. On every other day the review block takes up those minutes.
 public static class StudyPlanner
 {
     public const int BlockMinutes = 15;
 
     public const int Step = 5;
+
+    public const int ReviewShareInPercent = 20;
+
+    public const int MaxReviewMinutes = 10;
+
+    public const int FinalPhaseShareInPercent = 20;
+
+    public const int MinFinalPhaseDays = 2;
 
     public static StudyPlan Plan(IReadOnlyCollection<TopicToPlan> topics, DailyBudget budget, DateOnly today, DateOnly examDay)
     {
@@ -27,7 +42,7 @@ public static class StudyPlanner
         Validate(topics);
 
         var weighted = topics
-            .Select(topic => (topic.TopicId, Weight: (long)topic.Size * (100 - topic.Mastery)))
+            .Select(topic => new Weighted(topic.TopicId, (long)topic.Size * (100 - topic.Mastery), topic.IsNew))
             .Where(topic => topic.Weight > 0)
             .OrderByDescending(topic => topic.Weight)
             .ThenBy(topic => topic.TopicId)
@@ -39,14 +54,44 @@ public static class StudyPlanner
             days.Add(day);
         }
 
-        if (weighted.Count == 0 || days.Count == 0)
+        var finalPhase = FinalPhaseDays(days.Count);
+        var anyIntroduced = weighted.Any(topic => !topic.IsNew);
+        if (weighted.Count == 0 || days.Count == 0 || (!anyIntroduced && finalPhase == days.Count))
         {
             return StudyPlan.Empty;
         }
 
-        var total = days.Sum(day => (long)budget.MinutesOn(day));
-        var quotas = Share(total, weighted.Select(topic => topic.Weight).ToList());
-        return Fill(days, budget, weighted.Select(topic => topic.TopicId).ToList(), quotas);
+        // Day 0 has learn time whenever it has no review, so from day 1 on something is introduced.
+        var hasReview = days.Select((_, i) => anyIntroduced || i > 0).ToList();
+        var learnMinutes = days
+            .Select((day, i) => budget.MinutesOn(day) - (hasReview[i] ? ReviewMinutes(budget.MinutesOn(day)) : 0))
+            .ToList();
+
+        // Without a review block to take them, the minutes of day 0 that don't fill a step go to the heaviest topic.
+        var leftOnDayZero = hasReview[0] ? 0 : learnMinutes[0] % Step;
+        learnMinutes[0] -= leftOnDayZero;
+
+        var firstFinal = days.Count - finalPhase;
+        var before = Share(learnMinutes.Take(firstFinal).Sum(minutes => (long)minutes), weighted.Select(topic => topic.Weight).ToList());
+        var inFinal = weighted.Select((topic, i) => !topic.IsNew || before[i] > 0 || (i == 0 && leftOnDayZero > 0)).ToList();
+        var final = Share(
+            learnMinutes.Skip(firstFinal).Sum(minutes => (long)minutes),
+            weighted.Select((topic, i) => inFinal[i] ? topic.Weight : 0).ToList());
+
+        return Fill(days, budget, weighted, hasReview, learnMinutes, leftOnDayZero, firstFinal, before, final);
+    }
+
+    // The last rounded 20 % of the study days, at least 2, and never more days than there are. 10 days give 2, 13 give 3.
+    public static int FinalPhaseDays(int studyDays) =>
+        Math.Min(studyDays, Math.Max(MinFinalPhaseDays, (int)Math.Round(studyDays * FinalPhaseShareInPercent / 100.0, MidpointRounding.AwayFromZero)));
+
+    // 20 % of the day's minutes in steps of 5, at least 5 and at most 10, plus the minutes of the day that don't fill a
+    // step, so every learn block can stay a multiple of 5. A budget below 5 minutes is all review.
+    public static int ReviewMinutes(int dayMinutes)
+    {
+        var rest = dayMinutes % Step;
+        var share = (dayMinutes - rest) * ReviewShareInPercent / 100 / Step * Step;
+        return Math.Min(dayMinutes, Math.Clamp(share, Step, MaxReviewMinutes) + rest);
     }
 
     private static void Validate(IReadOnlyCollection<TopicToPlan> topics)
@@ -65,12 +110,17 @@ public static class StudyPlanner
         }
     }
 
-    // Weights come sorted, heaviest first.
+    // Weights come sorted, heaviest first. A weight of 0 gets nothing.
     private static long[] Share(long total, List<long> weights)
     {
-        var steps = total / Step;
-        var sum = weights.Aggregate(Int128.Zero, (acc, weight) => acc + weight);
         var quotas = new long[weights.Count];
+        var sum = weights.Aggregate(Int128.Zero, (acc, weight) => acc + weight);
+        if (sum == 0)
+        {
+            return quotas;
+        }
+
+        var steps = total / Step;
         var remainders = new Int128[weights.Count];
         for (var i = 0; i < weights.Count; i++)
         {
@@ -80,7 +130,10 @@ public static class StudyPlanner
         }
 
         var left = steps - quotas.Sum();
-        var byRemainder = Enumerable.Range(0, weights.Count).OrderByDescending(i => remainders[i]).ThenBy(i => i);
+        var byRemainder = Enumerable.Range(0, weights.Count)
+            .Where(i => weights[i] > 0)
+            .OrderByDescending(i => remainders[i])
+            .ThenBy(i => i);
         foreach (var i in byRemainder.Take((int)left))
         {
             quotas[i]++;
@@ -91,18 +144,43 @@ public static class StudyPlanner
             quotas[i] *= Step;
         }
 
-        quotas[0] += total % Step;
+        quotas[weights.FindIndex(weight => weight > 0)] += total % Step;
         return quotas;
     }
 
-    private static StudyPlan Fill(List<DateOnly> days, DailyBudget budget, List<Guid> topicIds, long[] quotas)
+    private static StudyPlan Fill(
+        List<DateOnly> days,
+        DailyBudget budget,
+        List<Weighted> topics,
+        List<bool> hasReview,
+        List<int> learnMinutes,
+        int leftOnDayZero,
+        int firstFinal,
+        long[] before,
+        long[] final)
     {
-        var open = quotas.ToArray();
+        var introduced = topics.Select(topic => !topic.IsNew).ToArray();
+        var reviews = new int[topics.Count];
+        var open = before.ToArray();
         var plan = new List<DayPlan>();
-        foreach (var day in days)
+        for (var d = 0; d < days.Count; d++)
         {
-            var dayLeft = (long)budget.MinutesOn(day);
+            var quotas = d < firstFinal ? before : final;
+            if (d == firstFinal)
+            {
+                open = final.ToArray();
+            }
+
             var blocks = new List<Block>();
+            if (hasReview[d])
+            {
+                var next = NextReview(introduced, reviews);
+                reviews[next]++;
+                blocks.Add(new Block(topics[next].TopicId, budget.MinutesOn(days[d]) - learnMinutes[d], BlockKind.Review));
+            }
+
+            var dayLeft = (long)learnMinutes[d];
+            var learned = new List<int>();
             while (dayLeft > 0)
             {
                 var next = MostOpen(open, quotas);
@@ -112,18 +190,43 @@ public static class StudyPlanner
                 }
 
                 var minutes = Math.Min(BlockMinutes, Math.Min(open[next], dayLeft));
-                blocks.Add(new Block(topicIds[next], (int)minutes));
+                blocks.Add(new Block(topics[next].TopicId, (int)minutes));
+                learned.Add(next);
                 open[next] -= minutes;
                 dayLeft -= minutes;
             }
 
+            if (d == 0 && leftOnDayZero > 0)
+            {
+                blocks.Add(new Block(topics[0].TopicId, leftOnDayZero));
+                learned.Add(0);
+            }
+
+            // Introduced once its first learn block is done, so it can come up for review from the next day on.
+            learned.ForEach(i => introduced[i] = true);
+
             if (blocks.Count > 0)
             {
-                plan.Add(new DayPlan(day, blocks));
+                plan.Add(new DayPlan(days[d], blocks));
             }
         }
 
         return new StudyPlan(plan);
+    }
+
+    // The introduced topic with the fewest review blocks so far, the heavier one on a tie (topics come sorted).
+    private static int NextReview(bool[] introduced, int[] reviews)
+    {
+        var best = -1;
+        for (var i = 0; i < introduced.Length; i++)
+        {
+            if (introduced[i] && (best < 0 || reviews[i] < reviews[best]))
+            {
+                best = i;
+            }
+        }
+
+        return best;
     }
 
     // The topic with the largest open share open/quota, the earlier one on a tie. -1 when nothing is open.
@@ -145,4 +248,6 @@ public static class StudyPlanner
 
         return best;
     }
+
+    private sealed record Weighted(Guid TopicId, long Weight, bool IsNew);
 }

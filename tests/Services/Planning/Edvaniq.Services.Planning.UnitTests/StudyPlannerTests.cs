@@ -32,11 +32,11 @@ public class StudyPlannerTests
 
         var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(30), Today, ExamInTenDays);
 
-        // Weights 100, 50 and 100 of 250.
-        var minutes = MinutesPerTopic(plan);
-        Assert.Equal(120, minutes[A]);
-        Assert.Equal(60, minutes[B]);
-        Assert.Equal(120, minutes[C]);
+        // Weights 100, 50 and 100 of 250. 5 of the 30 minutes each day are review, so 250 minutes are learned.
+        var minutes = MinutesPerTopic(plan, BlockKind.Learn);
+        Assert.Equal(100, minutes[A]);
+        Assert.Equal(50, minutes[B]);
+        Assert.Equal(100, minutes[C]);
     }
 
     [Fact]
@@ -148,7 +148,11 @@ public class StudyPlannerTests
     {
         var plan = StudyPlanner.Plan([new(A, 1, 0), new(B, 1, 0)], DailyBudget.Uniform(30), Today, ExamInTenDays);
 
-        Assert.All(plan.Days, day => Assert.Equal([A, B], day.Blocks.Select(block => block.TopicId)));
+        Assert.All(plan.Days, day => Assert.Equal(
+            [A, B], day.Blocks.Where(block => block.Kind == BlockKind.Learn).Select(block => block.TopicId).Order()));
+        Assert.Equal(
+            [A, B, A, B],
+            plan.Days.Take(4).Select(day => day.Blocks.First(block => block.Kind == BlockKind.Learn).TopicId));
     }
 
     [Theory]
@@ -166,6 +170,148 @@ public class StudyPlannerTests
     {
         Assert.Throws<ArgumentException>(
             () => StudyPlanner.Plan([new(A, 1, 50), new(A, 2, 50)], DailyBudget.Uniform(30), Today, ExamInTenDays));
+    }
+
+    [Fact]
+    public void EveryStudyDay_StartsWithOneReviewBlock()
+    {
+        TopicToPlan[] topics = [new(A, 2, 50), new(B, 1, 50), new(C, 1, 20)];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(30), Today, ExamInTenDays);
+
+        Assert.Equal(10, plan.Days.Count);
+        Assert.All(plan.Days, day =>
+        {
+            Assert.Equal(BlockKind.Review, day.Blocks[0].Kind);
+            Assert.Single(day.Blocks, block => block.Kind == BlockKind.Review);
+        });
+    }
+
+    // Fewest reviews first, then the heaviest: weights A 100, C 80, B 50.
+    [Fact]
+    public void ReviewBlocks_TakeTurns_HeaviestFirst()
+    {
+        TopicToPlan[] topics = [new(A, 2, 50), new(B, 1, 50), new(C, 1, 20)];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(30), Today, ExamInTenDays);
+
+        Assert.Equal([A, C, B, A, C, B], plan.Days.Take(6).Select(day => day.Blocks[0].TopicId));
+    }
+
+    [Theory]
+    [InlineData(30, 5)]
+    [InlineData(45, 5)]
+    [InlineData(50, 10)]
+    [InlineData(720, 10)]
+    [InlineData(32, 7)]
+    [InlineData(12, 7)]
+    [InlineData(10, 5)]
+    [InlineData(7, 7)]
+    [InlineData(5, 5)]
+    [InlineData(3, 3)]
+    [InlineData(1, 1)]
+    public void ReviewBlock_IsAFifthOfTheDay_FiveToTenMinutes_PlusWhatDoesNotFillAStep(int budget, int review)
+    {
+        Assert.Equal(review, StudyPlanner.ReviewMinutes(budget));
+
+        var plan = StudyPlanner.Plan([new(A, 1, 0), new(B, 1, 50)], DailyBudget.Uniform(budget), Today, ExamInTenDays);
+
+        Assert.All(plan.Days, day =>
+        {
+            Assert.Equal((BlockKind.Review, review), (day.Blocks[0].Kind, day.Blocks[0].Minutes));
+            Assert.Equal(budget, day.Blocks.Sum(block => block.Minutes));
+            Assert.All(day.Blocks.Skip(1), block => Assert.Equal(0, block.Minutes % StudyPlanner.Step));
+        });
+    }
+
+    // A budget below a block: the whole day is the review.
+    [Fact]
+    public void BudgetBelowOneStep_IsAllReview()
+    {
+        var plan = StudyPlanner.Plan([new(A, 1, 0)], DailyBudget.Uniform(3), Today, ExamInTenDays);
+
+        Assert.All(plan.Days, day => Assert.Equal([new Block(A, 3, BlockKind.Review)], day.Blocks));
+    }
+
+    // Nothing introduced yet means nothing to review on the first day. A topic learned that day is reviewed from day 2.
+    [Fact]
+    public void OnlyNewTopics_FirstDayHasNoReview_TheNextDaysDo()
+    {
+        TopicToPlan[] topics = [new(A, 1, 0, IsNew: true), new(B, 1, 0, IsNew: true)];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(30), Today, ExamInTenDays);
+
+        Assert.DoesNotContain(plan.Days[0].Blocks, block => block.Kind == BlockKind.Review);
+        Assert.Equal(30, plan.Days[0].Blocks.Sum(block => block.Minutes));
+        var learnedOnDayOne = plan.Days[0].Blocks.Select(block => block.TopicId).ToHashSet();
+        Assert.All(plan.Days.Skip(1), day => Assert.Equal(BlockKind.Review, day.Blocks[0].Kind));
+        Assert.Contains(plan.Days[1].Blocks[0].TopicId, learnedOnDayOne);
+    }
+
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(2, 2)]
+    [InlineData(3, 2)]
+    [InlineData(10, 2)]
+    [InlineData(12, 2)]
+    [InlineData(13, 3)]
+    [InlineData(30, 6)]
+    public void FinalPhase_IsTheLastFifthOfTheStudyDays_AtLeastTwo(int studyDays, int finalPhase)
+    {
+        Assert.Equal(finalPhase, StudyPlanner.FinalPhaseDays(studyDays));
+    }
+
+    // 10 days: the last 2 are the final phase. D is new and learned before it, so it may come back. C is new and too light
+    // to get time before it, so it gets none in the final phase either, although minutes would be left for it.
+    [Fact]
+    public void FinalPhase_HasNoNewTopic()
+    {
+        var d = new Guid("00000000-0000-0000-0000-00000000000d");
+        TopicToPlan[] topics = [new(A, 1, 0), new(B, 1, 50), new(C, 1, 99, IsNew: true), new(d, 10, 0, IsNew: true)];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(30), Today, ExamInTenDays);
+
+        var finalPhase = plan.Days.TakeLast(2).SelectMany(day => day.Blocks).Select(block => block.TopicId).ToHashSet();
+        var before = plan.Days.SkipLast(2).SelectMany(day => day.Blocks).Select(block => block.TopicId).ToHashSet();
+        Assert.Contains(d, before);
+        Assert.DoesNotContain(C, before);
+        Assert.DoesNotContain(C, finalPhase);
+        Assert.Contains(d, finalPhase);
+        Assert.All(plan.Days.TakeLast(2), day => Assert.Equal(30, day.Blocks.Sum(block => block.Minutes)));
+    }
+
+    // 3 study days with a new topic: it is learned on day 1, the final phase of 2 days only repeats and deepens.
+    [Fact]
+    public void ThreeDays_OnlyTheFirstHasANewTopic()
+    {
+        TopicToPlan[] topics = [new(A, 1, 50), new(B, 1, 0, IsNew: true)];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(30), Today, Today.AddDays(3));
+
+        Assert.Equal(3, plan.Days.Count);
+        Assert.Contains(plan.Days[0].Blocks, block => block.TopicId == B && block.Kind == BlockKind.Learn);
+        Assert.All(plan.Days, day => Assert.Equal(30, day.Blocks.Sum(block => block.Minutes)));
+    }
+
+    // 1 or 2 study days are all final phase: new topics stay out, introduced ones fill the days.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void OneOrTwoDays_HaveNoNewTopic(int studyDays)
+    {
+        TopicToPlan[] topics = [new(A, 1, 50), new(B, 1, 0, IsNew: true)];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(30), Today, Today.AddDays(studyDays));
+
+        Assert.Equal(studyDays, plan.Days.Count);
+        Assert.All(plan.Days.SelectMany(day => day.Blocks), block => Assert.Equal(A, block.TopicId));
+        Assert.All(plan.Days, day => Assert.Equal(30, day.Blocks.Sum(block => block.Minutes)));
+    }
+
+    [Fact]
+    public void OneOrTwoDays_WithOnlyNewTopics_GiveAnEmptyPlan()
+    {
+        Assert.Empty(StudyPlanner.Plan([new(A, 1, 0, IsNew: true)], DailyBudget.Uniform(30), Today, Today.AddDays(2)).Days);
     }
 
     // Many random inputs with a fixed seed. A failure names seed and run, so Run(seed + run) reproduces it.
@@ -189,20 +335,24 @@ public class StudyPlannerTests
         var today = new DateOnly(2026, 1, 1).AddDays(random.Next(730));
         var exam = today.AddDays(random.Next(-3, 121));
         var topics = Enumerable.Range(0, random.Next(13))
-            .Select(_ => new TopicToPlan(RandomId(random), random.Next(21), random.Next(101)))
+            .Select(_ => new TopicToPlan(RandomId(random), random.Next(21), random.Next(101), random.Next(3) == 0))
             .ToArray();
         var weights = topics.ToDictionary(topic => topic.TopicId, topic => topic.Size * (100 - topic.Mastery));
+        var isNew = topics.ToDictionary(topic => topic.TopicId, topic => topic.IsNew);
 
         var plan = StudyPlanner.Plan(topics, budget, today, exam);
 
         var studyDays = Math.Max(0, exam.DayNumber - today.DayNumber);
-        if (studyDays == 0 || weights.Values.All(weight => weight == 0))
+        var finalPhase = StudyPlanner.FinalPhaseDays(studyDays);
+        var anyIntroduced = topics.Any(topic => weights[topic.TopicId] > 0 && !topic.IsNew);
+        if (studyDays == 0 || weights.Values.All(weight => weight == 0) || (!anyIntroduced && finalPhase == studyDays))
         {
             Assert.True(plan.Days.Count == 0, $"{input}: expected an empty plan");
             return;
         }
 
         Assert.True(plan.Days.Count == studyDays, $"{input}: {plan.Days.Count} days instead of {studyDays}");
+        var learned = new HashSet<Guid>();
         for (var i = 0; i < plan.Days.Count; i++)
         {
             var day = plan.Days[i];
@@ -215,18 +365,40 @@ public class StudyPlannerTests
             Assert.True(
                 !steps || day.Blocks.All(block => block.Minutes % StudyPlanner.Step == 0),
                 $"{input}: block not in steps of five on {day.StudyDay}");
+
+            // #369: one review block first on every day with something introduced, for a topic introduced by then.
+            var reviews = day.Blocks.Where(block => block.Kind == BlockKind.Review).ToList();
+            Assert.True(reviews.Count == (anyIntroduced || i > 0 ? 1 : 0), $"{input}: {reviews.Count} review blocks on {day.StudyDay}");
+            Assert.True(reviews.Count == 0 || day.Blocks[0].Kind == BlockKind.Review, $"{input}: review not first on {day.StudyDay}");
+            Assert.True(
+                reviews.All(block => !isNew[block.TopicId] || learned.Contains(block.TopicId)),
+                $"{input}: review of a topic not introduced yet on {day.StudyDay}");
+
+            var learn = day.Blocks.Where(block => block.Kind == BlockKind.Learn).ToList();
+            Assert.True(
+                i < studyDays - finalPhase || learn.All(block => !isNew[block.TopicId] || learned.Contains(block.TopicId)),
+                $"{input}: new topic in the final phase on {day.StudyDay}");
+            Assert.True(
+                reviews.Count == 0 || learn.All(block => block.Minutes % StudyPlanner.Step == 0 && block.Minutes >= StudyPlanner.Step),
+                $"{input}: learn block not in steps of five on {day.StudyDay}");
+            learn.ForEach(block => learned.Add(block.TopicId));
         }
 
         var perTopic = MinutesPerTopic(plan);
         Assert.True(perTopic.Keys.All(id => weights[id] > 0), $"{input}: a topic without weight got time");
+        var learnPerTopic = MinutesPerTopic(plan, BlockKind.Learn);
         var ranked = topics.OrderBy(topic => weights[topic.TopicId]).Select(topic => topic.TopicId).ToList();
-        for (var i = 1; i < ranked.Count; i++)
+        for (var i = 0; i < ranked.Count; i++)
         {
-            var lighter = ranked[i - 1];
-            var heavier = ranked[i];
-            Assert.True(
-                weights[lighter] == weights[heavier] || perTopic.GetValueOrDefault(heavier) >= perTopic.GetValueOrDefault(lighter),
-                $"{input}: more weight got fewer minutes");
+            for (var j = i + 1; j < ranked.Count; j++)
+            {
+                var (lighter, heavier) = (ranked[i], ranked[j]);
+                Assert.True(
+                    weights[lighter] == weights[heavier]
+                        || isNew[lighter] != isNew[heavier]
+                        || learnPerTopic.GetValueOrDefault(heavier) >= learnPerTopic.GetValueOrDefault(lighter),
+                    $"{input}: more weight got fewer minutes");
+            }
         }
 
         var again = StudyPlanner.Plan(topics.Reverse().ToArray(), budget, today, exam);
@@ -240,8 +412,9 @@ public class StudyPlannerTests
         return new Guid(bytes);
     }
 
-    private static Dictionary<Guid, int> MinutesPerTopic(StudyPlan plan) =>
+    private static Dictionary<Guid, int> MinutesPerTopic(StudyPlan plan, BlockKind? kind = null) =>
         plan.Days.SelectMany(day => day.Blocks)
+            .Where(block => kind is null || block.Kind == kind)
             .GroupBy(block => block.TopicId)
             .ToDictionary(group => group.Key, group => group.Sum(block => block.Minutes));
 
