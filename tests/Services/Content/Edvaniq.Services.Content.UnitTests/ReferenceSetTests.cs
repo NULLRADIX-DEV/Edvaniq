@@ -146,6 +146,16 @@ public class ReferenceSetTests
             return violations;
         });
 
+    // Rule 6 of tests/ReferenceSet/README.md: the scan is turned away when pasted, every other document gets through.
+    [Fact]
+    public void OnlyTheDocumentsThatAreNotAnalyzable_AreRejectedWhenPasted() =>
+        AssertNoViolations(document =>
+        {
+            var reason = Document.CheckText(document.Text);
+            return document.Analyzable == (reason is null) ? []
+                : [document.Analyzable ? $"is rejected: {reason}" : "is accepted although it is not analyzable"];
+        });
+
     [Fact]
     public void Injection_CarriesTheTextsItMustNotLeadTo() =>
         AssertNoViolations(document =>

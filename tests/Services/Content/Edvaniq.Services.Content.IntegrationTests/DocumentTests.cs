@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using Edvaniq.Services.Content.Domain;
 using Edvaniq.Services.Content.Infrastructure;
 using Edvaniq.Testing;
 
@@ -20,7 +21,7 @@ public sealed class DocumentTests(ServiceFactory service) : IClassFixture<Servic
     {
         var alice = $"alice-{Guid.NewGuid():N}";
         using var client = ClientFor(alice);
-        const string text = "Photosynthese\r\nLicht wird zu Zucker.";
+        const string text = $"Photosynthese\r\n{TestTexts.Lesson}";
 
         using var response = await client.PostAsJsonAsync("/documents", new { text }, TestContext.Current.CancellationToken);
 
@@ -66,13 +67,29 @@ public sealed class DocumentTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(["Der Titel ist zu lang. Erlaubt sind höchstens 80 Zeichen."], errors["Title"]);
     }
 
+    // What a scan without a text layer leaves behind: no document, so no analysis and no AI call.
+    [Fact]
+    public async Task TextWithoutRealWords_IsRejected_AndNothingIsStored()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        using var client = ClientFor(alice);
+
+        using var response = await client.PostAsJsonAsync(
+            "/documents", new { text = "- 1 -\n\n  .  ,  '  .\n | _ ~ ;\n\n- 2 -\n\n ab cd" }, TestContext.Current.CancellationToken);
+
+        var errors = await ErrorsAsync(response);
+        Assert.Equal([Document.TooFewWords], errors["Text"]);
+        Assert.Empty((await client.GetFromJsonAsync<DocumentDto[]>("/documents", TestContext.Current.CancellationToken))!);
+        Assert.DoesNotContain(service.Planning.Requests, received => received.User == alice);
+    }
+
     [Fact]
     public async Task TextAtTheLimit_IsStored()
     {
         using var client = ClientFor($"alice-{Guid.NewGuid():N}");
 
         using var response = await client.PostAsJsonAsync(
-            "/documents", new { text = new string('ä', 200_000) }, TestContext.Current.CancellationToken);
+            "/documents", new { text = string.Concat(Enumerable.Repeat("Äpfel ", 33_334))[..200_000] }, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
