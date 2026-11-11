@@ -63,7 +63,7 @@
             </div>
             @if (retryFailed)
             {
-                <ConnectionProblem Title="Der neue Versuch ließ sich gerade nicht starten." TraceId="@retryTrace" />
+                <ConnectionProblem Title="@FeedbackTexts.Retry.NotThrough" TraceId="@retryTrace" />
             }
             break;
         case ViewState.Ready:
@@ -85,7 +85,7 @@
         break;
     case ViewState.Failed:
         <button type="button" class="button" @onclick="RetryAnalysisAsync">
-            @(retrying ? "Wird gestartet …" : "Erneut analysieren")
+            @(retrying ? FeedbackTexts.Retry.Starting : FeedbackTexts.Retry.Button)
         </button>
         break;
 }

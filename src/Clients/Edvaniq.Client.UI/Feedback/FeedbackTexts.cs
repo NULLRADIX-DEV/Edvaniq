@@ -67,6 +67,16 @@ public static class FeedbackTexts
         public const string NothingChosen = "Wähl zuerst eine Antwort aus.";
     }
 
+    // Starting a failed analysis again on the topics page.
+    public static class Retry
+    {
+        public const string Button = "Erneut analysieren";
+
+        public const string Starting = "Wird gestartet …";
+
+        public const string NotThrough = "Der neue Versuch ließ sich gerade nicht starten.";
+    }
+
     // When a call or the app itself didn't get through. Never the user's fault.
     public static class Connection
     {
