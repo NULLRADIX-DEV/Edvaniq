@@ -175,6 +175,22 @@ public class TodayPlannerTests
         Assert.Equal(20, plan.Blocks.Sum(block => block.Minutes));
     }
 
+    // #370: 15 minutes a day leave 70 minutes to learn in the week, room for 4 of 6 topics. The weakness from
+    // LearningEngine stays although its mastery is the highest, the lightest topics in progress are shortened.
+    [Fact]
+    public void ShortWeek_KeepsTheWeaknessFromLearningEngine_AndNamesTheShortenedTopics()
+    {
+        var ids = Enumerable.Range(1, 6).Select(i => new Guid($"00000000-0000-0000-0000-00000000000{i}")).ToArray();
+        var standings = ids.ToDictionary(id => id, _ => new TopicStanding(50, TopicState.Building));
+        standings[ids[0]] = new TopicStanding(60, TopicState.Weakness);
+
+        var plan = TodayPlanner.Plan(ids, standings, DailyBudget.Uniform(15), Now);
+        var enoughTime = TodayPlanner.Plan(ids, standings, Budget, Now);
+
+        Assert.Equal([ids[4], ids[5]], plan.Shortened);
+        Assert.Empty(enoughTime.Shortened);
+    }
+
     private static Dictionary<Guid, TopicStanding> Introduced(Dictionary<Guid, int> masteries) =>
         Standings(TopicState.Building, masteries);
 

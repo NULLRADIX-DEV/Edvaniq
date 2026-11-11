@@ -47,6 +47,7 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
         Assert.True(MinutesOf(alicePlan, weak) > MinutesOf(alicePlan, strong));
         Assert.Null(alicePlan.EmptyReason);
         Assert.True(alicePlan.MasteryAvailable);
+        Assert.Empty(alicePlan.ShortenedTopicIds);
         Assert.Equal(LearningGoal.DefaultIdFor(alice), alicePlan.LearningGoalId);
         Assert.Equal([bobsTopic], bobPlan.Blocks.Select(block => block.TopicId).Distinct());
 
@@ -106,6 +107,29 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
 
         Assert.True(plan.MasteryAvailable);
         Assert.Equal([topic], plan.Blocks.Select(block => block.TopicId).Distinct());
+    }
+
+    // #370: 13 topics don't get a block each in a week of 30 minutes a day. The weakness from LearningEngine stays,
+    // two topics in progress are shortened, and the answer names them.
+    [Fact]
+    public async Task Plan_ShortOfTime_NamesTheShortenedTopics_ButNeverTheWeakness()
+    {
+        var (alice, token) = NewUser("alice");
+        var weakness = Guid.NewGuid();
+        var inProgress = Enumerable.Range(0, 12).Select(_ => Guid.NewGuid()).ToList();
+        foreach (var topic in inProgress.Append(weakness))
+        {
+            Seed(KnownTopic.Create(alice, topic, LearningGoal.DefaultIdFor(alice), hidden: false));
+            service.LearningEngine.Set(token, topic, 50);
+        }
+
+        service.LearningEngine.Set(token, weakness, 70, "weakness");
+
+        var plan = await PlanAsync(token);
+
+        Assert.Equal(2, plan.ShortenedTopicIds.Count);
+        Assert.All(plan.ShortenedTopicIds, id => Assert.Contains(id, inProgress));
+        Assert.Equal(plan.ShortenedTopicIds.Order(), plan.ShortenedTopicIds);
     }
 
     [Fact]
@@ -243,7 +267,8 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
         db.SaveChanges();
     }
 
-    private sealed record Plan(DateOnly StudyDay, Guid LearningGoalId, List<PlannedBlock> Blocks, string? EmptyReason, bool MasteryAvailable);
+    private sealed record Plan(
+        DateOnly StudyDay, Guid LearningGoalId, List<PlannedBlock> Blocks, string? EmptyReason, bool MasteryAvailable, List<Guid> ShortenedTopicIds);
 
     private sealed record PlannedBlock(Guid TopicId, int Minutes, string Kind);
 }

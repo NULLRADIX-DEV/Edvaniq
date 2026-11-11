@@ -379,6 +379,113 @@ public class StudyPlannerTests
         Assert.Equal(Flat(first), Flat(reversed));
     }
 
+    // A38: exam in 3 days, 15 minutes a day, 10 of them to learn, so 30 minutes for 4 topics: room for 2 blocks. The
+    // weakness stays, the heaviest topic in progress too, the two others are shortened.
+    [Fact]
+    public void A38_ShortOfTime_TheWeaknessStays_TopicsInProgressAreShortened()
+    {
+        var w = new Guid("00000000-0000-0000-0000-00000000000d");
+        TopicToPlan[] topics = [new(w, 1, 40, IsWeakness: true), new(A, 1, 60), new(B, 1, 65), new(C, 1, 70)];
+        var budget = DailyBudget.Uniform(15);
+        var exam = Today.AddDays(3);
+
+        var plan = StudyPlanner.Plan(topics, budget, Today, exam);
+        var unshortened = StudyPlanner.Plan(AllWeaknesses(topics), budget, Today, exam);
+
+        Assert.Equal([B, C], plan.Shortened);
+        Assert.Empty(unshortened.Shortened);
+        var learn = MinutesPerTopic(plan, BlockKind.Learn);
+        var learnBefore = MinutesPerTopic(unshortened, BlockKind.Learn);
+        Assert.True(learn[w] >= learnBefore[w]);
+        Assert.True(learn[w] > 0);
+        Assert.False(learn.ContainsKey(B));
+        Assert.False(learn.ContainsKey(C));
+        Assert.True(learnBefore.GetValueOrDefault(B) + learnBefore.GetValueOrDefault(C) > 0);
+        Assert.All(plan.Days, day => Assert.Equal(15, day.Blocks.Sum(block => block.Minutes)));
+    }
+
+    // A weakness also stays when it is the lightest topic, e.g. after many wrong answers lately (A39).
+    [Fact]
+    public void ShortOfTime_ALightWeakness_StaysBeforeHeavierTopics()
+    {
+        var w = new Guid("00000000-0000-0000-0000-00000000000d");
+        TopicToPlan[] topics = [new(A, 1, 50), new(B, 1, 50), new(C, 1, 50), new(w, 1, 90, IsWeakness: true)];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(15), Today, Today.AddDays(3));
+
+        Assert.Equal([B, C], plan.Shortened);
+        Assert.Equal([A, w], MinutesPerTopic(plan, BlockKind.Learn).Keys.Order());
+    }
+
+    // More weaknesses than room: none of them is shortened, every other topic is.
+    [Fact]
+    public void ShortOfTime_MoreWeaknessesThanRoom_KeepsThemAll()
+    {
+        var d = new Guid("00000000-0000-0000-0000-00000000000d");
+        var e = new Guid("00000000-0000-0000-0000-00000000000e");
+        TopicToPlan[] topics =
+        [
+            new(A, 1, 40, IsWeakness: true), new(B, 1, 40, IsWeakness: true), new(C, 1, 40, IsWeakness: true),
+            new(d, 1, 0), new(e, 1, 60),
+        ];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(15), Today, Today.AddDays(3));
+
+        Assert.Equal([d, e], plan.Shortened);
+        Assert.Equal([A, B, C], MinutesPerTopic(plan, BlockKind.Learn).Keys.Order());
+    }
+
+    // A shortened topic that is introduced gets no learn time, but still takes its turn for review.
+    [Fact]
+    public void ShortenedTopics_StillGetReview()
+    {
+        var topics = Enumerable.Range(1, 6).Select(i => new TopicToPlan(new Guid($"00000000-0000-0000-0000-00000000000{i}"), 1, 50 + i)).ToArray();
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(15), Today, examDay: null);
+
+        // 7 days with 10 minutes to learn: room for 4 blocks, the 2 lightest are shortened.
+        Assert.Equal([topics[4].TopicId, topics[5].TopicId], plan.Shortened);
+        var learn = MinutesPerTopic(plan, BlockKind.Learn);
+        var review = MinutesPerTopic(plan, BlockKind.Review);
+        Assert.All(plan.Shortened, id =>
+        {
+            Assert.False(learn.ContainsKey(id));
+            Assert.True(review.ContainsKey(id));
+        });
+    }
+
+    // Enough time: nothing is shortened, and the plan is the one from #368 and #369, with or without weaknesses.
+    [Fact]
+    public void NoShortening_WhenThereIsEnoughTime_GivesTheSamePlanAsBefore()
+    {
+        TopicToPlan[] topics = [new(A, 2, 50), new(B, 1, 50), new(C, 1, 0)];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(30), Today, ExamInTenDays);
+        var withWeaknesses = StudyPlanner.Plan(AllWeaknesses(topics), DailyBudget.Uniform(30), Today, ExamInTenDays);
+
+        Assert.Empty(plan.Shortened);
+        var minutes = MinutesPerTopic(plan, BlockKind.Learn);
+        Assert.Equal(100, minutes[A]);
+        Assert.Equal(50, minutes[B]);
+        Assert.Equal(100, minutes[C]);
+        Assert.Equal([A, C, B, A, C, B], plan.Days.Take(6).Select(day => day.Blocks[0].TopicId));
+        Assert.Equal(Flat(plan), Flat(withWeaknesses));
+    }
+
+    [Fact]
+    public void ShortOfTime_SameInput_GivesTheSamePlan()
+    {
+        var w = new Guid("00000000-0000-0000-0000-00000000000d");
+        TopicToPlan[] topics = [new(w, 1, 40, IsWeakness: true), new(A, 1, 60), new(B, 1, 60), new(C, 1, 70, IsNew: true)];
+
+        var first = StudyPlanner.Plan(topics, DailyBudget.Uniform(15), Today, Today.AddDays(4));
+        var reversed = StudyPlanner.Plan(topics.Reverse().ToArray(), DailyBudget.Uniform(15), Today, Today.AddDays(4));
+
+        Assert.NotEmpty(first.Shortened);
+        Assert.Equal(first.Shortened, reversed.Shortened);
+        Assert.Equal(Flat(first), Flat(reversed));
+    }
+
     // Many random inputs with a fixed seed. A failure names seed and run, so Run(seed + run) reproduces it.
     [Fact]
     public void RandomInputs_KeepAllRules()
@@ -386,24 +493,36 @@ public class StudyPlannerTests
         const int Seed = 368;
         for (var run = 0; run < 500; run++)
         {
-            Run(Seed + run, $"seed {Seed}, run {run}");
+            Run(Seed + run, $"seed {Seed}, run {run}", maxMinutes: DailyBudget.MaxMinutes, maxDays: 120);
         }
     }
 
-    private static void Run(int seed, string input)
+    // The same with small budgets and close exams, so the time is often too short (#370).
+    [Fact]
+    public void RandomInputs_ShortOfTime_KeepAllRules()
+    {
+        const int Seed = 370;
+        for (var run = 0; run < 500; run++)
+        {
+            Run(Seed + run, $"seed {Seed}, short of time, run {run}", maxMinutes: 20, maxDays: 10);
+        }
+    }
+
+    private static void Run(int seed, string input, int maxMinutes, int maxDays)
     {
         var random = new Random(seed);
         var steps = random.Next(2) == 0;
         var budget = DailyBudget.Of(Enum.GetValues<DayOfWeek>().ToDictionary(
             day => day,
-            _ => steps ? random.Next(1, 145) * 5 : random.Next(DailyBudget.MinMinutes, DailyBudget.MaxMinutes + 1)));
+            _ => steps ? random.Next(1, (maxMinutes / 5) + 1) * 5 : random.Next(DailyBudget.MinMinutes, maxMinutes + 1)));
         var today = new DateOnly(2026, 1, 1).AddDays(random.Next(730));
-        DateOnly? exam = random.Next(5) == 0 ? null : today.AddDays(random.Next(-3, 121));
+        DateOnly? exam = random.Next(5) == 0 ? null : today.AddDays(random.Next(-3, maxDays + 1));
         var topics = Enumerable.Range(0, random.Next(13))
-            .Select(_ => new TopicToPlan(RandomId(random), random.Next(21), random.Next(101), random.Next(3) == 0))
+            .Select(_ => new TopicToPlan(RandomId(random), random.Next(21), random.Next(101), random.Next(3) == 0, random.Next(4) == 0))
             .ToArray();
         var weights = topics.ToDictionary(topic => topic.TopicId, topic => topic.Size * (100 - topic.Mastery));
         var isNew = topics.ToDictionary(topic => topic.TopicId, topic => topic.IsNew);
+        var isWeakness = topics.ToDictionary(topic => topic.TopicId, topic => topic.IsWeakness);
 
         var plan = StudyPlanner.Plan(topics, budget, today, exam);
 
@@ -461,14 +580,40 @@ public class StudyPlannerTests
                 Assert.True(
                     weights[lighter] == weights[heavier]
                         || isNew[lighter] != isNew[heavier]
+                        || isWeakness[lighter] != isWeakness[heavier]
                         || learnPerTopic.GetValueOrDefault(heavier) >= learnPerTopic.GetValueOrDefault(lighter),
                     $"{input}: more weight got fewer minutes");
             }
         }
 
+        // #370: all topics as weaknesses never shortens anything, so it is the plan without the rule.
+        var unshortened = StudyPlanner.Plan(AllWeaknesses(topics), budget, today, exam);
+        Assert.True(unshortened.Shortened.Count == 0, $"{input}: a weakness was shortened");
+        Assert.True(plan.Shortened.All(id => !isWeakness[id]), $"{input}: a weakness was shortened");
+        Assert.True(plan.Shortened.All(id => !learnPerTopic.ContainsKey(id)), $"{input}: a shortened topic got learn time");
+        Assert.True(plan.Shortened.SequenceEqual(plan.Shortened.Order()), $"{input}: shortened topics not by id");
+        if (plan.Shortened.Count == 0)
+        {
+            Assert.True(Flat(plan).SequenceEqual(Flat(unshortened)), $"{input}: not shortened, but not the plan without the rule");
+        }
+        else
+        {
+            // Short of time means without the rule some topic that could learn got less than one block.
+            var unshortenedLearn = MinutesPerTopic(unshortened, BlockKind.Learn);
+            Assert.True(
+                topics.Any(topic => weights[topic.TopicId] > 0
+                    && !(topic.IsNew && finalPhase == studyDays)
+                    && unshortenedLearn.GetValueOrDefault(topic.TopicId) < StudyPlanner.MinLearnMinutesPerTopic),
+                $"{input}: shortened although there was time for a block each");
+        }
+
         var again = StudyPlanner.Plan(topics.Reverse().ToArray(), budget, today, exam);
         Assert.True(Flat(plan).SequenceEqual(Flat(again)), $"{input}: second run differs");
+        Assert.True(plan.Shortened.SequenceEqual(again.Shortened), $"{input}: second run shortens other topics");
     }
+
+    private static TopicToPlan[] AllWeaknesses(IEnumerable<TopicToPlan> topics) =>
+        [.. topics.Select(topic => topic with { IsWeakness = true })];
 
     private static Guid RandomId(Random random)
     {
