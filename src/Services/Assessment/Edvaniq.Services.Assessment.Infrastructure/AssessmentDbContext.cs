@@ -43,6 +43,7 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
                     options => options.ToList()));
 
         question.HasIndex(entry => new { entry.OwnerId, entry.DocumentId, entry.TopicPosition });
+        question.HasIndex(entry => new { entry.OwnerId, entry.TopicId });
 
         var attempt = modelBuilder.Entity<Attempt>();
         attempt.Property(entry => entry.Id).ValueGeneratedNever();

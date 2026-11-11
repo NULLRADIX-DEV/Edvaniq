@@ -24,15 +24,15 @@ public sealed class QuestionTests(ServiceFactory service) : IClassFixture<Servic
     [Fact]
     public async Task Questions_BelongToTheUserAndTopicOfTheEvent()
     {
-        var generated = Generated(NewUser("alice"), topicPosition: 2, Item(), Item());
+        var generated = await GeneratedAsync(NewUser("alice"), topicPosition: 2, Item(), Item());
 
         await DeliverAsync(Payload(generated));
 
         var stored = QuestionsOf(generated.UserId).OrderBy(question => question.Id).ToList();
         Assert.Equal(generated.Items.Select(item => item.ItemId).Order(), stored.Select(question => question.Id));
         Assert.All(stored, question => Assert.Equal(
-            (generated.UserId, generated.DocumentId, 2),
-            (question.OwnerId, question.DocumentId, question.TopicPosition)));
+            (generated.UserId, generated.TopicId, generated.DocumentId, 2),
+            (question.OwnerId, question.TopicId, question.DocumentId, question.TopicPosition)));
 
         var item = generated.Items[0];
         var question = stored.Single(entry => entry.Id == item.ItemId);
@@ -51,9 +51,9 @@ public sealed class QuestionTests(ServiceFactory service) : IClassFixture<Servic
     public async Task QuestionsOfTwoTopicsAndTwoUsers_KeepTheirOwnTopic()
     {
         var alice = NewUser("alice");
-        var first = Generated(alice, topicPosition: 0, Item());
-        var second = first with { TopicPosition = 1, Items = [Item()] };
-        var bob = Generated(NewUser("bob"), topicPosition: 0, Item());
+        var first = await GeneratedAsync(alice, topicPosition: 0, Item());
+        var second = await GeneratedAsync(alice, topicPosition: 1, Item()) with { DocumentId = first.DocumentId };
+        var bob = await GeneratedAsync(NewUser("bob"), topicPosition: 0, Item());
 
         await DeliverAsync(Payload(first));
         await DeliverAsync(Payload(second));
@@ -69,7 +69,7 @@ public sealed class QuestionTests(ServiceFactory service) : IClassFixture<Servic
     [Fact]
     public async Task ItemsDeliveredTwice_OrSentTwice_StoreEachQuestionOnce()
     {
-        var generated = Generated(NewUser("alice"), topicPosition: 0, Item(), Item());
+        var generated = await GeneratedAsync(NewUser("alice"), topicPosition: 0, Item(), Item());
         Broker.DropsDuplicates = false;
         try
         {
@@ -97,7 +97,7 @@ public sealed class QuestionTests(ServiceFactory service) : IClassFixture<Servic
         var user = NewUser("alice");
         var known = Item();
         await service.AddQuestionAsync(user, known.ItemId);
-        var generated = Generated(user, topicPosition: 0, known, Item());
+        var generated = await GeneratedAsync(user, topicPosition: 0, known, Item());
 
         await DeliverAsync(Payload(generated));
 
@@ -112,20 +112,50 @@ public sealed class QuestionTests(ServiceFactory service) : IClassFixture<Servic
     {
         var good = Item();
         var broken = Item() with { Question = Item().Question! with { Answer = 9 } };
-        var generated = Generated(NewUser("alice"), topicPosition: 0, broken, good);
+        var generated = await GeneratedAsync(NewUser("alice"), topicPosition: 0, broken, good);
 
         await DeliverAsync(Payload(generated));
 
         Assert.Equal(good.ItemId, Assert.Single(QuestionsOf(generated.UserId)).Id);
     }
 
-    // Content may add fields later (topicId with #214), a field this service doesn't know is ignored.
+    // The questions came before TopicsChanged. Nothing is stored until the topic is known, then the next delivery
+    // brings them in.
+    [Fact]
+    public async Task QuestionsOfATopicNotKnownYet_ArriveOnceTheTopicIsKnown()
+    {
+        var user = NewUser("alice");
+        var generated = new ItemsGenerated(user, Guid.NewGuid(), 0, [Item()], Guid.NewGuid());
+
+        var messageId = await PublishAsync(Payload(generated));
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        Assert.Empty(QuestionsOf(user));
+        Assert.Equal(0, InboxEntries(messageId));
+
+        await service.AddKnownTopicAsync(user, generated.TopicId!.Value);
+
+        await WaitForAsync(() => InboxEntries(messageId) == 1, "The items were not handled once the topic was known.");
+        Assert.Equal(generated.TopicId, Assert.Single(QuestionsOf(user)).TopicId);
+    }
+
+    // Sent before Content knew the topic ids: no topic to put them to, the message is confirmed and dropped.
+    [Fact]
+    public async Task ItemsWithoutATopic_AreDropped()
+    {
+        var user = NewUser("alice");
+
+        await DeliverAsync(Payload(new ItemsGenerated(user, Guid.NewGuid(), 0, [Item()])));
+
+        Assert.Empty(QuestionsOf(user));
+    }
+
+    // Content may add fields later, a field this service doesn't know is ignored.
     [Fact]
     public async Task ItemsWithANewField_AreStoredAnyway()
     {
-        var generated = Generated(NewUser("alice"), topicPosition: 0, Item());
+        var generated = await GeneratedAsync(NewUser("alice"), topicPosition: 0, Item());
         var payload = JsonNode.Parse(Payload(generated))!.AsObject();
-        payload["topicId"] = Guid.NewGuid();
+        payload["cards"] = new JsonArray();
 
         await DeliverAsync(payload.ToJsonString());
 
@@ -134,8 +164,13 @@ public sealed class QuestionTests(ServiceFactory service) : IClassFixture<Servic
 
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
 
-    private static ItemsGenerated Generated(string user, int topicPosition, params GeneratedItem[] items) =>
-        new(user, Guid.NewGuid(), topicPosition, items);
+    // Items of a new topic the user has, known from TopicsChanged.
+    private async Task<ItemsGenerated> GeneratedAsync(string user, int topicPosition, params GeneratedItem[] items)
+    {
+        var topicId = Guid.NewGuid();
+        await service.AddKnownTopicAsync(user, topicId);
+        return new(user, Guid.NewGuid(), topicPosition, items, topicId);
+    }
 
     private static GeneratedItem Item() =>
         new(Guid.NewGuid(), ItemKind.Question, Guid.NewGuid(), Guid.NewGuid(), "simulated", "questions-1",

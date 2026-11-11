@@ -26,18 +26,22 @@ internal sealed class TokenIssuer(IOptions<TokenOptions> options, SigningKey key
             ? client
             : null;
 
-    public string Issue(string clientId) => Issue(clientId, clientId, Lifetime);
+    // A client with its own audience gets it, a service's internal client gets one the services turn away.
+    public string Issue(string clientId, TokenClient client) =>
+        Issue(clientId, clientId, Lifetime, string.IsNullOrEmpty(client.Audience) ? options.Value.Audience : client.Audience);
 
-    public string IssueForAccount(Guid accountId, string clientId) => Issue(accountId.ToString("D"), clientId, UserLifetime);
+    // A login is always for the services.
+    public string IssueForAccount(Guid accountId, string clientId) =>
+        Issue(accountId.ToString("D"), clientId, UserLifetime, options.Value.Audience);
 
-    private string Issue(string subject, string clientId, TimeSpan lifetime)
+    private string Issue(string subject, string clientId, TimeSpan lifetime, string audience)
     {
         var now = time.GetUtcNow().UtcDateTime;
         return handler.CreateToken(new SecurityTokenDescriptor
         {
             TokenType = "at+jwt",
             Issuer = options.Value.Issuer,
-            Audience = options.Value.Audience,
+            Audience = audience,
             IssuedAt = now,
             NotBefore = now,
             Expires = now + lifetime,

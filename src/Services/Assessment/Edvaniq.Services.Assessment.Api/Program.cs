@@ -1,7 +1,6 @@
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Web;
 using Edvaniq.Services.Assessment.Api;
-using Edvaniq.Services.Assessment.Application;
 using Edvaniq.Services.Assessment.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,12 +8,6 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 builder.AddTokenValidation();
 builder.AddInfrastructure();
-
-// Knowledge says which analysis a topic came from, asked with the caller's own token.
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddTransient<ForwardUserToken>();
-builder.Services.AddHttpClient<ITopicSource, KnowledgeTopics>(client => client.BaseAddress = KnowledgeTopics.Address)
-    .AddHttpMessageHandler<ForwardUserToken>();
 
 var app = builder.Build();
 

@@ -22,6 +22,8 @@ public sealed class Document : IOwnedByUser
 
     public const string QuestionsFailed = "Zu den Themen ließen sich gerade keine Fragen erstellen. Füge den Text später noch einmal ein.";
 
+    public const string TopicsMissing = "Die Themen kamen nicht an. Füge den Text später noch einmal ein.";
+
     private Document(string ownerId, string title, string text, DateTime createdAt)
     {
         OwnerId = ownerId;
@@ -45,6 +47,13 @@ public sealed class Document : IOwnedByUser
 
     // UTC.
     public DateTime CreatedAt { get; private set; }
+
+    // When the topics went out with DocumentAnalyzed, UTC. The document stays in analysis until its questions are there
+    // too, null means the topics are still to come.
+    public DateTime? AnalyzedAt { get; private set; }
+
+    // The topics are reported, the question pool is what's left before the document is ready.
+    public bool WaitsForQuestions => Status == DocumentStatus.Analyzing && AnalyzedAt is not null;
 
     // Why the text can't become a document, or null if it can. The client shows the message as it is.
     public static string? CheckText(string? text) =>
@@ -82,12 +91,24 @@ public sealed class Document : IOwnedByUser
         return sections;
     }
 
-    // The topics are known and reported, the document is ready to learn from. Only a document in analysis gets there.
+    // The topics are reported. Knowledge gives them their ids, then the questions follow. Only once per document.
+    public void ReportTopics(DateTime analyzedAt)
+    {
+        if (Status != DocumentStatus.Analyzing || AnalyzedAt is not null)
+        {
+            throw new InvalidOperationException($"Document {Id} is {Status}, only a document in analysis can report its topics once.");
+        }
+
+        AnalyzedAt = analyzedAt;
+    }
+
+    // Topics and questions are there, the document is ready to learn from. Only a document whose topics are reported gets
+    // there.
     public void FinishAnalysis()
     {
-        if (Status != DocumentStatus.Analyzing)
+        if (!WaitsForQuestions)
         {
-            throw new InvalidOperationException($"Document {Id} is {Status}, only a document in analysis can finish it.");
+            throw new InvalidOperationException($"Document {Id} is {Status}, only a document waiting for its questions can finish.");
         }
 
         Status = DocumentStatus.Ready;

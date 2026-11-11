@@ -101,7 +101,7 @@ public class TopicsChangedHandlerTests
     private static Task HandleAsync(FakeKnownTopics store, TopicsChanged integrationEvent) =>
         new TopicsChangedHandler(store).HandleAsync(integrationEvent, TestContext.Current.CancellationToken);
 
-    private sealed class FakeKnownTopics : IKnownTopics
+    internal sealed class FakeKnownTopics : IKnownTopics
     {
         public List<KnownTopic> Topics { get; } = [];
 
@@ -109,6 +109,9 @@ public class TopicsChangedHandlerTests
 
         public Task<TopicsSnapshot?> SnapshotAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
             Task.FromResult(Snapshots.FirstOrDefault(snapshot => snapshot.OwnerId == ownerId && snapshot.LearningGoalId == learningGoalId));
+
+        public Task<bool> IsKnownAsync(string ownerId, Guid topicId, CancellationToken cancellationToken) =>
+            Task.FromResult(Topics.Any(topic => topic.OwnerId == ownerId && topic.TopicId == topicId));
 
         public Task<IReadOnlyList<KnownTopic>> ListAsync(
             string ownerId, Guid learningGoalId, IReadOnlyCollection<Guid> topicIds, CancellationToken cancellationToken) =>

@@ -20,9 +20,10 @@ using Microsoft.Extensions.Hosting;
 
 namespace Edvaniq.Services.Content.IntegrationTests;
 
-// The worker asks the simulated AI for the topics of a split document, makes it ready and reports it exactly once with
-// DocumentAnalyzed, and every topic with its questions in an ItemsGenerated of the same save. The material stays data,
-// the prompts carry nothing of the user, and a failing AI fails the document with a reason. The tests share the database
+// The worker asks the simulated AI for the topics of a split document and reports them exactly once with
+// DocumentAnalyzed. Once Knowledge has given the topics their ids, every topic without a pool gets its questions in an
+// ItemsGenerated with that id, and the document is ready in the same save. The material stays data, the prompts carry
+// nothing of the user, and a failing AI fails the document with a reason. The tests share the database
 // with other tests, so they analyze only their own documents.
 public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<ServiceFactory>, IDisposable
 {
@@ -55,7 +56,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     private SimulatedChatClient Simulated => ai.Services.GetRequiredService<SimulatedChatClient>();
 
     [Fact]
-    public async Task SplitDocument_IsAnalyzed_MadeReady_AndReportedOnce()
+    public async Task SplitDocument_IsAnalyzed_ReportedOnce_AndWaitsForItsQuestions()
     {
         var alice = $"alice-{Guid.NewGuid():N}";
         using var client = ClientFor(alice);
@@ -65,9 +66,10 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         await Analyzer().AnalyzeAsync(id, TestContext.Current.CancellationToken);
 
         var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
-        Assert.Equal(("Ready", null), (found!.Status, found.FailureReason));
+        Assert.Equal(("Analyzing", null), (found!.Status, found.FailureReason));
         var analyzed = Assert.Single(await ReportedAsync(id));
         Assert.Equal((alice, id), (analyzed.UserId, analyzed.DocumentId));
+        Assert.Empty(await GeneratedAsync(id));
 
         // The preface has no heading and goes to the topic after it.
         Assert.Equal(
@@ -75,31 +77,34 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             await ShapeAsync(id, analyzed));
     }
 
+    // Questions only with the ids Knowledge gave the topics, the document is ready only with all of them.
     [Fact]
-    public async Task EveryTopic_GetsValidQuestions_WithSourceModelAndPrompt_ReportedOnce()
+    public async Task EveryTopicWithItsId_GetsValidQuestions_WithSourceModelAndPrompt_AndThenTheDocumentIsReady()
     {
         var alice = $"alice-{Guid.NewGuid():N}";
         using var client = ClientFor(alice);
         var id = await PasteAsync(client, Text);
-
         await AnalyzeAsync(id);
-        await Analyzer().AnalyzeAsync(id, TestContext.Current.CancellationToken);
+        var topics = service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
 
-        var analyzed = Assert.Single(await ReportedAsync(id));
+        Assert.True(await Pools().FinishAsync(id, TestContext.Current.CancellationToken));
+
+        var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
+        Assert.Equal("Ready", found!.Status);
         var pools = await GeneratedAsync(id);
-        Assert.Equal([.. Enumerable.Range(0, analyzed.Topics.Count)], pools.Select(pool => pool.TopicPosition).Order());
+        Assert.Equal(topics.Select(topic => topic.Id).Order(), pools.Select(pool => pool.TopicId!.Value).Order());
         Assert.Equal(
             pools.Sum(pool => pool.Items.Count),
             pools.SelectMany(pool => pool.Items).Select(item => item.ItemId).Distinct().Count());
         foreach (var pool in pools)
         {
-            Assert.Equal((alice, id), (pool.UserId, pool.DocumentId));
-            var topic = analyzed.Topics[pool.TopicPosition];
+            var topic = topics.Single(topic => topic.Id == pool.TopicId);
+            Assert.Equal((alice, id, topic.Position), (pool.UserId, pool.DocumentId, pool.TopicPosition));
 
             // The roof topic Photosynthese has no sections of its own and asks about those of its subtopics.
             var sections = topic.SectionIds.Count > 0
                 ? topic.SectionIds
-                : [.. analyzed.Topics.Where(other => other.Parent == pool.TopicPosition).SelectMany(other => other.SectionIds)];
+                : [.. topics.Where(other => other.ParentId == topic.Id).SelectMany(other => other.SectionIds)];
             Assert.NotEmpty(pool.Items);
             Assert.All(pool.Items, item =>
             {
@@ -110,31 +115,106 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
                 Assert.InRange(item.Question.Answer, 0, item.Question.Options.Count - 1);
             });
         }
+
+        Assert.Equal(topics.Select(topic => topic.Id).Order(), PooledTopics(id).Order());
+    }
+
+    // Knowledge hasn't taken the analysis over yet, or can't be reached: the document waits, nothing goes out.
+    [Fact]
+    public async Task WithoutTopicsFromKnowledge_TheDocumentWaits_AndSendsNoQuestions()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var waiting = await PasteAsync(client, Text);
+        var down = await PasteAsync(client, Text);
+        await AnalyzeAsync(waiting);
+        await AnalyzeAsync(down);
+        service.Knowledge.Down(down);
+
+        Assert.False(await Pools().FinishAsync(waiting, TestContext.Current.CancellationToken));
+        Assert.False(await Pools().FinishAsync(down, TestContext.Current.CancellationToken));
+
+        foreach (var id in new[] { waiting, down })
+        {
+            var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
+            Assert.Equal("Analyzing", found!.Status);
+            Assert.Empty(await GeneratedAsync(id));
+        }
+    }
+
+    // Knowledge never got the topics: after the time limit the document fails with a reason.
+    [Fact]
+    public async Task TopicsThatNeverCome_FailTheDocumentAfterTheLimit()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        await AnalyzeAsync(id);
+        var pools = Pools();
+        pools.TopicsTimeout = TimeSpan.Zero;
+
+        Assert.True(await pools.FinishAsync(id, TestContext.Current.CancellationToken));
+
+        var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
+        Assert.Equal(("Failed", Document.TopicsMissing), (found!.Status, found.FailureReason));
+        Assert.Empty(await GeneratedAsync(id));
+    }
+
+    // A topic that has its pool already is a topic that came again unchanged: it gets no new questions.
+    [Fact]
+    public async Task TopicWithAPool_GetsNoNewQuestions_TheNewOnesDo()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        await AnalyzeAsync(id);
+        var topics = service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
+        await AddPoolAsync(id, topics[3].Id);
+
+        await Pools().FinishAsync(id, TestContext.Current.CancellationToken);
+
+        Assert.Equal(topics.Take(3).Select(topic => topic.Id).Order(), (await GeneratedAsync(id)).Select(pool => pool.TopicId!.Value).Order());
     }
 
     [Fact]
-    public async Task TwoWorkersOnOneDocument_ReportItsQuestionsOnce()
+    public async Task SecondRun_SendsNoQuestionTwice()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        await AnalyzeAsync(id);
+        var topics = service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
+
+        await Pools().FinishAsync(id, TestContext.Current.CancellationToken);
+        Assert.False(await Pools().FinishAsync(id, TestContext.Current.CancellationToken));
+        await Analyzer().AnalyzeAsync(id, TestContext.Current.CancellationToken);
+
+        Assert.Single(await ReportedAsync(id));
+        Assert.Equal(topics.Count, (await GeneratedAsync(id)).Count);
+    }
+
+    [Fact]
+    public async Task TwoAnalyzersOnOneDocument_ReportItsTopicsOnce()
     {
         using var client = ClientFor($"alice-{Guid.NewGuid():N}");
         var id = await PasteAsync(client, Text);
         await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(id, TestContext.Current.CancellationToken);
 
-        var runs = await Task.WhenAll(Enumerable.Range(0, 2).Select(async _ =>
-        {
-            try
-            {
-                await Analyzer().AnalyzeAsync(id, TestContext.Current.CancellationToken);
-                return true;
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                return false;
-            }
-        }));
+        var runs = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => SucceedsAsync(() => Analyzer().AnalyzeAsync(id, TestContext.Current.CancellationToken))));
 
         Assert.Contains(true, runs);
-        var analyzed = Assert.Single(await ReportedAsync(id));
-        Assert.Equal(analyzed.Topics.Count, (await GeneratedAsync(id)).Count);
+        Assert.Single(await ReportedAsync(id));
+    }
+
+    [Fact]
+    public async Task TwoWorkersOnOneDocument_SendItsQuestionsOnce()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        await AnalyzeAsync(id);
+        var topics = service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
+
+        var runs = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => SucceedsAsync(() => Pools().FinishAsync(id, TestContext.Current.CancellationToken))));
+
+        Assert.Contains(true, runs);
+        Assert.Equal(topics.Count, (await GeneratedAsync(id)).Count);
+        Assert.Equal(topics.Count, PooledTopics(id).Count);
     }
 
     [Fact]
@@ -144,7 +224,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         var id = await PasteAsync(client, Text);
         var questions = new BrokenQuestions(failures: 1);
 
-        await AnalyzeAsync(id, questions);
+        await AnalyzeAsync(id, questions, withQuestions: true);
 
         var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
         Assert.Equal("Ready", found!.Status);
@@ -154,28 +234,28 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     }
 
     [Fact]
-    public async Task TopicWithoutValidQuestionTwice_FailsTheDocument_AndReportsNothing()
+    public async Task TopicWithoutValidQuestionTwice_FailsTheDocument_AndSendsNoQuestions()
     {
         using var client = ClientFor($"alice-{Guid.NewGuid():N}");
         var id = await PasteAsync(client, Text);
         var questions = new BrokenQuestions(failures: 2);
 
-        await AnalyzeAsync(id, questions);
+        await AnalyzeAsync(id, questions, withQuestions: true);
 
-        await AssertFailedAsync(client, id);
+        await AssertQuestionsFailedAsync(client, id);
         Assert.Equal(2, questions.Calls);
     }
 
     [Fact]
-    public async Task FailingAiForQuestions_FailsTheDocumentAtOnce_AndReportsNothing()
+    public async Task FailingAiForQuestions_FailsTheDocumentAtOnce_AndSendsNoQuestions()
     {
         using var client = ClientFor($"alice-{Guid.NewGuid():N}");
         var id = await PasteAsync(client, Text);
         var questions = new BrokenQuestions(failures: int.MaxValue, outage: true);
 
-        await AnalyzeAsync(id, questions);
+        await AnalyzeAsync(id, questions, withQuestions: true);
 
-        await AssertFailedAsync(client, id);
+        await AssertQuestionsFailedAsync(client, id);
         Assert.Equal(1, questions.Calls);
     }
 
@@ -203,8 +283,9 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         const string title = "Notizen von Erika Mustermann";
         var id = await PasteAsync(client, Text, title);
 
-        await AnalyzeAsync(id);
+        await AnalyzeAsync(id, withQuestions: true);
 
+        Assert.Contains(prompts, message => message.Text.StartsWith(ContentAi.QuestionsTask, StringComparison.Ordinal));
         Assert.Contains(prompts, message => message.Text.Contains("Licht spaltet Wasser.", StringComparison.Ordinal));
         Assert.All(prompts, message =>
         {
@@ -244,35 +325,87 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         return builder.Build();
     }
 
-    // The analyzer of the worker, on the service's database and the simulated AI, keeping every prompt it sends.
-    // BrokenQuestions sits in between when given.
-    private DocumentAnalyzer Analyzer(BrokenQuestions? questions = null)
+    // The simulated AI, keeping every prompt it gets. BrokenQuestions sits in between when given.
+    private IChatClient Chat(BrokenQuestions? questions = null)
     {
         IChatClient chat = new RecordingChatClient(ai.Services.GetRequiredService<IChatClient>(), prompts);
-        if (questions is not null)
+        if (questions is null)
         {
-            questions.InnerClient = chat;
-            chat = questions;
+            return chat;
         }
 
-        var analyzer = ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, chat);
+        questions.InnerClient = chat;
+        return questions;
+    }
+
+    // The analyzer of the worker, on the service's database.
+    private DocumentAnalyzer Analyzer(BrokenQuestions? questions = null)
+    {
+        var analyzer = ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, Chat(questions));
         analyzer.AiTimeout = TimeSpan.FromMilliseconds(500);
         return analyzer;
     }
 
-    // Splits the document as the worker does, then analyzes it.
-    private async Task AnalyzeAsync(Guid id, BrokenQuestions? questions = null)
+    // The question pools of the worker, asking the KnowledgeStub of the service.
+    private QuestionPools Pools(BrokenQuestions? questions = null)
+    {
+        var pools = ActivatorUtilities.CreateInstance<QuestionPools>(service.Services, Chat(questions));
+        pools.AiTimeout = TimeSpan.FromMilliseconds(500);
+        return pools;
+    }
+
+    // Splits the document as the worker does and analyzes it. With questions Knowledge takes the topics over and the
+    // pools follow.
+    private async Task AnalyzeAsync(Guid id, BrokenQuestions? questions = null, bool withQuestions = false)
     {
         await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(id, TestContext.Current.CancellationToken);
         await Analyzer(questions).AnalyzeAsync(id, TestContext.Current.CancellationToken);
+        if (withQuestions)
+        {
+            service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
+            await Pools(questions).FinishAsync(id, TestContext.Current.CancellationToken);
+        }
     }
 
-    private async Task AssertFailedAsync(HttpClient client, Guid id)
+    // A save that loses against another worker fails on the status, the time of the analysis or the pool's key.
+    private static async Task<bool> SucceedsAsync(Func<Task> run)
+    {
+        try
+        {
+            await run();
+            return true;
+        }
+        catch (DbUpdateException)
+        {
+            return false;
+        }
+    }
+
+    // The topics are out, their questions are not.
+    private async Task AssertQuestionsFailedAsync(HttpClient client, Guid id)
     {
         var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
         Assert.Equal(("Failed", Document.QuestionsFailed), (found!.Status, found.FailureReason));
-        Assert.Empty(await ReportedAsync(id));
+        Assert.Single(await ReportedAsync(id));
         Assert.Empty(await GeneratedAsync(id));
+        Assert.Empty(PooledTopics(id));
+    }
+
+    private async Task AddPoolAsync(Guid documentId, Guid topicId)
+    {
+        using var scope = service.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
+        var document = await db.Documents.IgnoreQueryFilters().SingleAsync(item => item.Id == documentId, TestContext.Current.CancellationToken);
+        db.QuestionPools.Add(QuestionPool.For(document, topicId, DateTime.UtcNow));
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+    }
+
+    private List<Guid> PooledTopics(Guid documentId)
+    {
+        using var scope = service.Services.CreateScope();
+        return [.. scope.ServiceProvider.GetRequiredService<ContentDbContext>().QuestionPools.IgnoreQueryFilters()
+            .Where(pool => pool.DocumentId == documentId)
+            .Select(pool => pool.TopicId)];
     }
 
     private static async Task<Guid> PasteAsync(HttpClient client, string text, string? title = null)
@@ -335,7 +468,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     }
 
     // Answers the first questions prompts with a question that has no answer, or fails them like a provider that is down.
-    // Topics go through untouched.
+    // Topics go through untouched. One instance counts the calls of analyzer and pools together.
     private sealed class BrokenQuestions(int failures, bool outage = false) : IChatClient
     {
         public IChatClient InnerClient { get; set; } = null!;

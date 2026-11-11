@@ -232,9 +232,6 @@ services:
   assessment-api:
     <<: *assessment
     image: ghcr.io/nullradix-dev/edvaniq/assessment-api:sha-${APP_COMMIT:?}
-    environment:
-      <<: *messaging-environment
-      services__knowledge-api__http__0: http://knowledge-api:8080
   assessment-migrate:
     <<: *assessment
     image: ghcr.io/nullradix-dev/edvaniq/assessment-api:sha-${APP_COMMIT:?}
@@ -274,6 +271,17 @@ services:
   content-worker:
     <<: *content
     image: ghcr.io/nullradix-dev/edvaniq/content-worker:sha-${APP_COMMIT:?}
+    env_file:
+      - path: app.env
+        required: true
+      - path: content.env
+        required: true
+      - path: content-worker.env
+        required: true
+    environment:
+      <<: *messaging-environment
+      services__identity-api__http__0: http://identity-api:8080
+      services__knowledge-api__http__0: http://knowledge-api:8080
     healthcheck:
       disable: true
   notifications-worker:

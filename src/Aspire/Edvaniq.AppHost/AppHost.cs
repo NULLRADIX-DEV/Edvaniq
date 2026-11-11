@@ -40,10 +40,12 @@ var learningEngineMigrate = builder.AddMigration<Projects.Edvaniq_Services_Learn
 // Token issuer: Identity signs the tokens, every service checks them with the public key it gets from Identity
 var signingKey = builder.AddSigningKey("identity-signing-key");
 var webClientSecret = builder.AddClientSecret("web-client-secret");
+var contentClientSecret = builder.AddClientSecret("content-client-secret");
 var identityApi = builder.AddProject<Projects.Edvaniq_Services_Identity_Api>("identity-api")
     .WithDatabase(identityDb)
     .WaitForCompletion(identityMigrate)
-    .WithTokenIssuer(signingKey, webClientSecret);
+    .WithTokenIssuer(signingKey, webClientSecret)
+    .WithEnvironment("Tokens__Clients__content__Secret", contentClientSecret);
 
 // Services
 var planningApi = AddService<Projects.Edvaniq_Services_Planning_Api>("planning-api", planningDb)
@@ -57,8 +59,7 @@ var knowledgeApi = AddService<Projects.Edvaniq_Services_Knowledge_Api>("knowledg
     .WithMessaging(nats);
 var assessmentApi = AddService<Projects.Edvaniq_Services_Assessment_Api>("assessment-api", assessmentDb)
     .WaitForCompletion(assessmentMigrate)
-    .WithMessaging(nats)
-    .WithReference(knowledgeApi);
+    .WithMessaging(nats);
 var flashcardsApi = AddService<Projects.Edvaniq_Services_Flashcards_Api>("flashcards-api", flashcardsDb);
 var learningEngineApi = AddService<Projects.Edvaniq_Services_LearningEngine_Api>("learningengine-api", learningEngineDb)
     .WaitForCompletion(learningEngineMigrate)
@@ -71,7 +72,10 @@ var notificationsApi = AddService<Projects.Edvaniq_Services_Notifications_Api>("
 // Workers (share the database of their service)
 AddService<Projects.Edvaniq_Services_Content_Worker>("content-worker", contentDb)
     .WaitForCompletion(contentMigrate)
-    .WithMessaging(nats);
+    .WithMessaging(nats)
+    .WithReference(identityApi)
+    .WithReference(knowledgeApi)
+    .WithEnvironment("InternalToken__ClientSecret", contentClientSecret);
 AddService<Projects.Edvaniq_Services_Notifications_Worker>("notifications-worker", notificationsDb);
 
 // Gateway

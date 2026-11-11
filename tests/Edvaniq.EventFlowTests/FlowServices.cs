@@ -1,9 +1,13 @@
 extern alias assessment;
+extern alias content;
 extern alias knowledge;
 extern alias learningengine;
 extern alias planning;
 
+using System.Net.Http.Headers;
+
 using Edvaniq.BuildingBlocks.Messaging;
+using Edvaniq.Services.Content.Application;
 using Edvaniq.Testing;
 
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -11,19 +15,25 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 using AssessmentInfra = Edvaniq.Services.Assessment.Infrastructure;
+using ContentInfra = Edvaniq.Services.Content.Infrastructure;
 using KnowledgeInfra = Edvaniq.Services.Knowledge.Infrastructure;
 using LearningEngineInfra = Edvaniq.Services.LearningEngine.Infrastructure;
 using PlanningInfra = Edvaniq.Services.Planning.Infrastructure;
 
 namespace Edvaniq.EventFlowTests;
 
-// Knowledge and its three receivers in one process, each with its own database and user, all on the same NATS. The
-// receivers know nothing of each other, only the broker connects them.
+// Content, Knowledge and Knowledge's three receivers in one process, each with its own database and user, all on the
+// same NATS. The services know nothing of each other, only the broker connects them, and Content asks Knowledge over
+// HTTP with its own internal token.
 public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : IAsyncLifetime
 {
     private readonly List<IAsyncDisposable> hosts = [];
 
     public WebApplicationFactory<knowledge::Program> Knowledge { get; private set; } = null!;
+
+    public WebApplicationFactory<content::Program> Content { get; private set; } = null!;
+
+    public WebApplicationFactory<assessment::Program> Assessment { get; private set; } = null!;
 
     public IReadOnlyList<Receiver> Receivers { get; private set; } = [];
 
@@ -32,6 +42,14 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
         Knowledge = await StartAsync<knowledge::Program, KnowledgeInfra.KnowledgeDbContext>(KnowledgeInfra.InfrastructureExtensions.DatabaseName);
         var planningHost = await StartAsync<planning::Program, PlanningInfra.PlanningDbContext>(PlanningInfra.InfrastructureExtensions.DatabaseName);
         var assessmentHost = await StartAsync<assessment::Program, AssessmentInfra.AssessmentDbContext>(AssessmentInfra.InfrastructureExtensions.DatabaseName);
+        Assessment = assessmentHost;
+
+        // What the worker registers with its token, against the Knowledge above.
+        var knowledge = Knowledge.CreateClient();
+        knowledge.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.CreateForClient("content"));
+        Content = await StartAsync<content::Program, ContentInfra.ContentDbContext>(
+            ContentInfra.InfrastructureExtensions.DatabaseName,
+            services => services.AddSingleton<IKnowledgeTopics>(new ContentInfra.KnowledgeTopics(knowledge)));
         var learningEngineHost = await StartAsync<learningengine::Program, LearningEngineInfra.LearningEngineDbContext>(LearningEngineInfra.InfrastructureExtensions.DatabaseName);
 
         Receivers =
@@ -64,7 +82,12 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
 
     public T QueryKnowledge<T>(Func<KnowledgeInfra.KnowledgeDbContext, T> query) => Query(Knowledge.Services, query);
 
-    private async Task<WebApplicationFactory<TEntryPoint>> StartAsync<TEntryPoint, TContext>(string database)
+    public T QueryContent<T>(Func<ContentInfra.ContentDbContext, T> query) => Query(Content.Services, query);
+
+    public T QueryAssessment<T>(Func<AssessmentInfra.AssessmentDbContext, T> query) => Query(Assessment.Services, query);
+
+    private async Task<WebApplicationFactory<TEntryPoint>> StartAsync<TEntryPoint, TContext>(
+        string database, Action<IServiceCollection>? services = null)
         where TEntryPoint : class
         where TContext : DbContext
     {
@@ -73,7 +96,8 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
         {
             [$"ConnectionStrings:{database}"] = connectionString,
             [$"ConnectionStrings:{MessagingExtensions.NatsConnectionName}"] = nats.Url,
-        });
+        },
+        services);
         hosts.Add(host);
 
         // The same synchronous call the migrate step makes. Services starts the host with the new database.

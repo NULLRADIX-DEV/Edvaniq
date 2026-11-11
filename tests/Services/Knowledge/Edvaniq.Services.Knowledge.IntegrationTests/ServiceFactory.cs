@@ -36,8 +36,8 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
             .UseSetting($"ConnectionStrings:{InfrastructureExtensions.DatabaseName}", ConnectionString)
             .ConfigureTestServices(services =>
             {
-                services.PostConfigure<JwtBearerOptions>(
-                    JwtBearerDefaults.AuthenticationScheme,
+                // Every scheme, the internal one for Content's worker too.
+                services.PostConfigureAll<JwtBearerOptions>(
                     options =>
                     {
                         options.TokenValidationParameters.ValidateIssuer = true;

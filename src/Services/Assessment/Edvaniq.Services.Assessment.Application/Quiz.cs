@@ -6,18 +6,17 @@ namespace Edvaniq.Services.Assessment.Application;
 
 // Puts a question of a topic to the user and grades the answer. The answer and its learning record are stored by the
 // same save, and an attempt is answered once: whatever comes in after that gets the stored result back.
-public sealed class Quiz(ITopicSource topics, IAttempts attempts, IEventOutbox outbox, TimeProvider time)
+// The topic must be one of the user's from TopicsChanged, someone else's looks like none.
+public sealed class Quiz(IAttempts attempts, IEventOutbox outbox, TimeProvider time)
 {
     public async Task<Asked> AskAsync(Guid topicId, CancellationToken cancellationToken)
     {
-        if (await topics.FindAsync(topicId, cancellationToken) is not { } source)
+        if (!await attempts.KnowsTopicAsync(topicId, cancellationToken))
         {
             return new(AskOutcome.UnknownTopic, null, null);
         }
 
-        var questions = source.DocumentId is { } documentId
-            ? await attempts.QuestionsOfAsync(documentId, source.Position, cancellationToken)
-            : [];
+        var questions = await attempts.QuestionsOfAsync(topicId, cancellationToken);
         if (questions.Count == 0)
         {
             return new(AskOutcome.NoQuestions, null, null);

@@ -11,14 +11,13 @@ public sealed class QuizTests
 {
     private static readonly DateTime Now = new(2026, 11, 11, 9, 0, 0, DateTimeKind.Utc);
 
-    private readonly FakeTopics topics = new();
     private readonly FakeAttempts attempts = new();
     private readonly FakeOutbox outbox = new();
     private readonly Clock time = new();
 
     public QuizTests() => attempts.Outbox = outbox;
 
-    private Quiz Quiz => new(topics, attempts, outbox, time);
+    private Quiz Quiz => new(attempts, outbox, time);
 
     [Fact]
     public async Task Ask_PicksAQuestionOfTheTopic()
@@ -35,7 +34,7 @@ public sealed class QuizTests
     }
 
     [Fact]
-    public async Task Ask_ForATopicKnowledgeDoesNotKnow_IsUnknown()
+    public async Task Ask_ForATopicTheUserDoesNotHave_IsUnknown()
     {
         var asked = await Quiz.AskAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
 
@@ -47,7 +46,7 @@ public sealed class QuizTests
     public async Task Ask_ForATopicWithoutQuestionsYet_SaysSo()
     {
         var topicId = Guid.NewGuid();
-        topics.Known[topicId] = new(Guid.NewGuid(), 0);
+        attempts.KnownTopics.Add(topicId);
 
         Assert.Equal(AskOutcome.NoQuestions, (await Quiz.AskAsync(topicId, TestContext.Current.CancellationToken)).Outcome);
     }
@@ -110,11 +109,10 @@ public sealed class QuizTests
 
     private Question AddTopicWithQuestion(Guid topicId)
     {
-        var documentId = Guid.NewGuid();
-        topics.Known[topicId] = new(documentId, 3);
-        var question = AttemptTests.Question("alice", documentId, 3);
+        attempts.KnownTopics.Add(topicId);
+        var question = AttemptTests.Question("alice", topicId);
         attempts.Questions.Add(question);
-        attempts.Questions.Add(AttemptTests.Question("alice", documentId, 4));
+        attempts.Questions.Add(AttemptTests.Question("alice"));
         return question;
     }
 
@@ -125,14 +123,6 @@ public sealed class QuizTests
         public override DateTimeOffset GetUtcNow() => now;
 
         public void Advance(TimeSpan by) => now += by;
-    }
-
-    private sealed class FakeTopics : ITopicSource
-    {
-        public Dictionary<Guid, TopicSource> Known { get; } = [];
-
-        public Task<TopicSource?> FindAsync(Guid topicId, CancellationToken cancellationToken) =>
-            Task.FromResult(Known.GetValueOrDefault(topicId));
     }
 
     private sealed class FakeOutbox : IEventOutbox
@@ -164,9 +154,12 @@ public sealed class QuizTests
 
         public void LoseNextSaveTo(Attempt attempt) => winner = attempt;
 
-        public Task<IReadOnlyList<Question>> QuestionsOfAsync(Guid documentId, int topicPosition, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<Question>>(
-                [.. Questions.Where(question => question.DocumentId == documentId && question.TopicPosition == topicPosition)]);
+        public HashSet<Guid> KnownTopics { get; } = [];
+
+        public Task<bool> KnowsTopicAsync(Guid topicId, CancellationToken cancellationToken) => Task.FromResult(KnownTopics.Contains(topicId));
+
+        public Task<IReadOnlyList<Question>> QuestionsOfAsync(Guid topicId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Question>>([.. Questions.Where(question => question.TopicId == topicId)]);
 
         public Task<Question?> FindQuestionAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(Questions.FirstOrDefault(question => question.Id == id));

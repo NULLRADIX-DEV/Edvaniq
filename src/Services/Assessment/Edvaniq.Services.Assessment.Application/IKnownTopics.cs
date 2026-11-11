@@ -7,6 +7,8 @@ public interface IKnownTopics
 {
     Task<TopicsSnapshot?> SnapshotAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken);
 
+    Task<bool> IsKnownAsync(string ownerId, Guid topicId, CancellationToken cancellationToken);
+
     // The owner's topics of this learning goal and those with one of the ids, wherever they belong now.
     Task<IReadOnlyList<KnownTopic>> ListAsync(string ownerId, Guid learningGoalId, IReadOnlyCollection<Guid> topicIds, CancellationToken cancellationToken);
 

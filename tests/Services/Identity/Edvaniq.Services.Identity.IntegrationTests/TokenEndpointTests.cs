@@ -43,6 +43,26 @@ public sealed class TokenEndpointTests
         Assert.Equal(TimeSpan.FromMinutes(5), token.ValidTo - token.IssuedAt);
     }
 
+    // Content's worker asks Knowledge with it. Its own audience keeps every normal endpoint closed to it.
+    [Fact]
+    public async Task InternalClient_GetsATokenForTheInternalAudience_AndNoLogin()
+    {
+        await using var identity = new IdentityFactory();
+
+        using var response = await identity.RequestTokenAsync(
+            clientId: IdentityFactory.InternalClientId, clientSecret: identity.InternalClientSecret);
+        using var login = await identity.LoginAsync(
+            "ben", "irrelevant-password", IdentityFactory.InternalClientId, identity.InternalClientSecret);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        var token = new JsonWebToken(body.GetProperty("access_token").GetString());
+        Assert.Equal(["edvaniq-internal"], token.Audiences);
+        Assert.Equal(IdentityFactory.InternalClientId, token.Subject);
+        Assert.Equal(IdentityFactory.InternalClientId, token.GetClaim("client_id").Value);
+        await AssertErrorAsync(login, "unauthorized_client");
+    }
+
     [Fact]
     public async Task EveryToken_HasItsOwnId()
     {

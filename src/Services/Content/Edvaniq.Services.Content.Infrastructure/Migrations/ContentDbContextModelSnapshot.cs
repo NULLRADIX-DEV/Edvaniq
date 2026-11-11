@@ -89,6 +89,10 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("char(36)");
 
+                    b.Property<DateTime?>("AnalyzedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("datetime(6)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
@@ -124,6 +128,32 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.ToTable("Documents");
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.QuestionPool", b =>
+                {
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.HasKey("TopicId");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("QuestionPools");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.Section", b =>
                 {
                     b.Property<Guid>("Id")
@@ -156,6 +186,15 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Sections");
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.QuestionPool", b =>
+                {
+                    b.HasOne("Edvaniq.Services.Content.Domain.Document", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.Section", b =>

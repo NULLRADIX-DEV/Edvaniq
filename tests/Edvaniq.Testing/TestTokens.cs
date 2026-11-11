@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
+
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
@@ -17,22 +18,30 @@ public static class TestTokens
 
     public static SymmetricSecurityKey NewKey() => new(RandomNumberGenerator.GetBytes(32));
 
+    // The audience of a service's own token for another service's internal endpoint.
+    public const string InternalAudience = "edvaniq-internal";
+
+    // A client's own token, the way Identity issues it: the client is the subject and names itself in client_id.
+    public static string CreateForClient(string clientId, string audience = InternalAudience) =>
+        Create(clientId, audience: audience, claims: [new Claim("client_id", clientId)]);
+
     // A token for userId. Without userId it has no subject. An expiry in the past gives an expired token.
     public static string Create(
         string? userId,
         DateTime? expires = null,
         string issuer = Issuer,
         string audience = Audience,
-        SecurityKey? signingKey = null)
+        SecurityKey? signingKey = null,
+        IReadOnlyList<Claim>? claims = null)
     {
         var expiresAt = expires ?? DateTime.UtcNow.AddMinutes(5);
-        var claims = userId is null ? [] : new[] { new Claim("sub", userId) };
+        IEnumerable<Claim> subject = userId is null ? [] : [new Claim("sub", userId)];
 
         return new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
         {
             Issuer = issuer,
             Audience = audience,
-            Subject = new ClaimsIdentity(claims),
+            Subject = new ClaimsIdentity(subject.Concat(claims ?? [])),
             IssuedAt = expiresAt.AddMinutes(-10),
             NotBefore = expiresAt.AddMinutes(-10),
             Expires = expiresAt,

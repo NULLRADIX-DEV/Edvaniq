@@ -26,7 +26,8 @@ public sealed record StreamSpec(string Name, string Subjects);
 // TraceParent: of the request that stored the event (MessageTrace), or null.
 public sealed record OutgoingMessage(string Subject, Guid MessageId, string Payload, string? TraceParent = null);
 
-public sealed record IncomingMessage(Guid MessageId, string Payload, string? TraceParent = null);
+// Delivery counts from 1, a redelivery of the same message has the next number.
+public sealed record IncomingMessage(Guid MessageId, string Payload, string? TraceParent = null, int Delivery = 1);
 
 // A durable consumer of one subject in a stream. It keeps its place when the process stops.
 public sealed record Subscription(string Stream, string Consumer, string Subject);

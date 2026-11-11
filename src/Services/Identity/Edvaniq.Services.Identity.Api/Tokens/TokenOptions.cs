@@ -21,7 +21,7 @@ internal sealed class TokenOptions
     // A P-256 private key, PKCS#8 in Base64.
     public string SigningKey { get; set; } = "";
 
-    // The clients by id. So far there is one: web, the web host.
+    // The clients by id: web, the web host, and content, Content's worker asking Knowledge.
     public Dictionary<string, TokenClient> Clients { get; set; } = new(StringComparer.Ordinal);
 }
 
@@ -31,6 +31,9 @@ internal sealed class TokenClient
 
     // Whether the client may log accounts in with their password. Only web, set in appsettings.json.
     public bool AllowPassword { get; set; }
+
+    // The audience of the client's own token, if not Tokens:Audience. Set in appsettings.json.
+    public string? Audience { get; set; }
 }
 
 // Checked at the start, so a missing value stops Identity instead of the first token request. The messages name the

@@ -13,6 +13,10 @@ internal sealed class KnownTopics(AssessmentDbContext db) : IKnownTopics
         db.TopicsSnapshots.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .FirstOrDefaultAsync(snapshot => snapshot.OwnerId == ownerId && snapshot.LearningGoalId == learningGoalId, cancellationToken);
 
+    public Task<bool> IsKnownAsync(string ownerId, Guid topicId, CancellationToken cancellationToken) =>
+        db.KnownTopics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .AnyAsync(topic => topic.OwnerId == ownerId && topic.TopicId == topicId, cancellationToken);
+
     public async Task<IReadOnlyList<KnownTopic>> ListAsync(
         string ownerId, Guid learningGoalId, IReadOnlyCollection<Guid> topicIds, CancellationToken cancellationToken) =>
         await db.KnownTopics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])

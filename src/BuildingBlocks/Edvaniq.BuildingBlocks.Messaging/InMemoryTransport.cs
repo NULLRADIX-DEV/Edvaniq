@@ -90,6 +90,8 @@ public sealed class InMemoryTransport : IMessageTransport
         CancellationToken cancellationToken)
     {
         var consumer = (subscription.Stream, subscription.Consumer);
+        var delivery = 0;
+        var deliveredIndex = -1;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -119,9 +121,11 @@ public sealed class InMemoryTransport : IMessageTransport
                 continue;
             }
 
+            delivery = index == deliveredIndex ? delivery + 1 : 1;
+            deliveredIndex = index;
             try
             {
-                await onMessage(new IncomingMessage(next.MessageId, next.Payload, next.TraceParent), cancellationToken);
+                await onMessage(new IncomingMessage(next.MessageId, next.Payload, next.TraceParent, delivery), cancellationToken);
                 lock (gate)
                 {
                     positions[consumer] = index + 1;

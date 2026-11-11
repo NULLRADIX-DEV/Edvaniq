@@ -11,9 +11,9 @@ Ein Token ist ein JWT mit dem Typ `at+jwt` nach RFC 9068, signiert mit ES256. De
 | Claim | Inhalt |
 |---|---|
 | `iss` | Aussteller, auf dem Server die Adresse der App, lokal der Wert aus dem AppHost |
-| `aud` | `edvaniq-api`, für alle Services gleich |
+| `aud` | `edvaniq-api`, für alle Services gleich, beim Token eines internen Clients `edvaniq-internal` ([Interne Tokens](#interne-tokens)) |
 | `sub` | beim Login die ID des Kontos, eine GUID wie `3f2b9c1e-8d4a-4e0f-9b6a-2c7d1e5f4a10`, beim Client-Token die Client-ID |
-| `client_id` | der Client, der das Token geholt hat, heute immer `web` |
+| `client_id` | der Client, der das Token geholt hat: `web` oder `content` |
 | `jti` | eine eigene ID je Token |
 | `iat`, `nbf`, `exp` | ausgestellt, gültig ab, gültig bis |
 
@@ -39,6 +39,12 @@ Eine erfolgreiche Antwort ist `200` mit `access_token`, `token_type` (`Bearer`) 
 | 400 | `unauthorized_client` | der Client darf keinen Login anfragen |
 | 400 | `invalid_grant` | Name oder Passwort falsch. Ob es das Konto gibt, sagt die Antwort nicht. |
 | 429 | `too_many_attempts` | zu viele Versuche für dieses Konto in kurzer Zeit, `Retry-After` nennt die Wartezeit in Sekunden |
+
+## Interne Tokens
+
+Fragt ein Service einen anderen ohne Nutzer, nimmt er das Token eines eigenen Clients. Heute ist das nur der Client `content`: Der Worker von Content fragt Knowledge, welche IDs die Themen einer Analyse bekommen haben ([Fragenpool](architecture.md#fragenpool)). Der Client darf nur Client Credentials, keinen Login. Sein Token hat die Audience `edvaniq-internal` statt `edvaniq-api`, deshalb lehnen alle Services und das Gateway es an jedem normalen Endpunkt mit 401 ab. Es gilt nie als Nutzer, auch nicht als einer ohne Daten.
+
+Ein Endpunkt, der ein internes Token annehmen soll, sagt das mit `RequireInternalClient("<client>")` aus `BuildingBlocks.Web`. Er nimmt dann nur ein Token mit der Audience `edvaniq-internal`, bei dem `client_id` und `sub` der genannte Client sind. Das Token eines Nutzers oder eines anderen Clients bekommt dort 401 oder 403. Ein solcher Endpunkt hat keine Route im Gateway und im Web-Host. Was er herausgibt, legt er selbst fest, ohne Nutzer aus dem Token: Knowledge gibt nur die Themen eines Dokuments heraus, und ein Dokument gehört genau einem Nutzer.
 
 ## Passwörter
 

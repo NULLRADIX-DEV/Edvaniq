@@ -58,8 +58,8 @@ public sealed class AttemptTests
         Assert.False(attempt.Answered);
     }
 
-    internal static Question Question(string owner = "alice", Guid? documentId = null, int topicPosition = 0) =>
+    internal static Question Question(string owner = "alice", Guid? topicId = null) =>
         Domain.Question.Create(
-            Guid.NewGuid(), owner, documentId ?? Guid.NewGuid(), topicPosition, Guid.NewGuid(), "Was ist 2 + 2?", ["3", "4"], 1,
+            Guid.NewGuid(), owner, topicId ?? Guid.NewGuid(), Guid.NewGuid(), 0, Guid.NewGuid(), "Was ist 2 + 2?", ["3", "4"], 1,
             "Zwei und zwei ist vier.", 2, "simulated", "questions-1", AskedAt);
 }

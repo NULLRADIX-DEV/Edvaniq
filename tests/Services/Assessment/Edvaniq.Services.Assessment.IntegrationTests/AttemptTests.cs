@@ -142,18 +142,25 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
         Assert.Empty(Records(attemptId));
     }
 
-    // Knowledge only knows the topic under Alice's token, so Bob's own token gets him nothing.
+    // Alice's topic is known only for her, Bob gets nothing of it.
     [Fact]
     public async Task ForeignTopic_IsNotFound()
     {
         var alice = User.New("alice");
         var (topicId, _) = await AddTopicAsync(alice);
-        var bob = User.New("bob");
 
-        using var response = await AskAsync(bob, topicId);
+        using var response = await AskAsync(User.New("bob"), topicId);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Contains($"Bearer {bob.Token}", service.Knowledge.Authorizations);
+    }
+
+    // Knowledge never told this service about the topic.
+    [Fact]
+    public async Task UnknownTopic_IsNotFound()
+    {
+        using var response = await AskAsync(User.New("alice"), Guid.NewGuid());
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -172,41 +179,19 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
     }
 
     // The questions arrive some time after the topics, the client can tell that apart from a topic that isn't there.
+    // Alice's questions of another topic don't count.
     [Fact]
     public async Task OwnTopicWithoutQuestionsYet_IsAConflict()
     {
         var alice = User.New("alice");
         var topicId = Guid.NewGuid();
-        service.Knowledge.Add(alice.Token, topicId, Guid.NewGuid(), 0);
+        await service.AddKnownTopicAsync(alice.Id, topicId);
+        await service.AddQuestionAsync(alice.Id);
 
         using var response = await AskAsync(alice, topicId);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-    }
-
-    [Fact]
-    public async Task KnowledgeDown_IsAProblemWithTheTrace_WithoutDetails()
-    {
-        var alice = User.New("alice");
-        var (topicId, _) = await AddTopicAsync(alice);
-        service.Knowledge.Down = true;
-        try
-        {
-            using var response = await AskAsync(alice, topicId);
-
-            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-            Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-            var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-            Assert.Equal(TraceId, JsonDocument.Parse(body).RootElement.GetProperty("traceId").GetString());
-            Assert.DoesNotContain("knowledge", body, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("Exception", body, StringComparison.Ordinal);
-            Assert.Empty(service.Logs.Containing(alice.Token));
-        }
-        finally
-        {
-            service.Knowledge.Down = false;
-        }
     }
 
     private sealed record User(string Id, string Token)
@@ -221,14 +206,13 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
     private sealed record GradedDto(
         Guid Id, Guid TopicId, Guid QuestionId, int Option, bool Correct, int Answer, string Explanation, int ResponseTimeMs, DateTime AnsweredAt);
 
-    // A topic of Knowledge with one question of Content's analysis.
+    // A topic of the user known from TopicsChanged, with one question of Content's analysis.
     private async Task<(Guid TopicId, Question Question)> AddTopicAsync(User user)
     {
-        var documentId = Guid.NewGuid();
         var topicId = Guid.NewGuid();
-        service.Knowledge.Add(user.Token, topicId, documentId, 2);
+        await service.AddKnownTopicAsync(user.Id, topicId);
         var question = Domain.Question.Create(
-            Guid.NewGuid(), user.Id, documentId, 2, Guid.NewGuid(), "Was ist 2 + 2?", ["3", "4"], 1, "Zwei und zwei ist vier.", 2,
+            Guid.NewGuid(), user.Id, topicId, Guid.NewGuid(), 2, Guid.NewGuid(), "Was ist 2 + 2?", ["3", "4"], 1, "Zwei und zwei ist vier.", 2,
             "simulated", "questions-1", Seed.Now);
         using var scope = service.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AssessmentDbContext>();

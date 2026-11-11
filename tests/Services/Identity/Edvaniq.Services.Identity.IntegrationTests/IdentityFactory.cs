@@ -23,7 +23,12 @@ public sealed class IdentityFactory(
     public const string Issuer = "edvaniq-identity-tests";
     public const string ClientId = "web";
 
+    // Content's worker, a client whose tokens are only for other services' internal endpoints.
+    public const string InternalClientId = "content";
+
     public string ClientSecret { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+
+    public string InternalClientSecret { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 
     // What Identity logs.
     public TestLogs Logs { get; } = new();
@@ -87,6 +92,7 @@ public sealed class IdentityFactory(
             ["Tokens:Issuer"] = Issuer,
             ["Tokens:SigningKey"] = NewSigningKey(),
             [$"Tokens:Clients:{ClientId}:Secret"] = ClientSecret,
+            [$"Tokens:Clients:{InternalClientId}:Secret"] = InternalClientSecret,
         };
         if (connectionString is not null)
         {

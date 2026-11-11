@@ -99,7 +99,8 @@ internal sealed class NatsTransport : IMessageTransport, IAsyncDisposable, IDisp
 
             try
             {
-                await onMessage(new IncomingMessage(messageId, message.Data, TraceParentOf(message.Headers)), cancellationToken);
+                var delivery = (int)Math.Min(int.MaxValue, message.Metadata?.NumDelivered ?? 1);
+                await onMessage(new IncomingMessage(messageId, message.Data, TraceParentOf(message.Headers), delivery), cancellationToken);
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {

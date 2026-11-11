@@ -5,7 +5,7 @@ using Aspire.Hosting.Publishing;
 namespace Edvaniq.AppHost;
 
 // Identity issues the tokens, every service checks them with the public key it fetches from Identity, as on the server
-// (deploy/compose.yml). Locally the issuer is a fixed name. Signing key and the web host's client secret are generated
+// (deploy/compose.yml). Locally the issuer is a fixed name. Signing key and the clients' secrets are generated
 // once and kept in the AppHost's user secrets, like the database passwords.
 internal static class TokenIssuerExtensions
 {

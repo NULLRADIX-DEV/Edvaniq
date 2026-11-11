@@ -1,3 +1,5 @@
+using Edvaniq.BuildingBlocks.Application;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -106,7 +108,16 @@ internal sealed class ConsumerHost(
             Consumer = consumer,
             ReceivedAt = time.GetUtcNow().UtcDateTime,
         });
-        await subscription.HandleAsync(scope.ServiceProvider, message.Payload, cancellationToken);
+        try
+        {
+            await subscription.HandleAsync(scope.ServiceProvider, message.Payload, cancellationToken);
+        }
+        catch (MessageNotReadyException) when (message.Delivery >= options.Value.NotReadyDeliveries)
+        {
+            // Returning confirms the message to the broker. Nothing is stored, the inbox entry goes with the scope.
+            MessagingLog.NotReadyDropped(logger, consumer, message.MessageId, message.Delivery);
+            return;
+        }
 
         try
         {

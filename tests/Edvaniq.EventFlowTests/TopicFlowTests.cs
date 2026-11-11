@@ -14,7 +14,8 @@ namespace Edvaniq.EventFlowTests;
 
 // The whole way of TopicsChanged over NATS: Knowledge takes topics over from an analysis or renames one, stores the
 // event with the change, its dispatcher sends it, and Planning, Assessment and LearningEngine each know the topics after.
-public sealed class TopicFlowTests(FlowServices services) : IClassFixture<FlowServices>
+[Collection(FlowCollection.Name)]
+public sealed class TopicFlowTests(FlowServices services)
 {
     // The receivers may wait a few seconds for Knowledge's stream before the first event.
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(60);

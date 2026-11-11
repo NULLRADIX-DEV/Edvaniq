@@ -3,8 +3,8 @@ using Edvaniq.BuildingBlocks.Domain;
 namespace Edvaniq.Services.Assessment.Domain;
 
 // A question taken over from Content's worker (docs/spec/glossary.md#frage), owned by Assessment from then on. The id is
-// the itemId Content gave it, so a second delivery finds it. Until #214 the topic is the suggestion at TopicPosition in
-// the analysis of DocumentId, #214 adds the topicId next to it and fills it in from Knowledge.
+// the itemId Content gave it, so a second delivery finds it. TopicId is Knowledge's topic. Questions taken over before
+// it came have none and are never asked, DocumentId and TopicPosition stay as their source.
 public sealed class Question : IOwnedByUser
 {
     // Well above Content's limits (500, 200 per option, 1000), so a longer prompt later still fits the columns.
@@ -29,6 +29,8 @@ public sealed class Question : IOwnedByUser
     public Guid DocumentId { get; private set; }
 
     public int TopicPosition { get; private set; }
+
+    public Guid? TopicId { get; private set; }
 
     public Guid SectionId { get; private set; }
 
@@ -64,6 +66,7 @@ public sealed class Question : IOwnedByUser
     public static Question Create(
         Guid id,
         string ownerId,
+        Guid topicId,
         Guid documentId,
         int topicPosition,
         Guid sectionId,
@@ -85,6 +88,7 @@ public sealed class Question : IOwnedByUser
         {
             Id = id,
             OwnerId = ownerId,
+            TopicId = topicId,
             DocumentId = documentId,
             TopicPosition = topicPosition,
             SectionId = sectionId,

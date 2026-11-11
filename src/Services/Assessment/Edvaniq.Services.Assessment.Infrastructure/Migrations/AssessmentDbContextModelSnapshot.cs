@@ -202,12 +202,17 @@ namespace Edvaniq.Services.Assessment.Infrastructure.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("varchar(2000)");
 
+                    b.Property<Guid?>("TopicId")
+                        .HasColumnType("char(36)");
+
                     b.Property<int>("TopicPosition")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
                     b.HasIndex("OwnerId");
+
+                    b.HasIndex("OwnerId", "TopicId");
 
                     b.HasIndex("OwnerId", "DocumentId", "TopicPosition");
 

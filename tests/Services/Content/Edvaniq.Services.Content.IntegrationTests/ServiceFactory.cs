@@ -1,4 +1,5 @@
 using Edvaniq.BuildingBlocks.Messaging;
+using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Infrastructure;
 using Edvaniq.Testing;
 
@@ -21,6 +22,9 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
 
     // What the service logs, for the tests that look for a log line.
     public TestLogs Logs { get; } = new();
+
+    // Answers the worker's question pools in place of Knowledge. The Api itself never asks Knowledge.
+    public KnowledgeStub Knowledge { get; } = new();
 
     public async ValueTask InitializeAsync()
     {
@@ -47,5 +51,6 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
                     });
                 services.AddInMemoryTransport();
                 services.AddSingleton<ILoggerProvider>(Logs);
+                services.AddSingleton<IKnowledgeTopics>(Knowledge);
             });
 }
