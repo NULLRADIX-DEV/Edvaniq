@@ -60,6 +60,32 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
         Assert.Equal(new MasteryResponse(topic, 31, "weakness", 3), await MasteryAsync(alice, topic));
     }
 
+    // Nothing is stored, so the state of the next request already follows every answer (#452). Every value is at least
+    // 4 points from 50 and 80 and 0.1 from a rounding edge (decay here is about 0.0005 per minute):
+    // hard correct a day ago 67.5 -> 66.98, medium correct 75.24, hard correct 83.90 (secure), then easy wrong ones
+    // 71.32 (building) and 60.62: 2 wrong of the last 3, a weakness above 50 (A39).
+    [Fact]
+    public async Task State_FollowsEveryAnswer()
+    {
+        var alice = NewUser("alice");
+        var topic = await KnowAsync(alice);
+        (bool Correct, int Difficulty, TimeSpan Ago, int Mastery, string State)[] steps =
+        [
+            (true, 3, TimeSpan.FromDays(1), 67, "building"),
+            (true, 2, TimeSpan.FromMinutes(4), 75, "building"),
+            (true, 3, TimeSpan.FromMinutes(3), 84, "secure"),
+            (false, 1, TimeSpan.FromMinutes(2), 71, "building"),
+            (false, 1, TimeSpan.FromMinutes(1), 61, "weakness"),
+        ];
+
+        foreach (var step in steps)
+        {
+            await DeliverAsync(Answer(alice, topic, step.Correct, step.Ago, step.Difficulty));
+
+            Assert.Equal(new MasteryResponse(topic, step.Mastery, step.State, 3), await MasteryAsync(alice, topic));
+        }
+    }
+
     // The same answer again, under the same and under a new message id, doesn't move the value a second time.
     [Fact]
     public async Task AnswerDeliveredTwice_OrSentTwice_MovesItOnce()
@@ -124,9 +150,9 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
 
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
 
-    private static AnswerRecorded Answer(string user, Guid topic, bool correct, TimeSpan? ago = null) =>
+    private static AnswerRecorded Answer(string user, Guid topic, bool correct, TimeSpan? ago = null, int difficulty = 2) =>
         new(AnswerRecorded.CurrentVersion, user, TopicId: topic, ItemId: Guid.NewGuid(), SessionId: Guid.NewGuid(),
-            AnswerId: Guid.NewGuid(), correct, 2, 4200, null, Mode.Practice, DateTime.UtcNow - (ago ?? AMinute));
+            AnswerId: Guid.NewGuid(), correct, difficulty, 4200, null, Mode.Practice, DateTime.UtcNow - (ago ?? AMinute));
 
     // Topics only come from TopicsChanged, KnownTopicTests covers that way. Here they go into the database directly.
     private async Task<Guid> KnowAsync(string owner, Guid? topicId = null)
