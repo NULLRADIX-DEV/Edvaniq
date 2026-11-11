@@ -249,6 +249,14 @@ Assessment übernimmt die Fragen aus `ItemsGenerated` und besitzt sie ab dann (`
 
 Fragen legt Assessment nur zu einem Thema an, das der Nutzer laut `TopicsChanged` hat (`KnownTopic`). Content schickt die Fragen erst, wenn Knowledge das Thema kennt, und Knowledge speichert `TopicsChanged` im selben Speichern wie das Thema. Ist das Thema noch nicht bekannt, ist `TopicsChanged` also unterwegs: Der Handler wirft `MessageNotReadyException`, und die Nachricht kommt später wieder ([Ereignis empfangen](service-internals.md#ereignis-empfangen)). Eine Nachricht ohne Themen-ID stammt von vor dieser Regel und hat kein Thema, zu dem ihre Fragen gehören. Der Handler bestätigt sie ohne Wirkung und schreibt die `documentId` ins Log. Das Quiz findet ein Thema über `KnownTopic` des Nutzers und dessen Fragen über die Themen-ID, ohne Knowledge zu fragen. Ein fremdes oder unbekanntes Thema ergibt 404, ein eigenes ohne Fragen 409. Fragen ohne Themen-ID, die vorher übernommen wurden, stellt das Quiz nicht mehr. `DocumentId` und `TopicPosition` bleiben an jeder Frage als ihre Quelle.
 
+## Standard-Lernziel
+
+Bis der Lernziel-Assistent in M2 kommt, hat jeder Nutzer genau ein Lernziel, das Standard-Lernziel. Es gehört Planning (`LearningGoal`). Wer es braucht, fragt `POST /learning-goals/default` mit dem Token des Nutzers ab und bekommt die `id` zurück. Der erste Aufruf legt es an, jeder weitere liefert dasselbe. POST, weil der Aufruf anlegen kann. Content ruft es beim Einfügen eines Textes auf und reicht dafür das Token des Nutzers weiter (#215). Das ist nach Regel 6 erlaubt, weil Planning auf Content hört und nicht umgekehrt.
+
+Die Id des Standard-Lernziels leitet Planning aus der Nutzer-ID ab (`LearningGoal.DefaultIdFor`). Kommen zwei erste Aufrufe gleichzeitig, legen beide dieselbe Zeile an, die Datenbank lässt nur eine durch, und der andere liest sie danach. Weil jeder mit der Nutzer-ID die Id ausrechnen kann, schützt sie nichts. Wer ein Lernziel sieht, regelt allein der Owner-Filter. In M2 bekommt `LearningGoal` Name, Art und Prüfung dazu. Das Standard-Lernziel wird damit zu einem echten Lernziel mit derselben Id, und was darauf verweist, bleibt gleich. Es gehört dem Nutzer und geht mit `UserDeleted`.
+
+Bis #215 kennt `DocumentAnalyzed` kein Lernziel. Knowledge hängt die Themen deshalb an `Guid.Empty`, und die Empfänger von `TopicsChanged` übernehmen das so.
+
 ## Starten
 
 Wie du das Backend und die Web-Shell lokal mit einem Befehl startest, steht in der [README](../README.md#lokal-starten).

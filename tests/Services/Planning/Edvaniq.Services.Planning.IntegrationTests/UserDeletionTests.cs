@@ -39,6 +39,21 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         Assert.Equal(1, ItemsOf(bob));
     }
 
+    [Fact]
+    public async Task DeletedUser_LosesTheirDefaultLearningGoal_OthersKeepTheirs()
+    {
+        var alice = NewUser("alice");
+        var bob = NewUser("bob");
+        await CreateDefaultGoalAsync(alice);
+        await CreateDefaultGoalAsync(bob);
+
+        var messageId = await DeleteAsync(alice);
+
+        await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
+        Assert.Equal(0, GoalsOf(alice));
+        Assert.Equal(1, GoalsOf(bob));
+    }
+
     // "Alice" and "alice" are two users, deleting one keeps the data of the other.
     [Fact]
     public async Task DeletedUser_KeepsTheDataOfTheSameNameInOtherCase()
@@ -111,6 +126,18 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         using var response = await client.PostAsJsonAsync("/examples", new { text }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
+
+    private async Task CreateDefaultGoalAsync(string user)
+    {
+        using var client = service.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.Create(user));
+
+        using var response = await client.PostAsync("/learning-goals/default", content: null, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    private int GoalsOf(string user) =>
+        Query(db => db.LearningGoals.IgnoreQueryFilters().Count(goal => goal.OwnerId == user));
 
     // Like Identity's dispatcher would.
     private async Task<Guid> DeleteAsync(string user, Guid? messageId = null, string? traceParent = null)
