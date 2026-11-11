@@ -6,6 +6,7 @@ using Edvaniq.Services.Knowledge.Contracts;
 using Edvaniq.Services.LearningEngine.Application;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace Edvaniq.Services.LearningEngine.Infrastructure;
@@ -24,6 +25,7 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<ILearningRecords, LearningRecords>();
         builder.Services.AddScoped<IKnownTopics, KnownTopics>();
         builder.Services.AddScoped<IMasteries, Masteries>();
+        builder.Services.TryAddSingleton(TimeProvider.System);
 
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<LearningEngineDbContext>(ServiceKey);

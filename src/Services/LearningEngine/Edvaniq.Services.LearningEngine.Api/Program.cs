@@ -1,6 +1,7 @@
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Web;
 using Edvaniq.Services.LearningEngine.Application;
+using Edvaniq.Services.LearningEngine.Domain;
 using Edvaniq.Services.LearningEngine.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,12 +33,12 @@ app.MapGet("/me", (ICurrentUser user) => new { user.Id });
 // Someone else's topic and one this service doesn't know (yet) look the same: 404.
 app.MapGet("/mastery/{topicId:guid}", async (Guid topicId, IMasteries masteries, CancellationToken cancellationToken) =>
     await masteries.FindAsync(topicId, cancellationToken) is { } mastery
-        ? Results.Ok(new MasteryResponse(topicId, mastery))
+        ? Results.Ok(new MasteryResponse(topicId, mastery, Mastery.RuleVersion))
         : Results.NotFound());
 
 app.Run();
 
 return 0;
 
-// Whole percent, 0 to 100.
-internal sealed record MasteryResponse(Guid TopicId, int Mastery);
+// Whole percent, 0 to 100, and the version of the rule that worked it out.
+internal sealed record MasteryResponse(Guid TopicId, int Mastery, int RuleVersion);

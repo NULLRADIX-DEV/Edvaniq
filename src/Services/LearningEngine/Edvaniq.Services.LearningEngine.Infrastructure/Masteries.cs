@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Edvaniq.Services.LearningEngine.Infrastructure;
 
 // No query here mentions the owner: the filter of ServiceDbContext adds it to every one of them.
-internal sealed class Masteries(LearningEngineDbContext db) : IMasteries
+internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) : IMasteries
 {
     public async Task<int?> FindAsync(Guid topicId, CancellationToken cancellationToken)
     {
@@ -18,6 +18,6 @@ internal sealed class Masteries(LearningEngineDbContext db) : IMasteries
         var records = await db.LearningRecords.AsNoTracking()
             .Where(record => record.TopicId == topicId)
             .ToListAsync(cancellationToken);
-        return Mastery.Percent(Mastery.Of(records));
+        return Mastery.Percent(Mastery.Of(records, time.GetUtcNow().UtcDateTime));
     }
 }

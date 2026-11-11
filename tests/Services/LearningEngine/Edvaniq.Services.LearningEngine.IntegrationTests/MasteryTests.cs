@@ -21,7 +21,8 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
     private const string Consumer = $"{InfrastructureExtensions.ServiceKey}-AnswerRecordedHandler";
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
-    private static readonly DateTime Monday = new(2026, 11, 9, 9, 0, 0, DateTimeKind.Utc);
+    // Answers a minute old: the value has decayed a hair, 62.5 shows as 62 and 37.5 as 37 (MasteryTests in the unit tests).
+    private static readonly TimeSpan AMinute = TimeSpan.FromMinutes(1);
 
     private InMemoryTransport Broker => service.Services.GetRequiredService<InMemoryTransport>();
 
@@ -31,7 +32,7 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
         var alice = NewUser("alice");
         var topic = await KnowAsync(alice);
 
-        Assert.Equal(new MasteryResponse(topic, 50), await MasteryAsync(alice, topic));
+        Assert.Equal(new MasteryResponse(topic, 50, 2), await MasteryAsync(alice, topic));
     }
 
     [Fact]
@@ -43,8 +44,20 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
         await DeliverAsync(Answer(alice, up, correct: true));
         await DeliverAsync(Answer(alice, down, correct: false));
 
-        Assert.Equal(63, (await MasteryAsync(alice, up))!.Mastery);
-        Assert.Equal(38, (await MasteryAsync(alice, down))!.Mastery);
+        Assert.Equal(62, (await MasteryAsync(alice, up))!.Mastery);
+        Assert.Equal(37, (await MasteryAsync(alice, down))!.Mastery);
+    }
+
+    // The value is worked out for the time of the request: a correct answer from 90 days ago has lost half, 62.5 -> 31.25.
+    [Fact]
+    public async Task OldAnswer_HasDecayed()
+    {
+        var alice = NewUser("alice");
+        var topic = await KnowAsync(alice);
+
+        await DeliverAsync(Answer(alice, topic, correct: true, ago: TimeSpan.FromDays(90) + AMinute));
+
+        Assert.Equal(new MasteryResponse(topic, 31, 2), await MasteryAsync(alice, topic));
     }
 
     // The same answer again, under the same and under a new message id, doesn't move the value a second time.
@@ -64,7 +77,7 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
 
             // One consumer, in order: once the second event is through, so is the duplicate.
             await WaitForAsync(() => InboxEntries(again) == 1, "The second event was not handled.");
-            Assert.Equal(63, (await MasteryAsync(alice, topic))!.Mastery);
+            Assert.Equal(62, (await MasteryAsync(alice, topic))!.Mastery);
         }
         finally
         {
@@ -82,7 +95,7 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
         await DeliverAsync(Answer(bob, topic, correct: false));
         await DeliverAsync(Answer(bob, topic, correct: false));
 
-        Assert.Equal(63, (await MasteryAsync(alice, topic))!.Mastery);
+        Assert.Equal(62, (await MasteryAsync(alice, topic))!.Mastery);
         Assert.Equal(HttpStatusCode.NotFound, (await GetAsync(bob, topic)).StatusCode);
     }
 
@@ -97,7 +110,7 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
         Assert.Equal(HttpStatusCode.NotFound, (await GetAsync(alice, topic)).StatusCode);
 
         await KnowAsync(alice, topic);
-        Assert.Equal(63, (await MasteryAsync(alice, topic))!.Mastery);
+        Assert.Equal(62, (await MasteryAsync(alice, topic))!.Mastery);
     }
 
     [Fact]
@@ -111,9 +124,9 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
 
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
 
-    private static AnswerRecorded Answer(string user, Guid topic, bool correct) =>
+    private static AnswerRecorded Answer(string user, Guid topic, bool correct, TimeSpan? ago = null) =>
         new(AnswerRecorded.CurrentVersion, user, TopicId: topic, ItemId: Guid.NewGuid(), SessionId: Guid.NewGuid(),
-            AnswerId: Guid.NewGuid(), correct, 2, 4200, null, Mode.Practice, Monday);
+            AnswerId: Guid.NewGuid(), correct, 2, 4200, null, Mode.Practice, DateTime.UtcNow - (ago ?? AMinute));
 
     // Topics only come from TopicsChanged, KnownTopicTests covers that way. Here they go into the database directly.
     private async Task<Guid> KnowAsync(string owner, Guid? topicId = null)
@@ -175,5 +188,5 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
         }
     }
 
-    private sealed record MasteryResponse(Guid TopicId, int Mastery);
+    private sealed record MasteryResponse(Guid TopicId, int Mastery, int RuleVersion);
 }
