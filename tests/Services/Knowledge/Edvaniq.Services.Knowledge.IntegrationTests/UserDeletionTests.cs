@@ -38,6 +38,35 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         Assert.Equal(1, ItemsOf(bob));
     }
 
+    // Every table with an owner holds rows of both users. A new table without a seed here fails before the deletion.
+    [Fact]
+    public async Task DeletedUser_HasNoRowInAnyTable_OthersKeepTheirs()
+    {
+        var alice = NewUser("alice");
+        var bob = NewUser("bob");
+        await SeedEveryTableAsync(alice);
+        await SeedEveryTableAsync(bob);
+        Assert.Empty(OwnedRows.Unseeded(Query(db => OwnedRows.Of(db, alice))));
+        var ofBob = Query(db => OwnedRows.Of(db, bob));
+
+        var messageId = await DeleteAsync(alice);
+
+        await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
+        Assert.All(Query(db => OwnedRows.Of(db, alice)), table => Assert.Equal(0, table.Value));
+        Assert.Equal(ofBob, Query(db => OwnedRows.Of(db, bob)));
+    }
+
+    private async Task SeedEveryTableAsync(string user)
+    {
+        using var scope = service.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<KnowledgeDbContext>();
+        var topic = Topic.Create(user, Guid.NewGuid(), "Zelle", Seed.Now, Guid.NewGuid());
+        var subtopic = topic.AddSubtopic("Zellkern", Seed.Now, topic.DocumentId);
+        db.Topics.AddRange(topic, subtopic);
+        db.TopicSections.Add(subtopic.AssignSection(topic.DocumentId!.Value, Guid.NewGuid()));
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+    }
+
     // "Alice" and "alice" are two users, deleting one keeps the data of the other.
     [Fact]
     public async Task DeletedUser_KeepsTheDataOfTheSameNameInOtherCase()
