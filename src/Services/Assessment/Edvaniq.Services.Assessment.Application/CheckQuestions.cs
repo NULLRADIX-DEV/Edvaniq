@@ -6,13 +6,13 @@ namespace Edvaniq.Services.Assessment.Application;
 // the topic's pool, the easiest first. They're no kind of their own, each is asked as an attempt and answered like any.
 public static class CheckQuestions
 {
-    public const int Min = 2;
     public const int Max = 3;
 
-    // Easiest first, shuffled within a difficulty, so a repeat doesn't always bring the same ones. Null below Min.
+    // Easiest first, shuffled within a difficulty, so a repeat doesn't always bring the same ones. Null while the pool
+    // isn't ready.
     public static IReadOnlyList<Question>? Pick(IReadOnlyList<Question> pool, Random random)
     {
-        if (pool.Count < Min)
+        if (!QuestionPool.IsReady(pool.Count))
         {
             return null;
         }
