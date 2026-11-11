@@ -42,6 +42,7 @@ app.MapPingEndpoints();
 app.MapLearningGoalEndpoints();
 app.MapDailyBudgetEndpoints();
 app.MapPlanEndpoints();
+app.MapSessionEndpoints();
 app.MapExampleEndpoints();
 
 app.Run();

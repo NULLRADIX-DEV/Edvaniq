@@ -26,6 +26,7 @@ public class Rule5ProjectionTests
         Assert.Equal(
             [
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.BlockKind from Planning at DoneBlock.Kind",
+                "PlanningDbContext maps Edvaniq.Services.Planning.Domain.BlockKind from Planning at Session.Kind",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.DailyBudgetSetting from Planning at DailyBudgetSetting",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.DoneBlock from Planning at DoneBlock",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.ExamType from Planning at LearningGoal.ExamType",
@@ -35,6 +36,7 @@ public class Rule5ProjectionTests
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.LearningGoalKind from Planning at LearningGoal.Kind",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.LearningLevel from Planning at LearningGoal.Level",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.PingRecord from Planning at PingRecord",
+                "PlanningDbContext maps Edvaniq.Services.Planning.Domain.Session from Planning at Session",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.TopicsSnapshot from Planning at TopicsSnapshot",
             ],
             violations);
