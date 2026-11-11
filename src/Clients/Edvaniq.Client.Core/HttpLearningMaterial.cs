@@ -44,49 +44,32 @@ public sealed class HttpLearningMaterial(HttpClient http) : ILearningMaterial
             MaterialJson.Default.DocumentInfo,
             cancellationToken);
 
-    private static async Task<CallOutcome<T>> CallAsync<T>(
-        Func<CancellationToken, Task<HttpResponseMessage>> send, JsonTypeInfo<T> answer, CancellationToken cancellationToken)
-    {
-        try
-        {
-            using var response = await send(cancellationToken);
-            switch (response.StatusCode)
+    private static Task<CallOutcome<T>> CallAsync<T>(
+        Func<CancellationToken, Task<HttpResponseMessage>> send, JsonTypeInfo<T> answer, CancellationToken cancellationToken) =>
+        HostCall.GuardAsync(
+            async () =>
             {
-                case HttpStatusCode.Unauthorized:
-                    return CallOutcome<T>.SignedOut;
-                case HttpStatusCode.RequestEntityTooLarge:
-                    return new CallOutcome<T>(CallResult.TooLarge, Messages: [TextTooLong]);
-                case HttpStatusCode.BadRequest:
-                    var (messages, traceId) = await RejectionAsync(response, cancellationToken);
-                    return messages.Count > 0
-                        ? new CallOutcome<T>(CallResult.Rejected, Messages: messages)
-                        : CallOutcome<T>.Failed(traceId);
-                case var _ when !response.IsSuccessStatusCode:
-                    return CallOutcome<T>.Failed(await ProblemTrace.ReadAsync(response, cancellationToken));
-            }
+                using var response = await send(cancellationToken);
+                switch (response.StatusCode)
+                {
+                    case HttpStatusCode.Unauthorized:
+                        return CallOutcome<T>.SignedOut;
+                    case HttpStatusCode.RequestEntityTooLarge:
+                        return new CallOutcome<T>(CallResult.TooLarge, Messages: [TextTooLong]);
+                    case HttpStatusCode.BadRequest:
+                        var (messages, traceId) = await RejectionAsync(response, cancellationToken);
+                        return messages.Count > 0
+                            ? new CallOutcome<T>(CallResult.Rejected, Messages: messages)
+                            : CallOutcome<T>.Failed(traceId);
+                    case var _ when !response.IsSuccessStatusCode:
+                        return CallOutcome<T>.Failed(await ProblemTrace.ReadAsync(response, cancellationToken));
+                }
 
-            return await response.Content.ReadFromJsonAsync(answer, cancellationToken) is { } value
-                ? CallOutcome<T>.Ok(value)
-                : CallOutcome<T>.Failed();
-        }
-        catch (HttpRequestException)
-        {
-            return CallOutcome<T>.Failed();
-        }
-        catch (JsonException)
-        {
-            return CallOutcome<T>.Failed();
-        }
-        catch (NotSupportedException)
-        {
-            // An answer that is no JSON at all, an HTML page from a proxy for instance.
-            return CallOutcome<T>.Failed();
-        }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            return CallOutcome<T>.Failed();
-        }
-    }
+                return await response.Content.ReadFromJsonAsync(answer, cancellationToken) is { } value
+                    ? CallOutcome<T>.Ok(value)
+                    : CallOutcome<T>.Failed();
+            },
+            cancellationToken);
 
     // The messages of a validation problem, meant to be shown as they are, and its trace. Anything else says nothing a
     // user could fix. The body can be read only once.

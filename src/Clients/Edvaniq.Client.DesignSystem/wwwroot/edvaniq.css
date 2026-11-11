@@ -18,6 +18,9 @@
     --color-alert: #a61b12;
     --color-alert-surface: #fdeeec;
     --color-on-alert-surface: #6e140d;
+    --color-right: #1d6b35;
+    --color-right-surface: #eaf6ee;
+    --color-on-right-surface: #134a24;
 
     --font-body: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
 

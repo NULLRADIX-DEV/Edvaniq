@@ -83,6 +83,23 @@ public sealed class TopicsTests : BunitContext
         Assert.Equal(3, material.TopicCalls);
     }
 
+    // Every topic and subtopic leads to a question of its own, the link names it for a screen reader.
+    [Fact]
+    public void EachTopic_LeadsToItsQuestion()
+    {
+        var material = new FakeLearningMaterial()
+            .Documents(Document(DocumentStatus.Ready))
+            .Topics(NewTopic);
+
+        var page = RenderPage(material);
+
+        var links = page.FindAll(".topic-list a.practice-link");
+        Assert.Equal(
+            [$"themen/{NewTopic.Id}/ueben", $"themen/{NewTopic.Subtopics[0].Id}/ueben"],
+            links.Select(link => link.GetAttribute("href")));
+        Assert.Equal(["Üben zu „Photosynthese“", "Üben zu „Lichtreaktion“"], links.Select(link => link.TextContent));
+    }
+
     // The topics of earlier texts stay, the state follows the newest text.
     [Fact]
     public void EarlierTopics_StayVisible_WhileANewTextIsAnalyzed()

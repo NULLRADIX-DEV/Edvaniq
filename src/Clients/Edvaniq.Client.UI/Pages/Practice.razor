@@ -1,0 +1,22 @@
+@page "/themen/{TopicId:guid}/ueben"
+@attribute [Authorize]
+
+<PageTitle>Frage üben – Edvaniq</PageTitle>
+
+@* Only the browser talks to Assessment. While the page is prerendered on the server there is nobody to ask. *@
+@if (RendererInfo.IsInteractive)
+{
+    <QuizView TopicId="TopicId" />
+}
+else
+{
+    <h1>Frage üben</h1>
+    <div role="status">
+        <p>Wird geladen …</p>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid TopicId { get; set; }
+}

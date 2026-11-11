@@ -1,0 +1,10 @@
+@* Leads to a question of the topic. The topic's name is in the link for a screen reader, the list has many of them. *@
+<a class="practice-link" href="themen/@TopicId.ToString("D")/ueben">Üben<span class="visually-hidden"> zu „@Name“</span></a>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid TopicId { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Name { get; set; } = "";
+}

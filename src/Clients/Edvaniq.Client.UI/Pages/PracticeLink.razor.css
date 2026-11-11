@@ -1,0 +1,11 @@
+/* Big enough for a thumb next to the topic's name. */
+.practice-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    margin-left: var(--space-2);
+    padding: 0 var(--space-3);
+    font-weight: 600;
+}

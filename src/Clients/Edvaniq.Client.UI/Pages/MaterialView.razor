@@ -93,12 +93,13 @@
                 {
                     <li @key="topic.Id">
                         @topic.Name
+                        <PracticeLink TopicId="topic.Id" Name="@topic.Name" />
                         @if (topic.Subtopics.Count > 0)
                         {
                             <ul>
                                 @foreach (var subtopic in topic.Subtopics)
                                 {
-                                    <li @key="subtopic.Id">@subtopic.Name</li>
+                                    <li @key="subtopic.Id">@subtopic.Name <PracticeLink TopicId="subtopic.Id" Name="@subtopic.Name" /></li>
                                 }
                             </ul>
                         }
