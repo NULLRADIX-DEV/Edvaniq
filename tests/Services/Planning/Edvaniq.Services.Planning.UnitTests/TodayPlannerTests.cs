@@ -191,7 +191,6 @@ public class TodayPlannerTests
         Assert.Empty(enoughTime.Shortened);
     }
 
-<<<<<<< HEAD
     // #374: a topic without a ready question pool can't be practised, so it gets neither learn time nor a review, even
     // as the weakest, and the plan names it.
     [Fact]
@@ -250,7 +249,8 @@ public class TodayPlannerTests
         Assert.Empty(plan.Shortened);
         Assert.Equal(ids[..4], plan.NotReady);
         Assert.All(plan.Blocks, block => Assert.Contains(block.TopicId, ids[4..]));
-=======
+    }
+
     // #909: 10 minutes a day leave 35 learn minutes in the week, room for 2 blocks. The foundation C stays although it is
     // the lightest, and takes the place of B.
     [Fact]
@@ -263,7 +263,6 @@ public class TodayPlannerTests
 
         Assert.Equal([C], plain.Shortened);
         Assert.Equal([B], withFoundation.Shortened);
->>>>>>> aec1bac (Keep foundations in the plan when time is short)
     }
 
     private static Dictionary<Guid, TopicStanding> Introduced(Dictionary<Guid, int> masteries) =>

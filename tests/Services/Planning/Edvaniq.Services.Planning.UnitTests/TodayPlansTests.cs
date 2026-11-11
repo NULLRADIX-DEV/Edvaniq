@@ -128,6 +128,9 @@ public class TodayPlansTests
         public Task<IReadOnlyList<Guid>> ActiveAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
             Task.FromResult(active);
 
+        public Task<IReadOnlySet<Guid>> FoundationsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlySet<Guid>>(new HashSet<Guid>());
+
         public Task<TopicsSnapshot?> SnapshotAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
