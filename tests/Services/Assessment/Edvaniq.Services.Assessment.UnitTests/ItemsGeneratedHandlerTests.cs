@@ -1,9 +1,14 @@
+using System.Text.Json;
+
 using Edvaniq.BuildingBlocks.Application;
+using Edvaniq.BuildingBlocks.Contracts;
 using Edvaniq.Services.Assessment.Application;
 using Edvaniq.Services.Assessment.Domain;
 using Edvaniq.Services.Content.Contracts;
 
 using Microsoft.Extensions.Logging;
+
+using QuestionType = Edvaniq.Services.Content.Contracts.QuestionType;
 
 namespace Edvaniq.Services.Assessment.UnitTests;
 
@@ -114,8 +119,67 @@ public class ItemsGeneratedHandlerTests
         Assert.Equal("questions-7", Assert.Single(questions.Added).PromptVersion);
     }
 
+    [Fact]
+    public async Task QuestionWithoutType_IsSingleChoice()
+    {
+        await HandleAsync(Event(Item()));
+
+        var question = Assert.Single(questions.Added);
+        Assert.Equal(Domain.QuestionType.SingleChoice, question.Type);
+        Assert.Null(question.Answers);
+        Assert.Equal([1], question.RightOptions);
+    }
+
+    [Fact]
+    public async Task MultipleChoice_KeepsEveryRightOption_Sorted()
+    {
+        var item = Item();
+        item = item with { Question = item.Question! with { Type = QuestionType.MultipleChoice, Answers = [2, 0], Answer = 2 } };
+
+        await HandleAsync(Event(item));
+
+        var question = Assert.Single(questions.Added);
+        Assert.Equal(Domain.QuestionType.MultipleChoice, question.Type);
+        Assert.Equal([0, 2], question.RightOptions);
+        Assert.Equal(0, question.Answer);
+    }
+
+    [Fact]
+    public async Task TrueFalse_IsTakenOver()
+    {
+        var item = Item();
+        item = item with { Question = item.Question! with { Type = QuestionType.TrueFalse, Options = ["Wahr", "Falsch"], Answer = 1 } };
+
+        await HandleAsync(Event(item));
+
+        var question = Assert.Single(questions.Added);
+        Assert.Equal((Domain.QuestionType.TrueFalse, 1), (question.Type, question.Answer));
+    }
+
+    // Messages sent before the type came have neither field and still read as single choice.
+    [Fact]
+    public void MessageFromBeforeTheTypes_StillReads()
+    {
+        const string json = """
+            {"userId":"alice","documentId":"6f1c2a1e-0000-4000-8000-000000000001","topicPosition":0,"topicId":null,"items":[
+              {"itemId":"6f1c2a1e-0000-4000-8000-000000000002","kind":0,"documentId":"6f1c2a1e-0000-4000-8000-000000000001",
+               "sectionId":"6f1c2a1e-0000-4000-8000-000000000003","modelId":"simulated","promptVersion":"questions-1",
+               "question":{"text":"Was ist 2 + 2?","options":["3","4"],"answer":1,"explanation":"Vier.","difficulty":1}}]}
+            """;
+
+        var question = JsonSerializer.Deserialize<ItemsGenerated>(json, EventJson.Options)!.Items[0].Question!;
+
+        Assert.Equal((null, null, 1), (question.Type, question.Answers, question.Answer));
+    }
+
     public static TheoryData<string> BrokenItems =>
     [
+        "unknown type",
+        "true/false with three options",
+        "multiple choice without answers",
+        "multiple choice answer past the options",
+        "multiple choice answer twice",
+        "multiple choice answer not among answers",
         "no question",
         "answer past the options",
         "negative answer",
@@ -152,6 +216,12 @@ public class ItemsGeneratedHandlerTests
         var question = item.Question!;
         return broken switch
         {
+            "unknown type" => item with { Question = question with { Type = (QuestionType)9 } },
+            "true/false with three options" => item with { Question = question with { Type = QuestionType.TrueFalse } },
+            "multiple choice without answers" => item with { Question = question with { Type = QuestionType.MultipleChoice } },
+            "multiple choice answer past the options" => item with { Question = question with { Type = QuestionType.MultipleChoice, Answers = [1, 3] } },
+            "multiple choice answer twice" => item with { Question = question with { Type = QuestionType.MultipleChoice, Answers = [1, 1] } },
+            "multiple choice answer not among answers" => item with { Question = question with { Type = QuestionType.MultipleChoice, Answers = [0, 2] } },
             "no question" => item with { Question = null },
             "answer past the options" => item with { Question = question with { Answer = question.Options.Count } },
             "negative answer" => item with { Question = question with { Answer = -1 } },

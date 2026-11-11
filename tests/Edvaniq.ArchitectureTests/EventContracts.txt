@@ -27,16 +27,21 @@ Content.GeneratedItem.PromptVersion: string
 Content.GeneratedItem.Question: GeneratedQuestion?
 Content.GeneratedItem.SectionId: Guid
 Content.GeneratedQuestion.Answer: int
+Content.GeneratedQuestion.Answers: IReadOnlyList<int>?
 Content.GeneratedQuestion.Difficulty: int
 Content.GeneratedQuestion.Explanation: string
 Content.GeneratedQuestion.Options: IReadOnlyList<string>
 Content.GeneratedQuestion.Text: string
+Content.GeneratedQuestion.Type: QuestionType?
 Content.ItemKind.Question: = 0
 Content.ItemsGenerated.DocumentId: Guid
 Content.ItemsGenerated.Items: IReadOnlyList<GeneratedItem>
 Content.ItemsGenerated.TopicId: Guid?
 Content.ItemsGenerated.TopicPosition: int
 Content.ItemsGenerated.UserId: string
+Content.QuestionType.MultipleChoice: = 1
+Content.QuestionType.SingleChoice: = 0
+Content.QuestionType.TrueFalse: = 2
 Content.TopicSuggestion.Name: string
 Content.TopicSuggestion.Parent: int?
 Content.TopicSuggestion.SectionIds: IReadOnlyList<Guid>

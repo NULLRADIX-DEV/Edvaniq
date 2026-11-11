@@ -30,7 +30,17 @@ public sealed class Quiz(IAttempts attempts, IEventOutbox outbox, TimeProvider t
         return new(AskOutcome.Asked, attempt, question);
     }
 
-    public async Task<Graded> AnswerAsync(Guid attemptId, int option, int responseTimeMs, CancellationToken cancellationToken)
+    public Task<Graded> AnswerAsync(Guid attemptId, int option, int responseTimeMs, CancellationToken cancellationToken) =>
+        AnswerAsync(attemptId, [option], responseTimeMs, cancellationToken);
+
+    public Task<Graded> AnswerAsync(Guid attemptId, IReadOnlyCollection<int> chosen, int responseTimeMs, CancellationToken cancellationToken) =>
+        GradeAsync(attemptId, chosen, responseTimeMs, cancellationToken);
+
+    // "Show solution": graded wrong, and like an answer only if it comes first.
+    public Task<Graded> RevealAsync(Guid attemptId, int responseTimeMs, CancellationToken cancellationToken) =>
+        GradeAsync(attemptId, null, responseTimeMs, cancellationToken);
+
+    private async Task<Graded> GradeAsync(Guid attemptId, IReadOnlyCollection<int>? chosen, int responseTimeMs, CancellationToken cancellationToken)
     {
         if (await attempts.FindAsync(attemptId, cancellationToken) is not { } attempt
             || await attempts.FindQuestionAsync(attempt.QuestionId, cancellationToken) is not { } question)
@@ -43,12 +53,20 @@ public sealed class Quiz(IAttempts attempts, IEventOutbox outbox, TimeProvider t
             return new(GradeOutcome.Graded, attempt, question);
         }
 
-        if (!Attempt.IsOption(question, option))
+        var now = time.GetUtcNow().UtcDateTime;
+        if (chosen is null)
+        {
+            attempt.Reveal(question, responseTimeMs, now);
+        }
+        else if (Attempt.IsChoice(question, chosen))
+        {
+            attempt.Answer(question, chosen, responseTimeMs, now);
+        }
+        else
         {
             return new(GradeOutcome.InvalidOption, null, null);
         }
 
-        attempt.Answer(question, option, responseTimeMs, time.GetUtcNow().UtcDateTime);
         outbox.Add(new AnswerRecorded(
             AnswerRecorded.CurrentVersion,
             attempt.OwnerId,

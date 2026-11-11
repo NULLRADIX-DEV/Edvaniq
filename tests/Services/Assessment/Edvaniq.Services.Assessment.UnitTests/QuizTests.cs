@@ -107,6 +107,70 @@ public sealed class QuizTests
         Assert.Equal((GradeOutcome.Graded, 0, false), (graded.Outcome, graded.Attempt!.Option, graded.Attempt.Correct));
     }
 
+    // Showing the solution is recorded wrong with the measured time, once, and an answer after it changes nothing.
+    [Fact]
+    public async Task Reveal_IsRecordedWrongOnce_AndAnAnswerAfterItGetsItBack()
+    {
+        var topicId = Guid.NewGuid();
+        var question = AddTopicWithQuestion(topicId);
+        var attempt = (await Quiz.AskAsync(topicId, TestContext.Current.CancellationToken)).Attempt!;
+        time.Advance(TimeSpan.FromSeconds(6));
+
+        var revealed = await Quiz.RevealAsync(attempt.Id, 5_000, TestContext.Current.CancellationToken);
+        var answered = await Quiz.AnswerAsync(attempt.Id, 1, 1_000, TestContext.Current.CancellationToken);
+
+        Assert.Equal((GradeOutcome.Graded, true, false), (revealed.Outcome, revealed.Attempt!.Revealed, revealed.Attempt.Correct));
+        Assert.Equal((GradeOutcome.Graded, true, false, (int?)null), (answered.Outcome, answered.Attempt!.Revealed, answered.Attempt.Correct, answered.Attempt.Option));
+        Assert.Equal(
+            new AnswerRecorded(1, "alice", topicId, question.Id, null, attempt.Id, false, 2, 5_000, null, Mode.Practice, Now.AddSeconds(6)),
+            Assert.IsType<AnswerRecorded>(Assert.Single(outbox.Events)));
+    }
+
+    [Fact]
+    public async Task Reveal_AfterAnAnswer_GetsTheAnswerBack()
+    {
+        var topicId = Guid.NewGuid();
+        AddTopicWithQuestion(topicId);
+        var attempt = (await Quiz.AskAsync(topicId, TestContext.Current.CancellationToken)).Attempt!;
+
+        await Quiz.AnswerAsync(attempt.Id, 1, 1_000, TestContext.Current.CancellationToken);
+        var revealed = await Quiz.RevealAsync(attempt.Id, 2_000, TestContext.Current.CancellationToken);
+
+        Assert.Equal((false, true, 1), (revealed.Attempt!.Revealed, revealed.Attempt.Correct, revealed.Attempt.Option));
+        Assert.Single(outbox.Events);
+    }
+
+    [Fact]
+    public async Task MultipleChoice_IsGradedBySet()
+    {
+        var topicId = Guid.NewGuid();
+        attempts.KnownTopics.Add(topicId);
+        attempts.Questions.Add(AttemptTests.MultipleChoice("alice", topicId));
+        var right = (await Quiz.AskAsync(topicId, TestContext.Current.CancellationToken)).Attempt!;
+        var half = (await Quiz.AskAsync(topicId, TestContext.Current.CancellationToken)).Attempt!;
+
+        var rightGrade = await Quiz.AnswerAsync(right.Id, [2, 0], 1_000, TestContext.Current.CancellationToken);
+        var halfGrade = await Quiz.AnswerAsync(half.Id, [0], 1_000, TestContext.Current.CancellationToken);
+        var empty = await Quiz.AnswerAsync(Guid.NewGuid(), [], 1_000, TestContext.Current.CancellationToken);
+
+        Assert.True(rightGrade.Attempt!.Correct);
+        Assert.False(halfGrade.Attempt!.Correct);
+        Assert.Equal(GradeOutcome.NotFound, empty.Outcome);
+        Assert.Equal([true, false], outbox.Events.Cast<AnswerRecorded>().Select(record => record.Correct));
+    }
+
+    [Fact]
+    public async Task MultipleChoice_WithoutAnyOption_IsRejected()
+    {
+        var topicId = Guid.NewGuid();
+        attempts.KnownTopics.Add(topicId);
+        attempts.Questions.Add(AttemptTests.MultipleChoice("alice", topicId));
+        var attempt = (await Quiz.AskAsync(topicId, TestContext.Current.CancellationToken)).Attempt!;
+
+        Assert.Equal(GradeOutcome.InvalidOption, (await Quiz.AnswerAsync(attempt.Id, [], 1_000, TestContext.Current.CancellationToken)).Outcome);
+        Assert.False(attempt.Answered);
+    }
+
     private Question AddTopicWithQuestion(Guid topicId)
     {
         attempts.KnownTopics.Add(topicId);

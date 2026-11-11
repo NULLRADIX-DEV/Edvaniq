@@ -3,7 +3,8 @@ using Edvaniq.BuildingBlocks.Domain;
 namespace Edvaniq.Services.Assessment.Domain;
 
 // A question put to the user and, once given, their answer. Its id is the answerId of the learning record, so however
-// often the same answer comes in, it's stored and reported once. The question is single choice: one option is right.
+// often the same answer comes in, it's stored and reported once. Grading is binary: single choice and true/false are
+// right with the right option, multiple choice only with exactly the right set, and showing the solution is wrong.
 public sealed class Attempt : IOwnedByUser
 {
     private Attempt()
@@ -24,7 +25,14 @@ public sealed class Attempt : IOwnedByUser
 
     public bool Answered { get; private set; }
 
+    // The chosen option of a single choice or true/false question.
     public int? Option { get; private set; }
+
+    // The chosen options of a multiple choice question, sorted.
+    public IReadOnlyList<int>? Options { get; private set; }
+
+    // The user asked for the solution instead of answering.
+    public bool Revealed { get; private set; }
 
     public bool? Correct { get; private set; }
 
@@ -45,6 +53,12 @@ public sealed class Attempt : IOwnedByUser
 
     public static bool IsOption(Question question, int option) => option >= 0 && option < question.Options.Count;
 
+    // Multiple choice takes one or more options, the others exactly one. The same option twice counts once.
+    public static bool IsChoice(Question question, IReadOnlyCollection<int> chosen) =>
+        chosen.All(option => IsOption(question, option))
+        && chosen.Distinct().Count() is var count
+        && (question.Type == QuestionType.MultipleChoice ? count > 0 : count == 1);
+
     // The client measures the time, but it can't be longer than the server saw pass since the question went out.
     public static int ResponseTime(int measuredMs, DateTime askedAt, DateTime answeredAt)
     {
@@ -52,22 +66,56 @@ public sealed class Attempt : IOwnedByUser
         return (int)Math.Min(Math.Max(measuredMs, 0), elapsed);
     }
 
-    // Call it only once, with an option that passed IsOption.
-    public void Answer(Question question, int option, int measuredMs, DateTime answeredAt)
+    public void Answer(Question question, int option, int measuredMs, DateTime answeredAt) =>
+        Answer(question, [option], measuredMs, answeredAt);
+
+    // Call it only once, with a choice that passed IsChoice. The order of the options doesn't matter.
+    public void Answer(Question question, IReadOnlyCollection<int> chosen, int measuredMs, DateTime answeredAt)
+    {
+        CheckOpen(question);
+        if (!IsChoice(question, chosen))
+        {
+            throw new ArgumentException("Not a choice the question that was asked allows.", nameof(chosen));
+        }
+
+        var options = chosen.Distinct().Order().ToList();
+        if (question.Type == QuestionType.MultipleChoice)
+        {
+            Options = options;
+        }
+        else
+        {
+            Option = options[0];
+        }
+
+        Close(options.SequenceEqual(question.RightOptions), measuredMs, answeredAt);
+    }
+
+    // Showing the solution answers the attempt as wrong, once, like any answer.
+    public void Reveal(Question question, int measuredMs, DateTime answeredAt)
+    {
+        CheckOpen(question);
+        Revealed = true;
+        Close(false, measuredMs, answeredAt);
+    }
+
+    private void CheckOpen(Question question)
     {
         if (Answered)
         {
             throw new InvalidOperationException("The attempt is answered already, its answer stays.");
         }
 
-        if (question.Id != QuestionId || !IsOption(question, option))
+        if (question.Id != QuestionId)
         {
-            throw new ArgumentException("Not an option of the question that was asked.", nameof(option));
+            throw new ArgumentException("Not the question that was asked.", nameof(question));
         }
+    }
 
+    private void Close(bool correct, int measuredMs, DateTime answeredAt)
+    {
         Answered = true;
-        Option = option;
-        Correct = option == question.Answer;
+        Correct = correct;
         AnsweredAt = Stored(answeredAt);
         ResponseTimeMs = ResponseTime(measuredMs, AskedAt, AnsweredAt.Value);
     }

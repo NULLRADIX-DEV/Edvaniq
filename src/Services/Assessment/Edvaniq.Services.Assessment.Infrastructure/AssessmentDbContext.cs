@@ -6,6 +6,7 @@ using Edvaniq.Services.Assessment.Domain;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Edvaniq.Services.Assessment.Infrastructure;
 
@@ -14,6 +15,16 @@ namespace Edvaniq.Services.Assessment.Infrastructure;
 public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> options, ICurrentUser currentUser)
     : ServiceDbContext(options, currentUser)
 {
+    // Option indexes as a json array. Null stays null in the column.
+    private static readonly ValueConverter<IReadOnlyList<int>?, string> IndexesConverter = new(
+        indexes => JsonSerializer.Serialize(indexes, JsonSerializerOptions.Web),
+        json => JsonSerializer.Deserialize<List<int>>(json, JsonSerializerOptions.Web) ?? new List<int>());
+
+    private static readonly ValueComparer<IReadOnlyList<int>?> IndexesComparer = new(
+        (left, right) => left == null ? right == null : right != null && left.SequenceEqual(right),
+        indexes => indexes == null ? 0 : indexes.Aggregate(0, HashCode.Combine),
+        indexes => indexes == null ? null : indexes.ToList());
+
     public DbSet<Question> Questions => Set<Question>();
 
     public DbSet<Attempt> Attempts => Set<Attempt>();
@@ -42,11 +53,14 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
                     options => options.Aggregate(0, (hash, option) => HashCode.Combine(hash, option.GetHashCode(StringComparison.Ordinal))),
                     options => options.ToList()));
 
+        question.Property(entry => entry.Answers).HasColumnType("json").HasConversion(IndexesConverter, IndexesComparer);
+
         question.HasIndex(entry => new { entry.OwnerId, entry.DocumentId, entry.TopicPosition });
         question.HasIndex(entry => new { entry.OwnerId, entry.TopicId });
 
         var attempt = modelBuilder.Entity<Attempt>();
         attempt.Property(entry => entry.Id).ValueGeneratedNever();
+        attempt.Property(entry => entry.Options).HasColumnType("json").HasConversion(IndexesConverter, IndexesComparer);
 
         // Two answers at once: the later one updates no row and gets the stored answer instead.
         attempt.Property(entry => entry.Answered).IsConcurrencyToken();

@@ -9,6 +9,7 @@ using Edvaniq.Services.Assessment.Domain;
 using Edvaniq.Services.Assessment.Infrastructure;
 using Edvaniq.Testing;
 
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -53,6 +54,98 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
         Assert.Equal((false, 0, question.Answer, question.Explanation), (graded.Correct, graded.Option, graded.Answer, graded.Explanation));
     }
 
+    // A31 (docs/spec/acceptance.md): single choice right, multiple choice complete, multiple choice half, and true/false
+    // by showing the solution. The first two count as right, the last two as wrong, each as one learning record.
+    [Fact]
+    public async Task AllThreeKinds_AreGradedBinary_AndShowingTheSolutionIsWrong()
+    {
+        var alice = User.New("alice");
+        var (single, _) = await AddTopicAsync(alice);
+        string[] four = ["2", "4", "5", "9"];
+        var (multiple, _) = await AddTopicAsync(alice, QuestionType.MultipleChoice, four, answer: 0, answers: [0, 2]);
+        var (trueFalse, _) = await AddTopicAsync(alice, QuestionType.TrueFalse, ["Wahr", "Falsch"], answer: 0);
+
+        var singleId = await AskIdAsync(alice, single);
+        var completeId = await AskIdAsync(alice, multiple);
+        var halfId = await AskIdAsync(alice, multiple);
+        var trueFalseId = await AskIdAsync(alice, trueFalse);
+        var grades = new[]
+        {
+            await AnswerAsync(alice, singleId, option: 1, responseTimeMs: 0),
+            await AnswerAsync(alice, completeId, options: [2, 0], responseTimeMs: 0),
+            await AnswerAsync(alice, halfId, options: [0], responseTimeMs: 0),
+            await RevealAsync(alice, trueFalseId, responseTimeMs: 0),
+        };
+
+        Assert.Equal([true, true, false, false], grades.Select(grade => grade.Correct));
+        Assert.Equal(["singleChoice", "multipleChoice", "multipleChoice", "trueFalse"], grades.Select(grade => grade.Type));
+        Assert.Equal([0, 2], grades[1].Answers);
+        Assert.Equal([0, 2], grades[1].Options!);
+        Assert.Equal(
+            [true, true, false, false],
+            new[] { singleId, completeId, halfId, trueFalseId }.Select(id => Assert.Single(Records(id)).Correct));
+    }
+
+    // The solution with its explanation comes back, nothing counts as chosen, and the time is the one measured.
+    [Fact]
+    public async Task ShowingTheSolution_GivesSolutionAndExplanation_WithNothingChosen()
+    {
+        var alice = User.New("alice");
+        var (topicId, question) = await AddTopicAsync(alice);
+        var attemptId = await AskIdAsync(alice, topicId);
+
+        var revealed = await RevealAsync(alice, attemptId, responseTimeMs: 0);
+
+        Assert.Equal(
+            (true, false, (int?)null, (int[]?)null, question.Answer, question.Explanation),
+            (revealed.Revealed, revealed.Correct, revealed.Option, revealed.Options, revealed.Answer, revealed.Explanation));
+        Assert.True(Stored(attemptId).Revealed);
+        Assert.False(Assert.Single(Records(attemptId)).Correct);
+    }
+
+    // Whichever comes first counts: an answer after the solution gets the solution back, and the other way round.
+    [Fact]
+    public async Task ShowingTheSolution_AndAnswering_CountOnce_WhicheverIsFirst()
+    {
+        var alice = User.New("alice");
+        var (topicId, _) = await AddTopicAsync(alice);
+        var revealedFirst = await AskIdAsync(alice, topicId);
+        var answeredFirst = await AskIdAsync(alice, topicId);
+
+        var revealed = await RevealAsync(alice, revealedFirst, responseTimeMs: 0);
+        var thenAnswered = await AnswerAsync(alice, revealedFirst, option: 1, responseTimeMs: 0);
+        var answered = await AnswerAsync(alice, answeredFirst, option: 1, responseTimeMs: 0);
+        var thenRevealed = await RevealAsync(alice, answeredFirst, responseTimeMs: 0);
+
+        Assert.Equivalent(revealed, thenAnswered, strict: true);
+        Assert.Equivalent(answered, thenRevealed, strict: true);
+        Assert.False(Assert.Single(Records(revealedFirst)).Correct);
+        Assert.True(Assert.Single(Records(answeredFirst)).Correct);
+    }
+
+    // Before the answer no response carries the solution: asking leaves it out, and asking and answering are the only
+    // ways to a question at all.
+    [Fact]
+    public async Task Solution_IsNowhere_BeforeTheAnswer()
+    {
+        var alice = User.New("alice");
+        var (topicId, _) = await AddTopicAsync(alice, QuestionType.MultipleChoice, ["2", "4", "5", "9"], answer: 0, answers: [0, 2]);
+
+        using var asked = await AskAsync(alice, topicId);
+        var attempt = await asked.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            ["difficulty", "id", "options", "questionId", "text", "topicId", "type"],
+            attempt.EnumerateObject().Select(property => property.Name).Order());
+        var routes = service.Services.GetServices<EndpointDataSource>()
+            .SelectMany(source => source.Endpoints)
+            .OfType<RouteEndpoint>()
+            .Select(endpoint => endpoint.RoutePattern.RawText!.TrimEnd('/'))
+            .Where(route => route is not ("/health" or "/alive" or "/me"))
+            .Order();
+        Assert.Equal(["/attempts", "/attempts/{id:guid}/answer"], routes);
+    }
+
     // A double click, a retry and a second answer to the same question all get the first answer back.
     [Fact]
     public async Task SameAnswerSentTwice_CountsOnce()
@@ -65,8 +158,8 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
         var again = await AnswerAsync(alice, attemptId, option: 1, responseTimeMs: 0);
         var other = await AnswerAsync(alice, attemptId, option: 0, responseTimeMs: 0);
 
-        Assert.Equal(first, again);
-        Assert.Equal(first, other);
+        Assert.Equivalent(first, again, strict: true);
+        Assert.Equivalent(first, other, strict: true);
         Assert.Single(Records(attemptId));
     }
 
@@ -79,7 +172,7 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
 
         var answers = await Task.WhenAll(Enumerable.Range(0, 6).Select(index => AnswerAsync(alice, attemptId, option: index % 2, responseTimeMs: 0)));
 
-        Assert.All(answers, answer => Assert.Equal(answers[0], answer));
+        Assert.All(answers, answer => Assert.Equivalent(answers[0], answer, strict: true));
         var record = Assert.Single(Records(attemptId));
         Assert.Equal(answers[0].Correct, record.Correct);
     }
@@ -125,6 +218,10 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
     [InlineData("{\"option\":1,\"responseTimeMs\":-1}", "ResponseTimeMs")]
     [InlineData("{\"responseTimeMs\":100}", "Option")]
     [InlineData("{\"option\":7,\"responseTimeMs\":100}", "Option")]
+    [InlineData("{\"option\":1,\"showSolution\":true,\"responseTimeMs\":100}", "Option")]
+    [InlineData("{\"option\":1,\"options\":[1],\"responseTimeMs\":100}", "Option")]
+    [InlineData("{\"showSolution\":false,\"responseTimeMs\":100}", "Option")]
+    [InlineData("{\"showSolution\":true}", "ResponseTimeMs")]
     public async Task Answer_WithoutAnOptionOfTheQuestionOrAValidTime_IsRejected(string body, string field)
     {
         var alice = User.New("alice");
@@ -204,16 +301,29 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
     }
 
     private sealed record GradedDto(
-        Guid Id, Guid TopicId, Guid QuestionId, int Option, bool Correct, int Answer, string Explanation, int ResponseTimeMs, DateTime AnsweredAt);
+        Guid Id,
+        Guid TopicId,
+        Guid QuestionId,
+        string Type,
+        int? Option,
+        int[]? Options,
+        bool Revealed,
+        bool Correct,
+        int Answer,
+        int[] Answers,
+        string Explanation,
+        int ResponseTimeMs,
+        DateTime AnsweredAt);
 
     // A topic of the user known from TopicsChanged, with one question of Content's analysis.
-    private async Task<(Guid TopicId, Question Question)> AddTopicAsync(User user)
+    private async Task<(Guid TopicId, Question Question)> AddTopicAsync(
+        User user, QuestionType type = QuestionType.SingleChoice, string[]? options = null, int answer = 1, int[]? answers = null)
     {
         var topicId = Guid.NewGuid();
         await service.AddKnownTopicAsync(user.Id, topicId);
         var question = Domain.Question.Create(
-            Guid.NewGuid(), user.Id, topicId, Guid.NewGuid(), 2, Guid.NewGuid(), "Was ist 2 + 2?", ["3", "4"], 1, "Zwei und zwei ist vier.", 2,
-            "simulated", "questions-1", Seed.Now);
+            Guid.NewGuid(), user.Id, topicId, Guid.NewGuid(), 2, Guid.NewGuid(), "Was ist 2 + 2?", options ?? ["3", "4"], answer, "Zwei und zwei ist vier.", 2,
+            "simulated", "questions-1", Seed.Now, type, answers);
         using var scope = service.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AssessmentDbContext>();
         db.Questions.Add(question);
@@ -242,11 +352,19 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
         return (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("id").GetGuid();
     }
 
-    private async Task<GradedDto> AnswerAsync(User user, Guid attemptId, int option, int responseTimeMs)
+    private Task<GradedDto> AnswerAsync(User user, Guid attemptId, int option, int responseTimeMs) =>
+        SendAnswerAsync(user, attemptId, new { option, responseTimeMs });
+
+    private Task<GradedDto> AnswerAsync(User user, Guid attemptId, int[] options, int responseTimeMs) =>
+        SendAnswerAsync(user, attemptId, new { options, responseTimeMs });
+
+    private Task<GradedDto> RevealAsync(User user, Guid attemptId, int responseTimeMs) =>
+        SendAnswerAsync(user, attemptId, new { showSolution = true, responseTimeMs });
+
+    private async Task<GradedDto> SendAnswerAsync(User user, Guid attemptId, object body)
     {
         using var client = ClientFor(user);
-        using var response = await client.PostAsJsonAsync(
-            $"/attempts/{attemptId}/answer", new { option, responseTimeMs }, TestContext.Current.CancellationToken);
+        using var response = await client.PostAsJsonAsync($"/attempts/{attemptId}/answer", body, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<GradedDto>(TestContext.Current.CancellationToken))!;
     }

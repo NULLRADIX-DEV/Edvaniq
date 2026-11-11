@@ -4,6 +4,9 @@ using Edvaniq.Services.Content.Contracts;
 
 using Microsoft.Extensions.Logging;
 
+using GeneratedType = Edvaniq.Services.Content.Contracts.QuestionType;
+using QuestionType = Edvaniq.Services.Assessment.Domain.QuestionType;
+
 namespace Edvaniq.Services.Assessment.Application;
 
 // Takes over the questions of one topic (docs/spec/events.md), only for a topic of the user that TopicsChanged made
@@ -45,7 +48,10 @@ public sealed partial class ItemsGeneratedHandler(
         foreach (var item in items.Where(item => !known.Contains(item.ItemId)))
         {
             if (item.Question is not { } question
-                || !Question.IsValid(question.Text, question.Options, question.Answer, question.Explanation, question.Difficulty, item.ModelId, item.PromptVersion))
+                || TypeOf(question.Type) is not { } type
+                || !Question.IsValid(
+                    question.Text, question.Options, question.Answer, question.Explanation, question.Difficulty, item.ModelId, item.PromptVersion,
+                    type, question.Answers))
             {
                 LogInvalidItem(item.ItemId, integrationEvent.DocumentId);
                 continue;
@@ -65,9 +71,20 @@ public sealed partial class ItemsGeneratedHandler(
                 question.Difficulty,
                 item.ModelId,
                 item.PromptVersion,
-                now));
+                now,
+                type,
+                question.Answers));
         }
     }
+
+    // No type is single choice, as sent before types came. A type this service doesn't know can't be graded.
+    private static QuestionType? TypeOf(GeneratedType? type) => type switch
+    {
+        null or GeneratedType.SingleChoice => QuestionType.SingleChoice,
+        GeneratedType.MultipleChoice => QuestionType.MultipleChoice,
+        GeneratedType.TrueFalse => QuestionType.TrueFalse,
+        _ => null,
+    };
 
     // Ids only, never the content of a question.
     [LoggerMessage(Level = LogLevel.Warning, Message = "Item {ItemId} of document {DocumentId} is no valid question and was left out")]

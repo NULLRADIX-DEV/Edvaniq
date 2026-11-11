@@ -104,6 +104,9 @@ namespace Edvaniq.Services.Assessment.Infrastructure.Migrations
                     b.Property<int?>("Option")
                         .HasColumnType("int");
 
+                    b.Property<string>("Options")
+                        .HasColumnType("json");
+
                     b.Property<string>("OwnerId")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -115,6 +118,9 @@ namespace Edvaniq.Services.Assessment.Infrastructure.Migrations
 
                     b.Property<int?>("ResponseTimeMs")
                         .HasColumnType("int");
+
+                    b.Property<bool>("Revealed")
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<Guid>("TopicId")
                         .HasColumnType("char(36)");
@@ -159,6 +165,9 @@ namespace Edvaniq.Services.Assessment.Infrastructure.Migrations
 
                     b.Property<int>("Answer")
                         .HasColumnType("int");
+
+                    b.Property<string>("Answers")
+                        .HasColumnType("json");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
@@ -206,6 +215,9 @@ namespace Edvaniq.Services.Assessment.Infrastructure.Migrations
                         .HasColumnType("char(36)");
 
                     b.Property<int>("TopicPosition")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Type")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
