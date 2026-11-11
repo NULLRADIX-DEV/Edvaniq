@@ -21,6 +21,8 @@ public static class InfrastructureExtensions
     {
         builder.Services.AddMySqlDbContext<AssessmentDbContext>(DatabaseName);
         builder.Services.AddScoped<IQuestions, Questions>();
+        builder.Services.AddScoped<IAttempts, Attempts>();
+        builder.Services.AddScoped<Quiz>();
 
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<AssessmentDbContext>(ServiceKey);

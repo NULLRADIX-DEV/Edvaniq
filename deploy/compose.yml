@@ -232,6 +232,9 @@ services:
   assessment-api:
     <<: *assessment
     image: ghcr.io/nullradix-dev/edvaniq/assessment-api:sha-${APP_COMMIT:?}
+    environment:
+      <<: *messaging-environment
+      services__knowledge-api__http__0: http://knowledge-api:8080
   assessment-migrate:
     <<: *assessment
     image: ghcr.io/nullradix-dev/edvaniq/assessment-api:sha-${APP_COMMIT:?}

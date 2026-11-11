@@ -1,0 +1,194 @@
+using Edvaniq.BuildingBlocks.Application;
+using Edvaniq.BuildingBlocks.Contracts;
+using Edvaniq.Services.Assessment.Application;
+using Edvaniq.Services.Assessment.Contracts;
+using Edvaniq.Services.Assessment.Domain;
+
+
+namespace Edvaniq.Services.Assessment.UnitTests;
+
+public sealed class QuizTests
+{
+    private static readonly DateTime Now = new(2026, 11, 11, 9, 0, 0, DateTimeKind.Utc);
+
+    private readonly FakeTopics topics = new();
+    private readonly FakeAttempts attempts = new();
+    private readonly FakeOutbox outbox = new();
+    private readonly Clock time = new();
+
+    public QuizTests() => attempts.Outbox = outbox;
+
+    private Quiz Quiz => new(topics, attempts, outbox, time);
+
+    [Fact]
+    public async Task Ask_PicksAQuestionOfTheTopic()
+    {
+        var topicId = Guid.NewGuid();
+        var question = AddTopicWithQuestion(topicId);
+
+        var asked = await Quiz.AskAsync(topicId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(AskOutcome.Asked, asked.Outcome);
+        Assert.Equal((question.Id, topicId, Now), (asked.Attempt!.QuestionId, asked.Attempt.TopicId, asked.Attempt.AskedAt));
+        Assert.Same(asked.Attempt, Assert.Single(attempts.Stored));
+        Assert.Empty(outbox.Events);
+    }
+
+    [Fact]
+    public async Task Ask_ForATopicKnowledgeDoesNotKnow_IsUnknown()
+    {
+        var asked = await Quiz.AskAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(AskOutcome.UnknownTopic, asked.Outcome);
+        Assert.Empty(attempts.Stored);
+    }
+
+    [Fact]
+    public async Task Ask_ForATopicWithoutQuestionsYet_SaysSo()
+    {
+        var topicId = Guid.NewGuid();
+        topics.Known[topicId] = new(Guid.NewGuid(), 0);
+
+        Assert.Equal(AskOutcome.NoQuestions, (await Quiz.AskAsync(topicId, TestContext.Current.CancellationToken)).Outcome);
+    }
+
+    [Fact]
+    public async Task Answer_IsGradedAndRecordedOnce()
+    {
+        var topicId = Guid.NewGuid();
+        var question = AddTopicWithQuestion(topicId);
+        var attempt = (await Quiz.AskAsync(topicId, TestContext.Current.CancellationToken)).Attempt!;
+        time.Advance(TimeSpan.FromSeconds(4));
+
+        var graded = await Quiz.AnswerAsync(attempt.Id, 1, 3_000, TestContext.Current.CancellationToken);
+        var again = await Quiz.AnswerAsync(attempt.Id, 0, 9_000, TestContext.Current.CancellationToken);
+
+        Assert.Equal(GradeOutcome.Graded, graded.Outcome);
+        Assert.True(graded.Attempt!.Correct);
+        Assert.Equal((GradeOutcome.Graded, 1, true, 3_000), (again.Outcome, again.Attempt!.Option, again.Attempt.Correct, again.Attempt.ResponseTimeMs));
+        var recorded = Assert.IsType<AnswerRecorded>(Assert.Single(outbox.Events));
+        Assert.Equal(
+            new AnswerRecorded(1, "alice", topicId, question.Id, null, attempt.Id, true, 2, 3_000, null, Mode.Practice, Now.AddSeconds(4)),
+            recorded);
+    }
+
+    [Fact]
+    public async Task Answer_WithAnOptionTheQuestionDoesNotHave_IsRejected()
+    {
+        var topicId = Guid.NewGuid();
+        AddTopicWithQuestion(topicId);
+        var attempt = (await Quiz.AskAsync(topicId, TestContext.Current.CancellationToken)).Attempt!;
+
+        var graded = await Quiz.AnswerAsync(attempt.Id, 5, 1_000, TestContext.Current.CancellationToken);
+
+        Assert.Equal(GradeOutcome.InvalidOption, graded.Outcome);
+        Assert.False(attempt.Answered);
+        Assert.Empty(outbox.Events);
+    }
+
+    [Fact]
+    public async Task Answer_ToAnUnknownAttempt_IsNotFound() =>
+        Assert.Equal(GradeOutcome.NotFound, (await Quiz.AnswerAsync(Guid.NewGuid(), 0, 1_000, TestContext.Current.CancellationToken)).Outcome);
+
+    // The other request saved first: its answer is what this one gets back.
+    [Fact]
+    public async Task Answer_ThatLosesTheRace_ReturnsTheStoredAnswer()
+    {
+        var topicId = Guid.NewGuid();
+        var question = AddTopicWithQuestion(topicId);
+        var attempt = (await Quiz.AskAsync(topicId, TestContext.Current.CancellationToken)).Attempt!;
+        var winner = Attempt.Ask(question, topicId, Now);
+        typeof(Attempt).GetProperty(nameof(Attempt.Id))!.SetValue(winner, attempt.Id);
+        winner.Answer(question, 0, 2_000, Now.AddSeconds(3));
+        attempts.LoseNextSaveTo(winner);
+        time.Advance(TimeSpan.FromSeconds(4));
+
+        var graded = await Quiz.AnswerAsync(attempt.Id, 1, 3_000, TestContext.Current.CancellationToken);
+
+        Assert.Equal((GradeOutcome.Graded, 0, false), (graded.Outcome, graded.Attempt!.Option, graded.Attempt.Correct));
+    }
+
+    private Question AddTopicWithQuestion(Guid topicId)
+    {
+        var documentId = Guid.NewGuid();
+        topics.Known[topicId] = new(documentId, 3);
+        var question = AttemptTests.Question("alice", documentId, 3);
+        attempts.Questions.Add(question);
+        attempts.Questions.Add(AttemptTests.Question("alice", documentId, 4));
+        return question;
+    }
+
+    private sealed class Clock : TimeProvider
+    {
+        private DateTimeOffset now = Now;
+
+        public override DateTimeOffset GetUtcNow() => now;
+
+        public void Advance(TimeSpan by) => now += by;
+    }
+
+    private sealed class FakeTopics : ITopicSource
+    {
+        public Dictionary<Guid, TopicSource> Known { get; } = [];
+
+        public Task<TopicSource?> FindAsync(Guid topicId, CancellationToken cancellationToken) =>
+            Task.FromResult(Known.GetValueOrDefault(topicId));
+    }
+
+    private sealed class FakeOutbox : IEventOutbox
+    {
+        private readonly List<IIntegrationEvent> pending = [];
+
+        public List<IIntegrationEvent> Events { get; } = [];
+
+        public void Add(IIntegrationEvent integrationEvent) => pending.Add(integrationEvent);
+
+        public void Commit()
+        {
+            Events.AddRange(pending);
+            pending.Clear();
+        }
+
+        public void Discard() => pending.Clear();
+    }
+
+    private sealed class FakeAttempts : IAttempts
+    {
+        private Attempt? winner;
+
+        public FakeOutbox? Outbox { get; set; }
+
+        public List<Question> Questions { get; } = [];
+
+        public List<Attempt> Stored { get; } = [];
+
+        public void LoseNextSaveTo(Attempt attempt) => winner = attempt;
+
+        public Task<IReadOnlyList<Question>> QuestionsOfAsync(Guid documentId, int topicPosition, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Question>>(
+                [.. Questions.Where(question => question.DocumentId == documentId && question.TopicPosition == topicPosition)]);
+
+        public Task<Question?> FindQuestionAsync(Guid id, CancellationToken cancellationToken) =>
+            Task.FromResult(Questions.FirstOrDefault(question => question.Id == id));
+
+        public Task<Attempt?> FindAsync(Guid id, CancellationToken cancellationToken) =>
+            Task.FromResult(Stored.FirstOrDefault(attempt => attempt.Id == id));
+
+        public void Add(Attempt attempt) => Stored.Add(attempt);
+
+        public Task<bool> SaveAsync(CancellationToken cancellationToken)
+        {
+            if (winner is { } stored)
+            {
+                Stored.RemoveAll(attempt => attempt.Id == stored.Id);
+                Stored.Add(stored);
+                winner = null;
+                Outbox?.Discard();
+                return Task.FromResult(false);
+            }
+
+            Outbox?.Commit();
+            return Task.FromResult(true);
+        }
+    }
+}

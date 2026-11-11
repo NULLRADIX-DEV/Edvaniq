@@ -57,7 +57,8 @@ var knowledgeApi = AddService<Projects.Edvaniq_Services_Knowledge_Api>("knowledg
     .WithMessaging(nats);
 var assessmentApi = AddService<Projects.Edvaniq_Services_Assessment_Api>("assessment-api", assessmentDb)
     .WaitForCompletion(assessmentMigrate)
-    .WithMessaging(nats);
+    .WithMessaging(nats)
+    .WithReference(knowledgeApi);
 var flashcardsApi = AddService<Projects.Edvaniq_Services_Flashcards_Api>("flashcards-api", flashcardsDb);
 var learningEngineApi = AddService<Projects.Edvaniq_Services_LearningEngine_Api>("learningengine-api", learningEngineDb)
     .WaitForCompletion(learningEngineMigrate)

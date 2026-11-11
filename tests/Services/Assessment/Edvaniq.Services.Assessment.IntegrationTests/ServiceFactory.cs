@@ -1,4 +1,5 @@
 using Edvaniq.BuildingBlocks.Messaging;
+using Edvaniq.Services.Assessment.Application;
 using Edvaniq.Services.Assessment.Infrastructure;
 using Edvaniq.Testing;
 
@@ -8,6 +9,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.Services.Assessment.IntegrationTests;
@@ -21,6 +23,9 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
 
     // What the service logs, for the tests that look for a log line.
     public TestLogs Logs { get; } = new();
+
+    // Answers in place of Knowledge.
+    public KnowledgeStub Knowledge { get; } = new();
 
     public async ValueTask InitializeAsync()
     {
@@ -47,5 +52,9 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
                     });
                 services.AddInMemoryTransport();
                 services.AddSingleton<ILoggerProvider>(Logs);
+                services.AddHttpClient<ITopicSource, KnowledgeTopics>().ConfigurePrimaryHttpMessageHandler(Knowledge.Handler);
+
+                // Keeps the retries of a Knowledge that is down short.
+                services.ConfigureAll<HttpStandardResilienceOptions>(options => options.Retry.Delay = TimeSpan.FromMilliseconds(1));
             });
 }
