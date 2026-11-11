@@ -166,6 +166,19 @@ public sealed class MasteryTests
         Assert.Equal(54, Mastery.Percent(53.90625));
     }
 
+    // Response time and confidence are kept with the record, but nothing weighs them (#360).
+    [Fact]
+    public void ResponseTimeAndConfidence_DoNotMoveIt()
+    {
+        var quickAndSure = LearningRecord.Create(
+            Guid.NewGuid(), "alice", Guid.Empty, Guid.NewGuid(), null, true, 2, 300, 4, Mode.Practice, Monday);
+        var slowAndUnsure = LearningRecord.Create(
+            Guid.NewGuid(), "alice", Guid.Empty, Guid.NewGuid(), null, true, 2, 120_000, 1, Mode.Practice, Monday);
+
+        Assert.Equal(Mastery.Of([quickAndSure], Monday), Mastery.Of([slowAndUnsure], Monday));
+        Assert.Equal(Mastery.Of([Answer(true)], Monday), Mastery.Of([quickAndSure], Monday));
+    }
+
     private static IEnumerable<LearningRecord> Answers(int count, bool correct, int difficulty) =>
         Enumerable.Range(0, count).Select(minute => Answer(correct, Monday.AddMinutes(minute), difficulty)).ToList();
 
