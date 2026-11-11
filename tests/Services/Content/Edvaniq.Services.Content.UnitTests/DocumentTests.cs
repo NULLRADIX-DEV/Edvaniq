@@ -95,20 +95,39 @@ public class DocumentTests
         Assert.Throws<InvalidOperationException>(() => document.Split());
     }
 
+    // The topics are out, the questions are still to come: the document stays in analysis.
     [Fact]
-    public void FinishAnalysis_MakesTheDocumentReady()
+    public void ReportTopics_KeepsTheDocumentInAnalysis_UntilItsQuestionsAreThere()
     {
         var document = Document.Paste("alice", null, "Licht spaltet Wasser.", Now);
         document.Split();
 
-        document.FinishAnalysis();
+        document.ReportTopics(Now.AddMinutes(1));
 
-        Assert.Equal(DocumentStatus.Ready, document.Status);
+        Assert.Equal((DocumentStatus.Analyzing, Now.AddMinutes(1), true), (document.Status, document.AnalyzedAt, document.WaitsForQuestions));
+        document.FinishAnalysis();
+        Assert.Equal((DocumentStatus.Ready, false), (document.Status, document.WaitsForQuestions));
     }
 
     [Fact]
-    public void FinishAnalysis_BeforeTheSplit_IsRefused() =>
-        Assert.Throws<InvalidOperationException>(() => Document.Paste("alice", null, "Licht spaltet Wasser.", Now).FinishAnalysis());
+    public void ReportTopics_Twice_IsRefused()
+    {
+        var document = Document.Paste("alice", null, "Licht spaltet Wasser.", Now);
+        document.Split();
+        document.ReportTopics(Now);
+
+        Assert.Throws<InvalidOperationException>(() => document.ReportTopics(Now));
+    }
+
+    [Fact]
+    public void FinishAnalysis_BeforeTheTopicsAreReported_IsRefused()
+    {
+        var document = Document.Paste("alice", null, "Licht spaltet Wasser.", Now);
+        Assert.Throws<InvalidOperationException>(document.FinishAnalysis);
+
+        document.Split();
+        Assert.Throws<InvalidOperationException>(document.FinishAnalysis);
+    }
 
     [Fact]
     public void Fail_CutsALongReason()

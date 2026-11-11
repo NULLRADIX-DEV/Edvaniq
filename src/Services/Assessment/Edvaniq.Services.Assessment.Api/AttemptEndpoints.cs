@@ -18,18 +18,7 @@ internal static class AttemptEndpoints
                 return Invalid(nameof(request.TopicId), "Es fehlt das Thema.");
             }
 
-            Asked asked;
-            try
-            {
-                asked = await quiz.AskAsync(topicId, cancellationToken);
-            }
-            catch (TopicSourceUnavailableException)
-            {
-                return Results.Problem(
-                    statusCode: StatusCodes.Status503ServiceUnavailable,
-                    title: "Das Thema lässt sich gerade nicht abfragen. Versuch es gleich noch einmal.");
-            }
-
+            var asked = await quiz.AskAsync(topicId, cancellationToken);
             return asked.Outcome switch
             {
                 AskOutcome.UnknownTopic => Results.NotFound(),

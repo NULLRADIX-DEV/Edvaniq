@@ -21,6 +21,7 @@
 
   <!-- Every Api has its own Program in the global namespace, the aliases tell them apart. -->
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Services\Content\Edvaniq.Services.Content.Api\Edvaniq.Services.Content.Api.csproj" Aliases="content" />
     <ProjectReference Include="..\..\src\Services\Knowledge\Edvaniq.Services.Knowledge.Api\Edvaniq.Services.Knowledge.Api.csproj" Aliases="knowledge" />
     <ProjectReference Include="..\..\src\Services\Planning\Edvaniq.Services.Planning.Api\Edvaniq.Services.Planning.Api.csproj" Aliases="planning" />
     <ProjectReference Include="..\..\src\Services\Assessment\Edvaniq.Services.Assessment.Api\Edvaniq.Services.Assessment.Api.csproj" Aliases="assessment" />

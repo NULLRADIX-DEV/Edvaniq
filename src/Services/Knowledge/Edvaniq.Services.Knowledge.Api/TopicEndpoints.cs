@@ -38,7 +38,7 @@ internal static class TopicEndpoints
 
 internal sealed record RenamedTopic(string? Name);
 
-// DocumentId and Position name the analysis the topic came from. Until #214 that is how Assessment finds its questions.
+// DocumentId and Position name the analysis the topic came from, the client shows which topics a document brought.
 internal sealed record TopicResponse(Guid Id, Guid LearningGoalId, Guid? ParentId, string Name, Guid? DocumentId, int Position)
 {
     public static TopicResponse From(Topic topic) =>

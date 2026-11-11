@@ -3,9 +3,11 @@ using Edvaniq.BuildingBlocks.Contracts;
 namespace Edvaniq.Services.Content.Contracts;
 
 // The questions of one topic, made and checked by the worker (docs/spec/events.md). Assessment takes them over and owns
-// them from then on. Content knows no topicId yet, so until #214 the topic is the suggestion at TopicPosition in the
-// DocumentAnalyzed of the same document, which Knowledge keeps as the topic's position.
-public sealed record ItemsGenerated(string UserId, Guid DocumentId, int TopicPosition, IReadOnlyList<GeneratedItem> Items)
+// them from then on. TopicId is Knowledge's id of the topic, which the worker asks Knowledge for before it makes the
+// questions. TopicPosition stays from before: the place of the topic in the DocumentAnalyzed of the same document.
+// Messages sent before TopicId came have none.
+public sealed record ItemsGenerated(
+    string UserId, Guid DocumentId, int TopicPosition, IReadOnlyList<GeneratedItem> Items, Guid? TopicId = null)
     : IIntegrationEvent;
 
 // ItemId comes from Content, so a second delivery of the event is the same item. DocumentId and SectionId are the source.

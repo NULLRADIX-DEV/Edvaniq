@@ -86,6 +86,25 @@ public sealed class InboxTests(MySqlTestServer mysql) : IAsyncLifetime
         Assert.Equal(1, receiver!.Query(db => db.Set<InboxMessage>().Count()));
     }
 
+    // A handler that keeps saying it isn't ready gets the message NotReadyDeliveries times, then it's dropped with a log
+    // line and the consumer goes on with the next one.
+    [Fact]
+    public async Task EventThatIsNeverReady_IsDroppedAfterTheLimit()
+    {
+        behavior.NeverReady = "Später";
+        await StartReceiverAsync(options: messaging => messaging.NotReadyDeliveries = 3);
+
+        var messageId = await PublishAsync("Später");
+        var marker = await PublishAsync("Marker");
+
+        await Wait.UntilAsync(() => Inbox(marker, Consumer), "The consumer did not get past the message.", () => receiver!.Logs);
+        Assert.False(Inbox(messageId, Consumer));
+        Assert.Equal(4, behavior.Calls);
+        Assert.Equal(1, Notifications());
+        Assert.Contains(
+            $"Consumer {Consumer} dropped message {messageId}, it still couldn't be handled after 3 deliveries", receiver!.Logs, StringComparison.Ordinal);
+    }
+
     // The effect is committed, then the process dies before it confirms the event. The inbox stops the second effect.
     [Fact]
     public async Task EventDeliveredAgainAfterALostConfirmation_HasOneEffect()
@@ -135,11 +154,12 @@ public sealed class InboxTests(MySqlTestServer mysql) : IAsyncLifetime
         Assert.Equal(["Hallo", "zweiter: Hallo"], receiver!.Query(db => db.Notifications.Select(n => n.Text).OrderBy(text => text).ToList()));
     }
 
-    private async Task StartReceiverAsync(Action<IServiceCollection>? configure = null)
+    private async Task StartReceiverAsync(Action<IServiceCollection>? configure = null, Action<MessagingOptions>? options = null)
     {
         receiver = TestService<ReceiverDbContext>.Create(
             "receiver",
             connectionString,
+            options: options,
             configure: services =>
             {
                 services.AddInMemoryTransport(transport);

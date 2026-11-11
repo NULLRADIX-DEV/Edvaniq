@@ -126,6 +126,37 @@ public sealed class NatsTransportTests(NatsTestServer nats) : IAsyncLifetime
         Assert.Equal([new IncomingMessage(first.MessageId, first.Payload), new IncomingMessage(second.MessageId, second.Payload)], received);
     }
 
+    // The consumer host drops a message that is never ready after a number of deliveries, so the count must come along.
+    [Fact]
+    public async Task Consumer_CountsTheDeliveriesOfAMessage()
+    {
+        await transport.EnsureStreamAsync(Stream, TestContext.Current.CancellationToken);
+        await transport.PublishAsync(new OutgoingMessage("sender.greeted", Guid.NewGuid(), "{}"), TestContext.Current.CancellationToken);
+
+        var deliveries = new ConcurrentQueue<int>();
+        using var stop = new CancellationTokenSource();
+        var running = transport.ConsumeAsync(
+            new Subscription(Stream.Name, "receiver-handler", "sender.greeted"),
+            (message, _) =>
+            {
+                deliveries.Enqueue(message.Delivery);
+                return message.Delivery == 1 ? throw new InvalidOperationException("Not now.") : Task.CompletedTask;
+            },
+            stop.Token);
+
+        await Wait.UntilAsync(() => deliveries.Count == 2, "The message was not delivered again.");
+        await stop.CancelAsync();
+        try
+        {
+            await running;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        Assert.Equal([1, 2], deliveries);
+    }
+
     private async Task<IReadOnlyList<IncomingMessage>> ConsumeAsync(int count)
     {
         var received = new ConcurrentQueue<IncomingMessage>();

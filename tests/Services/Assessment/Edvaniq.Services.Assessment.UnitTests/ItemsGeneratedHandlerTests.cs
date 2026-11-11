@@ -1,3 +1,4 @@
+using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.Services.Assessment.Application;
 using Edvaniq.Services.Assessment.Domain;
 using Edvaniq.Services.Content.Contracts;
@@ -11,8 +12,13 @@ public class ItemsGeneratedHandlerTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 9, 10, 0, 0, TimeSpan.Zero);
 
+    private static readonly Guid TopicId = Guid.NewGuid();
+
     private readonly FakeQuestions questions = new();
+    private readonly TopicsChangedHandlerTests.FakeKnownTopics topics = new();
     private readonly FakeLogger logger = new();
+
+    public ItemsGeneratedHandlerTests() => topics.Add(KnownTopic.Create("alice", TopicId, Guid.Empty, hidden: false));
 
     [Fact]
     public async Task NewQuestion_IsAddedWithUserTopicAndEveryField()
@@ -25,14 +31,48 @@ public class ItemsGeneratedHandlerTests
         var question = Assert.Single(questions.Added);
         var source = item.Question!;
         Assert.Equal(
-            (item.ItemId, "alice", generated.DocumentId, 3, item.SectionId),
-            (question.Id, question.OwnerId, question.DocumentId, question.TopicPosition, question.SectionId));
+            (item.ItemId, "alice", TopicId, generated.DocumentId, 3, item.SectionId),
+            (question.Id, question.OwnerId, question.TopicId, question.DocumentId, question.TopicPosition, question.SectionId));
         Assert.Equal(
             (source.Text, source.Answer, source.Explanation, source.Difficulty, item.ModelId, item.PromptVersion),
             (question.Text, question.Answer, question.Explanation, question.Difficulty, question.ModelId, question.PromptVersion));
         Assert.Equal(source.Options, question.Options);
         Assert.Equal(Now.UtcDateTime, question.CreatedAt);
         Assert.Equal(DateTimeKind.Utc, question.CreatedAt.Kind);
+    }
+
+    // TopicsChanged is still on its way: the broker brings the message again later.
+    [Fact]
+    public async Task TopicNotKnownYet_WaitsForTheTopic_AndAddsNothing()
+    {
+        var generated = Event(Item()) with { TopicId = Guid.NewGuid() };
+
+        await Assert.ThrowsAsync<MessageNotReadyException>(() => HandleAsync(generated));
+
+        Assert.Empty(questions.Added);
+    }
+
+    // Another user's topic is as unknown as none.
+    [Fact]
+    public async Task TopicOfAnotherUser_IsNotKnown()
+    {
+        var generated = Event(Item()) with { UserId = "bob" };
+
+        await Assert.ThrowsAsync<MessageNotReadyException>(() => HandleAsync(generated));
+
+        Assert.Empty(questions.Added);
+    }
+
+    // Sent before Content knew the topicId: there is no topic to put the questions to.
+    [Fact]
+    public async Task EventWithoutTopic_IsDroppedWithALogLine()
+    {
+        var generated = Event(Item()) with { TopicId = null };
+
+        await HandleAsync(generated);
+
+        Assert.Empty(questions.Added);
+        Assert.Contains(generated.DocumentId.ToString(), Assert.Single(logger.Lines), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -128,10 +168,10 @@ public class ItemsGeneratedHandlerTests
     }
 
     private Task HandleAsync(ItemsGenerated generated) =>
-        new ItemsGeneratedHandler(questions, new FixedClock(), logger)
+        new ItemsGeneratedHandler(questions, topics, new FixedClock(), logger)
             .HandleAsync(generated, TestContext.Current.CancellationToken);
 
-    private static ItemsGenerated Event(params GeneratedItem[] items) => new("alice", Guid.NewGuid(), 3, items);
+    private static ItemsGenerated Event(params GeneratedItem[] items) => new("alice", Guid.NewGuid(), 3, items, TopicId);
 
     private static GeneratedItem Item() =>
         new(Guid.NewGuid(), ItemKind.Question, Guid.NewGuid(), Guid.NewGuid(), "simulated", "questions-1",

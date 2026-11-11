@@ -99,6 +99,9 @@ public class DocumentAnalyzedHandlerTests
 
         public void Add(TopicImport import) => Added.Add(import);
 
+        public Task<IReadOnlyList<DocumentTopic>> OfDocumentAsync(Guid documentId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException("The handler never asks for this.");
+
         public Task<IReadOnlyList<Guid>> TopicIdsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<Guid>>([.. Stored, .. Added.SelectMany(import => import.Topics).Select(topic => topic.Id)]);
     }

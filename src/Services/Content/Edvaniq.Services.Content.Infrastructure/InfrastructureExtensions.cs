@@ -1,8 +1,8 @@
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.BuildingBlocks.Messaging;
-using Edvaniq.Services.Identity.Contracts;
 using Edvaniq.Services.Content.Application;
+using Edvaniq.Services.Identity.Contracts;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -39,7 +39,8 @@ public static class InfrastructureExtensions
 
     // The worker: the same database, without a user, and the jobs that run in the background. It sends events through
     // the outbox but handles none, the API consumes them. A second consumer here would handle every event twice. Both
-    // dispatchers send from the same outbox, each takes other rows.
+    // dispatchers send from the same outbox, each takes other rows. QuestionPools needs an IKnowledgeTopics, the worker
+    // registers it with its own token.
     public static TBuilder AddWorkerInfrastructure<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
         builder.Services.AddMySqlDbContext<ContentDbContext>(DatabaseName);
@@ -48,6 +49,7 @@ public static class InfrastructureExtensions
         builder.Services.AddMessaging<ContentDbContext>(ServiceKey);
         builder.Services.AddHostedService<DocumentSplitter>();
         builder.Services.AddHostedService<DocumentAnalyzer>();
+        builder.Services.AddHostedService<QuestionPools>();
 
         return builder;
     }

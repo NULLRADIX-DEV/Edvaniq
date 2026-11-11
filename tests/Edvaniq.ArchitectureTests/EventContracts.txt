@@ -33,6 +33,7 @@ Content.GeneratedQuestion.Text: string
 Content.ItemKind.Question: = 0
 Content.ItemsGenerated.DocumentId: Guid
 Content.ItemsGenerated.Items: IReadOnlyList<GeneratedItem>
+Content.ItemsGenerated.TopicId: Guid?
 Content.ItemsGenerated.TopicPosition: int
 Content.ItemsGenerated.UserId: string
 Content.TopicSuggestion.Name: string

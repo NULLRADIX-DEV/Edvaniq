@@ -1,6 +1,7 @@
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.Services.Content.Domain;
+
 using Microsoft.EntityFrameworkCore;
 
 namespace Edvaniq.Services.Content.Infrastructure;
@@ -14,6 +15,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
     public DbSet<Section> Sections => Set<Section>();
 
+    public DbSet<QuestionPool> QuestionPools => Set<QuestionPool>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         var document = modelBuilder.Entity<Document>();
@@ -24,6 +27,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         // The status says which job has a document. Whoever saves a new one first wins, a second worker on the same
         // document fails at its save instead of reporting it twice.
         document.Property(item => item.Status).HasConversion<string>().HasMaxLength(16).IsConcurrencyToken();
+        // The topics stay in analysis while the questions follow, so the status alone doesn't tell two analyzers apart.
+        document.Property(item => item.AnalyzedAt).IsConcurrencyToken();
         document.Property(item => item.FailureReason).HasMaxLength(Document.FailureReasonMaxLength);
 
         // A document takes its sections along when it goes. Each place in a document exists once, so splitting the
@@ -31,5 +36,11 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         var section = modelBuilder.Entity<Section>();
         section.HasOne<Document>().WithMany().HasForeignKey(item => item.DocumentId).OnDelete(DeleteBehavior.Cascade);
         section.HasIndex(item => new { item.DocumentId, item.Ordinal }).IsUnique();
+
+        // One pool per topic. A second worker with the same topic fails at its save instead of sending the questions twice.
+        var pool = modelBuilder.Entity<QuestionPool>();
+        pool.HasKey(item => item.TopicId);
+        pool.Property(item => item.TopicId).ValueGeneratedNever();
+        pool.HasOne<Document>().WithMany().HasForeignKey(item => item.DocumentId).OnDelete(DeleteBehavior.Cascade);
     }
 }

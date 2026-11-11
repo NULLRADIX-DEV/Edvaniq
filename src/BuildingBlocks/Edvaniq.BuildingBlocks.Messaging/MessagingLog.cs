@@ -25,6 +25,9 @@ internal static partial class MessagingLog
     [LoggerMessage(Level = LogLevel.Warning, Message = "Consumer {Consumer} failed on message {MessageId}, the broker delivers it again")]
     public static partial void HandlerFailed(ILogger logger, Exception exception, string consumer, Guid messageId);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Consumer {Consumer} dropped message {MessageId}, it still couldn't be handled after {Delivery} deliveries")]
+    public static partial void NotReadyDropped(ILogger logger, string consumer, Guid messageId, int delivery);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Consumer {Consumer} waits for the stream {Stream} of its sender")]
     public static partial void WaitingForStream(ILogger logger, string consumer, string stream);
 

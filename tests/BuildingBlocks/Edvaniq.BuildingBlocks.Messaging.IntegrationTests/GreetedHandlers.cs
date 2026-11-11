@@ -18,8 +18,17 @@ public sealed class HandlerBehavior
     // The first call changes the DbContext and then throws, the way a handler fails halfway.
     public bool FailFirstCall { get; set; }
 
-    internal void Enter()
+    // A greeting with this text is never ready, its handler throws MessageNotReadyException every time.
+    public string? NeverReady { get; set; }
+
+    internal void Enter(string text)
     {
+        if (text == NeverReady)
+        {
+            Interlocked.Increment(ref calls);
+            throw new MessageNotReadyException("Waits for something that never comes.");
+        }
+
         TraceIds.Enqueue(Activity.Current?.TraceId ?? default);
         if (Interlocked.Increment(ref calls) == 1 && FailFirstCall)
         {
@@ -34,7 +43,7 @@ public sealed class GreetedHandler(ReceiverDbContext db, HandlerBehavior behavio
     public Task HandleAsync(Greeted integrationEvent, CancellationToken cancellationToken)
     {
         db.Notifications.Add(new Notification { Id = Guid.NewGuid(), GreetingId = integrationEvent.GreetingId, Text = integrationEvent.Text });
-        behavior.Enter();
+        behavior.Enter(integrationEvent.Text);
         return Task.CompletedTask;
     }
 }

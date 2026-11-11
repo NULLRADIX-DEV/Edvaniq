@@ -12,7 +12,7 @@ internal static class Seed
 
     public static Question Question(string owner, Guid? id = null) =>
         Domain.Question.Create(
-            id ?? Guid.NewGuid(), owner, Guid.NewGuid(), 0, Guid.NewGuid(), "Was ist 2 + 2?", ["3", "4"], 1, "Zwei und zwei ist vier.", 1,
+            id ?? Guid.NewGuid(), owner, Guid.NewGuid(), Guid.NewGuid(), 0, Guid.NewGuid(), "Was ist 2 + 2?", ["3", "4"], 1, "Zwei und zwei ist vier.", 1,
             "simulated", "questions-1", Now);
 
     public static async Task<Question> AddQuestionAsync(this ServiceFactory service, string owner, Guid? id = null)
@@ -23,6 +23,15 @@ internal static class Seed
         db.Questions.Add(question);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         return question;
+    }
+
+    // A topic as TopicsChanged would have made it known.
+    public static async Task AddKnownTopicAsync(this ServiceFactory service, string owner, Guid topicId)
+    {
+        using var scope = service.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AssessmentDbContext>();
+        db.KnownTopics.Add(KnownTopic.Create(owner, topicId, Guid.Empty, hidden: false));
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
     public static async Task<Attempt> AddAttemptAsync(this ServiceFactory service, Question question)

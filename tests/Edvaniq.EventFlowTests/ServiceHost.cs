@@ -9,7 +9,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Edvaniq.EventFlowTests;
 
 // One service as it runs, with the settings given (its database and the broker), trusting the tokens of TestTokens.
-public sealed class ServiceHost<TEntryPoint>(IReadOnlyDictionary<string, string> settings) : WebApplicationFactory<TEntryPoint>
+// Services adds what a test hands the service in place of another one.
+public sealed class ServiceHost<TEntryPoint>(IReadOnlyDictionary<string, string> settings, Action<IServiceCollection>? services = null)
+    : WebApplicationFactory<TEntryPoint>
     where TEntryPoint : class
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -19,8 +21,9 @@ public sealed class ServiceHost<TEntryPoint>(IReadOnlyDictionary<string, string>
             builder.UseSetting(key, value);
         }
 
-        builder.ConfigureTestServices(services =>
-            services.PostConfigure<JwtBearerOptions>(
+        builder.ConfigureTestServices(collection =>
+        {
+            collection.PostConfigure<JwtBearerOptions>(
                 JwtBearerDefaults.AuthenticationScheme,
                 options =>
                 {
@@ -28,6 +31,8 @@ public sealed class ServiceHost<TEntryPoint>(IReadOnlyDictionary<string, string>
                     options.TokenValidationParameters.ValidIssuer = null;
                     options.TokenValidationParameters.ValidIssuers = [TestTokens.Issuer];
                     options.TokenValidationParameters.IssuerSigningKeys = [TestTokens.SigningKey];
-                }));
+                });
+            services?.Invoke(collection);
+        });
     }
 }

@@ -22,6 +22,11 @@ public sealed class MessagingOptions
     // How long a consumer may take for a message before the broker delivers it again.
     public TimeSpan AckWait { get; set; } = TimeSpan.FromSeconds(30);
 
+    // How often a message whose handler says it isn't ready (MessageNotReadyException) is delivered before it is dropped.
+    // The broker waits 5 seconds between two deliveries, so 360 is about half an hour: enough for a sender's event that
+    // is still in its outbox while the sender or the broker restarts.
+    public int NotReadyDeliveries { get; set; } = 360;
+
     // After this time sent outbox rows and inbox rows are deleted.
     public TimeSpan Retention { get; set; } = TimeSpan.FromDays(14);
 }

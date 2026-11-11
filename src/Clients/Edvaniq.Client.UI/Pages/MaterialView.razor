@@ -198,7 +198,7 @@
 
     private bool IsAnalyzing => latest?.Status is DocumentStatus.Uploaded or DocumentStatus.Analyzing;
 
-    // Between Ready in Content and the topics in Knowledge lies the broker, so they may come a moment later.
+    // Content is ready only once Knowledge has the topics, but the two answers of one round may still disagree.
     private bool TopicsMissing =>
         latest is { Status: DocumentStatus.Ready } document && !topics.Any(topic => topic.CameFrom(document.Id));
 

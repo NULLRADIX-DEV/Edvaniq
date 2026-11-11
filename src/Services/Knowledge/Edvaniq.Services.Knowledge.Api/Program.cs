@@ -7,6 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddTokenValidation();
+builder.AddInternalTokenValidation();
 builder.AddInfrastructure();
 
 var app = builder.Build();
@@ -29,6 +30,7 @@ app.UseAuthorization();
 // Who the token says the caller is. Smoke test for the token check, ignores any user id in the request.
 app.MapGet("/me", (ICurrentUser user) => new { user.Id });
 app.MapTopicEndpoints();
+app.MapDocumentTopicEndpoints();
 
 app.Run();
 

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+
 using Edvaniq.Testing;
 
 namespace Edvaniq.Services.Content.IntegrationTests;
@@ -29,6 +30,19 @@ public sealed class TokenTests(ServiceFactory factory) : IClassFixture<ServiceFa
     [Fact]
     public async Task Request_WithTokenForOtherAudience_IsRejected() =>
         Assert.Equal(HttpStatusCode.Unauthorized, (await GetMeAsync(TestTokens.Create(Alice, audience: "other-app"))).StatusCode);
+
+    // The worker's own token for Knowledge never acts as a user here, not even as the user "content".
+    [Fact]
+    public async Task Request_WithAnInternalToken_IsRejected()
+    {
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.CreateForClient("content"));
+
+        using var documents = await client.PostAsJsonAsync("/documents", new { text = "Licht spaltet Wasser." }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await GetMeAsync(TestTokens.CreateForClient("content"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, documents.StatusCode);
+    }
 
     [Fact]
     public async Task Request_WithExpiredToken_IsRejected() =>

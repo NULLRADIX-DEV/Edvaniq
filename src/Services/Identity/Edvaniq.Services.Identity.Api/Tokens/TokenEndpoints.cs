@@ -92,7 +92,7 @@ internal static class TokenEndpoints
 
         if (grantType == ClientCredentials)
         {
-            return TypedResults.Ok(new TokenResponse(issuer.Issue(clientId), "Bearer", (int)issuer.Lifetime.TotalSeconds));
+            return TypedResults.Ok(new TokenResponse(issuer.Issue(clientId, client), "Bearer", (int)issuer.Lifetime.TotalSeconds));
         }
 
         // The login of a team account (RFC 6749, section 4.3), only for a client that may ask for it.
