@@ -97,6 +97,11 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         var db = scope.ServiceProvider.GetRequiredService<PlanningDbContext>();
         db.KnownTopics.Add(KnownTopic.Create(user, Guid.NewGuid(), Guid.Empty, hidden: false));
         db.TopicsSnapshots.Add(TopicsSnapshot.Create(user, Guid.Empty, DateTime.UtcNow));
+        var goal = LearningGoal.DefaultIdFor(user);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var block = new Block(Guid.NewGuid(), 15);
+        db.DoneBlocks.Add(DoneBlock.Create(Guid.NewGuid(), user, goal, today, block, DateTime.UtcNow));
+        db.Sessions.Add(Session.Start(Guid.NewGuid(), user, goal, today, new DayBlock(Guid.NewGuid(), block, Done: false), DateTime.UtcNow));
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
