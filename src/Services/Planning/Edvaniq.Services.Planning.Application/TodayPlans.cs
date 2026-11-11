@@ -12,6 +12,7 @@ public sealed class TodayPlans(
     IMasterySource masteries,
     IQuestionPoolSource questionPools,
     IDailyBudgets budgets,
+    IDoneBlocks doneBlocks,
     ICurrentUser currentUser,
     TimeProvider time)
 {
@@ -42,9 +43,14 @@ public sealed class TodayPlans(
             time.GetUtcNow().UtcDateTime,
             readyTopics: ready,
             foundations: foundations);
+
+        // What was done today stays, the rest comes from the fresh plan (#375).
+        var done = await doneBlocks.OnAsync(goal, plan.StudyDay, cancellationToken);
+        var blocks = DayBlocks.WithDone(owner, goal, plan.StudyDay, plan.Blocks, done, budget.MinutesOn(plan.StudyDay));
         return new TodayPlanResult(
             goal,
             plan,
+            blocks,
             MasteryAvailable: topics.Count == 0 || mastery is not null,
             QuestionPoolsAvailable: topics.Count == 0 || ready is not null);
     }
@@ -64,4 +70,6 @@ public sealed class TodayPlans(
     }
 }
 
-public sealed record TodayPlanResult(Guid LearningGoalId, TodayPlan Plan, bool MasteryAvailable, bool QuestionPoolsAvailable);
+// Blocks: today's blocks with their ids, the done ones first. Plan.Blocks is only the fresh part.
+public sealed record TodayPlanResult(
+    Guid LearningGoalId, TodayPlan Plan, IReadOnlyList<DayBlock> Blocks, bool MasteryAvailable, bool QuestionPoolsAvailable);
