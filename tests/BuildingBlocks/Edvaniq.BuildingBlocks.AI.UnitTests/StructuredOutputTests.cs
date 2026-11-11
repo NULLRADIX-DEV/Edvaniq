@@ -67,6 +67,32 @@ public class StructuredOutputTests
         Assert.Equal(12L, answer.Usage.TotalTokenCount);
     }
 
+    // The cost log keeps every attempt on its own: its tokens, cost, model and how it ended.
+    [Fact]
+    public async Task EveryAttempt_IsATry_WithItsOwnUsageCostAndOutcome()
+    {
+        var ai = new Scripted(
+            Answer("kaputt", 10, 2, 0.5m),
+            Answer("ok", 7, 3),
+            () => throw new HttpRequestException("down", null, HttpStatusCode.ServiceUnavailable));
+
+        var usable = await AskAsync(ai);
+        var failed = await AskAsync(ai);
+
+        Assert.Equal(
+            [(1, "test", 10L, 2L, (decimal?)0.5m, AiTryOutcome.Unusable), (2, "test", 7L, 3L, null, AiTryOutcome.Answered)],
+            usable.Tries.Select(attempt => (attempt.Number, attempt.ModelId, attempt.InputTokens, attempt.OutputTokens, attempt.Cost, attempt.Outcome)));
+        Assert.Equal((1, null, 0L, 0L, (decimal?)null, AiTryOutcome.Failed), Tuple(Assert.Single(failed.Tries)));
+        Assert.All(usable.Tries.Concat(failed.Tries), attempt =>
+        {
+            Assert.Equal(DateTimeKind.Utc, attempt.StartedAt.Kind);
+            Assert.True(attempt.Duration >= TimeSpan.Zero);
+        });
+    }
+
+    private static (int, string?, long, long, decimal?, AiTryOutcome) Tuple(AiTry attempt) =>
+        (attempt.Number, attempt.ModelId, attempt.InputTokens, attempt.OutputTokens, attempt.Cost, attempt.Outcome);
+
     [Fact]
     public async Task SlowAnswer_FailsAfterTheAttemptTimeout()
     {
@@ -105,11 +131,12 @@ public class StructuredOutputTests
 
     private static string? Read(string text) => text == "ok" ? text : null;
 
-    private static Func<ChatResponse> Answer(string text, long input, long output) => () =>
+    private static Func<ChatResponse> Answer(string text, long input, long output, decimal? cost = null) => () =>
         new ChatResponse(new ChatMessage(ChatRole.Assistant, text))
         {
             ModelId = "test",
             Usage = new UsageDetails { InputTokenCount = input, OutputTokenCount = output, TotalTokenCount = input + output },
+            AdditionalProperties = cost is { } known ? new() { [AiCost.Property] = known } : null,
         };
 
     // Answers each call with the next answer. One that throws InvalidOperationException hangs until the caller gives up.

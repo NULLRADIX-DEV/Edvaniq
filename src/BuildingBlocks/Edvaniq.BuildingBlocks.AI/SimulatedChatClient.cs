@@ -37,7 +37,10 @@ public sealed class SimulatedChatClient(IEnumerable<ISimulatedAnswer> answers, S
             answer = answer[..(answer.Length / 2)];
         }
 
-        return new ChatResponse(new ChatMessage(ChatRole.Assistant, answer)) { ModelId = Provider, Usage = EstimatedUsage(prompt, answer) };
+        // Costs nothing, but has a cost like a real answer.
+        var response = new ChatResponse(new ChatMessage(ChatRole.Assistant, answer)) { ModelId = Provider, Usage = EstimatedUsage(prompt, answer) };
+        AiCost.Set(response, 0m);
+        return response;
     }
 
     // Estimated, not counted: about four characters a token, so the usage of a document shows up without a real provider.

@@ -12,6 +12,9 @@ public static class TopicAnalysis
     // The first line of the system message. The simulated provider tells the task by it.
     public const string Task = "edvaniq:topics";
 
+    // Goes with every AI call of the task. A new prompt needs a new version, TopicAnalysisTests holds them together.
+    public const string PromptVersion = "topics-1";
+
     // Suggestions in all, topics and subtopics. The answer's first ones count, the rest is dropped.
     public const int MaxTopics = 30;
 

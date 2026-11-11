@@ -119,6 +119,79 @@ public class OpenAiCompatibleChatClientTests
         Assert.Equal(15, response.Usage?.TotalTokenCount);
     }
 
+    // The provider says what it billed only when asked for it in ExtraBody. The client keeps that field and reads the
+    // cost as a number, before any price of its own.
+    [Fact]
+    public async Task UsageFromExtraBody_GoesOut_AndTheBilledCostIsRead()
+    {
+        var stub = new AiStub().Answer(HttpStatusCode.OK, Billed("0.0001234"));
+        using var host = stub.Host(overrides:
+        [
+            ("Ai:OpenAiCompatible:ExtraBody", """{"usage":{"include":true}}"""),
+            ("Ai:Prices:0:Model", "vendor/model-1"),
+            ("Ai:Prices:0:Input", "1000"),
+            ("Ai:Prices:0:Output", "1000"),
+        ]);
+
+        var response = await AiStub.Client(host).GetResponseAsync(Prompt, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"include":true}"""), JsonNode.Parse(Assert.Single(stub.Requests).Body)!["usage"]));
+        Assert.Equal(0.0001234m, AiCost.Of(response));
+    }
+
+    // 12 input and 3 output tokens at 0.25 and 1.10 per million.
+    [Fact]
+    public async Task WithoutBilledCost_ThePriceOfTheAnsweringModelCounts()
+    {
+        var stub = new AiStub().Answer(HttpStatusCode.OK, AiStub.Completion("ok", "vendor/model-1-0101"));
+        using var host = stub.Host(overrides:
+        [
+            ("Ai:Prices:0:Model", "vendor/model-1"),
+            ("Ai:Prices:0:Input", "9"),
+            ("Ai:Prices:0:Output", "9"),
+            ("Ai:Prices:1:Model", "vendor/model-1-0101"),
+            ("Ai:Prices:1:Input", "0.25"),
+            ("Ai:Prices:1:Output", "1.10"),
+        ]);
+
+        var response = await AiStub.Client(host).GetResponseAsync(Prompt, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(((12 * 0.25m) + (3 * 1.10m)) / 1_000_000m, AiCost.Of(response));
+    }
+
+    [Fact]
+    public async Task WithoutBilledCost_TheConfiguredModelsPriceCounts_OrNothingIsKnown()
+    {
+        var priced = new AiStub().Answer(HttpStatusCode.OK, AiStub.Completion("ok", "vendor/model-1-0101"));
+        using var pricedHost = priced.Host(overrides: [("Ai:Prices:0:Model", "vendor/model-1"), ("Ai:Prices:0:Input", "1"), ("Ai:Prices:0:Output", "2")]);
+        var unpriced = new AiStub().Answer(HttpStatusCode.OK, AiStub.Completion("ok"));
+        using var unpricedHost = unpriced.Host();
+
+        var withPrice = await AiStub.Client(pricedHost).GetResponseAsync(Prompt, cancellationToken: TestContext.Current.CancellationToken);
+        var withoutPrice = await AiStub.Client(unpricedHost).GetResponseAsync(Prompt, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(18m / 1_000_000m, AiCost.Of(withPrice));
+        Assert.Null(AiCost.Of(withoutPrice));
+    }
+
+    [Theory]
+    [InlineData("Model", "", "Ai:Prices:0:Model is missing.")]
+    [InlineData("Input", "-1", "Ai:Prices:0:Input must be a price of at least 0, like 0.27.")]
+    [InlineData("Output", "teuer", "Ai:Prices:0:Output must be a price of at least 0, like 0.27.")]
+    public void BrokenPrice_StopsTheStart(string key, string value, string message)
+    {
+        (string, string?)[] price = [("Ai:Prices:0:Model", "vendor/model-1"), ("Ai:Prices:0:Input", "1"), ("Ai:Prices:0:Output", "1")];
+        var overrides = price.Select(entry => entry.Item1.EndsWith(key, StringComparison.Ordinal) ? (entry.Item1, value) : entry).ToArray();
+
+        Assert.Equal(message, Assert.Throws<InvalidOperationException>(() => new AiStub().Host(overrides: overrides)).Message);
+    }
+
+    private static string Billed(string cost) =>
+        $$$"""
+        {"id":"gen-1","model":"vendor/model-1","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"ok"}}],
+         "usage":{"prompt_tokens":12,"completion_tokens":3,"total_tokens":15,"cost":{{{cost}}}}}
+        """;
+
     // One request only: a retry would be a second paid one, the caller decides what happens after a failure.
     [Theory]
     [InlineData(HttpStatusCode.ServiceUnavailable)]

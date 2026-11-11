@@ -231,7 +231,7 @@ Ob der Anbieter antwortet, zeigt nach einem Deploy das Kommando `ai-check` des C
 
 ### Simulierter Anbieter
 
-Der simulierte Anbieter antwortet auf denselben Prompt immer gleich, auch in einem anderen Prozess, denn seine Zufallszahlen hängen nur vom Prompt ab. Ein Schema in der Anfrage übergeht er, er antwortet ohnehin in der verlangten Form. Seine Tokens sind geschätzt, etwa vier Zeichen je Token, damit die Kosten eines Dokuments auch ohne echten Anbieter im Log stehen. Was er antwortet, bestimmt der Service, der den Prompt schickt: Er registriert für jede Aufgabe ein `ISimulatedAnswer`. Content erkennt seine Aufgaben an der ersten Zeile der Systemnachricht, `edvaniq:topics` für Themen und `edvaniq:questions` für Fragen, und jeder echte Prompt dieser Aufgaben beginnt ebenso.
+Der simulierte Anbieter antwortet auf denselben Prompt immer gleich, auch in einem anderen Prozess, denn seine Zufallszahlen hängen nur vom Prompt ab. Ein Schema in der Anfrage übergeht er, er antwortet ohnehin in der verlangten Form. Seine Tokens sind geschätzt, etwa vier Zeichen je Token, damit die Tokens eines Dokuments auch ohne echten Anbieter im Kostenlogging stehen ([Kosten](#kosten)). Was er antwortet, bestimmt der Service, der den Prompt schickt: Er registriert für jede Aufgabe ein `ISimulatedAnswer`. Content erkennt seine Aufgaben an der ersten Zeile der Systemnachricht, `edvaniq:topics` für Themen und `edvaniq:questions` für Fragen, und jeder echte Prompt dieser Aufgaben beginnt ebenso.
 
 Für die Fehlerwege lässt sich der simulierte Anbieter absichtlich scheitern lassen, mit `Ai:Simulated:Fault` oder in Tests über `SimulatedChatClient.Fault`. `Outage` antwortet wie ein Anbieter mit 503, `Timeout` wartet, bis der Aufrufer aufgibt, und `InvalidOutput` liefert eine halbe Antwort, die kein gültiges JSON ist. Einen Schalter im eingefügten Material gibt es bewusst nicht, denn Material ist nur Daten und steuert nie, was die KI tut.
 
@@ -241,7 +241,23 @@ Jeder KI-Aufruf von Content verlangt JSON in einer festen Form und liefert entwe
 
 Die Form steht als JSON-Schema neben dem Prompt (`TopicAnalysis.Schema`, `QuestionGeneration.Schema`) und geht als `response_format` mit jeder Anfrage hinaus, mit `strict`. Das macht eine unbrauchbare Antwort seltener, ersetzt aber keine Prüfung: Die Antwort geht immer durch `TopicAnalysis.Read` bzw. `QuestionGeneration.Read`. Kann ein Endpunkt kein Schema, schaltet `Ai:OpenAiCompatible:SchemaOutput=false` es ohne neuen Build ab.
 
-Jeder Versuch zählt zu den Kosten, auch ein verworfener. `StructuredOutput` addiert die Tokens aller Versuche, und der Worker schreibt je Dokument eine Zeile ins Log, eine für die Themen und eine für alle Fragen des Dokuments: `AI usage for the topics of document <id>: 2 attempts, … input tokens, … output tokens, model …`. Die Zeile kommt auch, wenn das Dokument scheitert, und trägt weder Prompt noch Antwort.
+Jeder Versuch zählt zu den Kosten, auch ein verworfener. `StructuredOutput` gibt deshalb neben der Antwort jeden Versuch einzeln zurück (`Tries`), mit Beginn, Dauer, Modell, Tokens, Kosten und Ausgang (`Answered`, `Unusable`, `Failed`).
+
+### Kosten
+
+Was ein Aufruf gekostet hat, legt jeder Client in die Antwort (`AiCost.Of`), in der Abrechnungswährung des Anbieters, US-Dollar. `OpenAiCompatible` nimmt den Betrag, den der Anbieter in `usage.cost` nennt. Manche Anbieter nennen ihn nur, wenn die Anfrage danach fragt, das Feld dafür kommt dann in `ExtraBody`, und der Client lässt es unverändert. Fehlt der Betrag, rechnet der Client mit dem Preis je Million Tokens aus `Ai:Prices`, zuerst für das Modell, das geantwortet hat, sonst für das konfigurierte. Die Preise stehen wie das Modell nur in der Umgebung des Servers, als Liste, weil ein Modellname einen Doppelpunkt enthalten kann:
+
+| Wert | Bedeutung |
+|---|---|
+| `Ai:Prices:<n>:Model` | Name des Modells, wie ihn der Anbieter nennt |
+| `Ai:Prices:<n>:Input` | US-Dollar je Million Tokens der Anfrage |
+| `Ai:Prices:<n>:Output` | US-Dollar je Million Tokens der Antwort |
+
+Ein Eintrag ohne Modell, ein Modell zweimal oder ein Preis, der keine Zahl ab 0 ist, verhindert den Start. Ist kein Betrag bekannt, bleiben die Kosten leer und zählen in den Summen als „ohne Preis“. Der simulierte Anbieter kostet 0.
+
+Content speichert jeden Versuch direkt danach als `AiAttempt` in seiner Datenbank, in einem eigenen Speichern: Das Geld ist auch dann ausgegeben, wenn das Speichern des Dokuments danach scheitert. Kann diese Zeile nicht gespeichert werden, steht eine Warnung im Log und die Analyse läuft weiter. Eine Zeile nennt Nutzer, Dokument, Zweck (`topics`, `questions`), Modell, Prompt-Version (`topics-1`, `questions-1`), Beginn in UTC, Dauer, Tokens, Kosten und Ausgang, die Versuche eines Aufrufs haben dieselbe `CallId`. Prompt, Material und Antwort speichert sie nie. Einen Fremdschlüssel auf das Dokument gibt es nicht, die Kosten bleiben, wenn das Dokument geht. Dazu schreibt der Worker je Aufruf eine Zeile ins Log: `AI usage for the topics of document <id>: 2 attempts, … input tokens, … output tokens, cost …, … ms, model …`.
+
+Ausgewertet wird mit `AiUsageReport` je UTC-Tag, je Nutzer und je Dokument. Der Tag ist der UTC-Tag, wie der Anbieter abrechnet, nicht der Lerntag. Wird ein Nutzer gelöscht, gehen seine Versuche nicht verloren, sondern in `AiUsageDay` auf: Summen je UTC-Tag, Zweck, Modell und Prompt-Version, ohne Nutzer, Dokument oder Uhrzeit. So bleiben die Gesamtkosten für den Kostenbericht stimmig, ohne dass etwas auf eine Person zurückführt. Die Summe je Tag zählt beide Tabellen zusammen.
 
 ## Analyse im Worker
 

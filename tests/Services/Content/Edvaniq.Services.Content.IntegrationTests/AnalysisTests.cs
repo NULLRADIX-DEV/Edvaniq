@@ -355,7 +355,95 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(StructuredOutput.DefaultAttempts, UsageOf("questions", id).Attempts);
     }
 
+    // Every AI call of a document is stored: what it was for, model, prompt version, tokens, cost and duration, one
+    // row per attempt.
+    [Fact]
+    public async Task EveryAiCall_IsStored_WithPurposeModelVersionTokensCostAndDuration()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        using var client = ClientFor(alice);
+        var id = await PasteAsync(client, Text);
+        var before = DateTime.UtcNow.AddSeconds(-1);
+
+        await AnalyzeAsync(id, withQuestions: true);
+
+        var attempts = AttemptsOf(id);
+        var topics = Assert.Single(attempts, attempt => attempt.Purpose == AiAttempt.Topics);
+        Assert.Equal((alice, SimulatedChatClient.Provider, TopicAnalysis.PromptVersion, 1, AiAttemptOutcome.Answered, (decimal?)0m),
+            (topics.OwnerId, topics.Model, topics.PromptVersion, topics.Attempt, topics.Outcome, topics.Cost));
+        var questions = attempts.Where(attempt => attempt.Purpose == AiAttempt.Questions).ToList();
+        Assert.Equal(Assert.Single(await ReportedAsync(id)).Topics.Count, questions.Count);
+        Assert.All(questions, attempt => Assert.Equal(QuestionGeneration.PromptVersion, attempt.PromptVersion));
+        Assert.Equal(attempts.Count, attempts.Select(attempt => attempt.CallId).Distinct().Count());
+        Assert.All(attempts, attempt =>
+        {
+            Assert.True(attempt.InputTokens > 0 && attempt.OutputTokens > 0);
+            Assert.True(attempt.DurationMs >= 0);
+            Assert.Equal(DateTimeKind.Utc, attempt.CalledAt.Kind);
+            Assert.InRange(attempt.CalledAt, before, DateTime.UtcNow);
+        });
+    }
+
+    // A call that asks again keeps both attempts under one call, each with how it ended.
+    [Fact]
+    public async Task CallThatAsksAgain_StoresEachAttempt_UnderOneCall()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+
+        await AnalyzeAsync(id, new BrokenAnswers(failures: 1, task: ContentAi.TopicsTask));
+
+        var attempts = AttemptsOf(id).OrderBy(attempt => attempt.Attempt).ToList();
+        Assert.Equal([(1, AiAttemptOutcome.Unusable), (2, AiAttemptOutcome.Answered)], attempts.Select(attempt => (attempt.Attempt, attempt.Outcome)));
+        Assert.Single(attempts.Select(attempt => attempt.CallId).Distinct());
+    }
+
+    // The cost log holds only numbers and names of our own, never a prompt, the material or the answer.
+    [Fact]
+    public void CostLog_HasNoColumnForText()
+    {
+        using var scope = service.Services.CreateScope();
+        var model = scope.ServiceProvider.GetRequiredService<ContentDbContext>().Model;
+
+        Assert.Equal(
+            ["Attempt", "CallId", "CalledAt", "Cost", "DocumentId", "DurationMs", "Id", "InputTokens", "Model", "Outcome", "OutputTokens", "OwnerId", "PromptVersion", "Purpose"],
+            model.FindEntityType(typeof(AiAttempt))!.GetProperties().Select(property => property.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["Attempts", "Calls", "Cost", "Day", "DurationMs", "InputTokens", "Model", "OutputTokens", "PromptVersion", "Purpose", "UnpricedAttempts"],
+            model.FindEntityType(typeof(AiUsageDay))!.GetProperties().Select(property => property.Name).Order(StringComparer.Ordinal));
+    }
+
+    // A database that is away when the usage goes in costs only the log rows: the analysis goes on with a warning.
+    [Fact]
+    public async Task CostLogThatCannotStore_LeavesTheAnalysis_WithAWarning()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(id, TestContext.Current.CancellationToken);
+        var usage = new AiUsageLog(new BrokenScopes(), LoggerOf<AiUsageLog>());
+        var analyzer = ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, Chat(), usage, LoggerOf<DocumentAnalyzer>());
+
+        await analyzer.AnalyzeAsync(id, TestContext.Current.CancellationToken);
+
+        Assert.Single(await ReportedAsync(id));
+        Assert.Empty(AttemptsOf(id));
+        Assert.Contains(logs.Entries, entry => entry.Level == LogLevel.Warning
+            && entry.Message == $"The AI usage for the {AiAttempt.Topics} of document {id} could not be stored, the analysis goes on");
+    }
+
     public void Dispose() => ai.Dispose();
+
+    private List<AiAttempt> AttemptsOf(Guid documentId)
+    {
+        using var scope = service.Services.CreateScope();
+        return [.. scope.ServiceProvider.GetRequiredService<ContentDbContext>().AiAttempts.IgnoreQueryFilters()
+            .Where(attempt => attempt.DocumentId == documentId)];
+    }
+
+    private sealed class BrokenScopes : IServiceScopeFactory
+    {
+        public IServiceScope CreateScope() => throw new InvalidOperationException("The database is away.");
+    }
 
     // A host with nothing but Content's AI on the simulated provider.
     private static IHost SimulatedAi()
@@ -417,14 +505,14 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         }
     }
 
-    // The one cost line of the task for the document.
+    // The stored attempts of the task for the document.
     private (int Attempts, long InputTokens) UsageOf(string task, Guid documentId)
     {
-        var entry = Assert.Single(logs.Entries, entry => entry.Message.StartsWith($"AI usage for the {task} of document {documentId}:", StringComparison.Ordinal));
-        var match = System.Text.RegularExpressions.Regex.Match(entry.Message, ": (\\d+) attempts, (\\d+) input tokens");
-        Assert.True(match.Success, entry.Message);
-        return (int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture),
-            long.Parse(match.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture));
+        using var scope = service.Services.CreateScope();
+        var attempts = scope.ServiceProvider.GetRequiredService<ContentDbContext>().AiAttempts.IgnoreQueryFilters()
+            .Where(attempt => attempt.DocumentId == documentId && attempt.Purpose == task)
+            .ToList();
+        return (attempts.Count, attempts.Sum(attempt => attempt.InputTokens));
     }
 
     private ILogger<T> LoggerOf<T>() => new TestLogger<T>(logs.CreateLogger(typeof(T).FullName!));
