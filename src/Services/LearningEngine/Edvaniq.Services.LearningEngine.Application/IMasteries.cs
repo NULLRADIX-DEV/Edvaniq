@@ -11,6 +11,12 @@ public interface IMasteries
     // Every topic the user knows, or those of one learning goal, practised or not, ordered by id. Someone else's
     // learning goal and one without topics both give an empty list.
     Task<IReadOnlyList<TopicMastery>> ListAsync(Guid? learningGoalId, CancellationToken cancellationToken);
+
+    // The topics of one learning goal that were secure at their last answer and have decayed since
+    // (TopicStates.Decayed), the lowest mastery first.
+    Task<IReadOnlyList<DecayedTopicMastery>> DecayedAsync(Guid learningGoalId, CancellationToken cancellationToken);
 }
 
 public sealed record TopicMastery(Guid TopicId, int Mastery, TopicState State);
+
+public sealed record DecayedTopicMastery(Guid TopicId, DecayedTopic Standing);

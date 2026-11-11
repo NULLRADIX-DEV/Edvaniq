@@ -58,6 +58,26 @@ app.MapGet("/mastery", async (string? learningGoalId, IMasteries masteries, Canc
         [.. topics.Select(topic => new MasteryListEntry(topic.TopicId, topic.Mastery, StateNames.Of(topic.State)))]));
 });
 
+// Topics of one learning goal to refresh: secure at their last answer, below secure now only by the decay since. The
+// goal is required, like /mastery a goal that isn't the user's gives an empty list.
+app.MapGet("/mastery/decayed", async (string? learningGoalId, IMasteries masteries, CancellationToken cancellationToken) =>
+{
+    if (!Guid.TryParse(learningGoalId, out var goal))
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["learningGoalId"] = [learningGoalId is null ? "Is required." : "Must be a GUID."],
+        });
+    }
+
+    var topics = await masteries.DecayedAsync(goal, cancellationToken);
+    return Results.Ok(new DecayedListResponse(
+        Mastery.RuleVersion,
+        TopicStates.SecureFrom,
+        [.. topics.Select(topic => new DecayedListEntry(
+            topic.TopicId, topic.Standing.Mastery, topic.Standing.MasteryAtLastAnswer, topic.Standing.LastAnsweredAt))]));
+});
+
 app.Run();
 
 return 0;
@@ -69,6 +89,11 @@ internal sealed record MasteryResponse(Guid TopicId, int Mastery, string State, 
 internal sealed record MasteryListResponse(int RuleVersion, IReadOnlyList<MasteryListEntry> Topics);
 
 internal sealed record MasteryListEntry(Guid TopicId, int Mastery, string State);
+
+// Threshold: the mastery a topic has fallen below, TopicStates.SecureFrom. LastAnsweredAt in UTC.
+internal sealed record DecayedListResponse(int RuleVersion, int Threshold, IReadOnlyList<DecayedListEntry> Topics);
+
+internal sealed record DecayedListEntry(Guid TopicId, int Mastery, int MasteryAtLastAnswer, DateTime LastAnsweredAt);
 
 // The names on the wire, fixed here so renaming the enum can't change the contract.
 internal static class StateNames
