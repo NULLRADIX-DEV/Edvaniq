@@ -107,7 +107,7 @@ public sealed class MasteryListTests(ServiceFactory service) : IClassFixture<Ser
         }
 
         var median = times.Order().ElementAt(2);
-        TestContext.Current.SendDiagnosticMessage(
+        TestContext.Current.TestOutputHelper?.WriteLine(
             $"GET /mastery, 50 topics, 500 records: median {median:F1} ms ({string.Join(", ", times.Select(t => $"{t:F1}"))})");
         Assert.True(median < 500, $"Median {median:F1} ms, limit 500 ms.");
     }
