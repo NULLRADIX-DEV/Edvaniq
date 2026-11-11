@@ -83,9 +83,37 @@ public static class FeedbackTexts
         public const string AnswerBack = "Deine Frage von vorhin ist noch offen. Prüf deine Antwort, sie zählt einmal.";
     }
 
+    // The mastery after an answer, which comes a moment later (#222).
+    public static class Progress
+    {
+        public const string Heading = "Dein Lernstand";
+
+        public const string Updating = "Dein Lernstand wird aktualisiert …";
+
+        public const string Late = "Dein Lernstand ist noch nicht aktualisiert.";
+
+        public const string LateHint = "Deine Antwort ist gespeichert und zählt. Prüf es gleich noch einmal.";
+
+        public const string Check = "Erneut prüfen";
+
+        public const string New = "neu";
+
+        public const string Weakness = "Schwäche";
+
+        public const string Building = "im Aufbau";
+
+        public const string Secure = "sicher";
+    }
+
     // Today's plan on Home.
     public static class Plan
     {
+        public const string Updating = "Dein Plan wird gerade aktualisiert …";
+
+        public const string Late = "Dein Plan ist noch nicht aktualisiert.";
+
+        public const string LateHint = "Deine Antworten sind gespeichert. Lade den Plan gleich noch einmal.";
+
         public const string Learn = "Lernen";
 
         public const string Review = "Wiederholen";

@@ -28,6 +28,7 @@ public sealed class QuizTests : BunitContext
 
     public QuizTests()
     {
+        Services.AddQuietAnswerSync();
         Services.AddSingleton<TimeProvider>(time);
     }
 

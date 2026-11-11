@@ -33,7 +33,7 @@ app.MapGet("/me", (ICurrentUser user) => new { user.Id });
 // Someone else's topic and one this service doesn't know (yet) look the same: 404.
 app.MapGet("/mastery/{topicId:guid}", async (Guid topicId, IMasteries masteries, CancellationToken cancellationToken) =>
     await masteries.FindAsync(topicId, cancellationToken) is { } standing
-        ? Results.Ok(new MasteryResponse(topicId, standing.Mastery, StateNames.Of(standing.State), Mastery.RuleVersion))
+        ? Results.Ok(new MasteryResponse(topicId, standing.Mastery, StateNames.Of(standing.State), Mastery.RuleVersion, standing.LastAnswerId))
         : Results.NotFound());
 
 // All of the user's topics, or those of one learning goal. A goal that isn't the user's gives an empty list, like one
@@ -55,7 +55,7 @@ app.MapGet("/mastery", async (string? learningGoalId, IMasteries masteries, Canc
     var topics = await masteries.ListAsync(goal, cancellationToken);
     return Results.Ok(new MasteryListResponse(
         Mastery.RuleVersion,
-        [.. topics.Select(topic => new MasteryListEntry(topic.TopicId, topic.Mastery, StateNames.Of(topic.State)))]));
+        [.. topics.Select(topic => new MasteryListEntry(topic.TopicId, topic.Mastery, StateNames.Of(topic.State), topic.LastAnswerId))]));
 });
 
 // Topics of one learning goal to refresh: secure at their last answer, below secure now only by the decay since. The
@@ -82,13 +82,14 @@ app.Run();
 
 return 0;
 
-// Whole percent, 0 to 100, the topic state and the version of the rule that worked both out.
-internal sealed record MasteryResponse(Guid TopicId, int Mastery, string State, int RuleVersion);
+// Whole percent, 0 to 100, the topic state and the version of the rule that worked both out. LastAnswerId names the
+// newest answer LearningEngine has stored for the topic, so a client knows when its answer has arrived (#222).
+internal sealed record MasteryResponse(Guid TopicId, int Mastery, string State, int RuleVersion, Guid? LastAnswerId);
 
 // An object, not a bare list, so fields can be added later.
 internal sealed record MasteryListResponse(int RuleVersion, IReadOnlyList<MasteryListEntry> Topics);
 
-internal sealed record MasteryListEntry(Guid TopicId, int Mastery, string State);
+internal sealed record MasteryListEntry(Guid TopicId, int Mastery, string State, Guid? LastAnswerId);
 
 // Threshold: the mastery a topic has fallen below, TopicStates.SecureFrom. LastAnsweredAt in UTC.
 internal sealed record DecayedListResponse(int RuleVersion, int Threshold, IReadOnlyList<DecayedListEntry> Topics);

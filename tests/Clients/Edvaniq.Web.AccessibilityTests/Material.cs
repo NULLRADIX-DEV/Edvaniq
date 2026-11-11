@@ -54,6 +54,22 @@ internal static class Material
 
     public static readonly Guid TopicId = Guid.Parse("5f0c4a3e-1b2d-4c5e-8f9a-0b1c2d3e4f50");
 
+    // The attempt every question of AnswerQuizAsync belongs to, so also the answer's id at LearningEngine.
+    public static readonly Guid AttemptId = Guid.Parse("8c9d0e1f-2a3b-4c4d-9e5f-6a7b8c9d0e1f");
+
+    // LearningEngine's mastery of the topic, with the answer of AnswerQuizAsync once arrived returns true.
+    public static Task AnswerMasteryAsync(IPage page, Func<bool> arrived) =>
+        page.RouteAsync("**/api/learningengine/mastery", route => FulfillAsync(route, new
+        {
+            ruleVersion = 2,
+            topics = new[]
+            {
+                arrived()
+                    ? new { topicId = TopicId, mastery = 62, state = "building", lastAnswerId = (Guid?)AttemptId }
+                    : new { topicId = TopicId, mastery = 50, state = "new", lastAnswerId = (Guid?)null },
+            },
+        }));
+
     // Today's plan as Planning answers it: a review of the topic and learn time for both subtopics, one of them the
     // long word. Without blocks it says why with emptyReason.
     public static object Plan(string? emptyReason = null, bool masteryAvailable = true) => new
@@ -88,7 +104,7 @@ internal static class Material
     // option against the second one being right.
     public static async Task AnswerQuizAsync(IPage page, bool ready = true, string explanation = "Die Lichtreaktion läuft an den Membranen der Thylakoide ab.")
     {
-        var attempt = Guid.Parse("8c9d0e1f-2a3b-4c4d-9e5f-6a7b8c9d0e1f");
+        var attempt = AttemptId;
         await AnswerAsync(page, documents: [new[] { Document("Ready") }], topics: [Topics]);
         await page.RouteAsync("**/api/assessment/attempts", route => ready
             ? FulfillAsync(route, new

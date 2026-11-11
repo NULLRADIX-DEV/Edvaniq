@@ -1,5 +1,6 @@
 @inject ITodayPlan Plans
 @inject ILearningMaterial Material
+@inject AnswerSync Sync
 
 @* The plan is worked out anew on every call, so Home asks on every visit and when the user comes back: after an answer
    in another tab or on another device the order may have changed. *@
@@ -43,16 +44,26 @@
                 </div>
                 break;
         }
+
+        @* An answer just given is on its way to LearningEngine, the plan below doesn't contain it yet. *@
+        @if (state == ViewState.Shown && syncing)
+        {
+            <p class="plan-note plan-updating">@FeedbackTexts.Plan.Updating</p>
+        }
+        else if (state == ViewState.Shown && syncLate)
+        {
+            <p class="plan-note"><strong>@FeedbackTexts.Plan.Late</strong> @FeedbackTexts.Plan.LateHint</p>
+        }
     </div>
 
-    @if (state == ViewState.LoadFailed)
+    @if (state == ViewState.LoadFailed || (state == ViewState.Shown && syncLate && !syncing))
     {
         <button type="button" class="button" @onclick="LoadAsync">@FeedbackTexts.Plan.Reload</button>
     }
 
     @if (state == ViewState.Shown && plan!.Blocks.Count > 0)
     {
-        <ol class="plan-blocks">
+        <ol class="plan-blocks" aria-busy="@(syncing ? "true" : "false")">
             @foreach (var (block, index) in plan.Blocks.Select((block, index) => (block, index)))
             {
                 var name = NameOf(block.TopicId);
@@ -115,12 +126,50 @@
     private Dictionary<Guid, string> names = [];
     private string? trace;
     private int loads;
+    private bool syncing;
+    private bool syncLate;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
+    // The plan as it is now, and while answers are still on their way to LearningEngine, the plan again once they
+    // have arrived (#222). Until then the plan stays with a hint, after the limit the hint offers a reload.
+    private async Task LoadAsync()
+    {
+        if (syncing)
+        {
+            return;
+        }
+
+        await LoadPlanAsync();
+        if (state != ViewState.Shown || !Sync.HasPending)
+        {
+            syncLate = false;
+            return;
+        }
+
+        syncing = true;
+        syncLate = false;
+        StateHasChanged();
+        bool arrived;
+        try
+        {
+            arrived = (await Sync.WaitAsync()).Arrived;
+        }
+        finally
+        {
+            syncing = false;
+        }
+
+        syncLate = !arrived;
+        if (arrived)
+        {
+            await LoadPlanAsync();
+        }
+    }
+
     // A shown plan stays until the new one is there, so a return doesn't flash a loading hint. Only the newest load
     // counts when two overlap.
-    private async Task LoadAsync()
+    private async Task LoadPlanAsync()
     {
         var load = ++loads;
         var planCall = Plans.GetAsync();
