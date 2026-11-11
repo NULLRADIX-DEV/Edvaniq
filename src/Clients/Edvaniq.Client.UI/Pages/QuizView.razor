@@ -12,7 +12,7 @@
 @* Reloading or closing the page would throw away a ticked answer not checked yet, so the browser asks first. *@
 <NavigationLock ConfirmExternalNavigation="Unchecked" />
 
-@* Question, options and explanation are text from the AI, Razor writes them as text. *@
+@* Question, options and explanation are Markdown from the AI, shown through SafeMarkdown: never as HTML. *@
 <h1 tabindex="-1" @ref="pageHeading">@(topicName is null ? "Frage üben" : $"Frage zu „{topicName}“")</h1>
 
 <div class="quiz-status" role="status">
@@ -64,7 +64,7 @@
     case ViewState.Asking or ViewState.Graded:
         <form class="quiz-form" @onsubmit="SubmitAsync" novalidate>
             <fieldset class="quiz-question" disabled="@(graded is not null)">
-                <legend tabindex="-1" @ref="questionLegend">@asked!.Text</legend>
+                <legend tabindex="-1" @ref="questionLegend"><SafeMarkdown Text="@asked!.Text" Inline /></legend>
                 <ul class="quiz-options">
                     @for (var i = 0; i < asked.Options.Count; i++)
                     {
@@ -73,7 +73,7 @@
                             <input type="radio" id="option-@option" name="quiz-option" value="@option"
                                    checked="@(Chosen == option)" @onchange="() => Choose(option)" />
                             <label for="option-@option">
-                                <span class="quiz-option-text">@asked.Options[option]</span>
+                                <span class="quiz-option-text"><SafeMarkdown Text="@asked.Options[option]" Inline /></span>
                                 @if (graded is not null && option == graded.Option)
                                 {
                                     <span class="quiz-mark quiz-mark-own">
@@ -132,8 +132,12 @@
                 {
                     <p>@(graded.Revealed ? FeedbackTexts.Answer.RevealedHint : FeedbackTexts.Answer.WrongHint)</p>
                 }
-                <p><strong>Richtige Antwort:</strong> @RightOption</p>
-                <p><strong>Erklärung:</strong> @graded.Explanation</p>
+                <p><strong>Richtige Antwort:</strong> <SafeMarkdown Text="@RightOption" Inline /></p>
+                @* Below the h2 above, so a heading in the text starts at h3. *@
+                <div class="quiz-explanation">
+                    <p><strong>Erklärung:</strong></p>
+                    <SafeMarkdown Text="@graded.Explanation" HeadingOffset="2" />
+                </div>
             </section>
 
             <div class="quiz-actions">

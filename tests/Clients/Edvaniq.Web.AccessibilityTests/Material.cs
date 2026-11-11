@@ -56,7 +56,7 @@ internal static class Material
 
     // A question of the topic as Assessment asks it, or 409 while there are none. The answer is graded with the given
     // option against the second one being right.
-    public static async Task AnswerQuizAsync(IPage page, bool ready = true)
+    public static async Task AnswerQuizAsync(IPage page, bool ready = true, string explanation = "Die Lichtreaktion läuft an den Membranen der Thylakoide ab.")
     {
         var attempt = Guid.Parse("8c9d0e1f-2a3b-4c4d-9e5f-6a7b8c9d0e1f");
         await AnswerAsync(page, documents: [new[] { Document("Ready") }], topics: [Topics]);
@@ -87,7 +87,7 @@ internal static class Material
                 option,
                 correct = option == 1,
                 answer = 1,
-                explanation = "Die Lichtreaktion läuft an den Membranen der Thylakoide ab.",
+                explanation,
                 responseTimeMs = 1000,
                 answeredAt = DateTime.UtcNow,
             });

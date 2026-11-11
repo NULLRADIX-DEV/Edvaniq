@@ -80,7 +80,7 @@ public sealed class PlainTextTests
         Assert.Equal([text, "Zweite Antwort"], page.FindAll(".quiz-option-text").Select(option => option.TextContent));
         var feedback = page.Find(".quiz-feedback").TextContent;
         Assert.Contains($"Richtige Antwort: {text}", feedback);
-        Assert.Contains($"Erklärung: {text}", feedback);
+        Assert.Equal(text, page.Find(".quiz-explanation .markdown").TextContent);
         AssertSameElements(expected.Nodes, page.Nodes);
     }
 
