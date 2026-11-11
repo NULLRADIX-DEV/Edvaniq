@@ -31,7 +31,8 @@ public sealed class MasteryListTests(ServiceFactory service) : IClassFixture<Ser
 
         Assert.Equal(Mastery.RuleVersion, list.RuleVersion);
         Assert.Equal(
-            new[] { new Entry(up, 62), new Entry(down, 37), new Entry(untouched, 50) }.OrderBy(entry => entry.TopicId),
+            new[] { new Entry(up, 62, "building"), new Entry(down, 37, "weakness"), new Entry(untouched, 50, "new") }
+                .OrderBy(entry => entry.TopicId),
             list.Topics);
     }
 
@@ -43,8 +44,8 @@ public sealed class MasteryListTests(ServiceFactory service) : IClassFixture<Ser
         var (cell, rome) = (Guid.NewGuid(), Guid.NewGuid());
         await SeedAsync([Topic(alice, cell, biology), Topic(alice, rome, history)], [Record(alice, cell, correct: true)]);
 
-        Assert.Equal(new[] { new Entry(cell, 62) }, (await ListAsync(alice, $"?learningGoalId={biology}")).Topics);
-        Assert.Equal(new[] { new Entry(rome, 50) }, (await ListAsync(alice, $"?learningGoalId={history}")).Topics);
+        Assert.Equal(new[] { new Entry(cell, 62, "building") }, (await ListAsync(alice, $"?learningGoalId={biology}")).Topics);
+        Assert.Equal(new[] { new Entry(rome, 50, "new") }, (await ListAsync(alice, $"?learningGoalId={history}")).Topics);
         Assert.Empty((await ListAsync(alice, $"?learningGoalId={Guid.NewGuid()}")).Topics);
     }
 
@@ -58,7 +59,7 @@ public sealed class MasteryListTests(ServiceFactory service) : IClassFixture<Ser
             [Topic(alice, topic, goal)],
             [Record(alice, topic, correct: true), Record(bob, topic, correct: false), Record(bob, topic, correct: false)]);
 
-        Assert.Equal(new[] { new Entry(topic, 62) }, (await ListAsync(alice)).Topics);
+        Assert.Equal(new[] { new Entry(topic, 62, "building") }, (await ListAsync(alice)).Topics);
         Assert.Empty((await ListAsync(bob)).Topics);
         Assert.Empty((await ListAsync(bob, $"?learningGoalId={goal}")).Topics);
     }
@@ -149,5 +150,5 @@ public sealed class MasteryListTests(ServiceFactory service) : IClassFixture<Ser
 
     private sealed record MasteryList(int RuleVersion, IReadOnlyList<Entry> Topics);
 
-    private sealed record Entry(Guid TopicId, int Mastery);
+    private sealed record Entry(Guid TopicId, int Mastery, string State);
 }

@@ -57,12 +57,13 @@ public sealed class LearningEngineStub
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
             }
 
+            // Shaped like LearningEngine's answer, state included: Planning reads only the mastery until #367.
             var topics = learningEngine.masteries.TryGetValue(token, out var known)
-                ? known.Select(topic => new { topicId = topic.Key, mastery = topic.Value }).ToArray()
+                ? known.Select(topic => new { topicId = topic.Key, mastery = topic.Value, state = "building" }).ToArray()
                 : [];
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = JsonContent.Create(new { ruleVersion = 1, topics }, options: JsonSerializerOptions.Web),
+                Content = JsonContent.Create(new { ruleVersion = 3, topics }, options: JsonSerializerOptions.Web),
             });
         }
     }

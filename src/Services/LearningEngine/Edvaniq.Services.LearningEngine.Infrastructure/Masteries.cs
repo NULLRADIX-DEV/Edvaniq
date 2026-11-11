@@ -8,7 +8,7 @@ namespace Edvaniq.Services.LearningEngine.Infrastructure;
 // No query here mentions the owner: the filter of ServiceDbContext adds it to every one of them.
 internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) : IMasteries
 {
-    public async Task<int?> FindAsync(Guid topicId, CancellationToken cancellationToken)
+    public async Task<TopicStanding?> FindAsync(Guid topicId, CancellationToken cancellationToken)
     {
         if (!await db.KnownTopics.AnyAsync(topic => topic.TopicId == topicId, cancellationToken))
         {
@@ -20,7 +20,7 @@ internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) :
             .ToListAsync(cancellationToken);
         var introduction = await db.TopicIntroductions.AsNoTracking()
             .SingleOrDefaultAsync(item => item.TopicId == topicId, cancellationToken);
-        return TopicStates.Assess(records, introduction, time.GetUtcNow().UtcDateTime).Mastery;
+        return TopicStates.Assess(records, introduction, time.GetUtcNow().UtcDateTime);
     }
 
     // Three queries however many topics: the topics, then all their records and introductions at once.
@@ -46,10 +46,12 @@ internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) :
             .Where(item => topicIds.Contains(item.TopicId))
             .ToDictionaryAsync(item => item.TopicId, cancellationToken);
         var now = time.GetUtcNow().UtcDateTime;
-        return
-        [
-            .. topicIds.Order().Select(id => new TopicMastery(
-                id, TopicStates.Assess(records[id], introductions.GetValueOrDefault(id), now).Mastery)),
-        ];
+        return [.. topicIds.Order().Select(Entry)];
+
+        TopicMastery Entry(Guid id)
+        {
+            var standing = TopicStates.Assess(records[id], introductions.GetValueOrDefault(id), now);
+            return new TopicMastery(id, standing.Mastery, standing.State);
+        }
     }
 }

@@ -32,7 +32,7 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
         var alice = NewUser("alice");
         var topic = await KnowAsync(alice);
 
-        Assert.Equal(new MasteryResponse(topic, 50, 2), await MasteryAsync(alice, topic));
+        Assert.Equal(new MasteryResponse(topic, 50, "new", 3), await MasteryAsync(alice, topic));
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
 
         await DeliverAsync(Answer(alice, topic, correct: true, ago: TimeSpan.FromDays(90) + AMinute));
 
-        Assert.Equal(new MasteryResponse(topic, 31, 2), await MasteryAsync(alice, topic));
+        Assert.Equal(new MasteryResponse(topic, 31, "weakness", 3), await MasteryAsync(alice, topic));
     }
 
     // The same answer again, under the same and under a new message id, doesn't move the value a second time.
@@ -188,5 +188,5 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
         }
     }
 
-    private sealed record MasteryResponse(Guid TopicId, int Mastery, int RuleVersion);
+    private sealed record MasteryResponse(Guid TopicId, int Mastery, string State, int RuleVersion);
 }

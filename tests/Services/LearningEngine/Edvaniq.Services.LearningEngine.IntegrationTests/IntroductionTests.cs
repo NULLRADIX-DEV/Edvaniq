@@ -155,7 +155,7 @@ public sealed class IntroductionTests(ServiceFactory service) : IClassFixture<Se
         return query(scope.ServiceProvider.GetRequiredService<LearningEngineDbContext>());
     }
 
-    private sealed record MasteryResponse(Guid TopicId, int Mastery, int RuleVersion);
+    private sealed record MasteryResponse(Guid TopicId, int Mastery, string State, int RuleVersion);
 
     private sealed record TopicEntry(Guid TopicId, int Mastery);
 
