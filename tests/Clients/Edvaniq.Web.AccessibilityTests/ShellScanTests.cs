@@ -70,6 +70,11 @@ public sealed class ShellScanTests(WebShell shell)
             await Assertions.Expect(page.Locator(".ping-result")).ToContainTextAsync("Alles in Ordnung");
         }
 
+        if (path == "/")
+        {
+            await Assertions.Expect(page.Locator(".plan-blocks")).ToContainTextAsync("Photosynthese");
+        }
+
         if (path == "/themen")
         {
             await Assertions.Expect(page.Locator(".topic-list")).ToContainTextAsync("Photosynthese");

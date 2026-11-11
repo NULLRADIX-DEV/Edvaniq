@@ -83,6 +83,57 @@ public static class FeedbackTexts
         public const string AnswerBack = "Deine Frage von vorhin ist noch offen. Prüf deine Antwort, sie zählt einmal.";
     }
 
+    // Today's plan on Home.
+    public static class Plan
+    {
+        public const string Learn = "Lernen";
+
+        public const string Review = "Wiederholen";
+
+        public const string Minute = "Minute";
+
+        public const string Minutes = "Minuten";
+
+        // A block whose topic Knowledge doesn't name (yet).
+        public const string UnnamedTopic = "Thema ohne Namen";
+
+        public const string LoadFailed = "Dein Plan für heute ließ sich gerade nicht laden.";
+
+        public const string Reload = "Erneut laden";
+
+        public const string NoTopics = "Für heute ist noch nichts geplant.";
+
+        public const string NoTopicsHint = "Füge einen Text ein, aus dem du lernen willst. Aus seinen Themen entsteht dein Plan.";
+
+        public const string NoTopicsLink = "Text einfügen";
+
+        public const string QuestionsPending = "Deine Fragen entstehen gerade.";
+
+        public const string QuestionsPendingHint =
+            "Das dauert meist ein paar Minuten. Schau danach wieder vorbei, dann steht hier dein Plan.";
+
+        public const string QuestionsPendingLink = "Zu deinen Themen";
+
+        public const string AllMastered = "Für heute steht nichts an.";
+
+        public const string AllMasteredHint = "Deine Themen sitzen gerade. Mit einem neuen Text kommen neue Themen dazu.";
+
+        public const string AllMasteredLink = "Neuen Text einfügen";
+
+        // No blocks, for a reason this client doesn't know yet.
+        public const string Nothing = "Für heute ist nichts geplant.";
+
+        public const string NothingLink = "Zu deinen Themen";
+
+        public const string MasteryUnavailable = "Dein Lernstand ist gerade nicht abrufbar, die Reihenfolge ist deshalb vorläufig.";
+
+        // Followed by the names of the topics.
+        public const string Shortened = "Diese Woche reicht die Zeit nicht für jedes Thema. Ohne Lernzeit bleiben diesmal:";
+
+        // Followed by the names of the topics.
+        public const string NotReady = "Zu diesen Themen entstehen die Fragen noch. Sie kommen in den Plan, sobald die Fragen da sind:";
+    }
+
     // Starting a failed analysis again on the topics page.
     public static class Retry
     {
