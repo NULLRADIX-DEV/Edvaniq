@@ -22,6 +22,7 @@ public sealed class LearningEngineDbContext(DbContextOptions<LearningEngineDbCon
         var record = modelBuilder.Entity<LearningRecord>();
         record.HasKey(entry => entry.AnswerId);
         record.Property(entry => entry.AnswerId).ValueGeneratedNever();
+        record.HasIndex(entry => new { entry.OwnerId, entry.TopicId });
 
         // Topics of Knowledge, only ids (TopicsChanged).
         var topic = modelBuilder.Entity<KnownTopic>();

@@ -23,6 +23,7 @@ public static class InfrastructureExtensions
         builder.Services.AddMySqlDbContext<LearningEngineDbContext>(DatabaseName);
         builder.Services.AddScoped<ILearningRecords, LearningRecords>();
         builder.Services.AddScoped<IKnownTopics, KnownTopics>();
+        builder.Services.AddScoped<IMasteries, Masteries>();
 
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<LearningEngineDbContext>(ServiceKey);

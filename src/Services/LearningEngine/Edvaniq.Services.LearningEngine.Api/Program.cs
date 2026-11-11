@@ -1,5 +1,6 @@
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Web;
+using Edvaniq.Services.LearningEngine.Application;
 using Edvaniq.Services.LearningEngine.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,6 +29,15 @@ app.UseAuthorization();
 // Who the token says the caller is. Smoke test for the token check, ignores any user id in the request.
 app.MapGet("/me", (ICurrentUser user) => new { user.Id });
 
+// Someone else's topic and one this service doesn't know (yet) look the same: 404.
+app.MapGet("/mastery/{topicId:guid}", async (Guid topicId, IMasteries masteries, CancellationToken cancellationToken) =>
+    await masteries.FindAsync(topicId, cancellationToken) is { } mastery
+        ? Results.Ok(new MasteryResponse(topicId, mastery))
+        : Results.NotFound());
+
 app.Run();
 
 return 0;
+
+// Whole percent, 0 to 100.
+internal sealed record MasteryResponse(Guid TopicId, int Mastery);
