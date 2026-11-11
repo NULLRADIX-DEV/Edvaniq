@@ -11,7 +11,7 @@ Was auf `main` liegt, kann jederzeit ausgerollt werden. Deshalb kommt dorthin nu
 
 1. Einen Branch von `main` anlegen und einen Pull Request gegen `main` öffnen.
 2. Die CI baut, testet alle Testprojekte samt Architekturtests, sucht nach Secrets und baut die Container-Images. Hochgeladen werden die Images erst nach dem Merge.
-3. Der andere Entwickler reviewt und approvt.
+3. Der andere Entwickler reviewt und approvt. Ändert der Pull Request, was ein Client zeigt, geht er dabei die Checkliste aus [docs/accessibility.md](accessibility.md) durch.
 4. Mergen. Ist `main` inzwischen weiter, vorher „Update branch“ klicken, damit die CI den echten Stand nach dem Merge prüft.
 
 Ein roter Check blockiert den Merge für alle, auch Admins können ihn nicht übergehen.

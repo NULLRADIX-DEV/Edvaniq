@@ -50,7 +50,7 @@ Ziel ist WCAG 2.2 Stufe AA. Verbindlich für den Pilot ist die Basis-Barrierefre
 |---|---|---|---|---|
 | Q18 | Die Kernansichten erfüllen WCAG 2.2 Stufe AA. | 0 offene Verstöße gegen AA in den Kernansichten | Automatischer Check der Shell in der CI (#147), Prüfprotokolle je Meilenstein (#296, #425, #509), Audit mit Screenreader vor dem Pilot (#568), Abnahme (#611). | M0 |
 | Q19 | Text und Bedienelemente haben genug Kontrast. | 4,5:1 für Text, 3:1 für Rahmen und Bedienelemente | `ContrastTests` in `tests/Clients` rechnet jedes Farbpaar der Tokens in `edvaniq.css` nach. Eine neue Farbe bekommt dort ihr Paar. | M0 |
-| Q20 | Jede Kernansicht lässt sich allein mit der Tastatur bedienen, ist für Screenreader beschriftet und stoppt Animationen, wenn das System reduzierte Bewegung verlangt. | 100 % der Kernansichten | Checkliste in der Definition of Done der UI-Bibliothek (#259), Prüfprotokolle je Meilenstein (#296, #425, #509), Stichprobe je Kernansicht in der Abnahme (#611). | M2 |
+| Q20 | Jede Kernansicht lässt sich allein mit der Tastatur bedienen, ist für Screenreader beschriftet und stoppt Animationen, wenn das System reduzierte Bewegung verlangt. | 100 % der Kernansichten | Checkliste in der Definition of Done der UI-Bibliothek (#259, [docs/accessibility.md](../accessibility.md)), Prüfprotokolle je Meilenstein (#296, #425, #509), Stichprobe je Kernansicht in der Abnahme (#611). | M2 |
 
 ## KI-Kosten und Limits
 
