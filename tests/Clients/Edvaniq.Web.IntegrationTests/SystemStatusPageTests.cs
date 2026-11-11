@@ -21,7 +21,10 @@ public sealed class SystemStatusPageTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var html = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains(">Systemstatus</h1>", html);
-        Assert.Matches("""<div role="status">\s*<p>Wird geladen …</p>""", html);
+        Assert.Matches("""<div role="status"[^>]*>\s*<p class="loading"[^>]*><span[^>]*></span>Wird geladen (…|&#x2026;)</p>""", html);
+
+        // Should the runtime never load, a plain link fetches the page whole again.
+        Assert.Matches("""<a href="https?://[^"]+/systemstatus" data-enhance-nav="false"[^>]*>lade die Seite neu</a>""", html);
         Assert.Contains("<!--Blazor:", html);
     }
 }

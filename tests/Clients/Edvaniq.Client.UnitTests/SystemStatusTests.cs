@@ -154,7 +154,7 @@ public sealed class SystemStatusTests : BunitContext
         var page = Render<SystemStatus>();
 
         Assert.Equal("Systemstatus", page.Find("h1").TextContent);
-        Assert.Equal("Wird geladen …", page.Find("[role=status]").TextContent.Trim());
+        Assert.Equal("Wird geladen …", page.Find("[role=status] .loading").TextContent);
         Assert.Empty(page.FindAll("button"));
     }
 

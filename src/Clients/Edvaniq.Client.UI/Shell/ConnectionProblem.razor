@@ -1,0 +1,24 @@
+@* One hint for a call that didn't get through. From the browser a lost connection and a failing server look the same,
+   so the hint covers both and names nothing technical, only the trace id for the support. Put it into a live region,
+   the retry button belongs outside it. *@
+<Notice Kind="NoticeKind.Error" Title="@Title" class="connection-problem">
+    <p>@Advice</p>
+    @ChildContent
+    <RequestId Value="@TraceId" />
+</Notice>
+
+@code {
+    public const string Advice =
+        "Prüf deine Internetverbindung. Steht sie, liegt es an uns: Versuch es in ein paar Sekunden noch einmal.";
+
+    // What didn't work, from the user's view.
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string? TraceId { get; set; }
+
+    // Anything the place adds, after the advice.
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

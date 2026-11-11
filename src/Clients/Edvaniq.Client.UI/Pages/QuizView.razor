@@ -38,10 +38,7 @@
             <p class="quiz-note quiz-alert"><strong>Dieses Thema gibt es nicht oder nicht mehr.</strong></p>
             break;
         case ViewState.LoadFailed:
-            <div class="quiz-note quiz-alert">
-                <p><strong>Die Frage ließ sich gerade nicht laden.</strong> Edvaniq ist vielleicht kurz nicht erreichbar.</p>
-                <RequestId Value="@loadTrace" />
-            </div>
+            <ConnectionProblem Title="Die Frage ließ sich gerade nicht laden." TraceId="@loadTrace" />
             break;
     }
 </div>
@@ -96,7 +93,13 @@
 
             @* Always there, so a screen reader announces each hint. *@
             <div role="alert">
-                @if (answerMessage is not null)
+                @if (answerMessage is NotThrough)
+                {
+                    <ConnectionProblem Title="@NotThrough" TraceId="@answerTrace">
+                        <p>Schickst du sie noch einmal, zählt sie trotzdem nur einmal.</p>
+                    </ConnectionProblem>
+                }
+                else if (answerMessage is not null)
                 {
                     <div class="quiz-note quiz-alert">
                         <p>@answerMessage</p>
@@ -143,8 +146,7 @@
 }
 
 @code {
-    private const string NotThrough =
-        "Deine Antwort ist nicht angekommen. Edvaniq ist gerade nicht erreichbar. Versuch es in ein paar Sekunden noch einmal.";
+    private const string NotThrough = "Deine Antwort ist nicht angekommen.";
 
     private const string NothingChosen = "Wähl zuerst eine Antwort aus.";
 

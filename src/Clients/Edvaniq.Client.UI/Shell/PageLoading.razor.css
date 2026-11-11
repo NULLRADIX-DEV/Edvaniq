@@ -1,0 +1,5 @@
+/* Quiet: most of the time the app loads before anybody reads it. */
+.page-loading-help {
+    color: var(--color-ink-muted);
+    font-size: 0.9375rem;
+}

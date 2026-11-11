@@ -388,7 +388,7 @@ public sealed class TopicsTests : BunitContext
         var page = Render<Topics>();
 
         Assert.Equal("Deine Themen", page.Find("h1").TextContent);
-        Assert.Equal("Wird geladen …", page.Find("[role=status]").TextContent.Trim());
+        Assert.Equal("Wird geladen …", page.Find("[role=status] .loading").TextContent);
         Assert.Equal(0, material.DocumentCalls);
     }
 

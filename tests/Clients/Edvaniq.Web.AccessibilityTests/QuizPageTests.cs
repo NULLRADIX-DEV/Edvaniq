@@ -93,6 +93,40 @@ public sealed class QuizPageTests(WebShell shell)
         await AxeScan.AssertNoViolationsAsync(page.Page, $"{Path} without questions at {width} px");
     }
 
+    // #196 AC3 and AC4: the connection breaks while the answer is on its way. The page says so without anything
+    // technical, and sending it again goes to the same attempt, which the server grades only once.
+    [Fact]
+    public async Task AnswerLostOnTheWay_IsSentAgain_ToTheSameAttempt()
+    {
+        var answers = new List<string>();
+        await using var page = await shell.OpenSignedInAsync(Path, WebShell.PhoneWidth, prepare: async browser =>
+        {
+            await Material.AnswerQuizAsync(browser);
+            await browser.RouteAsync("**/api/assessment/attempts/*/answer", route =>
+            {
+                answers.Add(route.Request.Url);
+                return answers.Count == 1 ? route.AbortAsync("internetdisconnected") : route.FallbackAsync();
+            });
+        });
+        await page.Page.GetByLabel("In den Thylakoiden").CheckAsync();
+        var check = page.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Antwort prüfen" });
+
+        await check.ClickAsync();
+
+        var alert = page.Page.Locator("form [role=alert]");
+        await Assertions.Expect(alert).ToContainTextAsync("Deine Antwort ist nicht angekommen.");
+        await Assertions.Expect(alert).ToContainTextAsync("Prüf deine Internetverbindung.");
+        Assert.DoesNotMatch("""\d{3}|Exception|http|/api/""", await alert.InnerTextAsync());
+        await Assertions.Expect(page.Page.GetByLabel("In den Thylakoiden")).ToBeCheckedAsync();
+        await AxeScan.AssertNoViolationsAsync(page.Page, $"{Path} with a lost answer at {WebShell.PhoneWidth} px");
+
+        await check.ClickAsync();
+
+        await Assertions.Expect(page.Page.Locator("#feedback-heading")).ToContainTextAsync("Richtig! Gut gemacht.");
+        Assert.Equal(2, answers.Count);
+        Assert.Equal(answers[0], answers[1]);
+    }
+
     private static async Task AssertLargeEnoughAsync(ILocator target)
     {
         var box = await target.BoundingBoxAsync();

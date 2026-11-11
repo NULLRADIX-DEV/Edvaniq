@@ -1,20 +1,27 @@
 @inject IBackendStatus Backend
 
+@* Back in the tab, or back online, a shown hint checks once more by itself. Only then: a check on a timer would go on
+   asking while nobody looks. *@
+<RefreshOnReturn OnReturn="CheckAgainAsync" />
+
 @* The live region is always there, so a screen reader announces the hint when it appears, and the all-clear when it
-   goes away again. *@
-<div role="status">
+   goes away again. The button stays outside, a changing region would take its focus along. *@
+<div class="backend-banner">
+    <LiveRegion>
+        @if (!reachable)
+        {
+            <ConnectionProblem Title="Keine Verbindung zu Edvaniq." />
+        }
+        else if (reconnected)
+        {
+            <p class="visually-hidden">Die Verbindung zum Server ist wieder da.</p>
+        }
+    </LiveRegion>
     @if (!reachable)
     {
-        <div class="backend-banner">
-            <p><strong>Keine Verbindung zum Server.</strong> Prüf deine Internetverbindung und versuch es dann noch einmal.</p>
-            <button type="button" class="button" @onclick="CheckAsync">
-                @(checking ? "Wird geprüft …" : "Erneut versuchen")
-            </button>
-        </div>
-    }
-    else if (reconnected)
-    {
-        <p class="visually-hidden">Die Verbindung zum Server ist wieder da.</p>
+        <button type="button" class="button" @onclick="CheckAsync">
+            @(checking ? "Wird geprüft …" : "Erneut versuchen")
+        </button>
     }
 </div>
 
@@ -28,6 +35,8 @@
     public EventCallback OnReconnected { get; set; }
 
     protected override Task OnInitializedAsync() => CheckAsync();
+
+    private Task CheckAgainAsync() => reachable ? Task.CompletedTask : CheckAsync();
 
     // The button stays enabled while checking: a disabled button would lose the keyboard focus.
     private async Task CheckAsync()

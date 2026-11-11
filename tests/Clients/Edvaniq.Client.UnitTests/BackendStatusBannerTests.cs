@@ -23,7 +23,7 @@ public sealed class BackendStatusBannerTests : BunitContext
     {
         var banner = RenderBanner(new FakeBackendStatus(false));
 
-        Assert.Contains("Keine Verbindung zum Server.", banner.Find("[role=status]").TextContent);
+        Assert.Contains("Keine Verbindung zu Edvaniq.", banner.Find("[role=status]").TextContent);
         Assert.Equal("Erneut versuchen", banner.Find("button").TextContent.Trim());
     }
 
@@ -66,7 +66,7 @@ public sealed class BackendStatusBannerTests : BunitContext
         banner.Find("button").Click();
 
         Assert.Equal(2, backend.Checks);
-        Assert.Contains("Keine Verbindung zum Server.", banner.Find("[role=status]").TextContent);
+        Assert.Contains("Keine Verbindung zu Edvaniq.", banner.Find("[role=status]").TextContent);
     }
 
     private IRenderedComponent<BackendStatusBanner> RenderBanner(IBackendStatus backend)
