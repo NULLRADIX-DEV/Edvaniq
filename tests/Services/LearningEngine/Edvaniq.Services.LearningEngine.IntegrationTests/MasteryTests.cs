@@ -112,8 +112,8 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
 
     private static AnswerRecorded Answer(string user, Guid topic, bool correct) =>
-        new(AnswerRecorded.CurrentVersion, user, Guid.NewGuid(), topic, Guid.NewGuid(), Guid.NewGuid(),
-            correct, 2, 4200, null, Mode.Practice, Monday);
+        new(AnswerRecorded.CurrentVersion, user, TopicId: topic, ItemId: Guid.NewGuid(), SessionId: Guid.NewGuid(),
+            AnswerId: Guid.NewGuid(), correct, 2, 4200, null, Mode.Practice, Monday);
 
     // Topics only come from TopicsChanged, KnownTopicTests covers that way. Here they go into the database directly.
     private async Task<Guid> KnowAsync(string owner, Guid? topicId = null)
