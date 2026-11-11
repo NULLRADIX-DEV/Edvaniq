@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Edvaniq.Services.Content.Infrastructure;
 
 // No query here mentions the owner: the filter of ServiceDbContext adds it to every one of them.
-internal sealed class Documents(ContentDbContext db, ICurrentUser currentUser, IEventOutbox outbox, TimeProvider time) : IDocuments
+internal sealed class Documents(ContentDbContext db, ICurrentUser currentUser, IEventOutbox outbox, IFiles files, TimeProvider time) : IDocuments
 {
     public async Task<Document> PasteAsync(LearningGoalInfo learningGoal, string? title, string text, CancellationToken cancellationToken)
     {
@@ -80,7 +80,9 @@ internal sealed class Documents(ContentDbContext db, ICurrentUser currentUser, I
     }
 
     // A worker may save the document between our read and our save, then the status no longer matches and we read it
-    // again. Its own save fails once the row is gone, so nothing of the document goes out after DocumentDeleted.
+    // again. Its own save fails once the row is gone, so nothing of the document goes out after DocumentDeleted. The
+    // uploaded file goes first, bytes and row, as with UserDeleted: if the rest fails, a second try finds only the
+    // document left.
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         for (var attempt = 1; ; attempt++)
@@ -89,6 +91,11 @@ internal sealed class Documents(ContentDbContext db, ICurrentUser currentUser, I
             if (document is null)
             {
                 return false;
+            }
+
+            if (document.FileId is { } fileId)
+            {
+                await files.DeleteAsync(fileId, cancellationToken);
             }
 
             db.Documents.Remove(document);
