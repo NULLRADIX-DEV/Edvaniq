@@ -16,7 +16,7 @@ public sealed class DocumentTopicTests(ServiceFactory service) : IClassFixture<S
 {
     private const string Content = "content";
 
-    [Fact]
+    [Fact(Timeout = 60_000)]
     public async Task ContentsToken_GetsTheTopicsOfTheDocument_WithTheirSections_InTheOrderOfTheAnalysis()
     {
         var alice = $"alice-{Guid.NewGuid():N}";
@@ -37,7 +37,7 @@ public sealed class DocumentTopicTests(ServiceFactory service) : IClassFixture<S
     }
 
     // Knowledge hasn't taken the analysis over yet, or the document is someone else's that doesn't exist here.
-    [Fact]
+    [Fact(Timeout = 60_000)]
     public async Task UnknownDocument_IsAnEmptyList()
     {
         using var client = ClientWith(TestTokens.CreateForClient(Content));
@@ -49,7 +49,7 @@ public sealed class DocumentTopicTests(ServiceFactory service) : IClassFixture<S
 
     // A user's token and the web host's are for the services' audience, the internal scheme turns them away. Another
     // client with an internal token is no Content.
-    [Fact]
+    [Fact(Timeout = 60_000)]
     public async Task OtherTokens_GetNothing()
     {
         var path = $"/documents/{Guid.NewGuid()}/topics";
@@ -63,7 +63,7 @@ public sealed class DocumentTopicTests(ServiceFactory service) : IClassFixture<S
     }
 
     // Content's token never acts as a user, not even one without data.
-    [Fact]
+    [Fact(Timeout = 60_000)]
     public async Task ContentsToken_IsTurnedAwayEverywhereElse()
     {
         var token = TestTokens.CreateForClient(Content);

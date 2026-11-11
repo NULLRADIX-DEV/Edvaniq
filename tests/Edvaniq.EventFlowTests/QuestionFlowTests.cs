@@ -38,7 +38,7 @@ public sealed class QuestionFlowTests(FlowServices services) : IClassFixture<Flo
 
     private readonly IHost ai = SimulatedAi();
 
-    [Fact]
+    [Fact(Timeout = 180_000)]
     public async Task PastedText_EndsAsQuestionsOfEveryTopicInAssessment()
     {
         var alice = $"alice-{Guid.NewGuid():N}";

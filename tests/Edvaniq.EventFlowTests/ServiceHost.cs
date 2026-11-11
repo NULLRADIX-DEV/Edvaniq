@@ -23,8 +23,8 @@ public sealed class ServiceHost<TEntryPoint>(IReadOnlyDictionary<string, string>
 
         builder.ConfigureTestServices(collection =>
         {
-            collection.PostConfigure<JwtBearerOptions>(
-                JwtBearerDefaults.AuthenticationScheme,
+            // Every scheme, the internal one too.
+            collection.PostConfigureAll<JwtBearerOptions>(
                 options =>
                 {
                     options.TokenValidationParameters.ValidateIssuer = true;
