@@ -42,6 +42,7 @@ public static class InfrastructureExtensions
         builder.Services.AddMessaging<PlanningDbContext>(ServiceKey);
         builder.Services.AddIntegrationEventHandler<ExampleItemCreated, ExampleItemCreatedHandler>();
         builder.Services.AddScoped<IKnownTopics, KnownTopics>();
+        builder.Services.AddScoped<TodayPlans>();
         builder.Services.AddIntegrationEventHandler<TopicsChanged, TopicsChangedHandler>();
 
         // Stays when the example goes.

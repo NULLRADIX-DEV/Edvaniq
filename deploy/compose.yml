@@ -196,6 +196,9 @@ services:
   planning-api:
     <<: *planning
     image: ghcr.io/nullradix-dev/edvaniq/planning-api:sha-${APP_COMMIT:?}
+    environment:
+      <<: *messaging-environment
+      services__learningengine-api__http__0: http://learningengine-api:8080
   planning-migrate:
     <<: *planning
     image: ghcr.io/nullradix-dev/edvaniq/planning-api:sha-${APP_COMMIT:?}

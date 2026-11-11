@@ -115,6 +115,10 @@ public class TopicsChangedHandlerTests
             Task.FromResult<IReadOnlyList<KnownTopic>>(
                 [.. Topics.Where(topic => topic.OwnerId == ownerId && (topic.LearningGoalId == learningGoalId || topicIds.Contains(topic.TopicId)))]);
 
+        public Task<IReadOnlyList<Guid>> ActiveAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Guid>>(
+                [.. Topics.Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId && !topic.Hidden).Select(topic => topic.TopicId).Order()]);
+
         public void Add(TopicsSnapshot snapshot) => Snapshots.Add(snapshot);
 
         public void Add(KnownTopic topic) => Topics.Add(topic);
