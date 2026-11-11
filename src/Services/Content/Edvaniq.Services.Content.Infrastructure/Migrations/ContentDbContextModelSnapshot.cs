@@ -156,8 +156,8 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
 
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.AiUsageDay", b =>
                 {
-                    b.Property<DateOnly>("Day")
-                        .HasColumnType("date");
+                    b.Property<DateTime>("Day")
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Purpose")
                         .HasMaxLength(32)

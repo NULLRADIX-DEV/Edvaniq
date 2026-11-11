@@ -40,7 +40,7 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                 name: "AiUsageDays",
                 columns: table => new
                 {
-                    Day = table.Column<DateOnly>(type: "date", nullable: false),
+                    Day = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     Purpose = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false),
                     Model = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false),
                     PromptVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false),

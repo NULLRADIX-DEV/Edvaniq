@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Edvaniq.Services.Content.Infrastructure.Migrations
 {
     [DbContext(typeof(ContentDbContext))]
-    [Migration("20261111155452_AiUsage")]
+    [Migration("20261111161539_AiUsage")]
     partial class AiUsage
     {
         /// <inheritdoc />
@@ -159,8 +159,8 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
 
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.AiUsageDay", b =>
                 {
-                    b.Property<DateOnly>("Day")
-                        .HasColumnType("date");
+                    b.Property<DateTime>("Day")
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Purpose")
                         .HasMaxLength(32)

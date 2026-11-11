@@ -18,7 +18,7 @@ public class AiUsageDayTests
         sum.Add(Attempt(call, 2, At(23, 59), null));
 
         Assert.Equal(
-            (new DateOnly(2026, 11, 11), 1, 2, 20L, 6L, 0.002m, 1, 3000L),
+            (new DateTime(2026, 11, 11, 0, 0, 0, DateTimeKind.Utc), 1, 2, 20L, 6L, 0.002m, 1, 3000L),
             (sum.Day, sum.Calls, sum.Attempts, sum.InputTokens, sum.OutputTokens, sum.Cost, sum.UnpricedAttempts, sum.DurationMs));
     }
 

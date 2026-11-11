@@ -5,7 +5,7 @@ namespace Edvaniq.Services.Content.Domain;
 // anything that leads back to them. The attempts of users that still exist stay in AiAttempt, a report adds both.
 public sealed class AiUsageDay
 {
-    private AiUsageDay(DateOnly day, string purpose, string model, string promptVersion)
+    private AiUsageDay(DateTime day, string purpose, string model, string promptVersion)
     {
         Day = day;
         Purpose = purpose;
@@ -13,7 +13,8 @@ public sealed class AiUsageDay
         PromptVersion = promptVersion;
     }
 
-    public DateOnly Day { get; private set; }
+    // Midnight UTC of the day.
+    public DateTime Day { get; private set; }
 
     public string Purpose { get; private set; }
 
@@ -37,7 +38,7 @@ public sealed class AiUsageDay
 
     public long DurationMs { get; private set; }
 
-    public static DateOnly DayOf(AiAttempt attempt) => DateOnly.FromDateTime(attempt.CalledAt);
+    public static DateTime DayOf(AiAttempt attempt) => DateTime.SpecifyKind(attempt.CalledAt.Date, DateTimeKind.Utc);
 
     public static AiUsageDay For(AiAttempt attempt) => new(DayOf(attempt), attempt.Purpose, attempt.Model, attempt.PromptVersion);
 

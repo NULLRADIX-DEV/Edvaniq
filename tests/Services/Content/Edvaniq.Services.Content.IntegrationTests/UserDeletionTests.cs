@@ -121,9 +121,11 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         Assert.Equal(new AiUsageTotal(2, 3, 30, 9, 1.25m, 1, 4500), before[day]);
         Assert.Equal(0, Query(db => db.AiAttempts.IgnoreQueryFilters().Count(attempt => attempt.OwnerId == alice)));
         Assert.Equal(1, Query(db => db.AiAttempts.IgnoreQueryFilters().Count(attempt => attempt.OwnerId == bob)));
+        var first = day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var second = first.AddDays(1);
         Assert.Equal(
-            [(day, 1, 2, 0.25m, 1), (day.AddDays(1), 1, 1, 0.5m, 0)],
-            Query(db => db.AiUsageDays.Where(sum => sum.Day == day || sum.Day == day.AddDays(1)).OrderBy(sum => sum.Day).ToList())
+            [(first, 1, 2, 0.25m, 1), (second, 1, 1, 0.5m, 0)],
+            Query(db => db.AiUsageDays.Where(sum => sum.Day == first || sum.Day == second).OrderBy(sum => sum.Day).ToList())
                 .Select(sum => (sum.Day, sum.Calls, sum.Attempts, sum.Cost, sum.UnpricedAttempts)));
     }
 

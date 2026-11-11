@@ -14,9 +14,10 @@ public sealed class AiUsageReport(ContentDbContext db)
     public async Task<IReadOnlyDictionary<DateOnly, AiUsageTotal>> PerDayAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken)
     {
         var attempts = await AttemptsAsync(from, to, cancellationToken);
-        var archived = await db.AiUsageDays.Where(sum => sum.Day >= from && sum.Day <= to).ToListAsync(cancellationToken);
-        return attempts.GroupBy(AiUsageDay.DayOf).Select(day => (day.Key, Total: AiUsageTotal.Of(day)))
-            .Concat(archived.Select(sum => (Key: sum.Day, Total: AiUsageTotal.Of(sum))))
+        var (start, end) = RangeOf(from, to);
+        var archived = await db.AiUsageDays.Where(sum => sum.Day >= start && sum.Day < end).ToListAsync(cancellationToken);
+        return attempts.GroupBy(AiUsageDay.DayOf).Select(day => (Key: DateOnly.FromDateTime(day.Key), Total: AiUsageTotal.Of(day)))
+            .Concat(archived.Select(sum => (Key: DateOnly.FromDateTime(sum.Day), Total: AiUsageTotal.Of(sum))))
             .GroupBy(day => day.Key)
             .ToDictionary(day => day.Key, day => day.Select(part => part.Total).Aggregate(AiUsageTotal.Plus));
     }
@@ -33,12 +34,15 @@ public sealed class AiUsageReport(ContentDbContext db)
 
     private Task<List<AiAttempt>> AttemptsAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken)
     {
-        var start = from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var end = to.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var (start, end) = RangeOf(from, to);
         return db.AiAttempts.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .Where(attempt => attempt.CalledAt >= start && attempt.CalledAt < end)
             .ToListAsync(cancellationToken);
     }
+
+    // From midnight UTC of the first day to midnight after the last.
+    private static (DateTime Start, DateTime End) RangeOf(DateOnly from, DateOnly to) =>
+        (from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc), to.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
 }
 
 // Costs in the provider's billing currency, UnpricedAttempts had none.

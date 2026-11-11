@@ -407,10 +407,10 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
 
         Assert.Equal(
             ["Attempt", "CallId", "CalledAt", "Cost", "DocumentId", "DurationMs", "Id", "InputTokens", "Model", "Outcome", "OutputTokens", "OwnerId", "PromptVersion", "Purpose"],
-            model.FindEntityType(typeof(AiAttempt))!.GetProperties().Select(property => property.Name).Order());
+            model.FindEntityType(typeof(AiAttempt))!.GetProperties().Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
             ["Attempts", "Calls", "Cost", "Day", "DurationMs", "InputTokens", "Model", "OutputTokens", "PromptVersion", "Purpose", "UnpricedAttempts"],
-            model.FindEntityType(typeof(AiUsageDay))!.GetProperties().Select(property => property.Name).Order());
+            model.FindEntityType(typeof(AiUsageDay))!.GetProperties().Select(property => property.Name).Order(StringComparer.Ordinal));
     }
 
     // A database that is away when the usage goes in costs only the log rows: the analysis goes on with a warning.
