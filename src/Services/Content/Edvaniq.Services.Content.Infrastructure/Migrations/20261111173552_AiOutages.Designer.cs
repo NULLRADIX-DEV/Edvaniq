@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Edvaniq.Services.Content.Infrastructure.Migrations
 {
     [DbContext(typeof(ContentDbContext))]
-    [Migration("20261111172141_AiOutages")]
+    [Migration("20261111173552_AiOutages")]
     partial class AiOutages
     {
         /// <inheritdoc />
@@ -316,6 +316,30 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Sections");
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.StoredFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<long>("Length")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("StoredFiles");
                 });
 
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.QuestionPool", b =>
