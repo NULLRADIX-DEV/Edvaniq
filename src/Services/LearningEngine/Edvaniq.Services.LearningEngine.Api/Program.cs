@@ -36,9 +36,32 @@ app.MapGet("/mastery/{topicId:guid}", async (Guid topicId, IMasteries masteries,
         ? Results.Ok(new MasteryResponse(topicId, mastery, Mastery.RuleVersion))
         : Results.NotFound());
 
+// All of the user's topics, or those of one learning goal. A goal that isn't the user's gives an empty list, like one
+// without topics: this service doesn't own learning goals. Parsed by hand, so a broken id is a 400 with its field.
+app.MapGet("/mastery", async (string? learningGoalId, IMasteries masteries, CancellationToken cancellationToken) =>
+{
+    Guid? goal = null;
+    if (learningGoalId is not null)
+    {
+        if (!Guid.TryParse(learningGoalId, out var parsed))
+        {
+            return Results.ValidationProblem(
+                new Dictionary<string, string[]> { ["learningGoalId"] = ["Must be a GUID."] });
+        }
+
+        goal = parsed;
+    }
+
+    var topics = await masteries.ListAsync(goal, cancellationToken);
+    return Results.Ok(new MasteryListResponse(Mastery.RuleVersion, topics));
+});
+
 app.Run();
 
 return 0;
 
 // Whole percent, 0 to 100, and the version of the rule that worked it out.
 internal sealed record MasteryResponse(Guid TopicId, int Mastery, int RuleVersion);
+
+// An object, not a bare list, so fields can be added later.
+internal sealed record MasteryListResponse(int RuleVersion, IReadOnlyList<TopicMastery> Topics);

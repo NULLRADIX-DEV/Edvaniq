@@ -20,4 +20,27 @@ internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) :
             .ToListAsync(cancellationToken);
         return Mastery.Percent(Mastery.Of(records, time.GetUtcNow().UtcDateTime));
     }
+
+    // Two queries however many topics: the topics, then all their records at once (index on owner and topic).
+    public async Task<IReadOnlyList<TopicMastery>> ListAsync(Guid? learningGoalId, CancellationToken cancellationToken)
+    {
+        var topics = db.KnownTopics.AsNoTracking();
+        if (learningGoalId is { } goal)
+        {
+            topics = topics.Where(topic => topic.LearningGoalId == goal);
+        }
+
+        var topicIds = await topics.Select(topic => topic.TopicId).ToListAsync(cancellationToken);
+        if (topicIds.Count == 0)
+        {
+            return [];
+        }
+
+        var records = (await db.LearningRecords.AsNoTracking()
+                .Where(record => topicIds.Contains(record.TopicId))
+                .ToListAsync(cancellationToken))
+            .ToLookup(record => record.TopicId);
+        var now = time.GetUtcNow().UtcDateTime;
+        return [.. topicIds.Order().Select(id => new TopicMastery(id, Mastery.Percent(Mastery.Of(records[id], now))))];
+    }
 }
