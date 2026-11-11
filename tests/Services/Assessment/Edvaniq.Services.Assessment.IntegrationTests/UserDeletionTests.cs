@@ -63,6 +63,7 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         using var scope = service.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AssessmentDbContext>();
         db.TopicsSnapshots.Add(TopicsSnapshot.Create(user, Guid.Empty, Seed.Now));
+        db.DeletedDocuments.Add(DeletedDocument.Of(user, Guid.NewGuid(), Seed.Now));
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
