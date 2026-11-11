@@ -26,4 +26,13 @@ public sealed class PrivacyTests : BunitContext
         Assert.Equal("tristan@nullradix.de", page.Find("a[href='mailto:tristan@nullradix.de']").TextContent);
         Assert.Equal("Impressum", page.Find($"a[href='{Imprint.Url}']").TextContent);
     }
+
+    // The text read from an uploaded file goes to the AI service like a pasted one (#282).
+    [Fact]
+    public void Notice_SaysTheTextOfUploadedFilesGoesToTheAiService()
+    {
+        var text = string.Join(' ', Render<Privacy>().Find("h1").ParentElement!.TextContent.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+        Assert.Contains("Aus PDF-, Text- und Markdown-Dateien liest Edvaniq den Text und übermittelt ihn wie einen eingefügten Text an den KI-Dienst", text);
+    }
 }

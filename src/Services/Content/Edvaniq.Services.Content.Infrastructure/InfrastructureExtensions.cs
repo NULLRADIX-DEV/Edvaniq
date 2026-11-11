@@ -58,6 +58,7 @@ public static class InfrastructureExtensions
         builder.Services.AddFileStore();
         builder.Services.AddMessaging<ContentDbContext>(ServiceKey);
         builder.Services.AddSingleton<AiUsageLog>();
+        builder.Services.AddHostedService<FileTextExtractor>();
         builder.Services.AddHostedService<DocumentSplitter>();
         builder.Services.AddHostedService<DocumentAnalyzer>();
         builder.Services.AddHostedService<QuestionPools>();

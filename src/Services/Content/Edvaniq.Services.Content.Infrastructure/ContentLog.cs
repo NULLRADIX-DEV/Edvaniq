@@ -51,4 +51,17 @@ internal static partial class ContentLog
 
     [LoggerMessage(Level = LogLevel.Information, Message = "File {FileId} had no row and was removed from the file store")]
     public static partial void FileSwept(ILogger logger, Guid fileId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Reading files failed, trying again in {Delay}")]
+    public static partial void ReadRoundFailed(ILogger logger, Exception exception, TimeSpan delay);
+
+    // The type only: a message of the parser could quote the file.
+    [LoggerMessage(Level = LogLevel.Warning, Message = "The file of document {DocumentId} could not be read ({Error}), it is marked as failed")]
+    public static partial void FileUnreadable(ILogger logger, Guid documentId, string error);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "The file of document {DocumentId} is missing from the file store, it is marked as failed")]
+    public static partial void FileMissing(ILogger logger, Guid documentId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Read {Pages} pages and {Characters} characters from the file of document {DocumentId} in {DurationMs} ms")]
+    public static partial void FileRead(ILogger logger, Guid documentId, int pages, int characters, long durationMs);
 }
