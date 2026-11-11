@@ -231,7 +231,7 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
         var (ready, pending, unknown) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         Seed(KnownTopic.Create(alice, ready, goal, hidden: false));
         Seed(KnownTopic.Create(alice, pending, goal, hidden: false));
-        Seed(KnownTopic.Create(alice, unknown, goal, hidden: false));
+        Seed(KnownTopic.Create(alice, unknown, goal, hidden: false), withQuestionPool: false);
         service.Assessment.Set(token, pending, "notReady");
         service.LearningEngine.Set(token, ready, 70);
         service.LearningEngine.Set(token, pending, 5, "weakness");
@@ -414,14 +414,14 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
         return (await response.Content.ReadFromJsonAsync<Plan>(cancellationToken))!;
     }
 
-    private void Seed(KnownTopic topic)
+    private void Seed(KnownTopic topic, bool withQuestionPool = true)
     {
         using var scope = service.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<PlanningDbContext>();
         db.KnownTopics.Add(topic);
         db.SaveChanges();
 
-        if (tokens.TryGetValue(topic.OwnerId, out var token))
+        if (withQuestionPool && tokens.TryGetValue(topic.OwnerId, out var token))
         {
             service.Assessment.Set(token, topic.TopicId);
         }
