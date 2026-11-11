@@ -3,7 +3,8 @@ using Edvaniq.Services.Planning.Domain;
 
 namespace Edvaniq.Services.Planning.Api;
 
-// Today's plan of the user from the token. Worked out on every call, nothing is stored (#375).
+// Today's plan of the user from the token. The blocks done today stay as they were, the open ones are worked out on
+// every call (#375).
 internal static class PlanEndpoints
 {
     public static IEndpointRouteBuilder MapPlanEndpoints(this IEndpointRouteBuilder app)
@@ -14,8 +15,8 @@ internal static class PlanEndpoints
             return new TodayPlanResponse(
                 today.Plan.StudyDay,
                 today.LearningGoalId,
-                [.. today.Plan.Blocks.Select(block => new BlockResponse(block.TopicId, block.Minutes, KindOf(block.Kind)))],
-                today.Plan.Empty switch
+                [.. today.Blocks.Select(entry => new BlockResponse(entry.Block.TopicId, entry.Block.Minutes, KindOf(entry.Block.Kind), entry.Id, entry.Done))],
+                (today.Blocks.Count > 0 ? null : today.Plan.Empty) switch
                 {
                     TodayPlanEmpty.NoTopics => "noTopics",
                     TodayPlanEmpty.AllMastered => "allMastered",
@@ -53,5 +54,6 @@ internal sealed record TodayPlanResponse(
     bool QuestionPoolsAvailable,
     IReadOnlyList<Guid> NotReadyTopicIds);
 
-// Kind is "learn" or "review".
-internal sealed record BlockResponse(Guid TopicId, int Minutes, string Kind);
+// Kind is "learn" or "review". Id stays the same for the same block on every call, Done says whether its session was
+// finished (#375).
+internal sealed record BlockResponse(Guid TopicId, int Minutes, string Kind, Guid Id, bool Done);

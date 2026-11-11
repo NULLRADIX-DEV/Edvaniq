@@ -24,6 +24,8 @@ public sealed class PlanningDbContext(DbContextOptions<PlanningDbContext> option
 
     public DbSet<DailyBudgetSetting> DailyBudgets => Set<DailyBudgetSetting>();
 
+    public DbSet<DoneBlock> DoneBlocks => Set<DoneBlock>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ExampleItem>().Property(item => item.Text).HasMaxLength(ExampleItem.TextMaxLength);
@@ -59,5 +61,17 @@ public sealed class PlanningDbContext(DbContextOptions<PlanningDbContext> option
 
         // One stored budget per user.
         modelBuilder.Entity<DailyBudgetSetting>().HasKey(item => item.OwnerId);
+
+        // Done blocks (#375). Their id comes from the plan. Deleting the goal deletes its blocks.
+        var done = modelBuilder.Entity<DoneBlock>();
+        done.Property(item => item.Id).ValueGeneratedNever();
+        done.Property(item => item.Kind).HasConversion<string>().HasMaxLength(16);
+        done.Property(item => item.StudyDay)
+            .HasConversion(new ValueConverter<DateOnly, DateTime>(
+                date => date.ToDateTime(TimeOnly.MinValue),
+                stored => DateOnly.FromDateTime(stored)))
+            .HasColumnType("date");
+        done.HasIndex(item => new { item.OwnerId, item.LearningGoalId, item.StudyDay });
+        done.HasOne<LearningGoal>().WithMany().HasForeignKey(item => item.LearningGoalId).OnDelete(DeleteBehavior.Cascade);
     }
 }

@@ -121,6 +121,48 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                     b.ToTable("DailyBudgets");
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Planning.Domain.DoneBlock", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("DoneAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)");
+
+                    b.Property<Guid>("LearningGoalId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("Minutes")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<DateTime>("StudyDay")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LearningGoalId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("OwnerId", "LearningGoalId", "StudyDay");
+
+                    b.ToTable("DoneBlocks");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Planning.Domain.ExampleItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -255,6 +297,15 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                     b.HasIndex("OwnerId");
 
                     b.ToTable("TopicsSnapshots");
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Planning.Domain.DoneBlock", b =>
+                {
+                    b.HasOne("Edvaniq.Services.Planning.Domain.LearningGoal", null)
+                        .WithMany()
+                        .HasForeignKey("LearningGoalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }
