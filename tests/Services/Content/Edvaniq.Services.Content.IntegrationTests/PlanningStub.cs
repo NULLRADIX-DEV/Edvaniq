@@ -55,13 +55,20 @@ public sealed class PlanningStub : HttpMessageHandler
             return new HttpResponseMessage(status);
         }
 
-        if (request.Method != HttpMethod.Post || request.RequestUri.AbsolutePath != "/learning-goals/default")
+        var (level, outputLanguage) = profiles.GetValueOrDefault(user);
+        if (request.Method == HttpMethod.Post && request.RequestUri.AbsolutePath == "/learning-goals/default")
         {
-            return new HttpResponseMessage(HttpStatusCode.NotFound);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { id = GoalOf(user), level, outputLanguage }) };
         }
 
-        var (level, outputLanguage) = profiles.GetValueOrDefault(user);
-        return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { id = GoalOf(user), level, outputLanguage }) };
+        // Only the user's own goal is found, someone else's looks like none.
+        return request.Method == HttpMethod.Get
+            && request.RequestUri.AbsolutePath.Split('/') is ["", "learning-goals", var id]
+            && Guid.TryParse(id, out var goal)
+            && goals.TryGetValue(user, out var own)
+            && own == goal
+            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { id = goal, level, outputLanguage }) }
+            : new HttpResponseMessage(HttpStatusCode.NotFound);
     }
 
     // The sub of a bearer token, unchecked: the service checked it before it asked.

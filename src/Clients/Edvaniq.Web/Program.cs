@@ -64,6 +64,7 @@ else
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseApiProblems();
 app.UseOriginCheck();
+app.UseUploadLimit();
 app.UseHttpsRedirection();
 
 app.UseAuthentication();

@@ -14,6 +14,7 @@ public sealed class HttpLearningMaterial(HttpClient http) : ILearningMaterial
 {
     public const string DocumentsPath = "api/content/documents";
     public const string TopicsPath = "api/knowledge/topics";
+    public const string FilesPath = "api/content/documents/files";
 
     // The most Content takes, counted like .NET and the browser count a string's length.
     public const int TextMaxLength = 200_000;
@@ -47,8 +48,25 @@ public sealed class HttpLearningMaterial(HttpClient http) : ILearningMaterial
     public Task<CallOutcome<DocumentInfo>> RetryAsync(Guid documentId, CancellationToken cancellationToken = default) =>
         CallAsync(token => http.PostAsync($"{DocumentsPath}/{documentId}/retry", content: null, token), MaterialJson.Default.DocumentInfo, cancellationToken);
 
+    // The file streams up as it is read, as multipart under the name "file". Content judges it by its bytes. A file too
+    // large comes back as TooLarge without a message, the page words it.
+    public Task<CallOutcome<DocumentInfo>> UploadAsync(string fileName, Stream content, CancellationToken cancellationToken = default) =>
+        CallAsync(
+            async token =>
+            {
+                using var form = new MultipartFormDataContent();
+                form.Add(new StreamContent(content), "file", fileName);
+                return await http.PostAsync(FilesPath, form, token);
+            },
+            MaterialJson.Default.DocumentInfo,
+            cancellationToken,
+            tooLarge: []);
+
     private static Task<CallOutcome<T>> CallAsync<T>(
-        Func<CancellationToken, Task<HttpResponseMessage>> send, JsonTypeInfo<T> answer, CancellationToken cancellationToken) =>
+        Func<CancellationToken, Task<HttpResponseMessage>> send,
+        JsonTypeInfo<T> answer,
+        CancellationToken cancellationToken,
+        IReadOnlyList<string>? tooLarge = null) =>
         HostCall.GuardAsync(
             async () =>
             {
@@ -58,8 +76,8 @@ public sealed class HttpLearningMaterial(HttpClient http) : ILearningMaterial
                     case HttpStatusCode.Unauthorized:
                         return CallOutcome<T>.SignedOut;
                     case HttpStatusCode.RequestEntityTooLarge:
-                        return new CallOutcome<T>(CallResult.TooLarge, Messages: [TextTooLong]);
-                    case HttpStatusCode.BadRequest:
+                        return new CallOutcome<T>(CallResult.TooLarge, Messages: tooLarge ?? [TextTooLong]);
+                    case HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity:
                         var (messages, traceId) = await RejectionAsync(response, cancellationToken);
                         return messages.Count > 0
                             ? new CallOutcome<T>(CallResult.Rejected, Messages: messages)

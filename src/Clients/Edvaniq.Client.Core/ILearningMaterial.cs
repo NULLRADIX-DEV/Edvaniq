@@ -9,6 +9,10 @@ public interface ILearningMaterial
     // A new document in status Uploaded. A text Content refuses comes back as Rejected with Content's messages.
     Task<CallOutcome<DocumentInfo>> PasteAsync(string? title, string text, CancellationToken cancellationToken = default);
 
+    // A new document in status Uploaded from a file, in the default learning goal. A file Content refuses comes back as
+    // Rejected or TooLarge with Content's message.
+    Task<CallOutcome<DocumentInfo>> UploadAsync(string fileName, Stream content, CancellationToken cancellationToken = default);
+
     // Starts the analysis of a failed document again, the same document goes on where it failed. One that isn't failed
     // (any more) comes back as Failed, the newest state tells what happened.
     Task<CallOutcome<DocumentInfo>> RetryAsync(Guid documentId, CancellationToken cancellationToken = default);
@@ -25,7 +29,15 @@ public enum DocumentStatus
     Failed,
 }
 
-public sealed record DocumentInfo(Guid Id, string Title, DocumentStatus Status, DateTimeOffset CreatedAt, string? FailureReason = null);
+// Source says where it came from. One from a file stays Uploaded until Content can read its text (#282).
+public sealed record DocumentInfo(
+    Guid Id, string Title, DocumentStatus Status, DateTimeOffset CreatedAt, string? FailureReason = null, DocumentSource Source = DocumentSource.Text);
+
+public enum DocumentSource
+{
+    Text,
+    File,
+}
 
 // A topic of the upper level with its subtopics. DocumentId names the document whose analysis brought it first, null for
 // a topic that came another way. Later documents only add sections to it.

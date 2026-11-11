@@ -59,13 +59,13 @@ public sealed class DocumentSplitter(
         return waiting.Count;
     }
 
-    // The oldest uploaded documents of all users.
+    // The oldest uploaded documents of all users. One from a file waits for its text (#282).
     public async Task<IReadOnlyList<Guid>> WaitingAsync(CancellationToken cancellationToken)
     {
         using var scope = scopes.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<ContentDbContext>().Documents
             .IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
-            .Where(document => document.Status == DocumentStatus.Uploaded)
+            .Where(document => document.Status == DocumentStatus.Uploaded && document.FileId == null)
             .OrderBy(document => document.CreatedAt)
             .Select(document => document.Id)
             .Take(Batch)
@@ -78,7 +78,7 @@ public sealed class DocumentSplitter(
         var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
         var document = await db.Documents.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .SingleOrDefaultAsync(item => item.Id == documentId, cancellationToken);
-        if (document?.Status != DocumentStatus.Uploaded)
+        if (document is not { Status: DocumentStatus.Uploaded, IsFromFile: false })
         {
             return;
         }
