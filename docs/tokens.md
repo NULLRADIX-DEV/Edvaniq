@@ -59,3 +59,11 @@ dotnet Edvaniq.Services.Identity.Api.dll account set <name> < passwort.txt
 ```
 
 Das Passwort kommt nur über die Standardeingabe, nie als Argument, sonst stünde es in der Prozessliste und der Shell-History. Ein Zeilenumbruch am Ende gehört nicht dazu. Gibt es das Konto schon, bekommt es das neue Passwort und behält seine ID, der Befehl lässt sich also beliebig oft ausführen. Er schreibt eine Zeile wie `created ben 3f2b9c1e-8d4a-4e0f-9b6a-2c7d1e5f4a10` oder `updated ben …` und endet mit 0. Ist der Name oder das Passwort ungültig, endet er mit 2 und nennt die Regel, bei einem anderen Fehler mit 1. Der Name besteht aus Kleinbuchstaben, Ziffern, Punkt, Bindestrich und Unterstrich, höchstens 64 Zeichen.
+
+## Teamkonto löschen
+
+```bash
+dotnet Edvaniq.Services.Identity.Api.dll account delete <name>
+```
+
+Der Befehl entfernt das Konto und schickt im selben Speichern `UserDeleted` mit der ID des Kontos, also dem `sub` seiner Tokens. Daraufhin entfernt jeder Service alle Daten des Nutzers ([Nutzer löschen](service-internals.md#nutzer-löschen)). Gesendet wird über die Outbox: Der Befehl selbst braucht keinen Broker, die laufende Identity-Api schickt das Ereignis. Er schreibt nur `deleted <name>` und endet mit 0. Gibt es den Namen nicht, schreibt er `no account <name>`, schickt nichts und endet ebenfalls mit 0, ein zweiter Lauf ist also harmlos. Bei einem anderen Fehler endet er mit 1.

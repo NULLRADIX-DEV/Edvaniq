@@ -1,0 +1,161 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+
+using Edvaniq.BuildingBlocks.AI;
+using Edvaniq.BuildingBlocks.Domain;
+using Edvaniq.BuildingBlocks.Messaging;
+using Edvaniq.Services.Content.Infrastructure;
+using Edvaniq.Services.Content.Infrastructure.Ai;
+using Edvaniq.Services.Identity.Contracts;
+using Edvaniq.Testing;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+namespace Edvaniq.EventFlowTests;
+
+// The way of a deleted user (#201): Identity sends UserDeleted, and Planning, Content, Knowledge, Assessment and
+// LearningEngine each remove every row of the user, in every table with an owner. Another user keeps everything, and
+// the same deletion a second time changes nothing.
+[Collection(FlowCollection.Name)]
+public sealed class UserDeletionFlowTests(FlowServices services) : IDisposable
+{
+    private const string Text = """
+        # Photosynthese
+        ## Lichtreaktion
+        Licht spaltet Wasser.
+
+        # Zellatmung
+        Zucker wird zu Energie.
+        """;
+
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(60);
+
+    private readonly IHost ai = SimulatedAi();
+
+    [Fact(Timeout = 240_000)]
+    public async Task DeletedUser_HasNoRowLeftInAnyService_OthersKeepTheirs()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        var bob = $"bob-{Guid.NewGuid():N}";
+        await LearnAsync(alice);
+        await LearnAsync(bob);
+        var ofBob = Rows(bob);
+        Assert.All(ofBob, service => Assert.True(service.Value > 0, $"{service.Key} has nothing of Bob to keep."));
+        Assert.All(Rows(alice), service => Assert.True(service.Value > 0, $"{service.Key} has nothing of Alice to delete."));
+
+        await PublishAsync(new UserDeleted(alice), Guid.NewGuid());
+
+        await WaitForAsync(() => Task.FromResult(Rows(alice).Values.All(count => count == 0)), "A service kept rows of the deleted user.");
+        Assert.Equal(ofBob, Rows(bob));
+
+        await PublishAsync(new UserDeleted(alice), Guid.NewGuid());
+        await PublishAsync(new UserDeleted(bob[..^1]), Guid.NewGuid());
+        await Task.Delay(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+        Assert.All(Rows(alice).Values, count => Assert.Equal(0, count));
+        Assert.Equal(ofBob, Rows(bob));
+    }
+
+    public void Dispose() => ai.Dispose();
+
+    private IChatClient Chat => ai.Services.GetRequiredService<IChatClient>();
+
+    // Content's AI on the simulated provider.
+    private static IHost SimulatedAi()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
+        builder.Configuration.AddInMemoryCollection([KeyValuePair.Create("Ai:Provider", (string?)SimulatedChatClient.Provider)]);
+        builder.AddContentAi();
+        return builder.Build();
+    }
+
+    // Leaves data of the user in every service: a learning goal, a document with its topics and questions, and an
+    // answer with its learning record.
+    private async Task LearnAsync(string user)
+    {
+        var token = TestTokens.Create(user);
+        Guid documentId;
+        using (var content = Client(services.Content.CreateClient(), token))
+        {
+            using var response = await content.PostAsJsonAsync("/documents", new { text = Text }, TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            documentId = (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("id").GetGuid();
+        }
+
+        await ActivatorUtilities.CreateInstance<DocumentSplitter>(services.Content.Services).SplitAsync(documentId, TestContext.Current.CancellationToken);
+        await ActivatorUtilities.CreateInstance<DocumentAnalyzer>(services.Content.Services, Chat).AnalyzeAsync(documentId, TestContext.Current.CancellationToken);
+        var pools = ActivatorUtilities.CreateInstance<QuestionPools>(services.Content.Services, Chat);
+        await WaitForAsync(
+            async () => await pools.FinishAsync(documentId, TestContext.Current.CancellationToken),
+            "The worker never got the topics from Knowledge.");
+
+        var topic = services.QueryKnowledge(db => db.Topics.IgnoreQueryFilters().First(item => item.DocumentId == documentId && item.ParentId == null).Id);
+        await WaitForAsync(
+            () => Task.FromResult(services.QueryAssessment(db => db.Questions.IgnoreQueryFilters().Any(question => question.OwnerId == user && question.TopicId == topic))),
+            "Assessment did not take the questions over.");
+        using var assessment = Client(services.Assessment.CreateClient(), token);
+        using var asked = await assessment.PostAsJsonAsync("/attempts", new { topicId = topic }, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, asked.StatusCode);
+        var attempt = (await asked.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("id").GetGuid();
+        using var graded = await assessment.PostAsJsonAsync(
+            $"/attempts/{attempt}/answer", new { showSolution = true, responseTimeMs = 5000 }, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, graded.StatusCode);
+        await WaitForAsync(
+            () => Task.FromResult(services.QueryLearningEngine(db => db.LearningRecords.IgnoreQueryFilters().Any(record => record.OwnerId == user))),
+            "LearningEngine has no learning record of the answer.");
+    }
+
+    // Into Identity's stream, like its dispatcher would.
+    private async Task PublishAsync(UserDeleted deleted, Guid messageId)
+    {
+        await services.Broker.EnsureStreamAsync(
+            new StreamSpec(EventRoute.StreamOf("identity"), EventRoute.SubjectsOf("identity")), TestContext.Current.CancellationToken);
+        await services.Broker.PublishAsync(
+            new OutgoingMessage(EventRoute.For(typeof(UserDeleted)).Subject, messageId, JsonSerializer.Serialize(deleted, JsonSerializerOptions.Web)),
+            TestContext.Current.CancellationToken);
+    }
+
+    // The rows of the user per service, over every table with an owner.
+    private Dictionary<string, int> Rows(string user) => new()
+    {
+        ["planning"] = services.QueryPlanning(db => OwnedRows(db, user)),
+        ["content"] = services.QueryContent(db => OwnedRows(db, user)),
+        ["knowledge"] = services.QueryKnowledge(db => OwnedRows(db, user)),
+        ["assessment"] = services.QueryAssessment(db => OwnedRows(db, user)),
+        ["learningengine"] = services.QueryLearningEngine(db => OwnedRows(db, user)),
+    };
+
+    private static int OwnedRows(DbContext db, string user) =>
+        db.Model.GetEntityTypes()
+            .Select(entity => entity.ClrType)
+            .Where(typeof(IOwnedByUser).IsAssignableFrom)
+            .Sum(type => (int)typeof(UserDeletionFlowTests)
+                .GetMethod(nameof(Count), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+                .MakeGenericMethod(type)
+                .Invoke(null, [db, user])!);
+
+    private static int Count<T>(DbContext db, string user) where T : class, IOwnedByUser =>
+        db.Set<T>().IgnoreQueryFilters().Count(row => row.OwnerId == user);
+
+    private static HttpClient Client(HttpClient client, string token)
+    {
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    // Consumers, dispatchers and the worker run in the background.
+    private static async Task WaitForAsync(Func<Task<bool>> condition, string because)
+    {
+        var deadline = DateTime.UtcNow + Timeout;
+        while (!await condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, because);
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+        }
+    }
+}

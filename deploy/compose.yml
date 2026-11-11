@@ -53,9 +53,8 @@ x-identity: &identity
     - path: identity.env
       required: true
   networks: [inner, data]
-  depends_on:
-    db:
-      condition: service_healthy
+  environment: *messaging-environment
+  depends_on: *db-and-broker
 
 x-planning: &planning
   <<: *app
@@ -183,12 +182,13 @@ services:
       - path: identity-tokens.env
         required: true
     environment:
-      <<: *app-environment
+      <<: *messaging-environment
       Tokens__Issuer: *issuer
   identity-migrate:
     <<: *identity
     image: ghcr.io/nullradix-dev/edvaniq/identity-api:sha-${APP_COMMIT:?}
     command: ["migrate"]
+    depends_on: *db-only
     profiles: [migrate]
     restart: "no"
     healthcheck:
