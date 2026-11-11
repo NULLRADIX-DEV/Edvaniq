@@ -1,5 +1,6 @@
 using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.Services.Knowledge.Application;
+using Edvaniq.Services.Knowledge.Domain;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -18,6 +19,11 @@ internal sealed class AnalyzedTopics(KnowledgeDbContext db) : IAnalyzedTopics
         db.Topics.AddRange(import.Topics);
         db.TopicSections.AddRange(import.Sections);
     }
+
+    public async Task<IReadOnlyList<Topic>> OfGoalAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
+        await db.Topics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId)
+            .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<DocumentTopic>> OfDocumentAsync(Guid documentId, CancellationToken cancellationToken)
     {

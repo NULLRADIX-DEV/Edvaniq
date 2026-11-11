@@ -143,6 +143,17 @@ public sealed class HttpLearningMaterialTests
         Assert.Equal(CallResult.Failed, outcome.Result);
     }
 
+    // Content can't get the learning goal from Planning: the text did not get through, the page offers to send it again.
+    [Fact]
+    public async Task PasteWithoutPlanning_DidNotGetThrough_AndPassesTheTraceOn()
+    {
+        var material = Material(Problem(HttpStatusCode.ServiceUnavailable, $$"""{"status":503,"traceId":"{{TraceId}}"}"""));
+
+        var outcome = await material.PasteAsync(null, "Text", TestContext.Current.CancellationToken);
+
+        Assert.Equal((CallResult.Failed, TraceId), (outcome.Result, outcome.TraceId));
+    }
+
     // nginx refuses a body above its limit before anything else sees it.
     [Fact]
     public async Task TooLarge_SaysTheLimit()

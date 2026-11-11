@@ -26,6 +26,9 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
     // Answers the worker's question pools in place of Knowledge. The Api itself never asks Knowledge.
     public KnowledgeStub Knowledge { get; } = new();
 
+    // Answers the Api's question for the default goal in place of Planning, behind the real client.
+    public PlanningStub Planning { get; } = new();
+
     public async ValueTask InitializeAsync()
     {
         ConnectionString = await mysql.CreateDatabaseAsync(InfrastructureExtensions.DatabaseName);
@@ -38,6 +41,7 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>
         builder
             .UseSetting($"ConnectionStrings:{InfrastructureExtensions.DatabaseName}", ConnectionString)
+            .UseSetting("services:planning-api:http:0", "http://planning-api")
             .ConfigureTestServices(services =>
             {
                 services.PostConfigure<JwtBearerOptions>(
@@ -52,5 +56,6 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
                 services.AddInMemoryTransport();
                 services.AddSingleton<ILoggerProvider>(Logs);
                 services.AddSingleton<IKnowledgeTopics>(Knowledge);
+                services.AddHttpClient<IDefaultLearningGoal, PlanningLearningGoals>().ConfigurePrimaryHttpMessageHandler(() => Planning);
             });
 }

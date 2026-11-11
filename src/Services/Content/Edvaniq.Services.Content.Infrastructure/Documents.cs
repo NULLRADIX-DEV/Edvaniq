@@ -9,9 +9,9 @@ namespace Edvaniq.Services.Content.Infrastructure;
 // No query here mentions the owner: the filter of ServiceDbContext adds it to every one of them.
 internal sealed class Documents(ContentDbContext db, ICurrentUser currentUser, TimeProvider time) : IDocuments
 {
-    public async Task<Document> PasteAsync(string? title, string text, CancellationToken cancellationToken)
+    public async Task<Document> PasteAsync(Guid learningGoalId, string? title, string text, CancellationToken cancellationToken)
     {
-        var document = Document.Paste(currentUser.Id, title, text, time.GetUtcNow().UtcDateTime);
+        var document = Document.Paste(currentUser.Id, learningGoalId, title, text, time.GetUtcNow().UtcDateTime);
         db.Documents.Add(document);
         await db.SaveChangesAsync(cancellationToken);
 

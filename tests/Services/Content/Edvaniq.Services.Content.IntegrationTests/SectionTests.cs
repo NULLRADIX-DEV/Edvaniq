@@ -61,7 +61,7 @@ public sealed class SectionTests(ServiceFactory service) : IClassFixture<Service
     {
         // The API turns such a text away, so it goes straight into the database.
         var alice = $"alice-{Guid.NewGuid():N}";
-        var document = Document.Paste(alice, "Leer", " \r\n\t ", DateTime.UtcNow);
+        var document = Document.Paste(alice, Guid.NewGuid(), "Leer", " \r\n\t ", DateTime.UtcNow);
         using (var scope = service.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();

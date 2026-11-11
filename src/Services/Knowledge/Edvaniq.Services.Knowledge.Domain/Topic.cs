@@ -64,4 +64,7 @@ public sealed class Topic : IOwnedByUser
 
     // Call it only with a name that passed CheckName.
     public void Rename(string name) => Name = name.Trim();
+
+    // The topic goes to another learning goal and keeps its id, so whatever points to it stays valid.
+    public void MoveTo(Guid learningGoalId) => LearningGoalId = learningGoalId;
 }

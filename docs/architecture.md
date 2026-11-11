@@ -256,7 +256,7 @@ Danach fragt `QuestionPools` die KI je Thema nach Fragen, aber nur für Themen, 
 
 Erst mit allen Fragen wird das Dokument `Ready`. Im selben Speichern stehen die Einträge in `QuestionPools` und je Thema ein `ItemsGenerated` mit der Themen-ID. Die `itemId` jeder Frage steht schon im gespeicherten Ereignis. Die Fragen selbst behält Content nicht, sie gehören ab dann Assessment. Stoppt der Worker vorher, bleibt das Dokument `Analyzing` und kommt in der nächsten Runde wieder dran. Arbeiten zwei Worker am selben Dokument, scheitert der zweite beim Speichern am Status oder am Schlüssel des Fragenpools, und seine Ereignisse gehen mit zurück. Bekommt ein Thema auch beim zweiten Mal keine gültige Frage, oder fällt die KI aus, wird das Dokument `Failed`, und keine Frage des Dokuments geht hinaus.
 
-Das Ereignis trägt die Themen als flache Liste. `Parent` ist der Index eines Vorschlags weiter vorn, `SectionIds` sind die Abschnitte des Themas, und jeder Abschnitt gehört genau einem Thema. Das Lernziel kommt mit dem Standard-Lernziel (#215), bestehende Themen als Ziel mit den stabilen Themen-IDs (#208).
+Das Ereignis trägt die Themen als flache Liste. `Parent` ist der Index eines Vorschlags weiter vorn, `SectionIds` sind die Abschnitte des Themas, und jeder Abschnitt gehört genau einem Thema. Dazu kommt das Lernziel des Dokuments ([Standard-Lernziel](#standard-lernziel)). Bestehende Themen als Ziel kommen mit den stabilen Themen-IDs (#208).
 
 Der Worker liest Dokumente aller Nutzer und fragt deshalb mit `IgnoreQueryFilters([ServiceDbContext.OwnerFilter])`. Einen angemeldeten Nutzer hat er nicht, eine Abfrage unter dem Filter scheitert deshalb, statt alle Zeilen zu zeigen. Ereignisse sendet er über die Outbox, empfängt aber keine: Die empfängt die API, und ein zweiter Empfänger würde jedes doppelt verarbeiten. Die Outbox leeren API und Worker beide, jeder nimmt andere Zeilen.
 
@@ -278,7 +278,13 @@ Bis der Lernziel-Assistent in M2 kommt, hat jeder Nutzer genau ein Lernziel, das
 
 Die Id des Standard-Lernziels leitet Planning aus der Nutzer-ID ab (`LearningGoal.DefaultIdFor`). Kommen zwei erste Aufrufe gleichzeitig, legen beide dieselbe Zeile an, die Datenbank lässt nur eine durch, und der andere liest sie danach. Weil jeder mit der Nutzer-ID die Id ausrechnen kann, schützt sie nichts. Wer ein Lernziel sieht, regelt allein der Owner-Filter. In M2 bekommt `LearningGoal` Name, Art und Prüfung dazu. Das Standard-Lernziel wird damit zu einem echten Lernziel mit derselben Id, und was darauf verweist, bleibt gleich. Es gehört dem Nutzer und geht mit `UserDeleted`.
 
-Bis #215 kennt `DocumentAnalyzed` kein Lernziel. Knowledge hängt die Themen deshalb an `Guid.Empty`, und die Empfänger von `TopicsChanged` übernehmen das so.
+### Beim Einfügen eines Textes
+
+`POST /documents` in Content fragt Planning nach dem Standard-Lernziel, bevor es das Dokument speichert (`IDefaultLearningGoal`). Nur dieser eine HttpClient bekommt das Token des Nutzers mit (`ForwardUserToken`), sonst nichts aus der Anfrage. Antwortet Planning nicht oder mit einem Fehler, antwortet Content mit 503 und speichert nichts. Der Nutzer schickt den Text dann einfach noch einmal. Weil er dabei am Knopf wartet, hat der Aufruf eigene Grenzen statt der Standard-Resilience: höchstens drei Versuche zu je 2 s und nach 8 s ist Schluss. Wiederholen ist hier in Ordnung, weil der Endpunkt in Planning idempotent ist.
+
+Das Dokument merkt sich das Lernziel (`Document.LearningGoalId`), und der Worker gibt es in `DocumentAnalyzed` weiter. Knowledge hängt die Themen daran, und mit `TopicsChanged` erfahren es Planning, Assessment und LearningEngine. Fragen tragen kein eigenes Lernziel. Sie hängen an der Themen-ID, und das Thema an seinem Lernziel.
+
+Dokumente und Themen von vor dem Standard-Lernziel haben keins: Dokumente mit `null`, Themen mit `Guid.Empty`. Auch eine Nachricht ohne Lernziel, die beim Deploy noch unterwegs ist, landet dort. Bekommt Knowledge das erste `DocumentAnalyzed` mit Lernziel, zieht es im selben Speichern alle Themen des Nutzers ohne Lernziel dorthin um. Dann schickt es zwei `TopicsChanged`, eins für das Lernziel mit allen Themen und eins für `Guid.Empty` ohne Themen. Die IDs bleiben, Fragen und Lern-Nachweise bleiben also gültig. Die Empfänger brauchen dafür nichts Eigenes, denn ein Thema, das in einem anderen Lernziel auftaucht, ziehen sie ohnehin mit um. Danach hat der Nutzer keine Themen ohne Lernziel mehr, und spätere Analysen ziehen nichts mehr um.
 
 ## Starten
 

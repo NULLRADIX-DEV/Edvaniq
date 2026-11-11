@@ -53,7 +53,8 @@ var planningApi = AddService<Projects.Edvaniq_Services_Planning_Api>("planning-a
     .WithMessaging(nats);
 var contentApi = AddService<Projects.Edvaniq_Services_Content_Api>("content-api", contentDb)
     .WaitForCompletion(contentMigrate)
-    .WithMessaging(nats);
+    .WithMessaging(nats)
+    .WithReference(planningApi);
 var knowledgeApi = AddService<Projects.Edvaniq_Services_Knowledge_Api>("knowledge-api", knowledgeDb)
     .WaitForCompletion(knowledgeMigrate)
     .WithMessaging(nats);

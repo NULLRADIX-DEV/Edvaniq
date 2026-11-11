@@ -24,7 +24,7 @@ namespace Edvaniq.EventFlowTests;
 
 // Content, Knowledge and Knowledge's three receivers in one process, each with its own database and user, all on the
 // same NATS. The services know nothing of each other, only the broker connects them, and Content asks Knowledge over
-// HTTP with its own internal token.
+// HTTP with its own internal token, Planning with the token of the user who pastes.
 public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : IAsyncLifetime
 {
     private readonly List<IAsyncDisposable> hosts = [];
@@ -34,6 +34,8 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
     public WebApplicationFactory<content::Program> Content { get; private set; } = null!;
 
     public WebApplicationFactory<assessment::Program> Assessment { get; private set; } = null!;
+
+    public WebApplicationFactory<planning::Program> Planning { get; private set; } = null!;
 
     public IReadOnlyList<Receiver> Receivers { get; private set; } = [];
 
@@ -47,9 +49,17 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
         // What the worker registers with its token, against the Knowledge above.
         var knowledge = Knowledge.CreateClient();
         knowledge.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.CreateForClient("content"));
+        // Content asks the Planning above for the default goal, through its real client with the user's token.
         Content = await StartAsync<content::Program, ContentInfra.ContentDbContext>(
             ContentInfra.InfrastructureExtensions.DatabaseName,
-            services => services.AddSingleton<IKnowledgeTopics>(new ContentInfra.KnowledgeTopics(knowledge)));
+            services =>
+            {
+                services.AddSingleton<IKnowledgeTopics>(new ContentInfra.KnowledgeTopics(knowledge));
+                services.AddHttpClient<IDefaultLearningGoal, ContentInfra.PlanningLearningGoals>()
+                    .ConfigurePrimaryHttpMessageHandler(() => planningHost.Server.CreateHandler());
+            },
+            new() { ["services:planning-api:http:0"] = "http://planning-api" });
+        Planning = planningHost;
         var learningEngineHost = await StartAsync<learningengine::Program, LearningEngineInfra.LearningEngineDbContext>(LearningEngineInfra.InfrastructureExtensions.DatabaseName);
 
         Receivers =
@@ -57,15 +67,18 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
             Receiver.For<PlanningInfra.PlanningDbContext>(
                 PlanningInfra.InfrastructureExtensions.ServiceKey, planningHost.Services,
                 (db, user) => db.KnownTopics.IgnoreQueryFilters().Where(topic => topic.OwnerId == user).Select(topic => topic.TopicId).ToList(),
-                (db, user) => db.TopicsSnapshots.IgnoreQueryFilters().Where(snapshot => snapshot.OwnerId == user).Select(snapshot => (DateTime?)snapshot.ChangedAt).SingleOrDefault()),
+                (db, user) => db.KnownTopics.IgnoreQueryFilters().Where(topic => topic.OwnerId == user).Select(topic => topic.LearningGoalId).Distinct().ToList(),
+                (db, user) => db.TopicsSnapshots.IgnoreQueryFilters().Where(snapshot => snapshot.OwnerId == user).Max(snapshot => (DateTime?)snapshot.ChangedAt)),
             Receiver.For<AssessmentInfra.AssessmentDbContext>(
                 AssessmentInfra.InfrastructureExtensions.ServiceKey, assessmentHost.Services,
                 (db, user) => db.KnownTopics.IgnoreQueryFilters().Where(topic => topic.OwnerId == user).Select(topic => topic.TopicId).ToList(),
-                (db, user) => db.TopicsSnapshots.IgnoreQueryFilters().Where(snapshot => snapshot.OwnerId == user).Select(snapshot => (DateTime?)snapshot.ChangedAt).SingleOrDefault()),
+                (db, user) => db.KnownTopics.IgnoreQueryFilters().Where(topic => topic.OwnerId == user).Select(topic => topic.LearningGoalId).Distinct().ToList(),
+                (db, user) => db.TopicsSnapshots.IgnoreQueryFilters().Where(snapshot => snapshot.OwnerId == user).Max(snapshot => (DateTime?)snapshot.ChangedAt)),
             Receiver.For<LearningEngineInfra.LearningEngineDbContext>(
                 LearningEngineInfra.InfrastructureExtensions.ServiceKey, learningEngineHost.Services,
                 (db, user) => db.KnownTopics.IgnoreQueryFilters().Where(topic => topic.OwnerId == user).Select(topic => topic.TopicId).ToList(),
-                (db, user) => db.TopicsSnapshots.IgnoreQueryFilters().Where(snapshot => snapshot.OwnerId == user).Select(snapshot => (DateTime?)snapshot.ChangedAt).SingleOrDefault()),
+                (db, user) => db.KnownTopics.IgnoreQueryFilters().Where(topic => topic.OwnerId == user).Select(topic => topic.LearningGoalId).Distinct().ToList(),
+                (db, user) => db.TopicsSnapshots.IgnoreQueryFilters().Where(snapshot => snapshot.OwnerId == user).Max(snapshot => (DateTime?)snapshot.ChangedAt)),
         ];
     }
 
@@ -86,18 +99,18 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
 
     public T QueryAssessment<T>(Func<AssessmentInfra.AssessmentDbContext, T> query) => Query(Assessment.Services, query);
 
+    public T QueryPlanning<T>(Func<PlanningInfra.PlanningDbContext, T> query) => Query(Planning.Services, query);
+
     private async Task<WebApplicationFactory<TEntryPoint>> StartAsync<TEntryPoint, TContext>(
-        string database, Action<IServiceCollection>? services = null)
+        string database, Action<IServiceCollection>? services = null, Dictionary<string, string>? settings = null)
         where TEntryPoint : class
         where TContext : DbContext
     {
         var connectionString = await mysql.CreateDatabaseAsync(database);
-        var host = new ServiceHost<TEntryPoint>(new Dictionary<string, string>
-        {
-            [$"ConnectionStrings:{database}"] = connectionString,
-            [$"ConnectionStrings:{MessagingExtensions.NatsConnectionName}"] = nats.Url,
-        },
-        services);
+        settings ??= [];
+        settings[$"ConnectionStrings:{database}"] = connectionString;
+        settings[$"ConnectionStrings:{MessagingExtensions.NatsConnectionName}"] = nats.Url;
+        var host = new ServiceHost<TEntryPoint>(settings, services);
         hosts.Add(host);
 
         // The same synchronous call the migrate step makes. Services starts the host with the new database.
@@ -114,11 +127,12 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
     }
 }
 
-// What a test needs to know of a receiver: which topics of a user it knows, which state it took last, and how many
-// messages its TopicsChanged consumer has handled.
+// What a test needs to know of a receiver: which topics of a user it knows and in which learning goals, which state it
+// took last, and how many messages its TopicsChanged consumer has handled.
 public sealed record Receiver(
     string Name,
     Func<string, IReadOnlyList<Guid>> KnownTopics,
+    Func<string, IReadOnlyList<Guid>> Goals,
     Func<string, DateTime?> ChangedAt,
     Func<Guid, int> InboxEntries)
 {
@@ -126,6 +140,7 @@ public sealed record Receiver(
         string service,
         IServiceProvider services,
         Func<TContext, string, List<Guid>> knownTopics,
+        Func<TContext, string, List<Guid>> goals,
         Func<TContext, string, DateTime?> changedAt)
         where TContext : DbContext
     {
@@ -133,6 +148,7 @@ public sealed record Receiver(
         return new(
             service,
             user => FlowServices.Query<TContext, List<Guid>>(services, db => knownTopics(db, user)),
+            user => FlowServices.Query<TContext, List<Guid>>(services, db => goals(db, user)),
             user => FlowServices.Query<TContext, DateTime?>(services, db => changedAt(db, user)),
             messageId => FlowServices.Query<TContext, int>(
                 services, db => db.Set<InboxMessage>().Count(entry => entry.MessageId == messageId && entry.Consumer == consumer)));

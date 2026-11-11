@@ -65,6 +65,21 @@ public sealed class QuestionFlowTests(FlowServices services) : IDisposable
             "Assessment did not take the questions of every topic over.");
         Assert.Equal(topics.Order(), QuestionTopics(alice).Order());
 
+        // Document, topics and every receiver's topics, those with the questions and the plan among them, belong to the
+        // default goal that Planning made for the pasted text.
+        var goal = Assert.Single(services.QueryPlanning(db => db.LearningGoals.IgnoreQueryFilters()
+            .Where(item => item.OwnerId == alice).Select(item => item.Id).ToList()));
+        Assert.Equal(goal, services.QueryContent(db => db.Documents.IgnoreQueryFilters().Single(item => item.Id == documentId).LearningGoalId));
+        Assert.Equal([goal], services.QueryKnowledge(db => db.Topics.IgnoreQueryFilters()
+            .Where(topic => topic.OwnerId == alice).Select(topic => topic.LearningGoalId).Distinct().ToList()));
+        foreach (var receiver in services.Receivers)
+        {
+            await WaitForAsync(
+                () => Task.FromResult(receiver.KnownTopics(alice).Count == topics.Count),
+                $"{receiver} did not take the topics over.");
+            Assert.Equal([goal], receiver.Goals(alice));
+        }
+
         using var assessment = services.Assessment.CreateClient();
         assessment.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         foreach (var topicId in topics)

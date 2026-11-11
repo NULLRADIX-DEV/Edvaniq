@@ -101,7 +101,7 @@ public sealed class DocumentAnalyzer(
         if (await TopicsAsync(document, sections, cancellationToken) is { } topics)
         {
             document.ReportTopics(time.GetUtcNow().UtcDateTime);
-            scope.ServiceProvider.GetRequiredService<IEventOutbox>().Add(new DocumentAnalyzed(document.OwnerId, document.Id, topics));
+            scope.ServiceProvider.GetRequiredService<IEventOutbox>().Add(new DocumentAnalyzed(document.OwnerId, document.Id, topics, document.LearningGoalId));
         }
         else
         {

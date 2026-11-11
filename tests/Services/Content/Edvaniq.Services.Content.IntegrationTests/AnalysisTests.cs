@@ -68,7 +68,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
         Assert.Equal(("Analyzing", null), (found!.Status, found.FailureReason));
         var analyzed = Assert.Single(await ReportedAsync(id));
-        Assert.Equal((alice, id), (analyzed.UserId, analyzed.DocumentId));
+        Assert.Equal((alice, id, service.Planning.GoalOf(alice)), (analyzed.UserId, analyzed.DocumentId, analyzed.LearningGoalId));
         Assert.Empty(await GeneratedAsync(id));
 
         // The preface has no heading and goes to the topic after it.
