@@ -31,6 +31,7 @@ public sealed partial class NetworkLossTests : BunitContext
 
     public NetworkLossTests()
     {
+        Services.AddQuietAnswerSync();
         Services.AddSingleton<IReturnSignal>(signal);
         Services.AddSingleton<TimeProvider>(time);
         JSInterop.Mode = JSRuntimeMode.Loose;

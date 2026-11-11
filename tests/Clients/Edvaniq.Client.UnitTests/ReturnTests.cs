@@ -28,6 +28,7 @@ public sealed class ReturnTests : BunitContext
 
     public ReturnTests()
     {
+        Services.AddQuietAnswerSync();
         Services.AddSingleton<IReturnSignal>(signal);
         Services.AddSingleton<TimeProvider>(time);
     }

@@ -29,6 +29,7 @@ public sealed class TodayPlanTests : BunitContext
 
     public TodayPlanTests()
     {
+        Services.AddQuietAnswerSync();
         Services.AddSingleton<IReturnSignal>(signal);
     }
 

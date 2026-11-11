@@ -1,0 +1,106 @@
+@implements IDisposable
+@inject AnswerSync Sync
+
+@* The mastery of the topic once LearningEngine has the answer. Until then a hint, never the old value: it would look
+   like the answer changed nothing. *@
+<section class="answer-progress" aria-labelledby="progress-heading">
+    <h3 id="progress-heading">@FeedbackTexts.Progress.Heading</h3>
+    <div role="status">
+        @if (standing is not null)
+        {
+            <p class="answer-progress-value">
+                <strong>@standing.Mastery %</strong>@(StateOf(standing.State) is { } state ? $", {state}" : "")
+            </p>
+        }
+        else if (late)
+        {
+            <p><strong>@FeedbackTexts.Progress.Late</strong> @FeedbackTexts.Progress.LateHint</p>
+        }
+        else
+        {
+            <p>@FeedbackTexts.Progress.Updating</p>
+        }
+    </div>
+    @if (late && standing is null)
+    {
+        <button type="button" class="button" @onclick="WaitAsync">@FeedbackTexts.Progress.Check</button>
+    }
+</section>
+
+@code {
+    private readonly CancellationTokenSource life = new();
+    private Guid? tracked;
+    private TopicProgress? standing;
+    private bool late;
+    private bool waiting;
+
+    [Parameter, EditorRequired]
+    public Guid TopicId { get; set; }
+
+    // The graded attempt, its id is the answer's id at LearningEngine.
+    [Parameter, EditorRequired]
+    public Guid AnswerId { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (tracked == AnswerId)
+        {
+            return;
+        }
+
+        tracked = AnswerId;
+        standing = null;
+        late = false;
+        Sync.Track(TopicId, AnswerId);
+        await WaitAsync();
+    }
+
+    private async Task WaitAsync()
+    {
+        if (waiting)
+        {
+            return;
+        }
+
+        waiting = true;
+        late = false;
+        var answer = AnswerId;
+        AnswerSyncResult result;
+        try
+        {
+            result = await Sync.WaitAsync(life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            waiting = false;
+        }
+
+        if (answer != AnswerId)
+        {
+            return;
+        }
+
+        // Only a state that contains this answer counts.
+        standing = result.Topics?.FirstOrDefault(topic => topic.TopicId == TopicId && topic.LastAnswerId == answer);
+        late = standing is null;
+    }
+
+    private static string? StateOf(TopicState? state) => state switch
+    {
+        TopicState.New => FeedbackTexts.Progress.New,
+        TopicState.Weakness => FeedbackTexts.Progress.Weakness,
+        TopicState.Building => FeedbackTexts.Progress.Building,
+        TopicState.Secure => FeedbackTexts.Progress.Secure,
+        _ => null,
+    };
+
+    public void Dispose()
+    {
+        life.Cancel();
+        life.Dispose();
+    }
+}
