@@ -104,13 +104,6 @@ public sealed class PlanFlowTests(FlowServices services) : IDisposable
         var measured = $"Q4, answer to mastery and plan, {Answers} answers: median {median.TotalMilliseconds:F0} ms, "
             + $"max {sorted[^1].TotalMilliseconds:F0} ms ({string.Join(", ", delays.Select(delay => $"{delay.TotalMilliseconds:F0}"))})";
         TestContext.Current.TestOutputHelper?.WriteLine(measured);
-
-        // The runner hides the output of a passing test, so in CI the value goes into the job's summary:
-        // docs/spec/quality.md (Q4) takes it from there.
-        if (Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY") is { Length: > 0 } summary)
-        {
-            await File.AppendAllTextAsync(summary, $"{measured}{Environment.NewLine}", cancellationToken);
-        }
         Assert.True(median < TimeSpan.FromSeconds(5), $"Median {median.TotalMilliseconds:F0} ms, Q4 allows 5000 ms.");
     }
 
