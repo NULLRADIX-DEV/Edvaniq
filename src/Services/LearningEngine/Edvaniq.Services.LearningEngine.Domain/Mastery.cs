@@ -11,7 +11,9 @@ namespace Edvaniq.Services.LearningEngine.Domain;
 // rule made it.
 public static class Mastery
 {
-    public const int RuleVersion = 2;
+    // 3 since #364: the answer carries the topic state (thresholds of TopicStates), and since #363 an introduction
+    // decides which answers count.
+    public const int RuleVersion = 3;
 
     public const double Start = 50;
 

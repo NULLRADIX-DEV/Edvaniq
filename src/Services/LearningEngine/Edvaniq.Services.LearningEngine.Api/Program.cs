@@ -32,8 +32,8 @@ app.MapGet("/me", (ICurrentUser user) => new { user.Id });
 
 // Someone else's topic and one this service doesn't know (yet) look the same: 404.
 app.MapGet("/mastery/{topicId:guid}", async (Guid topicId, IMasteries masteries, CancellationToken cancellationToken) =>
-    await masteries.FindAsync(topicId, cancellationToken) is { } mastery
-        ? Results.Ok(new MasteryResponse(topicId, mastery, Mastery.RuleVersion))
+    await masteries.FindAsync(topicId, cancellationToken) is { } standing
+        ? Results.Ok(new MasteryResponse(topicId, standing.Mastery, StateNames.Of(standing.State), Mastery.RuleVersion))
         : Results.NotFound());
 
 // All of the user's topics, or those of one learning goal. A goal that isn't the user's gives an empty list, like one
@@ -53,15 +53,32 @@ app.MapGet("/mastery", async (string? learningGoalId, IMasteries masteries, Canc
     }
 
     var topics = await masteries.ListAsync(goal, cancellationToken);
-    return Results.Ok(new MasteryListResponse(Mastery.RuleVersion, topics));
+    return Results.Ok(new MasteryListResponse(
+        Mastery.RuleVersion,
+        [.. topics.Select(topic => new MasteryListEntry(topic.TopicId, topic.Mastery, StateNames.Of(topic.State)))]));
 });
 
 app.Run();
 
 return 0;
 
-// Whole percent, 0 to 100, and the version of the rule that worked it out.
-internal sealed record MasteryResponse(Guid TopicId, int Mastery, int RuleVersion);
+// Whole percent, 0 to 100, the topic state and the version of the rule that worked both out.
+internal sealed record MasteryResponse(Guid TopicId, int Mastery, string State, int RuleVersion);
 
 // An object, not a bare list, so fields can be added later.
-internal sealed record MasteryListResponse(int RuleVersion, IReadOnlyList<TopicMastery> Topics);
+internal sealed record MasteryListResponse(int RuleVersion, IReadOnlyList<MasteryListEntry> Topics);
+
+internal sealed record MasteryListEntry(Guid TopicId, int Mastery, string State);
+
+// The names on the wire, fixed here so renaming the enum can't change the contract.
+internal static class StateNames
+{
+    public static string Of(TopicState state) => state switch
+    {
+        TopicState.New => "new",
+        TopicState.Weakness => "weakness",
+        TopicState.Building => "building",
+        TopicState.Secure => "secure",
+        _ => throw new ArgumentOutOfRangeException(nameof(state), state, "A topic state without a name on the wire."),
+    };
+}
