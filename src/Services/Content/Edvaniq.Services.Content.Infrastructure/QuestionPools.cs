@@ -206,7 +206,7 @@ public sealed class QuestionPools(
     {
         var answer = await ai.AskAsync(
             [
-                new ChatMessage(ChatRole.System, QuestionGeneration.System),
+                new ChatMessage(ChatRole.System, QuestionGeneration.System(LearnerProfile.Of(document.Level, document.OutputLanguage))),
                 new ChatMessage(ChatRole.User, QuestionGeneration.User(sectionIds.Select(id => texts[id]))),
             ],
             text => QuestionGeneration.Read(text, sectionIds) is { Count: > 0 } drafts ? drafts : null,

@@ -36,6 +36,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         // The topics stay in analysis while the questions follow, so the status alone doesn't tell two analyzers apart.
         document.Property(item => item.AnalyzedAt).IsConcurrencyToken();
         document.Property(item => item.FailureReason).HasMaxLength(Document.FailureReasonMaxLength);
+        document.Property(item => item.Level).HasMaxLength(Document.LevelMaxLength);
+        document.Property(item => item.OutputLanguage).HasMaxLength(Document.OutputLanguageMaxLength);
 
         // A document takes its sections along when it goes. Each place in a document exists once, so splitting the
         // same document again cannot add a section twice.
