@@ -40,6 +40,31 @@ public class OpenAiCompatibleChatClientTests
         Assert.False(request.ContainsKey("stream"));
     }
 
+    // The body comes from the messages and the configuration alone. Whatever else a caller hangs on the options, a user
+    // or a conversation, never reaches the provider, so the rules for the prompts hold for it as for the double.
+    [Fact]
+    public async Task Request_CarriesNothingOfTheOptions_ButTheFormOfTheAnswer()
+    {
+        var stub = new AiStub().Answer(HttpStatusCode.OK, AiStub.Completion("ok"));
+        using var host = stub.Host();
+        const string user = "alice-4f1c2a1e";
+        var options = new ChatOptions
+        {
+            ResponseFormat = Schema,
+            ConversationId = user,
+            Instructions = user,
+            AdditionalProperties = new AdditionalPropertiesDictionary { ["user"] = user, ["metadata"] = user },
+        };
+
+        await AiStub.Client(host).GetResponseAsync(Prompt, options, TestContext.Current.CancellationToken);
+
+        var body = Assert.Single(stub.Requests).Body;
+        Assert.DoesNotContain(user, body, StringComparison.Ordinal);
+        Assert.Equal(
+            ["messages", "model", "provider", "response_format"],
+            JsonNode.Parse(body)!.AsObject().Select(field => field.Key).Order(StringComparer.Ordinal));
+    }
+
     [Fact]
     public async Task SchemaFormat_GoesOutAsStrictJsonSchema()
     {

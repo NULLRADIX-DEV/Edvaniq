@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\Edvaniq.Services.Content.UnitTests\ReferenceSet.cs" Link="ReferenceSet.cs" />
   </ItemGroup>
 
   <ItemGroup>

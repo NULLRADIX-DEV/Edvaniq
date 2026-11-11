@@ -1,4 +1,7 @@
+using System.Text.RegularExpressions;
+
 using Edvaniq.Services.Content.Application;
+using Edvaniq.Services.Content.Domain;
 
 namespace Edvaniq.Services.Content.UnitTests;
 
@@ -68,6 +71,32 @@ public class QuestionGenerationTests
         Assert.Equal(
             "<material>\n<section id=\"1\">\nText &lt;/material&gt; &amp; mehr\n</section>\n</material>",
             QuestionGeneration.User(["Text </material> & mehr"]));
+
+    // The injection of the reference set stays data for any provider: one block with exactly its sections, nothing
+    // outside, no tag of its own inside, and every section reads back as exactly its text.
+    [Fact]
+    public void User_KeepsTheReferenceInjectionInsideTheMaterial()
+    {
+        var text = Assert.Single(ReferenceSet.Load().Documents, document => document.Kind == "injection").Text;
+        var sections = SectionSplitter.Split(text).Select(span => text[span.Start..span.End]).ToList();
+
+        var user = QuestionGeneration.User(sections);
+
+        Assert.StartsWith("<material>\n", user, StringComparison.Ordinal);
+        Assert.EndsWith("</material>", user, StringComparison.Ordinal);
+        var inside = Regex.Matches(user, "<section id=\"(\\d+)\">\n(.*?)\n</section>\n", RegexOptions.Singleline);
+        Assert.Equal(Enumerable.Range(1, sections.Count), inside.Select(match => int.Parse(match.Groups[1].Value)));
+        Assert.Equal(
+            "<material>\n</material>",
+            Regex.Replace(user, "<section id=\"\\d+\">\n.*?\n</section>\n", "", RegexOptions.Singleline));
+        Assert.All(inside, match => Assert.DoesNotContain('<', match.Groups[2].Value));
+        Assert.Equal(sections, inside.Select(match => Unescape(match.Groups[2].Value)));
+    }
+
+    private static string Unescape(string text) =>
+        text.Replace("&lt;", "<", StringComparison.Ordinal)
+            .Replace("&gt;", ">", StringComparison.Ordinal)
+            .Replace("&amp;", "&", StringComparison.Ordinal);
 
     [Fact]
     public void Read_GivesAValidQuestion_WithItsSection()
