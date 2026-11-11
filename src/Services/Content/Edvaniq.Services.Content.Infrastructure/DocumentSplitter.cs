@@ -100,6 +100,6 @@ public sealed class DocumentSplitter(
             document.Fail(Document.SplitFailed);
         }
 
-        await db.SaveChangesAsync(cancellationToken);
+        await WorkerSave.SaveAsync(db, documentId, "splitting", logger, cancellationToken);
     }
 }

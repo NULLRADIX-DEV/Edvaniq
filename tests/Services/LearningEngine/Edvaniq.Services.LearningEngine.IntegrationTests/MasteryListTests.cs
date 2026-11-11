@@ -64,6 +64,33 @@ public sealed class MasteryListTests(ServiceFactory service) : IClassFixture<Ser
         Assert.Empty((await ListAsync(bob, $"?learningGoalId={goal}")).Topics);
     }
 
+    // #222: both queries name the newest answer of each topic, so a client knows when its answer has arrived. A topic
+    // without answers has none.
+    [Fact]
+    public async Task NameTheNewestAnswerOfEachTopic()
+    {
+        var alice = NewUser("alice");
+        var (answered, untouched) = (Guid.NewGuid(), Guid.NewGuid());
+        var older = Record(alice, answered, correct: true);
+        var newer = LearningRecord.Create(
+            Guid.NewGuid(), alice, answered, Guid.NewGuid(), null, false, 2, 4200, null, Mode.Practice, AMinuteAgo.AddSeconds(10));
+        await SeedAsync([Topic(alice, answered), Topic(alice, untouched)], [newer, older]);
+
+        using var response = await GetAsync(alice, "");
+        var list = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        var latest = list.GetProperty("topics").EnumerateArray()
+            .ToDictionary(topic => topic.GetProperty("topicId").GetGuid(), topic => topic.GetProperty("lastAnswerId"));
+        Assert.Equal(newer.AnswerId, latest[answered].GetGuid());
+        Assert.Equal(JsonValueKind.Null, latest[untouched].ValueKind);
+
+        using var client = service.CreateClient();
+        using var one = new HttpRequestMessage(HttpMethod.Get, $"/mastery/{answered}");
+        one.Headers.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.Create(alice));
+        using var found = await client.SendAsync(one, TestContext.Current.CancellationToken);
+        var topic = await found.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        Assert.Equal(newer.AnswerId, topic.GetProperty("lastAnswerId").GetGuid());
+    }
+
     [Fact]
     public async Task BrokenLearningGoalId_IsAProblem()
     {

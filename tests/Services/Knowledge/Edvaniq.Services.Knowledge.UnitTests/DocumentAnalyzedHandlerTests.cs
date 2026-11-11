@@ -220,8 +220,35 @@ public class DocumentAnalyzedHandlerTests
         Assert.Equal(Now.UtcDateTime.AddTicks(1234560), Assert.IsType<TopicsChanged>(Assert.Single(outbox.Added)).ChangedAt);
     }
 
-    private static DocumentAnalyzedHandler Handler(FakeTopics topics, FakeOutbox outbox) =>
-        new(topics, new TopicsChangedEvents(topics, outbox, new FixedTime(Now)), new FixedTime(Now));
+    // DocumentDeleted came first on its own consumer: the analysis of the deleted document brings nothing back.
+    [Fact]
+    public async Task AnalysisOfADeletedDocument_AddsNothing_AndAnnouncesNothing()
+    {
+        var topics = new FakeTopics();
+        var outbox = new FakeOutbox();
+        var analyzed = new DocumentAnalyzed("alice", Guid.NewGuid(), [new TopicSuggestion("Photosynthese", null, [Guid.NewGuid()])], Guid.NewGuid());
+        var deleted = new FakeDeleted();
+        deleted.Documents.Add(("alice", analyzed.DocumentId));
+
+        await Handler(topics, outbox, deleted).HandleAsync(analyzed, TestContext.Current.CancellationToken);
+
+        Assert.Empty(topics.Added);
+        Assert.Empty(outbox.Added);
+    }
+
+    private static DocumentAnalyzedHandler Handler(FakeTopics topics, FakeOutbox outbox, FakeDeleted? deleted = null) =>
+        new(topics, deleted ?? new FakeDeleted(), new TopicsChangedEvents(topics, outbox, new FixedTime(Now)), new FixedTime(Now));
+
+    private sealed class FakeDeleted : IDeletedDocuments
+    {
+        public HashSet<(string OwnerId, Guid DocumentId)> Documents { get; } = [];
+
+        public Task<bool> IsDeletedAsync(string ownerId, Guid documentId, CancellationToken cancellationToken) =>
+            Task.FromResult(Documents.Contains((ownerId, documentId)));
+
+        public Task<IReadOnlyList<Topic>> RemoveAsync(string ownerId, Guid documentId, DateTime deletedAt, CancellationToken cancellationToken) =>
+            throw new NotSupportedException("The handler never removes.");
+    }
 
     // Plays both the store of the handler and the state that sees what was added or moved. Added topics count as stored
     // for the next handler, as after a save.

@@ -3,7 +3,9 @@ using System.Text.Json;
 
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Identity.Contracts;
+using Edvaniq.Services.LearningEngine.Domain;
 using Edvaniq.Services.LearningEngine.Infrastructure;
+using Edvaniq.Testing;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,6 +35,35 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
         Assert.Equal(0, ItemsOf(alice));
         Assert.Equal(1, ItemsOf(bob));
+    }
+
+    // Every table with an owner holds rows of both users. A new table without a seed here fails before the deletion.
+    [Fact]
+    public async Task DeletedUser_HasNoRowInAnyTable_OthersKeepTheirs()
+    {
+        var alice = NewUser("alice");
+        var bob = NewUser("bob");
+        await SeedEveryTableAsync(alice);
+        await SeedEveryTableAsync(bob);
+        Assert.Empty(OwnedRows.Unseeded(Query(db => OwnedRows.Of(db, alice))));
+        var ofBob = Query(db => OwnedRows.Of(db, bob));
+
+        var messageId = await DeleteAsync(alice);
+
+        await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
+        Assert.All(Query(db => OwnedRows.Of(db, alice)), table => Assert.Equal(0, table.Value));
+        Assert.Equal(ofBob, Query(db => OwnedRows.Of(db, bob)));
+    }
+
+    private async Task SeedEveryTableAsync(string user)
+    {
+        var record = await service.AddRecordAsync(user);
+        using var scope = service.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<LearningEngineDbContext>();
+        db.KnownTopics.Add(KnownTopic.Create(user, record.TopicId, Guid.Empty, hidden: false));
+        db.TopicsSnapshots.Add(TopicsSnapshot.Create(user, Guid.Empty, Seed.Now));
+        db.TopicIntroductions.Add(TopicIntroduction.Create(user, record.TopicId, Guid.NewGuid(), Seed.Now));
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
     // "Alice" and "alice" are two users, deleting one keeps the data of the other.

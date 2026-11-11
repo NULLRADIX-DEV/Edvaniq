@@ -165,7 +165,8 @@ public sealed class QuizPageTests(WebShell shell)
         await Assertions.Expect(shown.Locator("tbody tr")).ToHaveCountAsync(2);
         await Assertions.Expect(shown.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = "Wikipedia (öffnet in neuem Tab)" }))
             .ToHaveAttributeAsync("rel", "noopener noreferrer nofollow");
-        Assert.Equal(["H1", "H2", "H3", "H4"], await page.Page.Locator("main :is(h1, h2, h3, h4, h5, h6)").EvaluateAllAsync<string[]>("all => all.map(h => h.tagName)"));
+        // The last h3 is the mastery after the answer (#222), on the level of the explanation's own headings.
+        Assert.Equal(["H1", "H2", "H3", "H4", "H3"], await page.Page.Locator("main :is(h1, h2, h3, h4, h5, h6)").EvaluateAllAsync<string[]>("all => all.map(h => h.tagName)"));
         await AssertNoSidewaysScrollAsync(page.Page);
         await AxeScan.AssertNoViolationsAsync(page.Page, $"{Path} with a Markdown explanation at {width} px");
         await AxeScan.AssertHeadingOrderAsync(page.Page, $"{Path} with a Markdown explanation at {width} px");

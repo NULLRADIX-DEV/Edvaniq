@@ -7,6 +7,7 @@ using System.Text.Json;
 
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Content.Application;
+using Edvaniq.Services.Content.Domain;
 using Edvaniq.Services.Content.Infrastructure;
 using Edvaniq.Services.Identity.Contracts;
 using Edvaniq.Testing;
@@ -40,6 +41,38 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
         Assert.Equal(0, ItemsOf(alice));
         Assert.Equal(1, ItemsOf(bob));
+    }
+
+    // Every table with an owner holds rows of both users. A new table without a seed here fails before the deletion.
+    [Fact]
+    public async Task DeletedUser_HasNoRowInAnyTable_OthersKeepTheirs()
+    {
+        var alice = NewUser("alice");
+        var bob = NewUser("bob");
+        await SeedEveryTableAsync(alice);
+        await SeedEveryTableAsync(bob);
+        Assert.Empty(OwnedRows.Unseeded(Query(db => OwnedRows.Of(db, alice))));
+        var ofBob = Query(db => OwnedRows.Of(db, bob));
+
+        var messageId = await DeleteAsync(alice);
+
+        await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
+        Assert.All(Query(db => OwnedRows.Of(db, alice)), table => Assert.Equal(0, table.Value));
+        Assert.Equal(ofBob, Query(db => OwnedRows.Of(db, bob)));
+    }
+
+    private async Task SeedEveryTableAsync(string user)
+    {
+        await CreateItemAsync(user, "Notiz");
+        await SaveFileAsync(user);
+        await AiUsageSeed.AddAsync(service.Services, user, AiUsageSeed.SomeDay(), (1, 0.25m));
+        using var scope = service.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
+        var document = Document.Paste(user, Guid.NewGuid(), null, "Licht spaltet Wasser in der Lichtreaktion der Photosynthese.", DateTime.UtcNow);
+        db.Documents.Add(document);
+        db.Sections.AddRange(document.Split());
+        db.QuestionPools.Add(QuestionPool.For(document, Guid.NewGuid(), DateTime.UtcNow));
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
     // The bytes in the file store go too, not only the rows.

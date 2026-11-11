@@ -52,6 +52,28 @@ public sealed class FileUploadTests(ServiceFactory service) : IClassFixture<Serv
         Assert.Equal(("Uploaded", "File"), (listed.GetProperty("status").GetString(), listed.GetProperty("source").GetString()));
     }
 
+    // #202: deleting a document from a file takes the file along, bytes and row. Someone else's file stays.
+    [Fact]
+    public async Task DeletedFileDocument_TakesItsFile_OthersStay()
+    {
+        var alice = NewUser("alice");
+        var bob = NewUser("bob");
+        using var client = ClientFor(alice);
+        using var other = ClientFor(bob);
+        (await UploadAsync(client, "Notizen.txt", FileOf(FileFormat.Text))).Dispose();
+        (await UploadAsync(other, "Notizen.txt", FileOf(FileFormat.Text))).Dispose();
+        var document = Assert.Single(await DocumentsOfAsync(alice));
+        var kept = Assert.Single(await DocumentsOfAsync(bob));
+
+        using var deleted = await client.DeleteAsync($"/documents/{document.Id}", Cancel);
+
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        Assert.False(File.Exists(PathOf(document.FileId!.Value)));
+        await AssertNothingStoredAsync(alice);
+        Assert.True(File.Exists(PathOf(kept.FileId!.Value)));
+        Assert.Equal(1, Query(db => db.StoredFiles.IgnoreQueryFilters().Count(file => file.OwnerId == bob)));
+    }
+
     // Until the worker has read its text, the splitter leaves a document from a file alone.
     [Fact]
     public async Task Splitter_LeavesTheFileDocumentAlone()

@@ -118,7 +118,7 @@
 
         @if (graded is not null)
         {
-            @* Room below the explanation for how the answer moved the mastery, once there is one (#222). *@
+            @* Below the explanation, how the answer moved the mastery once LearningEngine has it (#222). *@
             <section class="quiz-feedback @(graded.Correct ? "quiz-right" : "")" aria-labelledby="feedback-heading">
                 <h2 id="feedback-heading" tabindex="-1" @ref="feedbackHeading">
                     <span aria-hidden="true">@(graded.Correct ? "✓" : "✗")</span>
@@ -134,6 +134,7 @@
                     <p><strong>Erklärung:</strong></p>
                     <SafeMarkdown Text="@graded.Explanation" HeadingOffset="2" />
                 </div>
+                <AnswerProgress TopicId="TopicId" AnswerId="graded.Id" />
             </section>
 
             <div class="quiz-actions">

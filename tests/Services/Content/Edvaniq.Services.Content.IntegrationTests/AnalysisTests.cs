@@ -775,6 +775,111 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal([HttpStatusCode.Accepted, HttpStatusCode.Conflict], codes.Order());
     }
 
+    // DELETE takes the document with its sections and reports DocumentDeleted in the same save. Someone else's document
+    // and one that's gone answer 404, the other document and the other user keep theirs.
+    [Fact]
+    public async Task DeletedDocument_GoesWithItsSections_AndIsReportedOnce()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        using var client = ClientFor(alice);
+        using var bob = ClientFor($"bob-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        var kept = await PasteAsync(client, Text);
+        var ofBob = await PasteAsync(bob, Text);
+        await AnalyzeAsync(id, withQuestions: true);
+        await AnalyzeAsync(kept);
+        await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(ofBob, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await bob.DeleteAsync($"/documents/{id}", TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/documents/{id}", TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"/documents/{id}", TestContext.Current.CancellationToken)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/documents/{id}", TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Empty(SectionIds(id));
+        Assert.Empty(PooledTopics(id));
+        var deleted = Assert.Single(await OutboxAsync<DocumentDeleted>(id));
+        Assert.Equal((alice, id), (deleted.UserId, deleted.DocumentId));
+        Assert.NotNull(deleted.LearningGoalId);
+        Assert.NotEmpty(SectionIds(kept));
+        Assert.NotEmpty(SectionIds(ofBob));
+        Assert.Empty(await OutboxAsync<DocumentDeleted>(kept));
+    }
+
+    // The user deletes the document while the AI works on its topics. The analyzer's save fails on the missing row, no
+    // DocumentAnalyzed goes out, and the analyzer carries on with the next document. The cost of the call stays.
+    [Fact]
+    public async Task DocumentDeletedDuringItsAnalysis_SendsNothing_AndTheAnalyzerGoesOn()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        var next = await PasteAsync(client, Text);
+        var splitter = ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services);
+        await splitter.SplitAsync(id, TestContext.Current.CancellationToken);
+        await splitter.SplitAsync(next, TestContext.Current.CancellationToken);
+        var deleting = new DeletingChatClient(Chat(), ContentAi.TopicsTask, () => DeleteAsync(client, id));
+        var analyzer = ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, (IChatClient)deleting, LoggerOf<DocumentAnalyzer>());
+
+        await analyzer.AnalyzeAsync(id, TestContext.Current.CancellationToken);
+        await analyzer.AnalyzeAsync(next, TestContext.Current.CancellationToken);
+
+        Assert.Empty(await ReportedAsync(id));
+        Assert.Single(await ReportedAsync(next));
+        Assert.NotEmpty(AttemptsOf(id));
+        Assert.Contains(logs.Entries, entry => entry.Level == LogLevel.Information
+            && entry.Message == $"Document {id} was deleted during its analysis, nothing of it was saved");
+    }
+
+    // The same while the AI makes the questions: no pool and no ItemsGenerated, the next document gets ready.
+    [Fact]
+    public async Task DocumentDeletedWhileItsQuestionsAreMade_SendsNoQuestion_AndThePoolsGoOn()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        var next = await PasteAsync(client, Text);
+        await AnalyzeAsync(id);
+        await AnalyzeAsync(next);
+        service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
+        service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(next)));
+        var deleting = new DeletingChatClient(Chat(), ContentAi.QuestionsTask, () => DeleteAsync(client, id));
+        var pools = ActivatorUtilities.CreateInstance<QuestionPools>(service.Services, (IChatClient)deleting, LoggerOf<QuestionPools>());
+
+        Assert.True(await pools.FinishAsync(id, TestContext.Current.CancellationToken));
+        Assert.True(await pools.FinishAsync(next, TestContext.Current.CancellationToken));
+
+        Assert.Empty(await GeneratedAsync(id));
+        Assert.Empty(PooledTopics(id));
+        Assert.NotEmpty(await GeneratedAsync(next));
+        Assert.Equal("Ready", (await client.GetFromJsonAsync<DocumentDto>($"/documents/{next}", TestContext.Current.CancellationToken))!.Status);
+        Assert.Contains(logs.Entries, entry => entry.Level == LogLevel.Information
+            && entry.Message == $"Document {id} was deleted during its questions, nothing of it was saved");
+    }
+
+    // The splitter's save: sections of a document deleted meanwhile fail on their key, and nothing stays.
+    [Fact]
+    public async Task SectionsOfADocumentDeletedMeanwhile_FailCleanly_AndNothingStays()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        using var scope = service.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
+        var document = await db.Documents.IgnoreQueryFilters().SingleAsync(item => item.Id == id, TestContext.Current.CancellationToken);
+        db.Sections.AddRange(document.Split());
+
+        await DeleteAsync(client, id);
+        var saved = await WorkerSave.SaveAsync(db, id, "splitting", LoggerOf<DocumentSplitter>(), TestContext.Current.CancellationToken);
+
+        Assert.False(saved);
+        Assert.Empty(SectionIds(id));
+        Assert.Contains(logs.Entries, entry => entry.Level == LogLevel.Information
+            && entry.Message == $"Document {id} was deleted during its splitting, nothing of it was saved");
+    }
+
+    private static async Task DeleteAsync(HttpClient client, Guid id)
+    {
+        using var response = await client.DeleteAsync($"/documents/{id}", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
     public void Dispose() => ai.Dispose();
 
     private static async Task<DocumentDto?> RetryAsync(HttpClient client, Guid id, HttpStatusCode expected)
@@ -984,6 +1089,25 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         var client = service.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.Create(userId));
         return client;
+    }
+
+    // Deletes the document, as the user would, while the AI works on the first prompt of the task.
+    private sealed class DeletingChatClient(IChatClient inner, string task, Func<Task> delete) : DelegatingChatClient(inner)
+    {
+        private bool deleted;
+
+        public override async Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            var list = messages.ToList();
+            if (!deleted && list[0].Text.StartsWith(task, StringComparison.Ordinal))
+            {
+                deleted = true;
+                await delete();
+            }
+
+            return await base.GetResponseAsync(list, options, cancellationToken);
+        }
     }
 
     private sealed class RecordingChatClient(IChatClient inner, List<ChatMessage> prompts, List<ChatOptions?> requestOptions)

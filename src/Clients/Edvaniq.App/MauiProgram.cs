@@ -48,6 +48,8 @@ public static class MauiProgram
 		}));
 		builder.Services.AddScoped<ILearningMaterial>(services => new HttpLearningMaterial(Watched(services)));
 		builder.Services.AddScoped<IQuiz>(services => new HttpQuiz(Watched(services)));
+		builder.Services.AddScoped<ITodayPlan>(services => new HttpTodayPlan(Watched(services)));
+		builder.Services.AddScoped<ILearningProgress>(services => new HttpLearningProgress(Watched(services)));
 
 		builder.Services.AddSingleton<WindowReturnSignal>();
 		builder.Services.AddSingleton<IReturnSignal>(services => services.GetRequiredService<WindowReturnSignal>());
@@ -55,6 +57,7 @@ public static class MauiProgram
 		builder.Services.AddAuthorizationCore();
 		builder.Services.AddCascadingAuthenticationState();
 		builder.Services.AddScoped<AuthenticationStateProvider, SessionAuthenticationState>();
+		builder.Services.AddScoped(services => new AnswerSync(services.GetRequiredService<ILearningProgress>(), services.GetRequiredService<AuthenticationStateProvider>()));
 
 #if DEBUG
 		builder.Services.AddBlazorWebViewDeveloperTools();

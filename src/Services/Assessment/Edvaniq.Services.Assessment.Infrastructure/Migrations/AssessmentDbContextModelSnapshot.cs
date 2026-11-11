@@ -135,6 +135,26 @@ namespace Edvaniq.Services.Assessment.Infrastructure.Migrations
                     b.ToTable("Attempts");
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Assessment.Domain.DeletedDocument", b =>
+                {
+                    b.Property<string>("OwnerId")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("DeletedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("OwnerId", "DocumentId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("DeletedDocuments");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Assessment.Domain.KnownTopic", b =>
                 {
                     b.Property<Guid>("TopicId")

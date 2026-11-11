@@ -68,7 +68,61 @@ public sealed class PlanFlowTests(FlowServices services) : IDisposable
             "Today's plan did not move the answered topic back.");
     }
 
+    // #222, Q4: how long after an answer LearningEngine names it as the topic's newest, so mastery and today's plan
+    // contain it. Measured from the grade to the first GET /mastery that has it, asked every 20 ms: Assessment's outbox,
+    // NATS, LearningEngine's inbox and its database, all real. Not in it: the way between browser and server and the
+    // client's own interval of 500 ms. Ten answers one after the other, the median has to stay under 5 s.
+    [Fact(Timeout = 300_000)]
+    public async Task Answer_ReachesMasteryAndPlan_TypicallyWithinFiveSeconds()
+    {
+        const int Answers = 10;
+        var bob = $"bob-{Guid.NewGuid():N}";
+        var token = TestTokens.Create(bob);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var topic = (await TopicsWithQuestionsAsync(token, bob))[0];
+        using var learningEngine = Client(services.LearningEngine.CreateClient(), token);
+
+        var delays = new List<TimeSpan>();
+        for (var i = 0; i < Answers; i++)
+        {
+            var answer = await AnswerRightAsync(token, topic, cancellationToken);
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            while (await LastAnswerAsync(learningEngine, topic, cancellationToken) != answer)
+            {
+                Assert.True(watch.Elapsed < Timeout, $"Answer {i + 1} never reached LearningEngine.");
+                await Task.Delay(20, cancellationToken);
+            }
+
+            delays.Add(watch.Elapsed);
+
+            // The plan is worked out from that same mastery on every call, so it contains the answer now too.
+            Assert.True((await PlanAsync(token, cancellationToken)).MasteryAvailable);
+        }
+
+        var sorted = delays.Order().ToList();
+        var median = (sorted[(Answers / 2) - 1] + sorted[Answers / 2]) / 2;
+        var measured = $"Q4, answer to mastery and plan, {Answers} answers: median {median.TotalMilliseconds:F0} ms, "
+            + $"max {sorted[^1].TotalMilliseconds:F0} ms ({string.Join(", ", delays.Select(delay => $"{delay.TotalMilliseconds:F0}"))})";
+        TestContext.Current.TestOutputHelper?.WriteLine(measured);
+
+        // The runner hides the output of a passing test, so in CI the value goes into the job's summary:
+        // docs/spec/quality.md (Q4) takes it from there.
+        if (Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY") is { Length: > 0 } summary)
+        {
+            await File.AppendAllTextAsync(summary, $"{measured}{Environment.NewLine}", cancellationToken);
+        }
+        Assert.True(median < TimeSpan.FromSeconds(5), $"Median {median.TotalMilliseconds:F0} ms, Q4 allows 5000 ms.");
+    }
+
     public void Dispose() => ai.Dispose();
+
+    private static async Task<Guid?> LastAnswerAsync(HttpClient learningEngine, Guid topic, CancellationToken cancellationToken)
+    {
+        using var response = await learningEngine.GetAsync($"/mastery/{topic}", cancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var standing = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        return standing.GetProperty("lastAnswerId") is { ValueKind: JsonValueKind.String } id ? id.GetGuid() : null;
+    }
 
     private IChatClient Chat => ai.Services.GetRequiredService<IChatClient>();
 
@@ -104,7 +158,7 @@ public sealed class PlanFlowTests(FlowServices services) : IDisposable
     }
 
     // Asks a question of the topic and answers it right, with the solution read from Assessment's database.
-    private async Task AnswerRightAsync(string token, Guid topicId, CancellationToken cancellationToken)
+    private async Task<Guid> AnswerRightAsync(string token, Guid topicId, CancellationToken cancellationToken)
     {
         using var assessment = Client(services.Assessment.CreateClient(), token);
         using var asked = await assessment.PostAsJsonAsync("/attempts", new { topicId }, cancellationToken);
@@ -119,6 +173,7 @@ public sealed class PlanFlowTests(FlowServices services) : IDisposable
         using var graded = await assessment.PostAsJsonAsync($"/attempts/{attempt.GetProperty("id").GetGuid()}/answer", answer, cancellationToken);
         Assert.Equal(HttpStatusCode.OK, graded.StatusCode);
         Assert.True((await graded.Content.ReadFromJsonAsync<JsonElement>(cancellationToken)).GetProperty("correct").GetBoolean());
+        return attempt.GetProperty("id").GetGuid();
     }
 
     private async Task<Plan> PlanAsync(string token, CancellationToken cancellationToken)

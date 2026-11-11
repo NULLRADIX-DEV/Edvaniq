@@ -1,0 +1,234 @@
+@inject ITodayPlan Plans
+@inject ILearningMaterial Material
+@inject AnswerSync Sync
+
+@* The plan is worked out anew on every call, so Home asks on every visit and when the user comes back: after an answer
+   in another tab or on another device the order may have changed. *@
+<RefreshOnReturn OnReturn="LoadAsync" />
+
+<section class="plan" aria-labelledby="plan-heading">
+    <h2 id="plan-heading">Dein Plan für heute</h2>
+
+    @* What the plan is about to say lives in one live region. Topic names come from the analysis, Razor writes them as
+       text. *@
+    <div class="plan-status" role="status">
+        @switch (state)
+        {
+            case ViewState.Loading:
+                <Loading />
+                break;
+            case ViewState.LoadFailed:
+                <ConnectionProblem Title="@FeedbackTexts.Plan.LoadFailed" TraceId="@trace" />
+                break;
+            case ViewState.Shown when plan!.Blocks.Count == 0:
+                <div class="plan-note plan-empty">
+                    @switch (plan.Empty)
+                    {
+                        case PlanEmpty.NoTopics:
+                            <p><strong>@FeedbackTexts.Plan.NoTopics</strong> @FeedbackTexts.Plan.NoTopicsHint</p>
+                            <p><a class="button" href="themen">@FeedbackTexts.Plan.NoTopicsLink</a></p>
+                            break;
+                        case PlanEmpty.QuestionsPending:
+                            <p><strong>@FeedbackTexts.Plan.QuestionsPending</strong> @FeedbackTexts.Plan.QuestionsPendingHint</p>
+                            <p><a class="button" href="themen">@FeedbackTexts.Plan.QuestionsPendingLink</a></p>
+                            break;
+                        case PlanEmpty.AllMastered:
+                            <p><strong>@FeedbackTexts.Plan.AllMastered</strong> @FeedbackTexts.Plan.AllMasteredHint</p>
+                            <p><a class="button" href="themen">@FeedbackTexts.Plan.AllMasteredLink</a></p>
+                            break;
+                        default:
+                            <p><strong>@FeedbackTexts.Plan.Nothing</strong></p>
+                            <p><a class="button" href="themen">@FeedbackTexts.Plan.NothingLink</a></p>
+                            break;
+                    }
+                </div>
+                break;
+        }
+
+        @* An answer just given is on its way to LearningEngine, the plan below doesn't contain it yet. *@
+        @if (state == ViewState.Shown && syncing)
+        {
+            <p class="plan-note plan-updating">@FeedbackTexts.Plan.Updating</p>
+        }
+        else if (state == ViewState.Shown && syncLate)
+        {
+            <p class="plan-note"><strong>@FeedbackTexts.Plan.Late</strong> @FeedbackTexts.Plan.LateHint</p>
+        }
+    </div>
+
+    @if (state == ViewState.LoadFailed || (state == ViewState.Shown && syncLate && !syncing))
+    {
+        <button type="button" class="button" @onclick="LoadAsync">@FeedbackTexts.Plan.Reload</button>
+    }
+
+    @if (state == ViewState.Shown && plan!.Blocks.Count > 0)
+    {
+        <ol class="plan-blocks" aria-busy="@(syncing ? "true" : "false")">
+            @foreach (var (block, index) in plan.Blocks.Select((block, index) => (block, index)))
+            {
+                var name = NameOf(block.TopicId);
+                <li @key="index" class="plan-block">
+                    <span class="plan-topic">@name</span>
+                    <span class="plan-details">
+                        @if (KindOf(block.Kind) is { } kind)
+                        {
+                            <span class="plan-kind">@kind</span>
+                        }
+                        <span class="plan-minutes">@MinutesOf(block.Minutes)</span>
+                    </span>
+                    <PracticeLink TopicId="block.TopicId" Name="@name" />
+                </li>
+            }
+        </ol>
+    }
+
+    @if (state == ViewState.Shown)
+    {
+        @if (!plan!.MasteryAvailable)
+        {
+            <Notice Kind="NoticeKind.Info" class="plan-hint plan-mastery">
+                <p>@FeedbackTexts.Plan.MasteryUnavailable</p>
+            </Notice>
+        }
+
+        @if (plan.ShortenedTopicIds.Count > 0)
+        {
+            <Notice Kind="NoticeKind.Info" class="plan-hint plan-shortened">
+                <p>@FeedbackTexts.Plan.Shortened</p>
+                <ul>
+                    @foreach (var id in plan.ShortenedTopicIds)
+                    {
+                        <li @key="id">@NameOf(id)</li>
+                    }
+                </ul>
+            </Notice>
+        }
+
+        @* With an empty plan for that reason the hint above already says it. *@
+        @if (plan.NotReadyTopicIds.Count > 0 && plan.Empty != PlanEmpty.QuestionsPending)
+        {
+            <Notice Kind="NoticeKind.Info" class="plan-hint plan-not-ready">
+                <p>@FeedbackTexts.Plan.NotReady</p>
+                <ul>
+                    @foreach (var id in plan.NotReadyTopicIds)
+                    {
+                        <li @key="id">@NameOf(id)</li>
+                    }
+                </ul>
+            </Notice>
+        }
+    }
+</section>
+
+@code {
+    private ViewState state = ViewState.Loading;
+    private TodayPlan? plan;
+    private Dictionary<Guid, string> names = [];
+    private string? trace;
+    private int loads;
+    private bool syncing;
+    private bool syncLate;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    // The plan as it is now, and while answers are still on their way to LearningEngine, the plan again once they
+    // have arrived (#222). Until then the plan stays with a hint, after the limit the hint offers a reload.
+    private async Task LoadAsync()
+    {
+        if (syncing)
+        {
+            return;
+        }
+
+        await LoadPlanAsync();
+        if (state != ViewState.Shown || !Sync.HasPending)
+        {
+            syncLate = false;
+            return;
+        }
+
+        syncing = true;
+        syncLate = false;
+        StateHasChanged();
+        bool arrived;
+        try
+        {
+            arrived = (await Sync.WaitAsync()).Arrived;
+        }
+        finally
+        {
+            syncing = false;
+        }
+
+        syncLate = !arrived;
+        if (arrived)
+        {
+            await LoadPlanAsync();
+        }
+    }
+
+    // A shown plan stays until the new one is there, so a return doesn't flash a loading hint. Only the newest load
+    // counts when two overlap.
+    private async Task LoadPlanAsync()
+    {
+        var load = ++loads;
+        var planCall = Plans.GetAsync();
+        var topicsCall = Material.ListTopicsAsync();
+        var (planned, topics) = (await planCall, await topicsCall);
+        if (load != loads)
+        {
+            return;
+        }
+
+        if (planned.Result == CallResult.SignedOut || topics.Result == CallResult.SignedOut)
+        {
+            // The shell says the login ran out (SessionEndedNotice). A plan already shown stays, there is nothing else
+            // to show here.
+            if (state != ViewState.Shown)
+            {
+                state = ViewState.SignedOut;
+            }
+        }
+        else if (planned.Result != CallResult.Ok || topics.Result != CallResult.Ok)
+        {
+            // Without names the list would only say "Thema" again and again.
+            trace = planned.TraceId ?? topics.TraceId;
+            state = ViewState.LoadFailed;
+        }
+        else
+        {
+            plan = planned.Value!;
+            names = [];
+            foreach (var topic in topics.Value!)
+            {
+                names.TryAdd(topic.Id, topic.Name);
+                foreach (var subtopic in topic.Subtopics)
+                {
+                    names.TryAdd(subtopic.Id, subtopic.Name);
+                }
+            }
+
+            state = ViewState.Shown;
+        }
+    }
+
+    private string NameOf(Guid topicId) => names.GetValueOrDefault(topicId) ?? FeedbackTexts.Plan.UnnamedTopic;
+
+    private static string? KindOf(BlockKind? kind) => kind switch
+    {
+        BlockKind.Learn => FeedbackTexts.Plan.Learn,
+        BlockKind.Review => FeedbackTexts.Plan.Review,
+        _ => null,
+    };
+
+    private static string MinutesOf(int minutes) =>
+        $"{minutes} {(minutes == 1 ? FeedbackTexts.Plan.Minute : FeedbackTexts.Plan.Minutes)}";
+
+    private enum ViewState
+    {
+        Loading,
+        SignedOut,
+        LoadFailed,
+        Shown,
+    }
+}

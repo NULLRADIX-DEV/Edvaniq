@@ -40,6 +40,7 @@ public sealed class SessionExpiryTests : BunitContext
         Services.AddSingleton<TimeProvider>(new ManualTime());
         Services.AddSingleton<ILearningMaterial>(material);
         Services.AddSingleton<IQuiz>(quiz);
+        Services.AddQuietAnswerSync();
         authorization = AddAuthorization();
         JSInterop.Mode = JSRuntimeMode.Loose;
         SetRendererInfo(new RendererInfo("WebAssembly", isInteractive: true));

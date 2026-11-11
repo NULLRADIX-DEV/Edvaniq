@@ -35,6 +35,13 @@ public sealed class LearningRecord : IOwnedByUser
 
     public DateTime AnsweredAt { get; private set; }
 
+    // The answer of the newest record, so a client can tell its answer has arrived. Two at the same time go by the
+    // larger id, the same records always give the same one. Null without records.
+    public static Guid? Latest(IEnumerable<LearningRecord> records) =>
+        records.OrderByDescending(record => record.AnsweredAt).ThenByDescending(record => record.AnswerId)
+            .Select(record => (Guid?)record.AnswerId)
+            .FirstOrDefault();
+
     public static LearningRecord Create(
         Guid answerId,
         string ownerId,

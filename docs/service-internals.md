@@ -156,6 +156,19 @@ Ein Consumer arbeitet in der Trace der Anfrage, die das Ereignis ausgelöst hat.
 
 Die Vorlage hört auf ihr eigenes `ExampleItemCreated`, damit der Weg von der Outbox bis in den Handler schon im Beispiel zu sehen ist. Ein echter Handler hört auf ein Event eines anderen Service. Eine Nachricht kann mehr als einmal und in anderer Reihenfolge ankommen, ein Handler verlässt sich auf beides nicht.
 
+### Reihenfolge
+
+Der Broker hält die Reihenfolge nur innerhalb eines Stream, nicht zwischen Absendern. Ein Ereignis kann deshalb vor dem ankommen, auf das es sich bezieht. Jeder Empfänger kommt dann zum selben Ergebnis wie in der richtigen Reihenfolge, und zwar so:
+
+| Empfänger | Ereignis vor seinem Bezug | Was passiert |
+|---|---|---|
+| Assessment | `ItemsGenerated` vor `TopicsChanged` mit dem Thema | Der Handler wirft `MessageNotReadyException`, die Nachricht kommt wieder, bis das Thema bekannt ist. Danach sind die Fragen da. |
+| LearningEngine | `AnswerRecorded` vor `TopicsChanged` mit dem Thema | Der Lern-Nachweis wird gespeichert, aber erst gezeigt, wenn das Thema bekannt ist. Die Mastery entsteht immer aus allen Nachweisen, also wie in der richtigen Reihenfolge. Eine Info-Zeile nennt `AnswerId` und `TopicId`. |
+| LearningEngine | `SessionCompleted` vor `TopicsChanged` | Die Einführung wird gespeichert und zählt, sobald das Thema bekannt ist. |
+| Planning, Assessment, LearningEngine | ein älteres `TopicsChanged` nach einem neueren | Der Stand mit dem früheren `ChangedAt` ändert nichts (`TopicsSnapshot`). |
+
+`OrderFlowTests` in `Edvaniq.EventFlowTests` schickt dieselben Ereignisse einmal in der richtigen und einmal in umgekehrter Reihenfolge über NATS und vergleicht Fragen und Mastery. Ein Ereignis eines gelöschten Nutzers, das nach `UserDeleted` ankommt, legt heute noch Daten an, das regelt [#944](https://github.com/NULLRADIX-DEV/Edvaniq/issues/944).
+
 ### Wenn ein Ereignis dauerhaft scheitert
 
 Scheitert ein Handler an einer Nachricht länger als `Messaging:FailureAlarmAfter` (voreingestellt 5 Minuten), wird `/health` des Service `Unhealthy` und nennt Consumer, Ereignistyp und seit wann: `messaging: content-UserDeletedHandler cannot handle UserDeleted for 6 min`. `MessageId`, Inhalt und Exception stehen nicht darin, sie können Daten eines Nutzers enthalten und bleiben im Log, zu finden über Consumer und Zeit. Der Container gilt dann als `unhealthy`, und der Server alarmiert einmal und meldet „behoben“, sobald der Check wieder grün ist.
@@ -174,10 +187,12 @@ Die Tabelle nennt diesen Test je Consumer als `Klasse.Methode` aus den Integrati
 
 | Service | Ereignis | Test |
 |---|---|---|
+| Assessment | `DocumentDeleted` | `DocumentDeletionTests.DeletionDeliveredTwice_OrSentTwice_ChangesNothingMore` |
 | Assessment | `ItemsGenerated` | `QuestionTests.ItemsDeliveredTwice_OrSentTwice_StoreEachQuestionOnce` |
 | Assessment | `TopicsChanged` | `KnownTopicTests.StateDeliveredTwice_SentTwice_OrOlder_ChangesNothing` |
 | Assessment | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
 | Content | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
+| Knowledge | `DocumentDeleted` | `DocumentDeletionTests.DeletionDeliveredTwice_OrSentTwice_ChangesNothingMore` |
 | Knowledge | `DocumentAnalyzed` | `AnalysisTests.AnalysisDeliveredTwice_OrSentTwice_AddsNoTopicTwice`, `TopicsChangedTests.AnalysisDeliveredTwice_OrSentTwice_StoresNoSecondEvent` |
 | Knowledge | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
 | LearningEngine | `AnswerRecorded` | `LearningRecordTests.AnswerDeliveredTwice_OrSentTwice_CountsOnce`, `MasteryTests.AnswerDeliveredTwice_OrSentTwice_MovesItOnce` |

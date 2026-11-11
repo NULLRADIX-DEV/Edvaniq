@@ -118,6 +118,7 @@ public sealed class PlainTextTests
             .Answer(new GradedAnswer(Attempt, 1, false, 0, text, 1000));
         context.Services.AddSingleton<IQuiz>(quiz);
         context.Services.AddSingleton<ILearningMaterial>(new FakeLearningMaterial().Topics(new TopicInfo(Topic, text, [])));
+        context.Services.AddQuietAnswerSync();
         context.JSInterop.Mode = JSRuntimeMode.Loose;
         context.SetRendererInfo(new RendererInfo("WebAssembly", isInteractive: true));
         var page = context.Render<Practice>(parameters => parameters.Add(p => p.TopicId, Topic));
