@@ -53,6 +53,7 @@ public sealed class RoutesTests : BunitContext
     [InlineData("/login", "Anmelden")]
     [InlineData("/datenschutz", "Datenschutzhinweis")]
     [InlineData("/open-source", "Open-Source-Hinweise")]
+    [InlineData("/bausteine", "Bausteine")]
     public void PublicPages_NeedNoLogin(string path, string heading)
     {
         var navigation = Services.GetRequiredService<NavigationManager>();

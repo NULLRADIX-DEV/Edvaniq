@@ -5,7 +5,7 @@ namespace Edvaniq.Web.AccessibilityTests;
 // host. A link to another site, like the imprint, is not a request until someone follows it.
 public sealed class ThirdPartyTests(WebShell shell)
 {
-    public static TheoryData<string> Pages { get; } = ["/", "/login", "/datenschutz", "/open-source", "/there-is-no-such-page"];
+    public static TheoryData<string> Pages { get; } = ["/", "/login", "/datenschutz", "/open-source", "/bausteine", "/there-is-no-such-page"];
 
     [Theory]
     [MemberData(nameof(Pages))]

@@ -1,0 +1,17 @@
+@* Always there, also while empty: a screen reader only announces what changes inside a region it already knows. A status
+   waits until the reader is done, an urgent one interrupts. Buttons belong outside, a changing region would take their
+   focus along. *@
+<div role="@(Urgent ? "alert" : "status")" @attributes="AdditionalAttributes">
+    @ChildContent
+</div>
+
+@code {
+    [Parameter]
+    public bool Urgent { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+}

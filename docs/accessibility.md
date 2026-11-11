@@ -11,6 +11,12 @@ Sie gilt für jeden Pull Request, der ändert, was ein Client zeigt, also Seiten
 3. Jede neue Farbe hat in `ContrastTests` ihr Paar mit dem Hintergrund, auf dem sie steht.
 4. Die manuellen Prüfungen der Checkliste sind für die geänderte Ansicht gemacht.
 
+## Bausteine
+
+Eingabefelder, Meldungen, Statusanzeigen und Ladezustände baut keine Seite selbst, sie nimmt die Bausteine aus `Client.DesignSystem`. `TextField` verbindet Beschriftung, Hinweis und Fehlermeldung mit dem Feld und schreibt „Pflichtfeld“ aus. `Notice` zeigt Hinweis, Erfolg, Warnung und Fehler jeweils mit eigenem Symbol und einem Wort für den Screenreader, die Farbe ist also nie das einzige Zeichen. `LiveRegion` ist die Statusanzeige, die schon vor ihrem Inhalt auf der Seite steht, damit ein Screenreader vorliest, was darin erscheint. `Loading` sagt, dass etwas lädt, und gehört in eine `LiveRegion`.
+
+Die Seite `/bausteine` zeigt jeden Baustein in jedem Zustand und läuft durch `ShellScanTests`. Wer ein Formular oder eine Meldung baut, schaut dort zuerst nach.
+
 ## Review
 
 Wer reviewt, geht die Checkliste für die geänderte Ansicht durch und macht die manuellen Prüfungen selbst. Was du geprüft hast, schreibst du in den Kommentar deines Approvals, etwa „Tastatur und Accessibility-Baum von `/themen` geprüft, keine neue Farbe“. Die Beschreibung des Pull Requests bleibt kurz, die Checkliste steht nur hier.

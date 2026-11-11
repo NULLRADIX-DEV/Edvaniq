@@ -1,0 +1,57 @@
+/* Every color pair here is in ContrastTests: the shape against the background of its message, the glyph against the
+   shape. */
+.status-symbol {
+    display: inline-flex;
+    flex: none;
+    width: 1.25em;
+    height: 1.25em;
+    vertical-align: -0.2em;
+}
+
+svg {
+    width: 100%;
+    height: 100%;
+}
+
+.glyph-line {
+    fill: none;
+    stroke-width: 2.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.status-symbol-info .shape {
+    fill: var(--color-accent);
+}
+
+.status-symbol-info .glyph {
+    fill: var(--color-on-accent);
+}
+
+.status-symbol-success .shape {
+    fill: var(--color-right);
+}
+
+.status-symbol-success .glyph-line {
+    stroke: var(--color-surface);
+}
+
+/* The yellow alone would vanish on white, the dark outline carries the shape. */
+.status-symbol-warning .shape {
+    fill: var(--color-highlight);
+    stroke: var(--color-on-highlight);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+}
+
+.status-symbol-warning .glyph {
+    fill: var(--color-on-highlight);
+}
+
+.status-symbol-error .shape {
+    fill: var(--color-alert);
+}
+
+.status-symbol-error .glyph-line {
+    stroke: var(--color-surface);
+}

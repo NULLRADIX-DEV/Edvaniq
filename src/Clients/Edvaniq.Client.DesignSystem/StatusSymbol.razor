@@ -1,0 +1,37 @@
+@* The shape tells the kind without color, the hidden word tells it to a screen reader. The drawing itself stays hidden. *@
+<span class="status-symbol status-symbol-@Kind.ToString().ToLowerInvariant()"><svg viewBox="0 0 20 20" focusable="false" aria-hidden="true">
+        @switch (Kind)
+        {
+            case NoticeKind.Success:
+                <circle class="shape" cx="10" cy="10" r="9" />
+                <path class="glyph-line" d="M5.5 10.5l3 3 6-7" />
+                break;
+            case NoticeKind.Warning:
+                <path class="shape" d="M10 1.75L18.75 17.75H1.25Z" />
+                <rect class="glyph" x="9" y="6.5" width="2" height="6" rx="1" />
+                <circle class="glyph" cx="10" cy="15" r="1.25" />
+                break;
+            case NoticeKind.Error:
+                <circle class="shape" cx="10" cy="10" r="9" />
+                <path class="glyph-line" d="M6.5 6.5l7 7M13.5 6.5l-7 7" />
+                break;
+            default:
+                <circle class="shape" cx="10" cy="10" r="9" />
+                <circle class="glyph" cx="10" cy="5.75" r="1.25" />
+                <rect class="glyph" x="9" y="8.5" width="2" height="7" rx="1" />
+                break;
+        }
+    </svg><span class="visually-hidden">@Word(Kind): </span></span>
+
+@code {
+    [Parameter]
+    public NoticeKind Kind { get; set; }
+
+    public static string Word(NoticeKind kind) => kind switch
+    {
+        NoticeKind.Success => "Erfolg",
+        NoticeKind.Warning => "Warnung",
+        NoticeKind.Error => "Fehler",
+        _ => "Hinweis",
+    };
+}

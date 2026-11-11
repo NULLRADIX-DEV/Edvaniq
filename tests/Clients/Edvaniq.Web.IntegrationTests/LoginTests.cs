@@ -277,6 +277,7 @@ public sealed partial class LoginTests
     [InlineData("/login")]
     [InlineData("/datenschutz")]
     [InlineData("/open-source")]
+    [InlineData("/bausteine")]
     public async Task PublicPages_NeedNoLogin(string path)
     {
         await using var web = new WebFactory("http://127.0.0.1:9");
