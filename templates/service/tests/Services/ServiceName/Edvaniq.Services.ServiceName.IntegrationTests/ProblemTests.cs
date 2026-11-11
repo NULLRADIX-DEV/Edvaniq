@@ -28,10 +28,24 @@ public sealed class ProblemTests(ServiceFactory factory) : IClassFixture<Service
         Assert.Equal(TraceId, await AssertProblemAsync(response, HttpStatusCode.NotFound));
     }
 
-    private async Task<HttpResponseMessage> GetAsync(string path, string? token)
+    // A body the endpoint can't bind is the caller's mistake, a 400, not a 500.
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("[1, 2]")]
+    public async Task UnreadableBody_IsABadRequestProblem(string body)
+    {
+        using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        using var response = await SendAsync(HttpMethod.Post, "/examples", TestTokens.Create("alice"), content);
+
+        Assert.Equal(TraceId, await AssertProblemAsync(response, HttpStatusCode.BadRequest));
+    }
+
+    private Task<HttpResponseMessage> GetAsync(string path, string? token) => SendAsync(HttpMethod.Get, path, token, content: null);
+
+    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, string? token, HttpContent? content)
     {
         using var client = factory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        using var request = new HttpRequestMessage(method, path) { Content = content };
         request.Headers.Add("traceparent", $"00-{TraceId}-00f067aa0ba902b7-01");
         if (token is not null)
         {
