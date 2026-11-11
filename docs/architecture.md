@@ -81,7 +81,7 @@ Weitere Regeln:
 - Zeitpunkte speichert jeder Service in UTC. Den [Lerntag](spec/glossary.md#lerntag) bestimmt jeder Service selbst mit der Tagesgrenze 04:00 Uhr Europe/Berlin, die in UTC im Sommer bei 02:00 und im Winter bei 03:00 liegt. Zwischen Services wird der Lerntag nie übertragen, weder in Ereignissen noch in Abfragen. Dem Client nennt Planning den Lerntag seiner Pläne.
 - Ereignisse ändern sich nur additiv, und es gibt keine Sagas ([Ereigniskatalog](spec/events.md#regeln-für-ereignisse)).
 
-Wer auf wessen Integration Events hört, nach Regel 6 ohne Kreis. Planning holt die Mastery per Abfrage bei LearningEngine, weil LearningEngine schon auf Planning hört. Welche Ereignisse auf diesen Wegen laufen, steht im [Ereigniskatalog](spec/events.md).
+Wer auf wessen Integration Events hört, nach Regel 6 ohne Kreis. Planning holt die Mastery per Abfrage bei LearningEngine, weil LearningEngine schon auf Planning hört. Assessment fragt Knowledge per HTTP, aus welcher Analyse ein Thema stammt, um dessen Fragen zu finden. Die Abfrage trägt das Token des Nutzers, so antwortet Knowledge nur zu dessen eigenen Themen. Welche Ereignisse auf diesen Wegen laufen, steht im [Ereigniskatalog](spec/events.md).
 
 | Consumer | konsumiert von |
 |---|---|

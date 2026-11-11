@@ -83,6 +83,49 @@ namespace Edvaniq.Services.Assessment.Infrastructure.Migrations
                     b.ToTable("outbox_messages", (string)null);
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Assessment.Domain.Attempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("char(36)");
+
+                    b.Property<bool>("Answered")
+                        .IsConcurrencyToken()
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<DateTime?>("AnsweredAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("AskedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool?>("Correct")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<int?>("Option")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<Guid>("QuestionId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int?>("ResponseTimeMs")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("Attempts");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Assessment.Domain.Question", b =>
                 {
                     b.Property<Guid>("Id")

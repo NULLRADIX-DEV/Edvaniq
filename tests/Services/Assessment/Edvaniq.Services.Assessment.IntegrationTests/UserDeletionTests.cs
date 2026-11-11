@@ -10,7 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Edvaniq.Services.Assessment.IntegrationTests;
 
-// UserDeleted removes all of the user's questions and nobody else's.
+// UserDeleted removes all of the user's questions and attempts and nobody else's.
 public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<ServiceFactory>
 {
     private const string Consumer = $"{InfrastructureExtensions.ServiceKey}-UserDeletedHandler";
@@ -24,15 +24,15 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
     {
         var alice = NewUser("alice");
         var bob = NewUser("bob");
+        await service.AddAttemptAsync(await service.AddQuestionAsync(alice));
         await service.AddQuestionAsync(alice);
-        await service.AddQuestionAsync(alice);
-        await service.AddQuestionAsync(bob);
+        await service.AddAttemptAsync(await service.AddQuestionAsync(bob));
 
         var messageId = await DeleteAsync(alice);
 
         await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
         Assert.Equal(0, ItemsOf(alice));
-        Assert.Equal(1, ItemsOf(bob));
+        Assert.Equal(2, ItemsOf(bob));
     }
 
     // "Alice" and "alice" are two users, deleting one keeps the data of the other.
@@ -110,8 +110,10 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         return id;
     }
 
+    // Questions and attempts.
     private int ItemsOf(string user) =>
-        Query(db => db.Questions.IgnoreQueryFilters().Count(item => item.OwnerId == user));
+        Query(db => db.Questions.IgnoreQueryFilters().Count(item => item.OwnerId == user)
+            + db.Attempts.IgnoreQueryFilters().Count(item => item.OwnerId == user));
 
     private int InboxEntries(Guid messageId) =>
         Query(db => db.Set<InboxMessage>().Count(entry => entry.MessageId == messageId && entry.Consumer == Consumer));

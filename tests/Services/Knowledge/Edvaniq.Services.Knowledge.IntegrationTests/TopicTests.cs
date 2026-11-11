@@ -41,6 +41,32 @@ public sealed class TopicTests(ServiceFactory service) : IClassFixture<ServiceFa
         Assert.Equal([cell.Id, genetics.Id, algebra.Id], (await ListAsync(client, "/topics")).Select(tree => tree.Id));
     }
 
+    // Clients see which analysis a topic came from, Assessment finds the topic's questions by it until #214.
+    [Fact]
+    public async Task EveryTopic_NamesItsDocumentAndPosition_InTheTreeAndAlone()
+    {
+        var alice = NewUser();
+        var document = Guid.NewGuid();
+        var cell = Topic.Create(alice, Guid.NewGuid(), "Zelle", Seed.Now, document, 0);
+        var nucleus = cell.AddSubtopic("Zellkern", Seed.Now, document, 1);
+        await service.AddAsync(cell, nucleus);
+        using var client = ClientFor(alice);
+
+        var tree = Assert.Single((await client.GetFromJsonAsync<JsonElement[]>("/topics", TestContext.Current.CancellationToken))!);
+        var subtopic = Assert.Single(tree.GetProperty("subtopics").EnumerateArray());
+        var alone = await client.GetFromJsonAsync<JsonElement>($"/topics/{nucleus.Id}", TestContext.Current.CancellationToken);
+
+        Assert.Equal((document, 0), Source(tree));
+        Assert.Equal((document, 1), Source(subtopic));
+        Assert.Equal((document, 1), Source(alone));
+        Assert.Equal(
+            (document, 0),
+            Source(await client.GetFromJsonAsync<JsonElement>($"/topics/{cell.Id}", TestContext.Current.CancellationToken)));
+
+        static (Guid, int) Source(JsonElement topic) =>
+            (topic.GetProperty("documentId").GetGuid(), topic.GetProperty("position").GetInt32());
+    }
+
     [Fact]
     public async Task Rename_KeepsTheId()
     {

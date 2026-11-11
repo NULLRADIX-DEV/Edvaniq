@@ -38,13 +38,16 @@ internal static class TopicEndpoints
 
 internal sealed record RenamedTopic(string? Name);
 
-internal sealed record TopicResponse(Guid Id, Guid LearningGoalId, Guid? ParentId, string Name)
+// DocumentId and Position name the analysis the topic came from. Until #214 that is how Assessment finds its questions.
+internal sealed record TopicResponse(Guid Id, Guid LearningGoalId, Guid? ParentId, string Name, Guid? DocumentId, int Position)
 {
-    public static TopicResponse From(Topic topic) => new(topic.Id, topic.LearningGoalId, topic.ParentId, topic.Name);
+    public static TopicResponse From(Topic topic) =>
+        new(topic.Id, topic.LearningGoalId, topic.ParentId, topic.Name, topic.DocumentId, topic.Position);
 }
 
 // A topic of the upper level with its subtopics.
-internal sealed record TopicTreeResponse(Guid Id, Guid LearningGoalId, string Name, IReadOnlyList<SubtopicResponse> Subtopics)
+internal sealed record TopicTreeResponse(
+    Guid Id, Guid LearningGoalId, string Name, Guid? DocumentId, int Position, IReadOnlyList<SubtopicResponse> Subtopics)
 {
     // Keeps the order of the list on both levels.
     public static IEnumerable<TopicTreeResponse> From(IReadOnlyList<Topic> topics)
@@ -55,8 +58,10 @@ internal sealed record TopicTreeResponse(Guid Id, Guid LearningGoalId, string Na
             topic.Id,
             topic.LearningGoalId,
             topic.Name,
-            [.. subtopics[topic.Id].Select(subtopic => new SubtopicResponse(subtopic.Id, subtopic.Name))]));
+            topic.DocumentId,
+            topic.Position,
+            [.. subtopics[topic.Id].Select(subtopic => new SubtopicResponse(subtopic.Id, subtopic.Name, subtopic.DocumentId, subtopic.Position))]));
     }
 }
 
-internal sealed record SubtopicResponse(Guid Id, string Name);
+internal sealed record SubtopicResponse(Guid Id, string Name, Guid? DocumentId, int Position);

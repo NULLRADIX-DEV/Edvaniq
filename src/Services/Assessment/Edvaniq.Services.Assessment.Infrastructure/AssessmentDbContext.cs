@@ -16,6 +16,8 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
 {
     public DbSet<Question> Questions => Set<Question>();
 
+    public DbSet<Attempt> Attempts => Set<Attempt>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         var question = modelBuilder.Entity<Question>();
@@ -41,5 +43,16 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
             .HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
 
         question.HasIndex(entry => new { entry.OwnerId, entry.DocumentId, entry.TopicPosition });
+
+        var attempt = modelBuilder.Entity<Attempt>();
+        attempt.Property(entry => entry.Id).ValueGeneratedNever();
+
+        // Two answers at once: the later one updates no row and gets the stored answer instead.
+        attempt.Property(entry => entry.Answered).IsConcurrencyToken();
+        attempt.Property(entry => entry.AskedAt)
+            .HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
+        attempt.Property(entry => entry.AnsweredAt)
+            .HasConversion(value => value, value => value == null ? null : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc));
+        attempt.HasIndex(entry => entry.OwnerId);
     }
 }
