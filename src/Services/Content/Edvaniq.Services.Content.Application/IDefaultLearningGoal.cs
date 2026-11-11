@@ -6,8 +6,11 @@ namespace Edvaniq.Services.Content.Application;
 public interface IDefaultLearningGoal
 {
     // Throws LearningGoalUnavailableException if Planning can't be asked.
-    Task<Guid> IdAsync(CancellationToken cancellationToken);
+    Task<DefaultLearningGoal> GetAsync(CancellationToken cancellationToken);
 }
+
+// Level and output language by Planning's names, null when the goal has none. LearnerProfile decides what they mean.
+public sealed record DefaultLearningGoal(Guid Id, string? Level, string? OutputLanguage);
 
 public sealed class LearningGoalUnavailableException(Exception innerException)
     : Exception("Planning could not be asked for the default learning goal.", innerException);

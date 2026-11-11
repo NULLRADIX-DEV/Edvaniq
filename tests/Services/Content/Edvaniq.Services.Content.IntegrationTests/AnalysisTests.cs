@@ -444,6 +444,24 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         });
     }
 
+    // Both prompts are the variant for the goal's level and language, and the default one for a goal without.
+    [Theory]
+    [InlineData("University", "en")]
+    [InlineData(null, null)]
+    public async Task Prompts_FollowLevelAndLanguageOfTheGoal(string? level, string? language)
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        service.Planning.Profile(alice, level, language);
+        using var client = ClientFor(alice);
+        var id = await PasteAsync(client, Text);
+
+        await AnalyzeAsync(id, withQuestions: true);
+
+        var profile = LearnerProfile.Of(level, language);
+        var systems = prompts.Where(message => message.Role == ChatRole.System).Select(message => message.Text).Distinct().ToList();
+        Assert.Equal([TopicAnalysis.System(profile), QuestionGeneration.System(profile)], systems);
+    }
+
     // An invalid answer is asked again up to the limit, a provider that fails is not, within one attempt. Without delays
     // left an outage fails the document. Every attempt is in the cost.
     [Theory]

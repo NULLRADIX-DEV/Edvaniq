@@ -27,6 +27,33 @@ public sealed class LearningGoalTests(ServiceFactory service) : IClassFixture<Se
         Assert.Equal(service.Planning.GoalOf(alice), (await StoredAsync(alice)).Single(document => document.Id == id).LearningGoalId);
     }
 
+    // The prompts of the text follow the goal's level and output language as they were when it came in.
+    [Fact]
+    public async Task PastedText_KeepsLevelAndOutputLanguageOfTheGoal()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        service.Planning.Profile(alice, "University", "en");
+        using var client = ClientFor(alice);
+
+        var id = await PasteAsync(client);
+
+        var stored = (await StoredAsync(alice)).Single(document => document.Id == id);
+        Assert.Equal(("University", "en"), (stored.Level, stored.OutputLanguage));
+    }
+
+    // A default goal nobody took over has neither, the prompts take their own default then.
+    [Fact]
+    public async Task PastedText_IntoAGoalWithoutLevel_KeepsNone()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        using var client = ClientFor(alice);
+
+        var id = await PasteAsync(client);
+
+        var stored = (await StoredAsync(alice)).Single(document => document.Id == id);
+        Assert.Equal((null, null), (stored.Level, stored.OutputLanguage));
+    }
+
     // Planning gets the caller's token and nothing else of the browser's request, no cookie and no other header.
     [Fact]
     public async Task Planning_GetsTheUsersTokenAndNoOtherHeader()

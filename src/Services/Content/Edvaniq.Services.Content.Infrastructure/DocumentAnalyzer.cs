@@ -132,7 +132,7 @@ public sealed class DocumentAnalyzer(
         IReadOnlyList<Guid> ids = [.. sections.Select(section => section.Id)];
         var answer = await ai.AskAsync(
             [
-                new ChatMessage(ChatRole.System, TopicAnalysis.System),
+                new ChatMessage(ChatRole.System, TopicAnalysis.System(LearnerProfile.Of(document.Level, document.OutputLanguage))),
                 new ChatMessage(ChatRole.User, TopicAnalysis.User(sections.Select(section => document.Text.Substring(section.Start, section.Length)))),
             ],
             text => TopicAnalysis.Read(text, ids),

@@ -12,9 +12,10 @@ internal static class LearningGoalEndpoints
         var goals = app.MapGroup("/learning-goals");
 
         // POST, because the first call creates it. Content asks for it when a text comes in (#215), with the token of the
-        // user who sent the text.
+        // user who sent the text, and keeps level and output language for the prompts (#290). A default goal nobody took
+        // over has neither, Content picks its own default then.
         goals.MapPost("/default", async (ILearningGoals goals, CancellationToken cancellationToken) =>
-            new DefaultLearningGoalResponse((await goals.DefaultAsync(cancellationToken)).Id));
+            DefaultLearningGoalResponse.From(await goals.DefaultAsync(cancellationToken)));
 
         goals.MapPost("/", async (NewLearningGoal request, ILearningGoals goals, TimeProvider time, CancellationToken cancellationToken) =>
         {
@@ -50,7 +51,10 @@ internal static class LearningGoalEndpoints
     }
 }
 
-internal sealed record DefaultLearningGoalResponse(Guid Id);
+internal sealed record DefaultLearningGoalResponse(Guid Id, string? Level, string? OutputLanguage)
+{
+    public static DefaultLearningGoalResponse From(LearningGoal goal) => new(goal.Id, goal.Level?.ToString(), goal.OutputLanguage);
+}
 
 // Strings, so an unknown value gets a message at its field. ExamDate as yyyy-MM-dd.
 internal sealed record NewLearningGoal(

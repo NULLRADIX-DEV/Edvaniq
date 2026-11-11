@@ -30,10 +30,10 @@ internal static class DocumentEndpoints
             }
 
             // The goal before the save: without Planning nothing is stored, the user just sends the text again.
-            Guid learningGoalId;
+            DefaultLearningGoal learningGoal;
             try
             {
-                learningGoalId = await goal.IdAsync(cancellationToken);
+                learningGoal = await goal.GetAsync(cancellationToken);
             }
             catch (LearningGoalUnavailableException)
             {
@@ -42,7 +42,7 @@ internal static class DocumentEndpoints
                     title: "Der Text ließ sich gerade nicht speichern. Versuch es gleich noch einmal.");
             }
 
-            var document = await documents.PasteAsync(learningGoalId, request.Title, request.Text!, cancellationToken);
+            var document = await documents.PasteAsync(learningGoal, request.Title, request.Text!, cancellationToken);
             return Results.Created($"/documents/{document.Id}", DocumentResponse.From(document));
         });
 
