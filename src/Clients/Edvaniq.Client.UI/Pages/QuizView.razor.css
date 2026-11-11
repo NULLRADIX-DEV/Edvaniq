@@ -130,3 +130,17 @@ h1 {
 .button {
     min-height: 2.75rem;
 }
+
+/* Next to the main button, plainer, as it gives up on the question. */
+.quiz-reveal {
+    min-height: 2.75rem;
+    padding: var(--space-2) var(--space-4);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    border: 2px solid var(--color-ink-muted);
+    font-weight: 600;
+}
+
+.quiz-reveal:hover {
+    border-color: var(--color-ink);
+}

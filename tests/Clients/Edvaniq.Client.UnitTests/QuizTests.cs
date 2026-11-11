@@ -4,6 +4,7 @@ using Edvaniq.Client.Core;
 using Edvaniq.Client.UI.Pages;
 
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Edvaniq.Client.UnitTests;
@@ -294,6 +295,79 @@ public sealed class QuizTests : BunitContext
         page.Find("#option-0").Change("0");
         page.Find("form").Submit();
         Assert.Equal((NextAttempt, 0, 2000), quiz.Answered[1]);
+    }
+
+    // "Lösung anzeigen" sends no option but the time measured, and shows the solution as a wrong answer without marking
+    // anything as the user's. Whatever was ticked no longer holds the page.
+    [Fact]
+    public void ShowingTheSolution_GivesSolutionAndExplanation_AsWrong()
+    {
+        var quiz = new FakeQuiz().Ask(Question).Answer(Graded(option: 1, answer: 1) with { Option = null, Correct = false, Revealed = true });
+        var page = RenderPage(quiz);
+        page.Find("#option-0").Change("0");
+        Assert.True(page.FindComponent<NavigationLock>().Instance.ConfirmExternalNavigation);
+        time.Advance(TimeSpan.FromSeconds(7));
+
+        page.Find("button.quiz-reveal").Click();
+
+        Assert.Equal((Attempt, 7000), Assert.Single(quiz.Revealed));
+        Assert.Empty(quiz.Answered);
+        Assert.Equal("✗ Diesmal nicht richtig.", Squeeze(page.Find("#feedback-heading").TextContent));
+        var feedback = Squeeze(page.Find(".quiz-feedback").TextContent);
+        Assert.Contains("Richtige Antwort: In den Thylakoiden", feedback);
+        Assert.Contains("Erklärung: Die Lichtreaktion läuft an den Membranen der Thylakoide ab.", feedback);
+        Assert.Equal(["Richtige Antwort"], Marks(page, 1));
+        Assert.Empty(Marks(page, 0));
+        Assert.Empty(page.FindAll("button.quiz-reveal"));
+        Assert.Empty(page.FindAll("button[type=submit]"));
+        Assert.False(page.FindComponent<NavigationLock>().Instance.ConfirmExternalNavigation);
+    }
+
+    [Fact]
+    public void RevealButton_StandsNextToTheAnswerButton_AndNeedsNoChoice()
+    {
+        var quiz = new FakeQuiz().Ask(Question).Answer(Graded(option: 1, answer: 1) with { Option = null, Correct = false, Revealed = true });
+        var page = RenderPage(quiz);
+
+        var actions = page.Find("form .quiz-actions");
+        Assert.Equal(["Antwort prüfen", "Lösung anzeigen"], actions.QuerySelectorAll("button").Select(button => Squeeze(button.TextContent)));
+        Assert.Equal("button", actions.QuerySelector("button.quiz-reveal")!.GetAttribute("type"));
+
+        page.Find("button.quiz-reveal").Click();
+
+        Assert.Single(quiz.Revealed);
+        Assert.Empty(page.FindAll("[role=alert] .quiz-note"));
+    }
+
+    // While the solution is on its way, a second click or an answer sends nothing more.
+    [Fact]
+    public void Reveal_WhileSending_SendsOnce()
+    {
+        var quiz = new FakeQuiz { AnswerGate = new() }.Ask(Question).Answer(Graded(option: 1, answer: 1) with { Option = null, Correct = false, Revealed = true });
+        var page = RenderPage(quiz);
+
+        page.Find("button.quiz-reveal").Click();
+        Assert.Equal("Wird geladen …", Squeeze(page.Find("button.quiz-reveal").TextContent));
+        page.Find("button.quiz-reveal").Click();
+        Answer(page, 1);
+        quiz.AnswerGate.SetResult();
+
+        page.WaitForAssertion(() => Assert.Single(page.FindAll(".quiz-feedback")));
+        Assert.Single(quiz.Revealed);
+        Assert.Empty(quiz.Answered);
+    }
+
+    [Fact]
+    public void Reveal_ThatFails_SaysSo_AndCanBeTriedAgain()
+    {
+        var quiz = new FakeQuiz().Ask(Question).Answer(CallOutcome<GradedAnswer>.Failed(TraceId));
+        var page = RenderPage(quiz);
+
+        page.Find("button.quiz-reveal").Click();
+
+        Assert.Contains("nicht angekommen", page.Find("[role=alert]").TextContent, StringComparison.Ordinal);
+        Assert.Empty(page.FindAll(".quiz-feedback"));
+        Assert.NotNull(page.Find("button.quiz-reveal"));
     }
 
     // Prerendered on the server there is nobody to ask.
