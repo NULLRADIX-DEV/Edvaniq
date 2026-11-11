@@ -4,7 +4,7 @@ Was auf `main` liegt, kann jederzeit ausgerollt werden. Deshalb kommt dorthin nu
 
 | Ruleset | Regeln |
 |---|---|
-| `main-protect` | Änderungen nur per Pull Request. Die Pflicht-Checks „Build & test backend“, „Secret scan“ und „Container images“ müssen grün sein. Der Branch muss vor dem Merge auf dem Stand von `main` sein. Kein Force-Push, Löschen gesperrt. |
+| `main-protect` | Änderungen nur per Pull Request. Die Pflicht-Checks „Build & test backend“, „Secret scan“ und „Container images“ müssen grün sein. Der Branch muss vor dem Merge nicht auf dem Stand von `main` sein, die CI prüft ihn einmal und danach `main` nach jedem Merge. Kein Force-Push, Löschen gesperrt. |
 | `main-review` | 1 Approval. Neue Commits machen alte Approvals ungültig. |
 
 ## Vom Branch nach main
@@ -12,7 +12,7 @@ Was auf `main` liegt, kann jederzeit ausgerollt werden. Deshalb kommt dorthin nu
 1. Einen Branch von `main` anlegen und einen Pull Request gegen `main` öffnen.
 2. Die CI baut, testet alle Testprojekte samt Architekturtests, sucht nach Secrets und baut die Container-Images. Die Tests laufen in mehreren Jobs parallel, der Job „Build & test backend“ fasst sie zusammen. Ändert der Pull Request keinen ausgelieferten Prozess (nichts unter `src/` oder `deploy/`, keine `Directory.*`, `global.json`, `nuget.config` und `ci.yml`), ist „Container images“ ohne Bau sofort grün. Auf `main` entstehen die Images immer, hochgeladen werden sie erst nach dem Merge.
 3. Der andere Entwickler reviewt und approvt. Ändert der Pull Request, was ein Client zeigt, geht er dabei die Checkliste aus [docs/accessibility.md](accessibility.md) durch.
-4. Mergen. Ist `main` inzwischen weiter, vorher „Update branch“ klicken, damit die CI den echten Stand nach dem Merge prüft.
+4. Mergen, sobald die Checks grün sind. Ein „Update branch“ ist nur bei einem Konflikt nötig. Bricht ein Merge zweier PRs, die einzeln grün waren, etwas, zeigt es die CI auf `main`, und der nächste PR behebt es.
 
 Ein roter Check blockiert den Merge für alle, auch Admins können ihn nicht übergehen.
 
