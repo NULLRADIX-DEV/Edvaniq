@@ -32,8 +32,7 @@ public sealed class TopicsTests : BunitContext
             Interval: TimeSpan.FromMilliseconds(10),
             SlowInterval: TimeSpan.FromMilliseconds(10),
             SlowAfter: TimeSpan.FromMilliseconds(20),
-            AnalysisLimit: TimeSpan.FromMilliseconds(40),
-            TopicsLimit: TimeSpan.FromMilliseconds(40)));
+            AnalysisLimit: TimeSpan.FromMilliseconds(40)));
     }
 
     // AC4: without a text the page says what to do next and offers the form right there.
@@ -64,23 +63,25 @@ public sealed class TopicsTests : BunitContext
         Assert.Contains("„Skript Bio“ wird analysiert", Status(page));
         page.WaitForAssertion(() => Assert.Contains("Die Themen aus „Skript Bio“ sind da.", Status(page)), Wait);
         Assert.Equal(["Photosynthese", "Lichtreaktion"], page.FindAll(".topic-list li").Select(Name));
+        Assert.Equal(2, material.TopicCalls);
     }
 
-    // Between Ready in Content and the topics in Knowledge lies the broker: the page waits for them.
+    // Content is Ready only once Knowledge has the topics. A text on known topics only brings no topic with its id (#208),
+    // the page still loads the topics once more and is done.
     [Fact]
-    public void TopicsLaterThanTheStatus_AreWaitedFor()
+    public async Task TextOnKnownTopicsOnly_IsDone_AfterOneMoreLoadOfTheTopics()
     {
         var material = new FakeLearningMaterial()
-            .Documents(Document(DocumentStatus.Ready))
-            .Topics()
-            .Topics()
-            .Topics(NewTopic);
+            .Documents(Document(DocumentStatus.Analyzing), Document(DocumentStatus.Ready, id: Older))
+            .Documents(Document(DocumentStatus.Ready), Document(DocumentStatus.Ready, id: Older))
+            .Topics(OldTopic);
 
         var page = RenderPage(material);
 
-        Assert.Contains("Die Themen werden gerade übernommen", Status(page));
-        page.WaitForAssertion(() => Assert.Contains("sind da", Status(page)), Wait);
-        Assert.Equal(3, material.TopicCalls);
+        page.WaitForAssertion(() => Assert.Contains("Die Themen aus „Skript Bio“ sind da.", Status(page)), Wait);
+        Assert.Equal("Zellatmung", Name(page.Find(".topic-list li")));
+        await Task.Delay(100, Xunit.TestContext.Current.CancellationToken);
+        Assert.Equal((2, 2), (material.DocumentCalls, material.TopicCalls));
     }
 
     // Every topic and subtopic leads to a question of its own, the link names it for a screen reader.
@@ -324,16 +325,6 @@ public sealed class TopicsTests : BunitContext
     }
 
     [Fact]
-    public void TopicsTakingLong_SayIt_WithAWayToLoadThemAgain()
-    {
-        var material = new FakeLearningMaterial().Documents(Document(DocumentStatus.Ready)).Topics();
-        var page = RenderPage(material);
-
-        page.WaitForAssertion(() => Assert.Contains("noch unterwegs", Status(page)), Wait);
-        Assert.Equal("Themen erneut laden", page.Find("button.button:not([type=submit])").TextContent.Trim());
-    }
-
-    [Fact]
     public void LoadNotThrough_ShowsAHint_AndLoadsAgainOnRetry()
     {
         var material = new FakeLearningMaterial()
@@ -368,7 +359,7 @@ public sealed class TopicsTests : BunitContext
     public async Task LeavingThePage_StopsAsking()
     {
         Services.AddSingleton(new MaterialPolling(
-            TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1)));
+            TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1)));
         var material = new FakeLearningMaterial().Documents(Document(DocumentStatus.Analyzing));
         var page = RenderPage(material);
         page.WaitForAssertion(() => Assert.True(material.DocumentCalls >= 2), Wait);

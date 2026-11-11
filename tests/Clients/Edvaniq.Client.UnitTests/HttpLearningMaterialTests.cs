@@ -59,8 +59,8 @@ public sealed class HttpLearningMaterialTests
         var topic = Assert.Single(outcome.Value!);
         Assert.Equal("Photosynthese", topic.Name);
         Assert.Equal("Lichtreaktion", Assert.Single(topic.Subtopics).Name);
-        Assert.True(topic.CameFrom(Guid.Parse(DocumentId)));
-        Assert.False(topic.CameFrom(Guid.NewGuid()));
+        Assert.Equal(Guid.Parse(DocumentId), topic.DocumentId);
+        Assert.Equal(Guid.Parse(DocumentId), topic.Subtopics[0].DocumentId);
     }
 
     // A topic that came another way names no document.

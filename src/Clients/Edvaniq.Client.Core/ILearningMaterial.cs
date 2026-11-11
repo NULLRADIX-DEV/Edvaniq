@@ -27,13 +27,9 @@ public enum DocumentStatus
 
 public sealed record DocumentInfo(Guid Id, string Title, DocumentStatus Status, DateTimeOffset CreatedAt, string? FailureReason = null);
 
-// A topic of the upper level with its subtopics. DocumentId names the document whose analysis brought it, null for a
-// topic that came another way.
-public sealed record TopicInfo(Guid Id, string Name, IReadOnlyList<SubtopicInfo> Subtopics, Guid? DocumentId = null)
-{
-    public bool CameFrom(Guid documentId) =>
-        DocumentId == documentId || Subtopics.Any(subtopic => subtopic.DocumentId == documentId);
-}
+// A topic of the upper level with its subtopics. DocumentId names the document whose analysis brought it first, null for
+// a topic that came another way. Later documents only add sections to it.
+public sealed record TopicInfo(Guid Id, string Name, IReadOnlyList<SubtopicInfo> Subtopics, Guid? DocumentId = null);
 
 public sealed record SubtopicInfo(Guid Id, string Name, Guid? DocumentId = null);
 

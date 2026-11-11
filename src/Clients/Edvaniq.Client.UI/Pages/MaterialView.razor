@@ -46,16 +46,6 @@
                 später wiederkommen.
             </p>
             break;
-        case ViewState.TopicsArriving:
-            <p class="material-note">
-                <strong>„@latest!.Title“ ist analysiert.</strong> Die Themen werden gerade übernommen …
-            </p>
-            break;
-        case ViewState.TopicsSlow:
-            <p class="material-note">
-                <strong>Die Themen aus „@latest!.Title“ sind noch unterwegs.</strong> Lade sie gleich noch einmal.
-            </p>
-            break;
         case ViewState.Failed:
             <div class="material-note material-alert">
                 <p><strong>Die Analyse von „@latest!.Title“ hat nicht geklappt.</strong></p>
@@ -79,9 +69,6 @@
         break;
     case ViewState.AnalysisSlow:
         <button type="button" class="button" @onclick="StartFollowing">Weiter warten</button>
-        break;
-    case ViewState.TopicsSlow:
-        <button type="button" class="button" @onclick="StartFollowing">Themen erneut laden</button>
         break;
     case ViewState.Failed:
         <button type="button" class="button" @onclick="RetryAnalysisAsync">
@@ -191,8 +178,6 @@
         Empty,
         Analyzing,
         AnalysisSlow,
-        TopicsArriving,
-        TopicsSlow,
         Failed,
         Ready,
     }
@@ -205,15 +190,13 @@
         { latest: null } => ViewState.Empty,
         { latest.Status: DocumentStatus.Failed } => ViewState.Failed,
         _ when IsAnalyzing => gaveUp ? ViewState.AnalysisSlow : ViewState.Analyzing,
-        _ when TopicsMissing => gaveUp ? ViewState.TopicsSlow : ViewState.TopicsArriving,
         _ => ViewState.Ready,
     };
 
+    // Content is ready only once Knowledge has the topics of the document, and RefreshAsync asks for the topics only after
+    // the documents. So a Ready document always comes with its topics, also when they are all known from earlier texts and
+    // none carries its id.
     private bool IsAnalyzing => latest?.Status is DocumentStatus.Uploaded or DocumentStatus.Analyzing;
-
-    // Content is ready only once Knowledge has the topics, but the two answers of one round may still disagree.
-    private bool TopicsMissing =>
-        latest is { Status: DocumentStatus.Ready } document && !topics.Any(topic => topic.CameFrom(document.Id));
 
     // The text binds on change, a binding on input would send a long text across with every key. Until the change comes,
     // TypingWatch tells that something is typed.
@@ -293,14 +276,14 @@
         }
     }
 
-    // Asks again and again while the newest text is analyzed or its topics are on their way, and stops when they are
-    // there, when it has waited long enough, or when the user leaves the page.
+    // Asks again and again while the newest text is analyzed, and stops when it is done (the topics come with that round),
+    // when it has waited long enough, or when the user leaves the page.
     private void StartFollowing()
     {
         follow?.Cancel();
         follow?.Dispose();
         gaveUp = false;
-        if (!IsAnalyzing && !TopicsMissing)
+        if (!IsAnalyzing)
         {
             follow = null;
             return;
@@ -342,19 +325,11 @@
     private async Task FollowAsync(CancellationToken cancellationToken)
     {
         var waited = TimeSpan.Zero;
-        var analyzing = IsAnalyzing;
         try
         {
-            while (IsAnalyzing || TopicsMissing)
+            while (IsAnalyzing)
             {
-                // The topics get their own time once the analysis is done.
-                if (analyzing != IsAnalyzing)
-                {
-                    analyzing = IsAnalyzing;
-                    waited = TimeSpan.Zero;
-                }
-
-                if (waited >= (analyzing ? polling.AnalysisLimit : polling.TopicsLimit))
+                if (waited >= polling.AnalysisLimit)
                 {
                     gaveUp = true;
                     StateHasChanged();
@@ -365,7 +340,7 @@
                 await Task.Delay(wait, cancellationToken);
                 waited += wait;
 
-                var through = await RefreshAsync(documents: analyzing, cancellationToken);
+                var through = await RefreshAsync(documents: true, cancellationToken);
                 StateHasChanged();
                 if (!through)
                 {
