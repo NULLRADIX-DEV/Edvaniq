@@ -1,6 +1,9 @@
+using System.Text.Json;
+
 using Edvaniq.BuildingBlocks.AI;
 using Edvaniq.Services.Content.Application;
 
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -15,11 +18,26 @@ public static class ContentAi
 
     public const string QuestionsTask = QuestionGeneration.Task;
 
+    public static readonly ChatResponseFormat TopicsFormat = FormatOf(TopicAnalysis.Schema, "topics");
+
+    public static readonly ChatResponseFormat QuestionsFormat = FormatOf(QuestionGeneration.Schema, "questions");
+
     public static TBuilder AddContentAi<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
         builder.Services.AddSingleton<ISimulatedAnswer, SimulatedTopics>();
         builder.Services.AddSingleton<ISimulatedAnswer, SimulatedQuestions>();
         return builder.AddAi();
+    }
+
+    // The model that answered. Some providers leave it out of the answer, then it is the configured one, never empty.
+    internal static string ModelOf(IChatClient ai, string? answered) =>
+        new[] { answered, ai.GetService<ChatClientMetadata>()?.DefaultModelId, ai.GetService<ChatClientMetadata>()?.ProviderName }
+            .FirstOrDefault(model => !string.IsNullOrWhiteSpace(model)) ?? "unknown";
+
+    private static ChatResponseFormat FormatOf(string schema, string name)
+    {
+        using var json = JsonDocument.Parse(schema);
+        return ChatResponseFormat.ForJsonSchema(json.RootElement.Clone(), name);
     }
 
     internal static bool IsTask(SimulatedPrompt prompt, string task) =>

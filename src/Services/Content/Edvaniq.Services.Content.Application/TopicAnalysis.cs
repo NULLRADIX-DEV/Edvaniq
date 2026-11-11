@@ -28,6 +28,17 @@ public static class TopicAnalysis
         {"topics":[{"title":"Thema","sections":[1],"subtopics":[{"title":"Unterthema","sections":[2,3]}]}]}
         """;
 
+    // The form of the answer as JSON schema, for a provider that can keep to one. Read checks the answer all the same.
+    public const string Schema = """
+        {"type":"object","additionalProperties":false,"required":["topics"],"properties":{
+          "topics":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["title","sections","subtopics"],"properties":{
+            "title":{"type":"string"},
+            "sections":{"type":"array","items":{"type":"integer"}},
+            "subtopics":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["title","sections"],"properties":{
+              "title":{"type":"string"},
+              "sections":{"type":"array","items":{"type":"integer"}}}}}}}}}}
+        """;
+
     // The sections in their order, numbered from 1.
     public static string User(IEnumerable<string> sections) => PromptMaterial.Of(sections);
 

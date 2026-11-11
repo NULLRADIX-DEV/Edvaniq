@@ -44,6 +44,17 @@ public class SimulatedChatClientTests
         Assert.Equal(SimulatedChatClient.Provider, first.ModelId);
     }
 
+    // Estimated at four characters a token, so the cost of a document shows up without a real provider.
+    [Fact]
+    public async Task Answer_CarriesAnEstimatedUsage()
+    {
+        var answer = await new SimulatedChatClient([new Echo()]).GetResponseAsync(Prompt, cancellationToken: TestContext.Current.CancellationToken);
+
+        var input = ("Antworte kurz.".Length + "Photosynthese".Length) / 4;
+        Assert.Equal((input, answer.Text.Length / 4), (answer.Usage?.InputTokenCount, answer.Usage?.OutputTokenCount));
+        Assert.Equal(answer.Usage!.InputTokenCount + answer.Usage.OutputTokenCount, answer.Usage.TotalTokenCount);
+    }
+
     [Fact]
     public async Task OtherPrompt_GetsItsOwnAnswer()
     {

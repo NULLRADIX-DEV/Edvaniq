@@ -8,7 +8,7 @@ namespace Edvaniq.BuildingBlocks.AI;
 // Where a provider with an OpenAI-compatible API lives, which model it runs and what goes into every request on top.
 // All of it comes from the environment of the server, the repo only knows the names. Errors name the setting, never
 // its value.
-internal sealed record OpenAiCompatibleSettings(Uri Endpoint, string Model, string ApiKey, JsonObject ExtraBody)
+internal sealed record OpenAiCompatibleSettings(Uri Endpoint, string Model, string ApiKey, JsonObject ExtraBody, bool SchemaOutput = true)
 {
     public const string Section = "Ai:OpenAiCompatible";
 
@@ -30,13 +30,20 @@ internal sealed record OpenAiCompatibleSettings(Uri Endpoint, string Model, stri
             uri = new Uri(uri.AbsoluteUri + "/");
         }
 
-        return new OpenAiCompatibleSettings(uri, Required(section, "Model"), Required(section, "ApiKey"), ExtraBodyOf(section["ExtraBody"]));
+        return new OpenAiCompatibleSettings(
+            uri, Required(section, "Model"), Required(section, "ApiKey"), ExtraBodyOf(section["ExtraBody"]), SchemaOutputOf(section["SchemaOutput"]));
     }
 
     private static string Required(IConfigurationSection section, string key) =>
         section[key] is { Length: > 0 } value && !string.IsNullOrWhiteSpace(value)
             ? value.Trim()
             : throw new InvalidOperationException($"{Section}:{key} is missing.");
+
+    // On unless set to false: an endpoint that can't keep to a JSON schema would otherwise fail every request.
+    private static bool SchemaOutputOf(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? true
+        : bool.TryParse(value.Trim(), out var on) ? on
+        : throw new InvalidOperationException($"{Section}:SchemaOutput must be true or false.");
 
     private static JsonObject ExtraBodyOf(string? value)
     {

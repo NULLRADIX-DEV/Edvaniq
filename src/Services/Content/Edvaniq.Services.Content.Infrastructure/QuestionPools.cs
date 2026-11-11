@@ -1,8 +1,10 @@
+using Edvaniq.BuildingBlocks.AI;
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Contracts;
 using Edvaniq.Services.Content.Domain;
+using Edvaniq.Services.Content.Infrastructure.Ai;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
@@ -128,10 +130,13 @@ public sealed class QuestionPools(
         // Every AI call comes before the one save, nothing holds the database meanwhile. A topic without questions fails
         // the document and nothing of the others goes out.
         var made = new List<(KnowledgeTopic Topic, List<GeneratedItem> Items)>();
+        var cost = new AiCost();
         foreach (var topic in topics.Where(topic => !pooled.Contains(topic.Id)))
         {
-            if (await PoolAsync(document, SectionsOf(topics, topic, texts), texts, cancellationToken) is not { } items)
+            var items = await PoolAsync(document, SectionsOf(topics, topic, texts), texts, cost, cancellationToken);
+            if (items is null)
             {
+                LogCost(document.Id, cost);
                 document.Fail(Document.QuestionsFailed);
                 await db.SaveChangesAsync(cancellationToken);
                 return true;
@@ -139,6 +144,8 @@ public sealed class QuestionPools(
 
             made.Add((topic, items));
         }
+
+        LogCost(document.Id, cost);
 
         var outbox = scope.ServiceProvider.GetRequiredService<IEventOutbox>();
         var now = time.GetUtcNow().UtcDateTime;
@@ -179,47 +186,65 @@ public sealed class QuestionPools(
         return [.. own.Where(texts.ContainsKey)];
     }
 
-    // The questions of one topic, or null if it got none. An answer without a valid question gets one more try, since a
-    // real model may just have had a bad moment. A provider that fails or takes too long fails at once, retries for that
-    // come with #300.
+    // The questions of one topic, or null if it got none. An answer without a valid question gets asked again, up to
+    // StructuredOutput.DefaultAttempts, since a real model may just have had a bad moment. A provider that fails or takes
+    // too long fails at once, retries for that come with #300. Every attempt adds to the cost of the document.
     private async Task<List<GeneratedItem>?> PoolAsync(
-        Document document, IReadOnlyList<Guid> sectionIds, Dictionary<Guid, string> texts, CancellationToken cancellationToken)
+        Document document, IReadOnlyList<Guid> sectionIds, Dictionary<Guid, string> texts, AiCost cost, CancellationToken cancellationToken)
     {
-        try
+        var answer = await ai.AskAsync(
+            [
+                new ChatMessage(ChatRole.System, QuestionGeneration.System),
+                new ChatMessage(ChatRole.User, QuestionGeneration.User(sectionIds.Select(id => texts[id]))),
+            ],
+            text => QuestionGeneration.Read(text, sectionIds) is { Count: > 0 } drafts ? drafts : null,
+            new StructuredRequest(AiTimeout, ContentAi.QuestionsFormat),
+            time,
+            cancellationToken);
+        cost.Add(answer.Attempts, answer.Usage, answer.ModelId);
+        if (answer.Failure is { } failure)
         {
-            for (var attempt = 0; attempt < 2; attempt++)
-            {
-                var response = await AskAsync(sectionIds.Select(id => texts[id]), cancellationToken);
-                if (QuestionGeneration.Read(response.Text, sectionIds) is { Count: > 0 } drafts)
-                {
-                    var model = ModelOf(response);
-                    return [.. drafts.Select(draft => new GeneratedItem(
-                        Guid.NewGuid(), ItemKind.Question, document.Id, draft.SectionId, model, QuestionGeneration.PromptVersion,
-                        new GeneratedQuestion(draft.Text, draft.Options, draft.Answer, draft.Explanation, draft.Difficulty)))];
-                }
-            }
-
-            ContentLog.QuestionsAnswerUnusable(logger, document.Id);
+            ContentLog.QuestionsFailed(logger, failure, document.Id);
             return null;
         }
-        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+
+        if (answer.Value is not { } drafts)
         {
-            ContentLog.QuestionsFailed(logger, exception, document.Id);
+            ContentLog.QuestionsAnswerUnusable(logger, document.Id, answer.Attempts);
             return null;
+        }
+
+        var model = ContentAi.ModelOf(ai, answer.ModelId);
+        return [.. drafts.Select(draft => new GeneratedItem(
+            Guid.NewGuid(), ItemKind.Question, document.Id, draft.SectionId, model, QuestionGeneration.PromptVersion,
+            new GeneratedQuestion(draft.Text, draft.Options, draft.Answer, draft.Explanation, draft.Difficulty)))];
+    }
+
+    // Nothing to log when every topic had its pool already.
+    private void LogCost(Guid documentId, AiCost cost)
+    {
+        if (cost.Attempts > 0)
+        {
+            ContentLog.AiUsage(
+                logger, "questions", documentId, cost.Attempts, cost.Usage.InputTokenCount ?? 0, cost.Usage.OutputTokenCount ?? 0,
+                ContentAi.ModelOf(ai, cost.ModelId));
         }
     }
 
-    // The model that answered. Some providers leave it out of the answer, then it is the configured one, never empty.
-    private string ModelOf(ChatResponse response) =>
-        new[] { response.ModelId, ai.GetService<ChatClientMetadata>()?.DefaultModelId, ai.GetService<ChatClientMetadata>()?.ProviderName }
-            .FirstOrDefault(model => !string.IsNullOrWhiteSpace(model)) ?? "unknown";
-
-    private async Task<ChatResponse> AskAsync(IEnumerable<string> sections, CancellationToken cancellationToken)
+    // The attempts and tokens of all AI calls for one document.
+    private sealed class AiCost
     {
-        using var timeout = new CancellationTokenSource(AiTimeout, time);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
-        return await ai.GetResponseAsync(
-            [new ChatMessage(ChatRole.System, QuestionGeneration.System), new ChatMessage(ChatRole.User, QuestionGeneration.User(sections))],
-            cancellationToken: linked.Token);
+        public int Attempts { get; private set; }
+
+        public UsageDetails Usage { get; } = new();
+
+        public string? ModelId { get; private set; }
+
+        public void Add(int attempts, UsageDetails usage, string? modelId)
+        {
+            Attempts += attempts;
+            Usage.Add(usage);
+            ModelId = modelId ?? ModelId;
+        }
     }
 }

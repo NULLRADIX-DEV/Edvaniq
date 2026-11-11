@@ -38,6 +38,19 @@ public static class QuestionGeneration
         {"questions":[{"text":"Frage","options":["A","B"],"answer":0,"explanation":"Erklärung","difficulty":1,"section":1}]}
         """;
 
+    // The form of the answer as JSON schema, for a provider that can keep to one. Read checks the answer all the same.
+    public const string Schema = """
+        {"type":"object","additionalProperties":false,"required":["questions"],"properties":{
+          "questions":{"type":"array","items":{"type":"object","additionalProperties":false,
+            "required":["text","options","answer","explanation","difficulty","section"],"properties":{
+              "text":{"type":"string"},
+              "options":{"type":"array","items":{"type":"string"}},
+              "answer":{"type":"integer"},
+              "explanation":{"type":"string"},
+              "difficulty":{"type":"integer"},
+              "section":{"type":"integer"}}}}}}
+        """;
+
     // The sections of the topic in their order, numbered from 1.
     public static string User(IEnumerable<string> sections) => PromptMaterial.Of(sections);
 

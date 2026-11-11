@@ -17,6 +17,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.Services.Content.IntegrationTests;
 
@@ -52,6 +53,8 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     private readonly IHost ai = SimulatedAi();
 
     private readonly List<ChatMessage> prompts = [];
+
+    private readonly TestLogs logs = new();
 
     private SimulatedChatClient Simulated => ai.Services.GetRequiredService<SimulatedChatClient>();
 
@@ -222,7 +225,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     {
         using var client = ClientFor($"alice-{Guid.NewGuid():N}");
         var id = await PasteAsync(client, Text);
-        var questions = new BrokenQuestions(failures: 1);
+        var questions = new BrokenAnswers(failures: 1);
 
         await AnalyzeAsync(id, questions, withQuestions: true);
 
@@ -231,6 +234,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         var analyzed = Assert.Single(await ReportedAsync(id));
         Assert.Equal(analyzed.Topics.Count + 1, questions.Calls);
         Assert.Equal(analyzed.Topics.Count, (await GeneratedAsync(id)).Count);
+        Assert.Equal(analyzed.Topics.Count + 1, UsageOf("questions", id).Attempts);
     }
 
     [Fact]
@@ -238,7 +242,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     {
         using var client = ClientFor($"alice-{Guid.NewGuid():N}");
         var id = await PasteAsync(client, Text);
-        var questions = new BrokenQuestions(failures: 2);
+        var questions = new BrokenAnswers(failures: 2);
 
         await AnalyzeAsync(id, questions, withQuestions: true);
 
@@ -251,7 +255,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     {
         using var client = ClientFor($"alice-{Guid.NewGuid():N}");
         var id = await PasteAsync(client, Text);
-        var questions = new BrokenQuestions(failures: int.MaxValue, outage: true);
+        var questions = new BrokenAnswers(failures: int.MaxValue, outage: true);
 
         await AnalyzeAsync(id, questions, withQuestions: true);
 
@@ -295,11 +299,12 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         });
     }
 
+    // An invalid answer is asked again up to the limit, a provider that fails is not (#300). Every attempt is in the cost.
     [Theory]
-    [InlineData(SimulatedFault.Outage)]
-    [InlineData(SimulatedFault.Timeout)]
-    [InlineData(SimulatedFault.InvalidOutput)]
-    public async Task FailingAi_FailsTheDocumentWithAReason_AndReportsNothing(SimulatedFault fault)
+    [InlineData(SimulatedFault.Outage, 1)]
+    [InlineData(SimulatedFault.Timeout, 1)]
+    [InlineData(SimulatedFault.InvalidOutput, StructuredOutput.DefaultAttempts)]
+    public async Task FailingAi_FailsTheDocumentWithAReason_AndReportsNothing(SimulatedFault fault, int attempts)
     {
         using var client = ClientFor($"alice-{Guid.NewGuid():N}");
         var id = await PasteAsync(client, Text);
@@ -312,6 +317,42 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             ("Failed", "Die Themen ließen sich gerade nicht erkennen. Füge den Text später noch einmal ein."),
             (found!.Status, found.FailureReason));
         Assert.Empty(await ReportedAsync(id));
+        Assert.Equal(attempts, Asked(ContentAi.TopicsTask));
+        Assert.Equal(attempts, UsageOf("topics", id).Attempts);
+    }
+
+    [Fact]
+    public async Task UnusableTopics_AreAskedOnceMore_AndCountInTheCost()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        var topics = new BrokenAnswers(failures: 1, task: ContentAi.TopicsTask);
+
+        await AnalyzeAsync(id, topics);
+
+        Assert.Equal(2, topics.Calls);
+        Assert.Single(await ReportedAsync(id));
+        var usage = UsageOf("topics", id);
+        Assert.Equal(2, usage.Attempts);
+        Assert.True(usage.InputTokens > 0);
+    }
+
+    // Questions that are no valid JSON at all: asked up to the limit for the first topic, then nothing of the document
+    // goes out.
+    [Fact]
+    public async Task InvalidQuestionOutput_IsAskedUpToTheLimit_ThenFailsTheDocument()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        await AnalyzeAsync(id);
+        service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
+        Simulated.Fault = SimulatedFault.InvalidOutput;
+
+        await Pools().FinishAsync(id, TestContext.Current.CancellationToken);
+
+        await AssertQuestionsFailedAsync(client, id);
+        Assert.Equal(StructuredOutput.DefaultAttempts, Asked(ContentAi.QuestionsTask));
+        Assert.Equal(StructuredOutput.DefaultAttempts, UsageOf("questions", id).Attempts);
     }
 
     public void Dispose() => ai.Dispose();
@@ -325,8 +366,8 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         return builder.Build();
     }
 
-    // The simulated AI, keeping every prompt it gets. BrokenQuestions sits in between when given.
-    private IChatClient Chat(BrokenQuestions? questions = null)
+    // The simulated AI, keeping every prompt it gets. BrokenAnswers sits in between when given.
+    private IChatClient Chat(BrokenAnswers? questions = null)
     {
         IChatClient chat = new RecordingChatClient(ai.Services.GetRequiredService<IChatClient>(), prompts);
         if (questions is null)
@@ -339,24 +380,24 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     }
 
     // The analyzer of the worker, on the service's database.
-    private DocumentAnalyzer Analyzer(BrokenQuestions? questions = null)
+    private DocumentAnalyzer Analyzer(BrokenAnswers? questions = null)
     {
-        var analyzer = ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, Chat(questions));
+        var analyzer = ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, Chat(questions), LoggerOf<DocumentAnalyzer>());
         analyzer.AiTimeout = TimeSpan.FromMilliseconds(500);
         return analyzer;
     }
 
     // The question pools of the worker, asking the KnowledgeStub of the service.
-    private QuestionPools Pools(BrokenQuestions? questions = null)
+    private QuestionPools Pools(BrokenAnswers? questions = null)
     {
-        var pools = ActivatorUtilities.CreateInstance<QuestionPools>(service.Services, Chat(questions));
+        var pools = ActivatorUtilities.CreateInstance<QuestionPools>(service.Services, Chat(questions), LoggerOf<QuestionPools>());
         pools.AiTimeout = TimeSpan.FromMilliseconds(500);
         return pools;
     }
 
     // Splits the document as the worker does and analyzes it. With questions Knowledge takes the topics over and the
     // pools follow.
-    private async Task AnalyzeAsync(Guid id, BrokenQuestions? questions = null, bool withQuestions = false)
+    private async Task AnalyzeAsync(Guid id, BrokenAnswers? questions = null, bool withQuestions = false)
     {
         await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(id, TestContext.Current.CancellationToken);
         await Analyzer(questions).AnalyzeAsync(id, TestContext.Current.CancellationToken);
@@ -366,6 +407,27 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             await Pools(questions).FinishAsync(id, TestContext.Current.CancellationToken);
         }
     }
+
+    // How often the AI got a prompt of the task.
+    private int Asked(string task)
+    {
+        lock (prompts)
+        {
+            return prompts.Count(message => message.Role == ChatRole.System && message.Text.StartsWith(task, StringComparison.Ordinal));
+        }
+    }
+
+    // The one cost line of the task for the document.
+    private (int Attempts, long InputTokens) UsageOf(string task, Guid documentId)
+    {
+        var entry = Assert.Single(logs.Entries, entry => entry.Message.StartsWith($"AI usage for the {task} of document {documentId}:", StringComparison.Ordinal));
+        var match = System.Text.RegularExpressions.Regex.Match(entry.Message, ": (\\d+) attempts, (\\d+) input tokens");
+        Assert.True(match.Success, entry.Message);
+        return (int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture),
+            long.Parse(match.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private ILogger<T> LoggerOf<T>() => new TestLogger<T>(logs.CreateLogger(typeof(T).FullName!));
 
     // A save that loses against another worker fails on the status, the time of the analysis or the pool's key.
     private static async Task<bool> SucceedsAsync(Func<Task> run)
@@ -467,9 +529,10 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         }
     }
 
-    // Answers the first questions prompts with a question that has no answer, or fails them like a provider that is down.
-    // Topics go through untouched. One instance counts the calls of analyzer and pools together.
-    private sealed class BrokenQuestions(int failures, bool outage = false) : IChatClient
+    // Answers the first prompts of the task with a question that has no answer, which is no use for topics either, or
+    // fails them like a provider that is down. Other tasks go through untouched. One instance counts the calls of
+    // analyzer and pools together.
+    private sealed class BrokenAnswers(int failures, bool outage = false, string task = ContentAi.QuestionsTask) : IChatClient
     {
         public IChatClient InnerClient { get; set; } = null!;
 
@@ -479,7 +542,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
             var list = messages.ToList();
-            if (!list[0].Text.StartsWith(ContentAi.QuestionsTask, StringComparison.Ordinal))
+            if (!list[0].Text.StartsWith(task, StringComparison.Ordinal))
             {
                 return await InnerClient.GetResponseAsync(list, options, cancellationToken);
             }
@@ -504,6 +567,16 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         public void Dispose()
         {
         }
+    }
+
+    private sealed class TestLogger<T>(ILogger inner) : ILogger<T>
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => inner.BeginScope(state);
+
+        public bool IsEnabled(LogLevel logLevel) => inner.IsEnabled(logLevel);
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            inner.Log(logLevel, eventId, state, exception, formatter);
     }
 
     private sealed record DocumentDto(Guid Id, string Title, string Status, string? FailureReason, DateTime CreatedAt);
