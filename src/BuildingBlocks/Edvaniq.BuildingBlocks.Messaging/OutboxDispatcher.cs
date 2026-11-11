@@ -87,7 +87,10 @@ internal sealed class OutboxDispatcher(
         var db = store.Resolve(scope.ServiceProvider);
 
         // The database calls are synchronous on purpose, MySql.Data's OpenAsync can hang forever (see MySqlHealthCheck).
-        using var transaction = db.Database.BeginTransaction();
+        // Read committed, so FOR UPDATE locks only the claimed rows. Under InnoDB's default it also locks the gap after
+        // them, and every save with a new event then waits for this transaction, while the broker is down up to the
+        // publish timeout.
+        using var transaction = db.Database.BeginTransaction(System.Data.IsolationLevel.ReadCommitted);
 
         var batch = db.Set<OutboxMessage>()
             .FromSql($"SELECT * FROM outbox_messages WHERE SentAt IS NULL ORDER BY Id LIMIT {options.Value.BatchSize} FOR UPDATE SKIP LOCKED")
