@@ -19,7 +19,7 @@ x-app: &app
     Authentication__Schemes__Bearer__Authority: http://identity-api:8080
     Authentication__Schemes__Bearer__RequireHttpsMetadata: "false"
   healthcheck:
-    test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && head -n 1 <&3 | grep -q ' 200 '"]
+    test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && tr -d '\\r' <&3 | awk 'NR == 1 { ok = / 200 / } { print } END { exit !ok }'"]
     interval: 30s
     timeout: 5s
     retries: 3

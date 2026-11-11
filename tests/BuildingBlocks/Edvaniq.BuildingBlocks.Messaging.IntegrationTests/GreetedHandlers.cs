@@ -21,8 +21,17 @@ public sealed class HandlerBehavior
     // A greeting with this text is never ready, its handler throws MessageNotReadyException every time.
     public string? NeverReady { get; set; }
 
+    // A greeting with this text fails every time, like a bug in the handler, until the test sets it back to null.
+    public string? Broken { get; set; }
+
     internal void Enter(string text)
     {
+        if (text == Broken)
+        {
+            Interlocked.Increment(ref calls);
+            throw new InvalidOperationException($"Cannot greet '{text}'.");
+        }
+
         if (text == NeverReady)
         {
             Interlocked.Increment(ref calls);

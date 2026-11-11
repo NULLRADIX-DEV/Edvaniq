@@ -35,6 +35,9 @@ Ein Service meldet zwei Dinge. `/alive` sagt nur, dass der Prozess antwortet. `/
 | DB gestoppt oder nicht erreichbar | 200 `Healthy` | 503 `Unhealthy` nach etwa 2 s |
 | DB hängt (Container pausiert oder eingefroren) | 200 `Healthy` | 503 `Unhealthy` nach 2–4 s |
 | kein Connection String | 200 `Healthy` | 503 `Unhealthy` |
+| ein Consumer scheitert seit 5 Minuten an derselben Nachricht | 200 `Healthy` | 503 `Unhealthy` mit einer Zeile `messaging: …` |
+
+Die Antwort von `/health` ist der Status. Nur ein Check mit dem Tag `details` hängt eine Zeile mit Namen und Beschreibung an, heute nur der Check `messaging` ([Wenn ein Ereignis dauerhaft scheitert](#wenn-ein-ereignis-dauerhaft-scheitert)). Fehlermeldungen und Exceptions anderer Checks stehen nie darin. Der Healthcheck in `deploy/compose.yml` gibt die Antwort aus, so behält Docker sie im Zustand des Containers.
 
 Außerhalb von Development antworten beide nur auf dem internen Port 8081 ([Deploy](deploy.md#health)).
 
@@ -152,6 +155,16 @@ Ein Handler ändert deshalb nur den DbContext und ruft kein `SaveChanges`. Wirft
 Ein Consumer arbeitet in der Trace der Anfrage, die das Ereignis ausgelöst hat. `IEventOutbox.Add` speichert dafür den `traceparent` mit dem Ereignis, der Dispatcher schickt ihn im Header `traceparent` mit, und der Consumer startet darunter eine Activity der Quelle `Edvaniq.Messaging`. Alles, was der Handler loggt, trägt so die `TraceId` dieser Anfrage, dazu `Consumer` und `MessageId`. Nach dem Speichern loggt der Consumer „Consumer <consumer> has handled message <MessageId>“.
 
 Die Vorlage hört auf ihr eigenes `ExampleItemCreated`, damit der Weg von der Outbox bis in den Handler schon im Beispiel zu sehen ist. Ein echter Handler hört auf ein Event eines anderen Service. Eine Nachricht kann mehr als einmal und in anderer Reihenfolge ankommen, ein Handler verlässt sich auf beides nicht.
+
+### Wenn ein Ereignis dauerhaft scheitert
+
+Scheitert ein Handler an einer Nachricht länger als `Messaging:FailureAlarmAfter` (voreingestellt 5 Minuten), wird `/health` des Service `Unhealthy` und nennt Consumer, Ereignistyp und seit wann: `messaging: content-UserDeletedHandler cannot handle UserDeleted for 6 min`. `MessageId`, Inhalt und Exception stehen nicht darin, sie können Daten eines Nutzers enthalten und bleiben im Log, zu finden über Consumer und Zeit. Der Container gilt dann als `unhealthy`, und der Server alarmiert einmal und meldet „behoben“, sobald der Check wieder grün ist.
+
+`MessageNotReadyException` zählt nicht. Sie ist der erwartete Fall, dass ein Ereignis des Absenders noch unterwegs ist, und eine solche Nachricht wird nach `Messaging:NotReadyDeliveries` Zustellungen ohnehin bestätigt. Würde sie zählen, gäbe es nach jedem Neustart des Absenders einen Fehlalarm. Auch ein Broker, der nicht erreichbar ist, zählt nicht: Dann gibt es keine Nachricht, an der ein Handler scheitert, und den Ausfall meldet der Container `nats` selbst.
+
+Neu verarbeiten muss niemand von Hand. Der Broker stellt die Nachricht weiter alle 5 Sekunden zu. Ist der Fehler behoben und ausgerollt, gelingt die nächste Zustellung, der Check wird grün. Das gilt, solange der Stream die Nachricht noch hat, also bis zu 7 Tage (`Messaging:StreamMaxAge`). Der Zähler lebt im Prozess: Ein Neustart beginnt die Frist von vorn, die nächste gescheiterte Zustellung startet sie wieder.
+
+Consumer laufen nur in den APIs, denn Worker haben keinen Healthcheck. `WorkerConsumerTests` in `Edvaniq.ArchitectureTests` prüft, dass kein Worker einen Handler registriert, außer er hat in `deploy/compose.yml` einen Healthcheck.
 
 ### Doppelte Zustellung
 
