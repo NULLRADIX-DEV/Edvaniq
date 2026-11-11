@@ -17,6 +17,10 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
     public DbSet<QuestionPool> QuestionPools => Set<QuestionPool>();
 
+    public DbSet<AiAttempt> AiAttempts => Set<AiAttempt>();
+
+    public DbSet<AiUsageDay> AiUsageDays => Set<AiUsageDay>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         var document = modelBuilder.Entity<Document>();
@@ -42,5 +46,23 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         pool.HasKey(item => item.TopicId);
         pool.Property(item => item.TopicId).ValueGeneratedNever();
         pool.HasOne<Document>().WithMany().HasForeignKey(item => item.DocumentId).OnDelete(DeleteBehavior.Cascade);
+
+        // No foreign key to the document: what an attempt cost stays when the document goes.
+        var attempt = modelBuilder.Entity<AiAttempt>();
+        attempt.Property(item => item.Purpose).HasMaxLength(AiAttempt.PurposeMaxLength);
+        attempt.Property(item => item.Model).HasMaxLength(AiAttempt.ModelMaxLength);
+        attempt.Property(item => item.PromptVersion).HasMaxLength(AiAttempt.PromptVersionMaxLength);
+        attempt.Property(item => item.Outcome).HasConversion<string>().HasMaxLength(16);
+        attempt.Property(item => item.Cost).HasPrecision(18, 10);
+        attempt.HasIndex(item => item.CalledAt);
+        attempt.HasIndex(item => item.DocumentId);
+        attempt.HasIndex(item => new { item.CallId, item.Attempt }).IsUnique();
+
+        var day = modelBuilder.Entity<AiUsageDay>();
+        day.HasKey(item => new { item.Day, item.Purpose, item.Model, item.PromptVersion });
+        day.Property(item => item.Purpose).HasMaxLength(AiAttempt.PurposeMaxLength);
+        day.Property(item => item.Model).HasMaxLength(AiAttempt.ModelMaxLength);
+        day.Property(item => item.PromptVersion).HasMaxLength(AiAttempt.PromptVersionMaxLength);
+        day.Property(item => item.Cost).HasPrecision(18, 10);
     }
 }

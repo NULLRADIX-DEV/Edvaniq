@@ -9,7 +9,7 @@ namespace Edvaniq.BuildingBlocks.AI;
 
 // A provider with an OpenAI-compatible chat completions API. The key only goes into the Authorization header of the
 // HttpClient, and no exception carries a header or the body of an answer, which may echo the key or the prompt.
-internal sealed class OpenAiCompatibleChatClient(IHttpClientFactory httpClients, OpenAiCompatibleSettings settings) : IChatClient
+internal sealed class OpenAiCompatibleChatClient(IHttpClientFactory httpClients, OpenAiCompatibleSettings settings, AiPrices prices) : IChatClient
 {
     public const string Provider = "OpenAiCompatible";
 
@@ -37,7 +37,9 @@ internal sealed class OpenAiCompatibleChatClient(IHttpClientFactory httpClients,
 
         using (answer)
         {
-            return Read(answer.RootElement);
+            var read = Read(answer.RootElement);
+            AiCost.Set(read, CostOf(answer.RootElement, read));
+            return read;
         }
     }
 
@@ -134,6 +136,15 @@ internal sealed class OpenAiCompatibleChatClient(IHttpClientFactory httpClients,
 
     private static string? Text(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    // What the provider billed, when it says so (it may have to be asked for it, that goes into ExtraBody), otherwise
+    // from the price of the model that answered, or else the configured one.
+    private decimal? CostOf(JsonElement answer, ChatResponse response) =>
+        answer.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object
+        && usage.TryGetProperty("cost", out var cost) && cost.ValueKind == JsonValueKind.Number && cost.TryGetDecimal(out var billed)
+            ? billed
+            : prices.CostOf(response.ModelId, response.Usage?.InputTokenCount ?? 0, response.Usage?.OutputTokenCount ?? 0)
+                ?? prices.CostOf(settings.Model, response.Usage?.InputTokenCount ?? 0, response.Usage?.OutputTokenCount ?? 0);
 
     private static long? Count(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.TryGetInt64(out var count) ? count : null;

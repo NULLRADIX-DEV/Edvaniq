@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Contracts;
 
@@ -7,6 +10,20 @@ namespace Edvaniq.Services.Content.UnitTests;
 public class TopicAnalysisTests
 {
     private static readonly Guid[] Sections = [.. Enumerable.Range(0, 4).Select(_ => Guid.NewGuid())];
+
+    // The SHA-256 of the system message per version. A changed prompt goes into the cost log under a new version.
+    private static readonly Dictionary<string, string> Prompts = new()
+    {
+        ["topics-1"] = "15281c86136864e658f604352b3925b9405000cd160c5f9f33b3c59fa99522ce",
+    };
+
+    [Fact]
+    public void System_ChangesOnlyWithANewPromptVersion()
+    {
+        var hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(TopicAnalysis.System.ReplaceLineEndings("\n"))));
+
+        Assert.Equal(Prompts[TopicAnalysis.PromptVersion], hash);
+    }
 
     [Fact]
     public void User_NumbersTheSections_AndEscapesTheirTags()

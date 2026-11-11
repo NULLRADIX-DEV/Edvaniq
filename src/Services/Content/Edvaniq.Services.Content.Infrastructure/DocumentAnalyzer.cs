@@ -21,6 +21,7 @@ namespace Edvaniq.Services.Content.Infrastructure;
 public sealed class DocumentAnalyzer(
     IServiceScopeFactory scopes,
     IChatClient ai,
+    AiUsageLog usage,
     TimeProvider time,
     ILogger<DocumentAnalyzer> logger) : BackgroundService
 {
@@ -128,9 +129,8 @@ public sealed class DocumentAnalyzer(
             new StructuredRequest(AiTimeout, ContentAi.TopicsFormat),
             time,
             cancellationToken);
-        ContentLog.AiUsage(
-            logger, "topics", document.Id, answer.Attempts, answer.Usage.InputTokenCount ?? 0, answer.Usage.OutputTokenCount ?? 0,
-            ContentAi.ModelOf(ai, answer.ModelId));
+        await usage.RecordAsync(
+            document, AiAttempt.Topics, TopicAnalysis.PromptVersion, answer.Tries, ContentAi.ModelOf(ai, null), cancellationToken);
         if (answer.Failure is { } failure)
         {
             ContentLog.AnalysisFailed(logger, failure, document.Id);

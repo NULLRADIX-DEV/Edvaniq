@@ -22,6 +22,7 @@ namespace Edvaniq.Services.Content.Infrastructure;
 public sealed class QuestionPools(
     IServiceScopeFactory scopes,
     IChatClient ai,
+    AiUsageLog usage,
     TimeProvider time,
     ILogger<QuestionPools> logger) : BackgroundService
 {
@@ -130,13 +131,11 @@ public sealed class QuestionPools(
         // Every AI call comes before the one save, nothing holds the database meanwhile. A topic without questions fails
         // the document and nothing of the others goes out.
         var made = new List<(KnowledgeTopic Topic, List<GeneratedItem> Items)>();
-        var cost = new AiCost();
         foreach (var topic in topics.Where(topic => !pooled.Contains(topic.Id)))
         {
-            var items = await PoolAsync(document, SectionsOf(topics, topic, texts), texts, cost, cancellationToken);
+            var items = await PoolAsync(document, SectionsOf(topics, topic, texts), texts, cancellationToken);
             if (items is null)
             {
-                LogCost(document.Id, cost);
                 document.Fail(Document.QuestionsFailed);
                 await db.SaveChangesAsync(cancellationToken);
                 return true;
@@ -144,8 +143,6 @@ public sealed class QuestionPools(
 
             made.Add((topic, items));
         }
-
-        LogCost(document.Id, cost);
 
         var outbox = scope.ServiceProvider.GetRequiredService<IEventOutbox>();
         var now = time.GetUtcNow().UtcDateTime;
@@ -188,9 +185,9 @@ public sealed class QuestionPools(
 
     // The questions of one topic, or null if it got none. An answer without a valid question gets asked again, up to
     // StructuredOutput.DefaultAttempts, since a real model may just have had a bad moment. A provider that fails or takes
-    // too long fails at once, retries for that come with #300. Every attempt adds to the cost of the document.
+    // too long fails at once, retries for that come with #300. Every attempt goes into the cost log.
     private async Task<List<GeneratedItem>?> PoolAsync(
-        Document document, IReadOnlyList<Guid> sectionIds, Dictionary<Guid, string> texts, AiCost cost, CancellationToken cancellationToken)
+        Document document, IReadOnlyList<Guid> sectionIds, Dictionary<Guid, string> texts, CancellationToken cancellationToken)
     {
         var answer = await ai.AskAsync(
             [
@@ -201,7 +198,8 @@ public sealed class QuestionPools(
             new StructuredRequest(AiTimeout, ContentAi.QuestionsFormat),
             time,
             cancellationToken);
-        cost.Add(answer.Attempts, answer.Usage, answer.ModelId);
+        await usage.RecordAsync(
+            document, AiAttempt.Questions, QuestionGeneration.PromptVersion, answer.Tries, ContentAi.ModelOf(ai, null), cancellationToken);
         if (answer.Failure is { } failure)
         {
             ContentLog.QuestionsFailed(logger, failure, document.Id);
@@ -218,33 +216,5 @@ public sealed class QuestionPools(
         return [.. drafts.Select(draft => new GeneratedItem(
             Guid.NewGuid(), ItemKind.Question, document.Id, draft.SectionId, model, QuestionGeneration.PromptVersion,
             new GeneratedQuestion(draft.Text, draft.Options, draft.Answer, draft.Explanation, draft.Difficulty)))];
-    }
-
-    // Nothing to log when every topic had its pool already.
-    private void LogCost(Guid documentId, AiCost cost)
-    {
-        if (cost.Attempts > 0)
-        {
-            ContentLog.AiUsage(
-                logger, "questions", documentId, cost.Attempts, cost.Usage.InputTokenCount ?? 0, cost.Usage.OutputTokenCount ?? 0,
-                ContentAi.ModelOf(ai, cost.ModelId));
-        }
-    }
-
-    // The attempts and tokens of all AI calls for one document.
-    private sealed class AiCost
-    {
-        public int Attempts { get; private set; }
-
-        public UsageDetails Usage { get; } = new();
-
-        public string? ModelId { get; private set; }
-
-        public void Add(int attempts, UsageDetails usage, string? modelId)
-        {
-            Attempts += attempts;
-            Usage.Add(usage);
-            ModelId = modelId ?? ModelId;
-        }
     }
 }

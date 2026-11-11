@@ -25,6 +25,7 @@ public static class AiExtensions
                 break;
             case OpenAiCompatibleChatClient.Provider:
                 var settings = OpenAiCompatibleSettings.Read(builder.Configuration);
+                var prices = AiPrices.Read(builder.Configuration);
                 // No standard resilience: its attempt timeout is far below an answer of a model, and a retry is a
                 // second paid request. The caller sets the time limit. The call is still marked as evaluation.
 #pragma warning disable EXTEXP0001
@@ -37,7 +38,7 @@ public static class AiExtensions
                     .RemoveAllResilienceHandlers();
 #pragma warning restore EXTEXP0001
                 builder.Services.AddSingleton<IChatClient>(services =>
-                    new OpenAiCompatibleChatClient(services.GetRequiredService<IHttpClientFactory>(), settings));
+                    new OpenAiCompatibleChatClient(services.GetRequiredService<IHttpClientFactory>(), settings, prices));
                 break;
             default:
                 throw new InvalidOperationException(provider is null

@@ -5,8 +5,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 
 using Edvaniq.BuildingBlocks.Messaging;
-using Edvaniq.Services.Identity.Contracts;
 using Edvaniq.Services.Content.Infrastructure;
+using Edvaniq.Services.Identity.Contracts;
 using Edvaniq.Testing;
 
 using Microsoft.EntityFrameworkCore;
@@ -99,6 +99,40 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
             "No log line says with the TraceId of the request that the deletion was handled.");
         Assert.Equal(1, InboxEntries(messageId));
         Assert.Contains(service.Logs.Entries, entry => entry.Message == "Rows of a deleted user to remove: 1" && entry.TraceId == traceId);
+    }
+
+    // The AI costs of a deleted user stay only as daily sums without user or document: the day's total is the same
+    // before and after, the user's attempts are gone, and nobody else's change.
+    [Fact]
+    public async Task DeletedUser_LeavesTheirAiCostsOnlyAsDailySums()
+    {
+        var alice = NewUser("alice");
+        var bob = NewUser("bob");
+        var day = AiUsageSeed.SomeDay();
+        await AiUsageSeed.AddAsync(service.Services, alice, day, (1, 0.25m), (2, null));
+        await AiUsageSeed.AddAsync(service.Services, alice, day.AddDays(1), (1, 0.5m));
+        await AiUsageSeed.AddAsync(service.Services, bob, day, (1, 1m));
+        var before = await PerDayAsync(day);
+
+        var messageId = await DeleteAsync(alice);
+
+        await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
+        Assert.Equal(before, await PerDayAsync(day));
+        Assert.Equal(new AiUsageTotal(2, 3, 30, 9, 1.25m, 1, 4500), before[day]);
+        Assert.Equal(0, Query(db => db.AiAttempts.IgnoreQueryFilters().Count(attempt => attempt.OwnerId == alice)));
+        Assert.Equal(1, Query(db => db.AiAttempts.IgnoreQueryFilters().Count(attempt => attempt.OwnerId == bob)));
+        Assert.Equal(
+            [(day, 1, 2, 0.25m, 1), (day.AddDays(1), 1, 1, 0.5m, 0)],
+            Query(db => db.AiUsageDays.Where(sum => sum.Day == day || sum.Day == day.AddDays(1)).OrderBy(sum => sum.Day).ToList())
+                .Select(sum => (sum.Day, sum.Calls, sum.Attempts, sum.Cost, sum.UnpricedAttempts)));
+    }
+
+    // Per day over both days, the attempts of existing users and the sums of deleted ones together.
+    private async Task<Dictionary<DateOnly, AiUsageTotal>> PerDayAsync(DateOnly day)
+    {
+        using var scope = service.Services.CreateScope();
+        var days = await scope.ServiceProvider.GetRequiredService<AiUsageReport>().PerDayAsync(day, day.AddDays(1), TestContext.Current.CancellationToken);
+        return days.ToDictionary();
     }
 
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";

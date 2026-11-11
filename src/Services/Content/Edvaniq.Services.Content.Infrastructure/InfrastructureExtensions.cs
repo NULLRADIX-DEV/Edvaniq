@@ -23,11 +23,14 @@ public static class InfrastructureExtensions
         builder.Services.AddMySqlDbContext<ContentDbContext>(DatabaseName);
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddScoped<IDocuments, Documents>();
+        builder.Services.AddScoped<AiUsageReport>();
+        builder.Services.AddSingleton<AiUsageLog>();
 
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<ContentDbContext>(ServiceKey);
 
         builder.Services.AddUserDataRemover<ContentDbContext>();
+        builder.Services.AddScoped<IAiUsageArchive, AiUsageArchive>();
         builder.Services.AddIntegrationEventHandler<UserDeleted, UserDeletedHandler>();
 
         // Ready only with a reachable database, alive without it.
@@ -47,6 +50,7 @@ public static class InfrastructureExtensions
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<ICurrentUser, NoUser>();
         builder.Services.AddMessaging<ContentDbContext>(ServiceKey);
+        builder.Services.AddSingleton<AiUsageLog>();
         builder.Services.AddHostedService<DocumentSplitter>();
         builder.Services.AddHostedService<DocumentAnalyzer>();
         builder.Services.AddHostedService<QuestionPools>();
