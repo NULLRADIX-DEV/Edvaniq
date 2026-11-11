@@ -69,6 +69,7 @@ var learningEngineApi = AddService<Projects.Edvaniq_Services_LearningEngine_Api>
     .WaitForCompletion(learningEngineMigrate)
     .WithMessaging(nats);
 planningApi.WithReference(learningEngineApi);
+planningApi.WithReference(assessmentApi);
 var tutorApi = AddService<Projects.Edvaniq_Services_Tutor_Api>("tutor-api", tutorDb);
 var gamificationApi = AddService<Projects.Edvaniq_Services_Gamification_Api>("gamification-api", gamificationDb);
 var analyticsApi = AddService<Projects.Edvaniq_Services_Analytics_Api>("analytics-api", analyticsDb);

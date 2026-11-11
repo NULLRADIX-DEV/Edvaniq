@@ -202,6 +202,156 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
         Assert.False(plan.MasteryAvailable);
     }
 
+    // #374 AC1: one plan asks LearningEngine and Assessment once each, both open at the same time, never more than 3.
+    [Fact]
+    public async Task Plan_AsksLearningEngineAndAssessment_SideBySide_OnceEach()
+    {
+        var (alice, token) = NewUser("alice");
+        var goal = LearningGoal.DefaultIdFor(alice);
+        Seed(KnownTopic.Create(alice, Guid.NewGuid(), goal, hidden: false));
+        service.Calls.WaitForEachOther(token);
+
+        var plan = await PlanAsync(token);
+
+        Assert.True(plan.MasteryAvailable);
+        Assert.True(plan.QuestionPoolsAvailable);
+        Assert.Equal(2, service.Calls.Total(token));
+        Assert.Equal(2, service.Calls.MostAtOnce(token));
+        Assert.Equal($"/question-pools?learningGoalId={goal}", Assert.Single(service.Assessment.RequestsWith(token)).PathAndQuery);
+        Assert.Single(service.LearningEngine.RequestsWith(token));
+    }
+
+    // #374: a topic whose question pool isn't ready gets no block, even as the weakest, and the answer names it. One
+    // Assessment doesn't name counts the same.
+    [Fact]
+    public async Task Plan_LeavesOutTopicsWithoutReadyQuestionPool_AndNamesThem()
+    {
+        var (alice, token) = NewUser("alice");
+        var goal = LearningGoal.DefaultIdFor(alice);
+        var (ready, pending, unknown) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        Seed(KnownTopic.Create(alice, ready, goal, hidden: false));
+        Seed(KnownTopic.Create(alice, pending, goal, hidden: false));
+        Seed(KnownTopic.Create(alice, unknown, goal, hidden: false), withQuestionPool: false);
+        service.Assessment.Set(token, pending, "notReady");
+        service.LearningEngine.Set(token, ready, 70);
+        service.LearningEngine.Set(token, pending, 5, "weakness");
+
+        var plan = await PlanAsync(token);
+
+        Assert.Equal([ready], plan.Blocks.Select(block => block.TopicId).Distinct());
+        Assert.Equal(new[] { pending, unknown }.Order(), plan.NotReadyTopicIds);
+        Assert.True(plan.QuestionPoolsAvailable);
+        Assert.Null(plan.EmptyReason);
+    }
+
+    [Fact]
+    public async Task Plan_WithNoReadyQuestionPool_IsEmpty_WithTheQuestionsPendingHint()
+    {
+        var (alice, token) = NewUser("alice");
+        var topic = Guid.NewGuid();
+        Seed(KnownTopic.Create(alice, topic, LearningGoal.DefaultIdFor(alice), hidden: false));
+        service.Assessment.Set(token, topic, "notReady");
+
+        var plan = await PlanAsync(token);
+
+        Assert.Empty(plan.Blocks);
+        Assert.Equal("questionsPending", plan.EmptyReason);
+        Assert.Equal([topic], plan.NotReadyTopicIds);
+    }
+
+    // #374 AC2: without Assessment the plan still comes, never a 500, with every topic and the mastery, and says so.
+    // LearningEngine is asked all the same.
+    [Theory]
+    [InlineData(null)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    public async Task Plan_WhileAssessmentIsDown_ComesWithEveryTopic(HttpStatusCode? status)
+    {
+        var (alice, token) = NewUser("alice");
+        var (strong, weak) = (Guid.NewGuid(), Guid.NewGuid());
+        Seed(KnownTopic.Create(alice, strong, LearningGoal.DefaultIdFor(alice), hidden: false));
+        Seed(KnownTopic.Create(alice, weak, LearningGoal.DefaultIdFor(alice), hidden: false));
+        service.Assessment.Set(token, weak, "notReady");
+        service.LearningEngine.Set(token, strong, 70);
+        service.LearningEngine.Set(token, weak, 10);
+        if (status is { } failing)
+        {
+            service.Assessment.Fail(token, failing);
+        }
+        else
+        {
+            service.Assessment.Unreachable(token);
+        }
+
+        var plan = await PlanAsync(token);
+
+        Assert.False(plan.QuestionPoolsAvailable);
+        Assert.True(plan.MasteryAvailable);
+        Assert.Equal(weak, plan.Blocks[0].TopicId);
+        Assert.Equal(new[] { strong, weak }.Order(), plan.Blocks.Select(block => block.TopicId).Distinct().Order());
+        Assert.Empty(plan.NotReadyTopicIds);
+        Assert.Single(service.LearningEngine.RequestsWith(token));
+    }
+
+    [Fact]
+    public async Task Plan_WhileBothAreDown_StillComes()
+    {
+        var (alice, token) = NewUser("alice");
+        var topic = Guid.NewGuid();
+        Seed(KnownTopic.Create(alice, topic, LearningGoal.DefaultIdFor(alice), hidden: false));
+        service.Assessment.Unreachable(token);
+        service.LearningEngine.Unreachable(token);
+
+        var plan = await PlanAsync(token);
+
+        Assert.False(plan.QuestionPoolsAvailable);
+        Assert.False(plan.MasteryAvailable);
+        Assert.Equal([topic], plan.Blocks.Select(block => block.TopicId).Distinct());
+    }
+
+    // #374 AC3, two users side by side: Assessment is asked with each user's own token, and only their own pools count.
+    [Fact]
+    public async Task Plan_AsksAssessmentWithTheUsersOwnToken_AndUsesOnlyTheirPools()
+    {
+        var (alice, aliceToken) = NewUser("alice");
+        var (bob, bobToken) = NewUser("bob");
+        var shared = Guid.NewGuid();
+        Seed(KnownTopic.Create(alice, shared, LearningGoal.DefaultIdFor(alice), hidden: false));
+        var bobsTopic = Guid.NewGuid();
+        Seed(KnownTopic.Create(bob, bobsTopic, LearningGoal.DefaultIdFor(bob), hidden: false));
+        service.Assessment.Set(aliceToken, shared, "notReady");
+        service.Assessment.Set(bobToken, shared, "ready");
+
+        var alicePlan = await PlanAsync(aliceToken);
+        var bobPlan = await PlanAsync(bobToken);
+
+        Assert.Equal("questionsPending", alicePlan.EmptyReason);
+        Assert.Equal([bobsTopic], bobPlan.Blocks.Select(block => block.TopicId).Distinct());
+        Assert.Equal(
+            $"/question-pools?learningGoalId={LearningGoal.DefaultIdFor(alice)}",
+            Assert.Single(service.Assessment.RequestsWith(aliceToken)).PathAndQuery);
+        Assert.Equal(
+            $"/question-pools?learningGoalId={LearningGoal.DefaultIdFor(bob)}",
+            Assert.Single(service.Assessment.RequestsWith(bobToken)).PathAndQuery);
+        Assert.DoesNotContain(service.Assessment.Requests, request => request.Token is null);
+    }
+
+    // The warning names what went wrong and the status, never the caller's token or what Assessment answered.
+    [Fact]
+    public async Task FailingAssessment_IsLogged_WithoutToken()
+    {
+        var (alice, token) = NewUser("alice");
+        Seed(KnownTopic.Create(alice, Guid.NewGuid(), LearningGoal.DefaultIdFor(alice), hidden: false));
+        service.Assessment.Fail(token, HttpStatusCode.BadGateway);
+
+        var plan = await PlanAsync(token);
+
+        Assert.False(plan.QuestionPoolsAvailable);
+        var warning = Assert.Single(service.Logs.Containing("Assessment could not be asked"), entry => entry.Text.Contains("502", StringComparison.Ordinal));
+        Assert.Contains(nameof(HttpRequestException), warning.Text, StringComparison.Ordinal);
+        Assert.Empty(service.Logs.Containing(token, "boom"));
+    }
+
     // AC4 across calls: the same topics and mastery give the same plan.
     [Fact]
     public async Task Plan_TwiceWithTheSameInput_IsTheSame()
@@ -237,10 +387,15 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
         Assert.Empty(service.Logs.Containing(token, answer));
     }
 
-    private static (string User, string Token) NewUser(string name)
+    // The token of each user, so a seeded topic gets a ready question pool in Assessment unless a test says otherwise.
+    private readonly Dictionary<string, string> tokens = [];
+
+    private (string User, string Token) NewUser(string name)
     {
         var user = $"{name}-{Guid.NewGuid():N}";
-        return (user, TestTokens.Create(user));
+        var token = TestTokens.Create(user);
+        tokens[user] = token;
+        return (user, token);
     }
 
     private static int MinutesOf(Plan plan, Guid topic) =>
@@ -259,16 +414,28 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
         return (await response.Content.ReadFromJsonAsync<Plan>(cancellationToken))!;
     }
 
-    private void Seed(KnownTopic topic)
+    private void Seed(KnownTopic topic, bool withQuestionPool = true)
     {
         using var scope = service.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<PlanningDbContext>();
         db.KnownTopics.Add(topic);
         db.SaveChanges();
+
+        if (withQuestionPool && tokens.TryGetValue(topic.OwnerId, out var token))
+        {
+            service.Assessment.Set(token, topic.TopicId);
+        }
     }
 
     private sealed record Plan(
-        DateOnly StudyDay, Guid LearningGoalId, List<PlannedBlock> Blocks, string? EmptyReason, bool MasteryAvailable, List<Guid> ShortenedTopicIds);
+        DateOnly StudyDay,
+        Guid LearningGoalId,
+        List<PlannedBlock> Blocks,
+        string? EmptyReason,
+        bool MasteryAvailable,
+        List<Guid> ShortenedTopicIds,
+        bool QuestionPoolsAvailable,
+        List<Guid> NotReadyTopicIds);
 
     private sealed record PlannedBlock(Guid TopicId, int Minutes, string Kind);
 }

@@ -19,10 +19,13 @@ internal static class PlanEndpoints
                 {
                     TodayPlanEmpty.NoTopics => "noTopics",
                     TodayPlanEmpty.AllMastered => "allMastered",
+                    TodayPlanEmpty.QuestionsPending => "questionsPending",
                     _ => null,
                 },
                 today.MasteryAvailable,
-                today.Plan.Shortened);
+                today.Plan.Shortened,
+                today.QuestionPoolsAvailable,
+                today.Plan.NotReady);
         });
 
         return app;
@@ -37,14 +40,18 @@ internal static class PlanEndpoints
 
 // EmptyReason is null while there are blocks. MasteryAvailable false: LearningEngine didn't answer, so the blocks don't
 // put weaker topics first, and the client can say so. ShortenedTopicIds: topics left without learn time this week
-// because the time is too short (#370), empty when nothing was shortened.
+// because the time is too short (#370), empty when nothing was shortened. QuestionPoolsAvailable false: Assessment
+// didn't answer, so topics whose questions aren't ready yet may have blocks too. NotReadyTopicIds: topics left out
+// because their question pool isn't ready (#374); "questionsPending" when that is all of them.
 internal sealed record TodayPlanResponse(
     DateOnly StudyDay,
     Guid LearningGoalId,
     IReadOnlyList<BlockResponse> Blocks,
     string? EmptyReason,
     bool MasteryAvailable,
-    IReadOnlyList<Guid> ShortenedTopicIds);
+    IReadOnlyList<Guid> ShortenedTopicIds,
+    bool QuestionPoolsAvailable,
+    IReadOnlyList<Guid> NotReadyTopicIds);
 
 // Kind is "learn" or "review".
 internal sealed record BlockResponse(Guid TopicId, int Minutes, string Kind);

@@ -4,10 +4,16 @@ using Edvaniq.Services.Planning.Domain;
 namespace Edvaniq.Services.Planning.Application;
 
 // Today's plan of the current user for the default learning goal. Topics come from this service's own database, mastery
-// and state from one query to LearningEngine, so a plan costs at most one call to another service. Without LearningEngine
-// the plan still comes, only without weaker topics first (docs/spec/acceptance.md A92).
+// and state from one query to LearningEngine, the ready question pools from one query to Assessment (#374). The two run
+// side by side, so a plan costs at most two calls to other services at once. Either one missing still gives a plan,
+// only a restricted one, and the result says which (docs/spec/acceptance.md A92).
 public sealed class TodayPlans(
-    IKnownTopics knownTopics, IMasterySource masteries, IDailyBudgets budgets, ICurrentUser currentUser, TimeProvider time)
+    IKnownTopics knownTopics,
+    IMasterySource masteries,
+    IQuestionPoolSource questionPools,
+    IDailyBudgets budgets,
+    ICurrentUser currentUser,
+    TimeProvider time)
 {
     public async Task<TodayPlanResult> TodayAsync(CancellationToken cancellationToken)
     {
@@ -15,12 +21,41 @@ public sealed class TodayPlans(
         var goal = LearningGoal.DefaultIdFor(owner);
 
         var topics = await knownTopics.ActiveAsync(owner, goal, cancellationToken);
-        var mastery = topics.Count == 0 ? null : await masteries.OfLearningGoalAsync(goal, cancellationToken);
+        IReadOnlyDictionary<Guid, TopicStanding>? mastery = null;
+        IReadOnlySet<Guid>? ready = null;
+        if (topics.Count > 0)
+        {
+            // No shared cancellation: one failing never stops the other.
+            var masteryCall = OrNullAsync(() => masteries.OfLearningGoalAsync(goal, cancellationToken), cancellationToken);
+            var poolsCall = OrNullAsync(() => questionPools.ReadyTopicsAsync(goal, cancellationToken), cancellationToken);
+            await Task.WhenAll(masteryCall, poolsCall);
+            (mastery, ready) = (await masteryCall, await poolsCall);
+        }
+
         var budget = await budgets.ForUserAsync(owner, cancellationToken);
 
-        var plan = TodayPlanner.Plan(topics, mastery ?? new Dictionary<Guid, TopicStanding>(), budget, time.GetUtcNow().UtcDateTime);
-        return new TodayPlanResult(goal, plan, MasteryAvailable: topics.Count == 0 || mastery is not null);
+        var plan = TodayPlanner.Plan(
+            topics, mastery ?? new Dictionary<Guid, TopicStanding>(), budget, time.GetUtcNow().UtcDateTime, ready);
+        return new TodayPlanResult(
+            goal,
+            plan,
+            MasteryAvailable: topics.Count == 0 || mastery is not null,
+            QuestionPoolsAvailable: topics.Count == 0 || ready is not null);
+    }
+
+    // The sources answer null when their service is down. Should one throw anyway, it counts the same, unless the
+    // request itself was cancelled.
+    private static async Task<T?> OrNullAsync<T>(Func<Task<T?>> call, CancellationToken cancellationToken) where T : class
+    {
+        try
+        {
+            return await call();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
     }
 }
 
-public sealed record TodayPlanResult(Guid LearningGoalId, TodayPlan Plan, bool MasteryAvailable);
+public sealed record TodayPlanResult(Guid LearningGoalId, TodayPlan Plan, bool MasteryAvailable, bool QuestionPoolsAvailable);

@@ -24,8 +24,14 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
     // What the service logs, for the tests that look for a log line.
     public TestLogs Logs { get; } = new();
 
+    // The calls to LearningEngine and Assessment together.
+    public OutgoingCalls Calls { get; } = new();
+
     // Answers in place of LearningEngine.
-    public LearningEngineStub LearningEngine { get; } = new();
+    public LearningEngineStub LearningEngine => field ??= new(Calls);
+
+    // Answers in place of Assessment.
+    public AssessmentStub Assessment => field ??= new(Calls);
 
     public async ValueTask InitializeAsync()
     {
@@ -53,8 +59,9 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
                 services.AddInMemoryTransport();
                 services.AddSingleton<ILoggerProvider>(Logs);
                 services.AddHttpClient<IMasterySource, LearningEngineMastery>().ConfigurePrimaryHttpMessageHandler(LearningEngine.Handler);
+                services.AddHttpClient<IQuestionPoolSource, AssessmentQuestionPools>().ConfigurePrimaryHttpMessageHandler(Assessment.Handler);
 
-                // Keeps the retries of a LearningEngine that is down short.
+                // Keeps the retries of a LearningEngine or Assessment that is down short.
                 services.ConfigureAll<HttpStandardResilienceOptions>(options => options.Retry.Delay = TimeSpan.FromMilliseconds(1));
             });
 }
