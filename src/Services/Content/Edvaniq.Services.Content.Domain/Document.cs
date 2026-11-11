@@ -24,6 +24,14 @@ public sealed class Document : IOwnedByUser
 
     public const string TopicsMissing = "Die Themen kamen nicht an. Versuch es später noch einmal.";
 
+    public const string AiUnavailable = "KI derzeit nicht verfügbar. Versuch es später noch einmal.";
+
+    // How long a document waits after each outage of the AI before the next attempt. After the last one it fails.
+    public static readonly IReadOnlyList<TimeSpan> OutageDelays = [TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(8)];
+
+    // The longest wait a provider's Retry-After may ask for, so one answer can't park a document for hours.
+    public static readonly TimeSpan MaxOutageDelay = TimeSpan.FromMinutes(15);
+
     private Document(string ownerId, Guid? learningGoalId, string title, string text, DateTime createdAt)
     {
         OwnerId = ownerId;
@@ -59,6 +67,12 @@ public sealed class Document : IOwnedByUser
 
     // When the user last started the failed analysis again, UTC. Null if they never did.
     public DateTime? RetriedAt { get; private set; }
+
+    // Outages of the AI in the current step of the analysis, each one postponed the document.
+    public int AiOutages { get; private set; }
+
+    // When the worker may ask the AI again after an outage, UTC. Null means right away.
+    public DateTime? NextAttemptAt { get; private set; }
 
     // The topics are reported, the question pool is what's left before the document is ready.
     public bool WaitsForQuestions => Status == DocumentStatus.Analyzing && AnalyzedAt is not null;
@@ -145,6 +159,34 @@ public sealed class Document : IOwnedByUser
         }
 
         AnalyzedAt = analyzedAt;
+        ClearOutages();
+    }
+
+    // The AI was away for a moment. The document waits delays[n] for the n-th outage, or longer if the provider asked
+    // for it (up to MaxOutageDelay), and keeps its status. Once the delays are used up it fails, the user can retry.
+    // Returns false if it failed.
+    public bool Postpone(DateTime now, IReadOnlyList<TimeSpan> delays, TimeSpan? retryAfter)
+    {
+        if (Status != DocumentStatus.Analyzing)
+        {
+            throw new InvalidOperationException($"Document {Id} is {Status}, only a document in analysis can wait for the AI.");
+        }
+
+        if (AiOutages >= delays.Count)
+        {
+            Fail(AiUnavailable);
+            return false;
+        }
+
+        var delay = delays[AiOutages];
+        if (retryAfter > delay)
+        {
+            delay = retryAfter < MaxOutageDelay ? retryAfter.Value : MaxOutageDelay;
+        }
+
+        AiOutages++;
+        NextAttemptAt = now + delay;
+        return true;
     }
 
     // Topics and questions are there, the document is ready to learn from. Only a document whose topics are reported gets
@@ -179,6 +221,13 @@ public sealed class Document : IOwnedByUser
         Status = AnalyzedAt is null ? DocumentStatus.Uploaded : DocumentStatus.Analyzing;
         FailureReason = null;
         RetriedAt = retriedAt;
+        ClearOutages();
+    }
+
+    private void ClearOutages()
+    {
+        AiOutages = 0;
+        NextAttemptAt = null;
     }
 
     // The first line with content, cut to a title. Trim takes the '\r' of Windows line ends along.
