@@ -61,7 +61,15 @@ public sealed class Document : IOwnedByUser
 
     public string Title { get; private set; }
 
+    // The pasted text. Empty for a document from a file until its text is extracted (#282).
     public string Text { get; private set; }
+
+    // The uploaded file the document comes from, null for a pasted text.
+    public Guid? FileId { get; private set; }
+
+    public FileFormat? FileFormat { get; private set; }
+
+    public bool IsFromFile => FileId is not null;
 
     public DocumentStatus Status { get; private set; } = DocumentStatus.Uploaded;
 
@@ -144,13 +152,54 @@ public sealed class Document : IOwnedByUser
             OutputLanguage = Fitting(outputLanguage, OutputLanguageMaxLength),
         };
 
+    // A new document in status Uploaded from a stored file whose content passed FileCheck. The file's name only gives the
+    // title, the text follows once it is extracted.
+    public static Document Upload(
+        string ownerId,
+        Guid learningGoalId,
+        string? fileName,
+        Guid fileId,
+        FileFormat format,
+        DateTime createdAt,
+        string? level = null,
+        string? outputLanguage = null) =>
+        new(ownerId, learningGoalId, TitleOf(fileName), "", createdAt)
+        {
+            FileId = fileId,
+            FileFormat = format,
+            Level = Fitting(level, LevelMaxLength),
+            OutputLanguage = Fitting(outputLanguage, OutputLanguageMaxLength),
+        };
+
+    public const string UntitledFile = "Hochgeladene Datei";
+
+    // The file's name without folders and extension, without control characters, cut to a title.
+    public static string TitleOf(string? fileName)
+    {
+        var name = (fileName ?? "").Split('/', '\\')[^1];
+        var dot = name.LastIndexOf('.');
+        if (dot > 0)
+        {
+            name = name[..dot];
+        }
+
+        name = new string([.. name.Where(c => !char.IsControl(c))]).Trim();
+        return name.Length == 0 ? UntitledFile : name[..Math.Min(name.Length, TitleMaxLength)].TrimEnd();
+    }
+
     // Cuts the text into sections and moves the document on to the analysis. A text with nothing but white space fails
-    // instead and has no sections. Only an uploaded document can be split.
+    // instead and has no sections. Only an uploaded document can be split, and one from a file only once its text is
+    // there (#282).
     public IReadOnlyList<Section> Split()
     {
         if (Status != DocumentStatus.Uploaded)
         {
             throw new InvalidOperationException($"Document {Id} is {Status}, only an uploaded document can be split.");
+        }
+
+        if (IsFromFile)
+        {
+            throw new InvalidOperationException($"Document {Id} comes from a file, its text isn't extracted yet.");
         }
 
         var sections = SectionSplitter.Split(Text).Select((span, ordinal) => Section.Of(this, ordinal, span)).ToList();

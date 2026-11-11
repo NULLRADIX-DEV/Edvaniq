@@ -6,7 +6,10 @@ namespace Edvaniq.Services.Content.Application;
 public interface IDocuments
 {
     // Text and title must have passed Document.CheckText and Document.CheckTitle.
-    Task<Document> PasteAsync(DefaultLearningGoal learningGoal, string? title, string text, CancellationToken cancellationToken);
+    Task<Document> PasteAsync(LearningGoalInfo learningGoal, string? title, string text, CancellationToken cancellationToken);
+
+    // The file must be stored and its content must have passed FileCheck.
+    Task<Document> UploadAsync(LearningGoalInfo learningGoal, string? fileName, Guid fileId, FileFormat format, CancellationToken cancellationToken);
 
     // Newest first.
     Task<IReadOnlyList<DocumentSummary>> ListAsync(CancellationToken cancellationToken);
@@ -28,4 +31,4 @@ public enum RetryResult
 }
 
 // A document without its text.
-public sealed record DocumentSummary(Guid Id, string Title, DocumentStatus Status, string? FailureReason, DateTime CreatedAt);
+public sealed record DocumentSummary(Guid Id, string Title, DocumentStatus Status, string? FailureReason, DateTime CreatedAt, bool IsFromFile);

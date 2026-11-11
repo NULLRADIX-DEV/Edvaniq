@@ -59,6 +59,11 @@
         case ViewState.Ready:
             <p class="material-note">Die Themen aus „@latest!.Title“ sind da.</p>
             break;
+        case ViewState.FileWaits:
+            <Notice Kind="NoticeKind.Info" Title="@($"„{latest!.Title}“ {FeedbackTexts.Upload.WaitsTitle}")">
+                <p>@FeedbackTexts.Upload.WaitsBody</p>
+            </Notice>
+            break;
     }
 </div>
 
@@ -138,6 +143,34 @@
             <button type="submit" class="button">@(submitting ? "Wird gesendet …" : "Themen erkennen")</button>
         </form>
     </section>
+
+    <section class="material-section" aria-labelledby="upload-heading">
+        <h2 id="upload-heading">@FeedbackTexts.Upload.Heading</h2>
+        <div class="paste-field">
+            <label for="upload-file">@FeedbackTexts.Upload.Label</label>
+            @* A new key after an upload empties the browser's field. *@
+            <InputFile @key="uploadField" id="upload-file" accept="@string.Join(',', UploadExtensions)" aria-describedby="upload-hint"
+                       OnChange="FileChosen" />
+            <p id="upload-hint" class="paste-optional">@FeedbackTexts.Upload.Hint</p>
+        </div>
+
+        <LiveRegion Urgent="true">
+            @if (uploadMessages.Count > 0)
+            {
+                <Notice Kind="NoticeKind.Error" Title="@uploadMessages[0]">
+                    @foreach (var message in uploadMessages.Skip(1))
+                    {
+                        <p>@message</p>
+                    }
+                    <RequestId Value="@uploadTrace" />
+                </Notice>
+            }
+        </LiveRegion>
+
+        <button type="button" class="button" @onclick="UploadAsync">
+            @(uploading ? FeedbackTexts.Upload.Sending : FeedbackTexts.Upload.Button)
+        </button>
+    </section>
 }
 
 @code {
@@ -170,6 +203,17 @@
     private bool retryFailed;
     private string? retryTrace;
 
+    // Checked here only to spare the way up, Content judges the file by its bytes.
+    public const long UploadMaxLength = 20L * 1024 * 1024;
+
+    public static readonly IReadOnlyList<string> UploadExtensions = [".pdf", ".docx", ".txt", ".md", ".markdown"];
+
+    private IBrowserFile? chosen;
+    private int uploadField;
+    private bool uploading;
+    private IReadOnlyList<string> uploadMessages = [];
+    private string? uploadTrace;
+
     private enum ViewState
     {
         Loading,
@@ -180,6 +224,7 @@
         AnalysisSlow,
         Failed,
         Ready,
+        FileWaits,
     }
 
     private ViewState State => this switch
@@ -189,6 +234,7 @@
         { loadFailed: true } => ViewState.LoadFailed,
         { latest: null } => ViewState.Empty,
         { latest.Status: DocumentStatus.Failed } => ViewState.Failed,
+        { latest: { Source: DocumentSource.File, Status: DocumentStatus.Uploaded } } => ViewState.FileWaits,
         _ when IsAnalyzing => gaveUp ? ViewState.AnalysisSlow : ViewState.Analyzing,
         _ => ViewState.Ready,
     };
@@ -196,7 +242,9 @@
     // Content is ready only once Knowledge has the topics of the document, and RefreshAsync asks for the topics only after
     // the documents. So a Ready document always comes with its topics, also when they are all known from earlier texts and
     // none carries its id.
-    private bool IsAnalyzing => latest?.Status is DocumentStatus.Uploaded or DocumentStatus.Analyzing;
+    // A file waits for its text to be read (#282), there's nothing to follow until then.
+    private bool IsAnalyzing =>
+        latest?.Status is DocumentStatus.Analyzing || latest is { Status: DocumentStatus.Uploaded, Source: DocumentSource.Text };
 
     // The text binds on change, a binding on input would send a long text across with every key. Until the change comes,
     // TypingWatch tells that something is typed.
@@ -470,6 +518,83 @@
                 Show([NotThrough], outcome.TraceId);
                 break;
         }
+    }
+
+    private void FileChosen(InputFileChangeEventArgs args)
+    {
+        chosen = args.File;
+        uploadMessages = [];
+        uploadTrace = null;
+    }
+
+    private async Task UploadAsync()
+    {
+        if (uploading)
+        {
+            return;
+        }
+
+        var problem = chosen is null ? FeedbackTexts.Upload.NothingChosen
+            : chosen.Size > UploadMaxLength ? FeedbackTexts.Upload.TooLarge
+            : !UploadExtensions.Contains(Path.GetExtension(chosen.Name).ToLowerInvariant()) ? FeedbackTexts.Upload.Unsupported
+            : null;
+        if (problem is not null)
+        {
+            ShowUpload([problem]);
+            return;
+        }
+
+        uploading = true;
+        ShowUpload([]);
+        CallOutcome<DocumentInfo> outcome;
+        try
+        {
+            await using var content = chosen!.OpenReadStream(UploadMaxLength, life.Token);
+            outcome = await Material.UploadAsync(chosen.Name, content, life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (IOException)
+        {
+            // The file changed or went away after it was chosen.
+            outcome = CallOutcome<DocumentInfo>.Failed();
+        }
+        finally
+        {
+            uploading = false;
+        }
+
+        switch (outcome.Result)
+        {
+            case CallResult.Ok:
+                latest = outcome.Value!;
+                chosen = null;
+                uploadField++;
+                loadFailed = false;
+                StartFollowing();
+                break;
+            case CallResult.SignedOut:
+                signedOut = true;
+                follow?.Cancel();
+                break;
+            case CallResult.TooLarge:
+                ShowUpload([FeedbackTexts.Upload.TooLarge]);
+                break;
+            case CallResult.Rejected when outcome.Messages is { Count: > 0 } messages:
+                ShowUpload(messages);
+                break;
+            default:
+                ShowUpload([FeedbackTexts.Upload.NotThrough, FeedbackTexts.Connection.Advice], outcome.TraceId);
+                break;
+        }
+    }
+
+    private void ShowUpload(IReadOnlyList<string> messages, string? trace = null)
+    {
+        uploadMessages = messages;
+        uploadTrace = trace;
     }
 
     private void Show(IReadOnlyList<string> messages, string? trace = null)

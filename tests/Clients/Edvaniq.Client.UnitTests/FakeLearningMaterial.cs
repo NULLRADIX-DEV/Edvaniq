@@ -67,6 +67,24 @@ internal sealed class FakeLearningMaterial : ILearningMaterial
         return Next(pastes, CallOutcome<DocumentInfo>.Failed());
     }
 
+    public List<(string FileName, byte[] Content)> Uploaded { get; } = [];
+
+    private readonly Queue<CallOutcome<DocumentInfo>> uploads = new();
+
+    public FakeLearningMaterial Upload(CallOutcome<DocumentInfo> outcome)
+    {
+        uploads.Enqueue(outcome);
+        return this;
+    }
+
+    public async Task<CallOutcome<DocumentInfo>> UploadAsync(string fileName, Stream content, CancellationToken cancellationToken = default)
+    {
+        using var copy = new MemoryStream();
+        await content.CopyToAsync(copy, cancellationToken);
+        Uploaded.Add((fileName, copy.ToArray()));
+        return Next(uploads, CallOutcome<DocumentInfo>.Failed());
+    }
+
     public FakeLearningMaterial Retry(CallOutcome<DocumentInfo> outcome)
     {
         retries.Enqueue(outcome);

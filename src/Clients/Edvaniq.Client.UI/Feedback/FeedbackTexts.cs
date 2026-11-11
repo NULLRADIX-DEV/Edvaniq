@@ -93,6 +93,36 @@ public static class FeedbackTexts
         public const string NotThrough = "Der neue Versuch ließ sich gerade nicht starten.";
     }
 
+    // Uploading a file on the topics page. The messages for a refused file match Content's words.
+    public static class Upload
+    {
+        public const string Heading = "Datei hochladen";
+
+        public const string Label = "Datei auswählen";
+
+        public const string Hint = "Dateien mit .pdf, .docx, .txt oder .md, höchstens 20 MB.";
+
+        public const string Button = "Hochladen";
+
+        public const string Sending = "Wird hochgeladen …";
+
+        public const string NothingChosen = "Wähl zuerst eine Datei aus.";
+
+        // Same words as the web host's UploadLimit.TooLarge and Content's FileCheck.TooLarge.
+        public const string TooLarge = "Die Datei ist zu groß. Erlaubt sind höchstens 20 MB.";
+
+        public const string Unsupported =
+            "Dieser Dateityp wird nicht unterstützt. Lade eine Datei mit .pdf, .docx, .txt oder .md hoch.";
+
+        public const string NotThrough = "Die Datei ist nicht angekommen.";
+
+        // A file stays uploaded until Edvaniq can read its text (#282), that's no failure.
+        public const string WaitsTitle = "ist hochgeladen.";
+
+        public const string WaitsBody =
+            "Themen aus Dateien erkennt Edvaniq bald. Bis dahin kannst du den Text der Datei unten einfügen, dann geht es gleich los.";
+    }
+
     // When a call or the app itself didn't get through. Never the user's fault.
     public static class Connection
     {
