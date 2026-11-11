@@ -40,6 +40,8 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
 
     public WebApplicationFactory<planning::Program> Planning { get; private set; } = null!;
 
+    public WebApplicationFactory<learningengine::Program> LearningEngine => learningEngine!;
+
     public IReadOnlyList<Receiver> Receivers { get; private set; } = [];
 
     public async ValueTask InitializeAsync()
@@ -110,6 +112,8 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
     public T QueryAssessment<T>(Func<AssessmentInfra.AssessmentDbContext, T> query) => Query(Assessment.Services, query);
 
     public T QueryPlanning<T>(Func<PlanningInfra.PlanningDbContext, T> query) => Query(Planning.Services, query);
+
+    public T QueryLearningEngine<T>(Func<LearningEngineInfra.LearningEngineDbContext, T> query) => Query(LearningEngine.Services, query);
 
     private async Task<WebApplicationFactory<TEntryPoint>> StartAsync<TEntryPoint, TContext>(
         string database, Action<IServiceCollection>? services = null, Dictionary<string, string>? settings = null)

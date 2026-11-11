@@ -20,6 +20,11 @@ public sealed class Attempt : IOwnedByUser
     // Knowledge's topic the question was asked for, only a reference.
     public Guid TopicId { get; private set; }
 
+    // Planning's session the question was asked in, set for the check questions of a unit and passed on with the answer.
+    // Assessment can't check it, it knows no sessions. A wrong one only moves the user's own mastery: LearningEngine
+    // matches it against the user's own introductions.
+    public Guid? SessionId { get; private set; }
+
     // UTC.
     public DateTime AskedAt { get; private set; }
 
@@ -41,13 +46,14 @@ public sealed class Attempt : IOwnedByUser
     // UTC, set by the server.
     public DateTime? AnsweredAt { get; private set; }
 
-    public static Attempt Ask(Question question, Guid topicId, DateTime askedAt) =>
+    public static Attempt Ask(Question question, Guid topicId, DateTime askedAt, Guid? sessionId = null) =>
         new()
         {
             Id = Guid.NewGuid(),
             OwnerId = question.OwnerId,
             QuestionId = question.Id,
             TopicId = topicId,
+            SessionId = sessionId,
             AskedAt = Stored(askedAt),
         };
 

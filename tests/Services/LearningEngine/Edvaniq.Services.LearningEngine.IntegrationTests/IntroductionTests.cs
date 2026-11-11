@@ -92,6 +92,23 @@ public sealed class IntroductionTests(ServiceFactory service) : IClassFixture<Se
         Assert.Equal(0, Query(db => db.TopicIntroductions.IgnoreQueryFilters().Count(item => item.OwnerId == alice)));
     }
 
+    // Assessment passes on whatever session the client names. Bob's answers carrying the session that introduced Alice's
+    // topic only move his own mastery, Alice's stays where her introduction put it.
+    [Fact]
+    public async Task SomeoneElsesSessionOnAnAnswer_OnlyMovesTheirOwnMastery()
+    {
+        var (alice, bob) = (NewUser("alice"), NewUser("bob"));
+        var (aliceTopic, bobTopic) = (await KnowAsync(alice), await KnowAsync(bob));
+        var unit = Guid.NewGuid();
+        await DeliverAsync(new SessionCompleted(alice, unit, DateTime.UtcNow.AddMinutes(-5), true, [aliceTopic]));
+
+        await DeliverAsync(Answer(bob, aliceTopic, unit, TimeSpan.FromMinutes(10)));
+        await DeliverAsync(Answer(bob, bobTopic, unit, TimeSpan.FromMinutes(10)));
+
+        Assert.Equal(50, await MasteryAsync(alice, aliceTopic));
+        Assert.Equal(62, await MasteryAsync(bob, bobTopic));
+    }
+
     [Fact]
     public async Task DeletedUser_LosesTheirIntroductions()
     {

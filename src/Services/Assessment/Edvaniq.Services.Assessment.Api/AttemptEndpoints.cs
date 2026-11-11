@@ -59,15 +59,16 @@ internal static class AttemptEndpoints
         });
 
         // Two or three questions for a new topic, each an attempt answered at /attempts/{id}/answer. A pool that isn't
-        // there yet is a status, not an error: the unit can go on without it.
-        app.MapPost("/check-questions", async (AskRequest request, Quiz quiz, CancellationToken cancellationToken) =>
+        // there yet is a status, not an error: the unit can go on without it. SessionId is the session of the unit, taken
+        // as it comes (see Attempt.SessionId).
+        app.MapPost("/check-questions", async (CheckRequest request, Quiz quiz, CancellationToken cancellationToken) =>
         {
             if (request.TopicId is not { } topicId)
             {
                 return Invalid(nameof(request.TopicId), "Es fehlt das Thema.");
             }
 
-            var check = await quiz.CheckAsync(topicId, cancellationToken);
+            var check = await quiz.CheckAsync(topicId, request.SessionId, cancellationToken);
             return check.Outcome switch
             {
                 CheckOutcome.UnknownTopic => Results.NotFound(),
@@ -88,6 +89,8 @@ internal static class AttemptEndpoints
 }
 
 internal sealed record AskRequest(Guid? TopicId);
+
+internal sealed record CheckRequest(Guid? TopicId, Guid? SessionId);
 
 // Without the solution, that comes with the grade. Type is singleChoice, multipleChoice or trueFalse.
 internal sealed record AskedResponse(Guid Id, Guid TopicId, Guid QuestionId, string Type, string Text, IReadOnlyList<string> Options, int Difficulty)
