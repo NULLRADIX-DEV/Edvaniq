@@ -26,13 +26,15 @@ public sealed class BrokerOutageTests(MySqlTestServer mysql) : IAsyncLifetime
     private TestService<SenderDbContext>? sender;
     private TestService<ReceiverDbContext>? receiver;
 
-    private string Url => broker.GetConnectionString();
+    // Taken once while the broker runs: a stopped container has no mapped port to ask for, the fixed binding keeps it.
+    private string Url { get; set; } = "";
 
     public async ValueTask InitializeAsync()
     {
         senderDatabase = await mysql.CreateDatabaseAsync("sender");
         receiverDatabase = await mysql.CreateDatabaseAsync("receiver");
         await broker.StartAsync(TestContext.Current.CancellationToken);
+        Url = broker.GetConnectionString();
     }
 
     public async ValueTask DisposeAsync()
