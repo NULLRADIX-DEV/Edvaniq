@@ -2,10 +2,10 @@ using Edvaniq.SharedKernel;
 
 namespace Edvaniq.Services.Planning.Domain;
 
-// Today's blocks for the topics of one learning goal, weaker topics first (#210). The StudyPlanner with an exam
-// tomorrow, so every minute falls on today: weight 100 - mastery, the heaviest topic gets the review block first and
-// the first learn block after it, ties go by topic id. Every topic counts as introduced until Planning learns which are
-// new (#364). A pure function, the same input always gives the same plan.
+// Today's blocks for the topics of one learning goal, weaker topics first (#210). The first day of the rolling plan
+// without an exam (#371), so today gets its share of the week: weight 100 - mastery, the heaviest topic gets the review
+// block first and the first learn block after it, ties go by topic id. Every topic counts as introduced until Planning
+// learns which are new (#364). A pure function, the same input always gives the same plan.
 public static class TodayPlanner
 {
     // There is no size per topic yet, so every topic counts the same and only the mastery decides.
@@ -34,7 +34,8 @@ public static class TodayPlanner
             .Distinct()
             .Select(id => new TopicToPlan(id, Size, MasteryOf(id, masteries)))
             .ToList();
-        var blocks = StudyPlanner.Plan(topics, budget, today, today.AddDays(1)).Days.SingleOrDefault()?.Blocks ?? [];
+        var blocks = StudyPlanner.Plan(topics, budget, today, examDay: null)
+            .Days.FirstOrDefault(day => day.StudyDay == today)?.Blocks ?? [];
         return new TodayPlan(today, blocks, blocks.Count == 0 ? TodayPlanEmpty.AllMastered : null);
     }
 

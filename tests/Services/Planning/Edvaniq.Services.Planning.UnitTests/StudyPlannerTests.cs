@@ -314,6 +314,71 @@ public class StudyPlannerTests
         Assert.Empty(StudyPlanner.Plan([new(A, 1, 0, IsNew: true)], DailyBudget.Uniform(30), Today, Today.AddDays(2)).Days);
     }
 
+    // A23: topics for more than a week and no exam give seven full study days from today.
+    [Fact]
+    public void NoExam_PlansSevenStudyDaysFromToday()
+    {
+        TopicToPlan[] topics = [new(A, 20, 0), new(B, 20, 50), new(C, 20, 20)];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(30), Today, examDay: null);
+
+        Assert.Equal(Enumerable.Range(0, StudyPlanner.RollingDays).Select(Today.AddDays), plan.Days.Select(day => day.StudyDay));
+        Assert.All(plan.Days, day => Assert.Equal(30, day.Blocks.Sum(block => block.Minutes)));
+        Assert.Equal([A, B, C], MinutesPerTopic(plan, BlockKind.Learn).Keys.Order());
+    }
+
+    // A23: when the next study day begins, the old first day is gone and a new seventh one is at the end.
+    [Fact]
+    public void NoExam_NextDay_DropsTheFirstDayAndAddsASeventh()
+    {
+        TopicToPlan[] topics = [new(A, 2, 50), new(B, 1, 50), new(C, 1, 20)];
+        var budget = DailyBudget.Uniform(30);
+
+        var today = StudyPlanner.Plan(topics, budget, Today, examDay: null);
+        var tomorrow = StudyPlanner.Plan(topics, budget, Today.AddDays(1), examDay: null);
+
+        Assert.Equal(StudyPlanner.RollingDays, tomorrow.Days.Count);
+        Assert.Equal(today.Days[1].StudyDay, tomorrow.Days[0].StudyDay);
+        Assert.DoesNotContain(tomorrow.Days, day => day.StudyDay == Today);
+        Assert.Equal(today.Days[^1].StudyDay.AddDays(1), tomorrow.Days[^1].StudyDay);
+    }
+
+    // Nothing to finish towards, so a new topic may come on the last day too, and every day after the first has review.
+    [Fact]
+    public void NoExam_HasNoFinalPhase()
+    {
+        TopicToPlan[] topics = [new(A, 1, 50), new(B, 1, 0, IsNew: true), new(C, 1, 0, IsNew: true)];
+
+        var plan = StudyPlanner.Plan(topics, DailyBudget.Uniform(30), Today, examDay: null);
+
+        Assert.Equal(StudyPlanner.RollingDays, plan.Days.Count);
+        Assert.All(plan.Days, day => Assert.Equal(BlockKind.Review, day.Blocks[0].Kind));
+        Assert.Contains(plan.Days[^1].Blocks, block => block.TopicId != A && block.Kind == BlockKind.Learn);
+    }
+
+    // Only new topics still fill the week, with review from the second day on. With an exam in 2 days they would give nothing.
+    [Fact]
+    public void NoExam_WithOnlyNewTopics_StillPlansTheWeek()
+    {
+        var plan = StudyPlanner.Plan([new(A, 1, 0, IsNew: true)], DailyBudget.Uniform(30), Today, examDay: null);
+
+        Assert.Equal(StudyPlanner.RollingDays, plan.Days.Count);
+        Assert.DoesNotContain(plan.Days[0].Blocks, block => block.Kind == BlockKind.Review);
+        Assert.All(plan.Days.Skip(1), day => Assert.Equal(BlockKind.Review, day.Blocks[0].Kind));
+    }
+
+    [Fact]
+    public void NoExam_SameInput_GivesTheSamePlan()
+    {
+        TopicToPlan[] topics = [new(A, 2, 50), new(B, 1, 50), new(C, 1, 20, IsNew: true)];
+        var budget = DailyBudget.Uniform(40);
+
+        var first = StudyPlanner.Plan(topics, budget, Today, examDay: null);
+        var reversed = StudyPlanner.Plan(topics.Reverse().ToArray(), budget, Today, examDay: null);
+
+        Assert.Equal(Flat(first), Flat(reversed));
+    }
+
     // Many random inputs with a fixed seed. A failure names seed and run, so Run(seed + run) reproduces it.
     [Fact]
     public void RandomInputs_KeepAllRules()
@@ -333,7 +398,7 @@ public class StudyPlannerTests
             day => day,
             _ => steps ? random.Next(1, 145) * 5 : random.Next(DailyBudget.MinMinutes, DailyBudget.MaxMinutes + 1)));
         var today = new DateOnly(2026, 1, 1).AddDays(random.Next(730));
-        var exam = today.AddDays(random.Next(-3, 121));
+        DateOnly? exam = random.Next(5) == 0 ? null : today.AddDays(random.Next(-3, 121));
         var topics = Enumerable.Range(0, random.Next(13))
             .Select(_ => new TopicToPlan(RandomId(random), random.Next(21), random.Next(101), random.Next(3) == 0))
             .ToArray();
@@ -342,8 +407,8 @@ public class StudyPlannerTests
 
         var plan = StudyPlanner.Plan(topics, budget, today, exam);
 
-        var studyDays = Math.Max(0, exam.DayNumber - today.DayNumber);
-        var finalPhase = StudyPlanner.FinalPhaseDays(studyDays);
+        var studyDays = exam is { } examDay ? Math.Max(0, examDay.DayNumber - today.DayNumber) : StudyPlanner.RollingDays;
+        var finalPhase = exam is null ? 0 : StudyPlanner.FinalPhaseDays(studyDays);
         var anyIntroduced = topics.Any(topic => weights[topic.TopicId] > 0 && !topic.IsNew);
         if (studyDays == 0 || weights.Values.All(weight => weight == 0) || (!anyIntroduced && finalPhase == studyDays))
         {
@@ -418,6 +483,6 @@ public class StudyPlannerTests
             .GroupBy(block => block.TopicId)
             .ToDictionary(group => group.Key, group => group.Sum(block => block.Minutes));
 
-    private static List<(DateOnly Day, Guid TopicId, int Minutes)> Flat(StudyPlan plan) =>
-        plan.Days.SelectMany(day => day.Blocks.Select(block => (day.StudyDay, block.TopicId, block.Minutes))).ToList();
+    private static List<(DateOnly Day, Guid TopicId, int Minutes, BlockKind Kind)> Flat(StudyPlan plan) =>
+        plan.Days.SelectMany(day => day.Blocks.Select(block => (day.StudyDay, block.TopicId, block.Minutes, block.Kind))).ToList();
 }
