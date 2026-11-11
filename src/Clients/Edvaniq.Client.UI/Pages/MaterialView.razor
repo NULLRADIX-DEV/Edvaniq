@@ -1,0 +1,423 @@
+@using Microsoft.Extensions.DependencyInjection
+@implements IDisposable
+@inject ILearningMaterial Material
+@inject IServiceProvider Services
+
+@* The state of the newest text lives in one live region, so a screen reader announces each step. Buttons stay outside,
+   they keep the focus. Titles, topics and messages are text from the user or the analysis, Razor writes them as text. *@
+<div class="material-status" role="status">
+    @switch (State)
+    {
+        case ViewState.Loading:
+            <p>Wird geladen …</p>
+            break;
+        case ViewState.SignedOut:
+            @* The login ran out or ended in another tab. Until #197 the way back is simply a new login. *@
+            <div class="material-note material-alert">
+                <p><strong>Du bist nicht mehr angemeldet.</strong> Melde dich neu an, dann geht es hier weiter.</p>
+                <p><a href="@ReturnUrl.LoginFor("/themen")">Neu anmelden</a></p>
+            </div>
+            break;
+        case ViewState.LoadFailed:
+            <div class="material-note material-alert">
+                <p><strong>Der Stand ließ sich gerade nicht laden.</strong> Edvaniq ist vielleicht kurz nicht erreichbar.</p>
+                <RequestId Value="@loadTrace" />
+            </div>
+            break;
+        case ViewState.Empty:
+            <p class="material-note">
+                <strong>Du hast noch keinen Text eingefügt.</strong> Füge unten deinen ersten Text ein, dann erscheinen hier
+                deine Themen.
+            </p>
+            break;
+        case ViewState.Analyzing:
+            <p class="material-note">
+                <strong>„@latest!.Title“ wird analysiert …</strong> Das kann ein paar Minuten dauern. Die Themen erscheinen
+                hier von selbst.
+            </p>
+            break;
+        case ViewState.AnalysisSlow:
+            <p class="material-note">
+                <strong>Die Analyse von „@latest!.Title“ dauert länger als gedacht.</strong> Du kannst weiter warten oder
+                später wiederkommen.
+            </p>
+            break;
+        case ViewState.TopicsArriving:
+            <p class="material-note">
+                <strong>„@latest!.Title“ ist analysiert.</strong> Die Themen werden gerade übernommen …
+            </p>
+            break;
+        case ViewState.TopicsSlow:
+            <p class="material-note">
+                <strong>Die Themen aus „@latest!.Title“ sind noch unterwegs.</strong> Lade sie gleich noch einmal.
+            </p>
+            break;
+        case ViewState.Failed:
+            <div class="material-note material-alert">
+                <p><strong>Die Analyse von „@latest!.Title“ hat nicht geklappt.</strong></p>
+                <p>@(latest.FailureReason ?? "Versuch es noch einmal.")</p>
+            </div>
+            break;
+        case ViewState.Ready:
+            <p class="material-note">Die Themen aus „@latest!.Title“ sind da.</p>
+            break;
+    }
+</div>
+
+@switch (State)
+{
+    case ViewState.LoadFailed:
+        <button type="button" class="button" @onclick="LoadAsync">Erneut laden</button>
+        break;
+    case ViewState.AnalysisSlow:
+        <button type="button" class="button" @onclick="StartFollowing">Weiter warten</button>
+        break;
+    case ViewState.TopicsSlow:
+        <button type="button" class="button" @onclick="StartFollowing">Themen erneut laden</button>
+        break;
+    case ViewState.Failed:
+        <button type="button" class="button" @onclick="RetryAnalysisAsync">
+            @(KeptText is null ? "Text erneut einfügen" : "Erneut analysieren")
+        </button>
+        break;
+}
+
+@if (State is not ViewState.SignedOut and not ViewState.Loading)
+{
+    @if (topics.Count > 0)
+    {
+        <section class="material-section" aria-labelledby="topics-heading">
+            <h2 id="topics-heading">Themen</h2>
+            <ul class="topic-list">
+                @foreach (var topic in topics)
+                {
+                    <li @key="topic.Id">
+                        @topic.Name
+                        @if (topic.Subtopics.Count > 0)
+                        {
+                            <ul>
+                                @foreach (var subtopic in topic.Subtopics)
+                                {
+                                    <li @key="subtopic.Id">@subtopic.Name</li>
+                                }
+                            </ul>
+                        }
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+
+    <section class="material-section" aria-labelledby="paste-heading">
+        <h2 id="paste-heading">@(latest is null ? "Ersten Text einfügen" : "Weiteren Text einfügen")</h2>
+        <form class="paste-form" @onsubmit="SubmitAsync" novalidate>
+            <div class="paste-field">
+                <label for="paste-title">Titel <span class="paste-optional">(freiwillig)</span></label>
+                <input id="paste-title" name="title" type="text" autocomplete="off" @bind="title" />
+            </div>
+            <div class="paste-field">
+                <label for="paste-text">Text</label>
+                <textarea id="paste-text" name="text" rows="8" required @bind="text" @ref="textArea"></textarea>
+            </div>
+
+            @* Always there, so a screen reader announces each hint. *@
+            <div role="alert">
+                @if (formMessages.Count > 0)
+                {
+                    <div class="material-note material-alert">
+                        @foreach (var message in formMessages)
+                        {
+                            <p>@message</p>
+                        }
+                        <RequestId Value="@formTrace" />
+                    </div>
+                }
+            </div>
+
+            @* Stays enabled while it sends: a disabled button would lose the keyboard focus. *@
+            <button type="submit" class="button">@(submitting ? "Wird gesendet …" : "Themen erkennen")</button>
+        </form>
+    </section>
+}
+
+@code {
+    private const string NotThrough =
+        "Der Text ist nicht angekommen. Edvaniq ist gerade nicht erreichbar. Versuch es in ein paar Sekunden noch einmal.";
+
+    private readonly CancellationTokenSource life = new();
+    private CancellationTokenSource? follow;
+    private MaterialPolling polling = MaterialPolling.Default;
+
+    private bool loading = true;
+    private bool signedOut;
+    private bool loadFailed;
+    private string? loadTrace;
+    private bool gaveUp;
+
+    // The newest of the user's documents, the page follows it until its topics are there.
+    private DocumentInfo? latest;
+    private IReadOnlyList<TopicInfo> topics = [];
+
+    private string title = "";
+    private string text = "";
+    private bool submitting;
+    private IReadOnlyList<string> formMessages = [];
+    private string? formTrace;
+    private ElementReference textArea;
+
+    // What this page sent last. Content can't analyze a document again, so a retry sends the same text as a new one.
+    // After a reload of the page the text is gone, then the retry leads to the form.
+    private (Guid DocumentId, string? Title, string Text)? kept;
+
+    private enum ViewState
+    {
+        Loading,
+        SignedOut,
+        LoadFailed,
+        Empty,
+        Analyzing,
+        AnalysisSlow,
+        TopicsArriving,
+        TopicsSlow,
+        Failed,
+        Ready,
+    }
+
+    private ViewState State => this switch
+    {
+        { signedOut: true } => ViewState.SignedOut,
+        { loading: true } => ViewState.Loading,
+        { loadFailed: true } => ViewState.LoadFailed,
+        { latest: null } => ViewState.Empty,
+        { latest.Status: DocumentStatus.Failed } => ViewState.Failed,
+        _ when IsAnalyzing => gaveUp ? ViewState.AnalysisSlow : ViewState.Analyzing,
+        _ when TopicsMissing => gaveUp ? ViewState.TopicsSlow : ViewState.TopicsArriving,
+        _ => ViewState.Ready,
+    };
+
+    private bool IsAnalyzing => latest?.Status is DocumentStatus.Uploaded or DocumentStatus.Analyzing;
+
+    // Between Ready in Content and the topics in Knowledge lies the broker, so they may come a moment later.
+    private bool TopicsMissing =>
+        latest is { Status: DocumentStatus.Ready } document && !topics.Any(topic => topic.CameFrom(document.Id));
+
+    private string? KeptText => kept is { } paste && paste.DocumentId == latest?.Id ? paste.Text : null;
+
+    protected override Task OnInitializedAsync()
+    {
+        polling = Services.GetService<MaterialPolling>() ?? MaterialPolling.Default;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        loadFailed = false;
+        try
+        {
+            if (await RefreshAsync(documents: true, life.Token))
+            {
+                StartFollowing();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    // Asks for the newest document and for the topics, these only on opening and once the analysis is over. False when
+    // that did not get through.
+    private async Task<bool> RefreshAsync(bool documents, CancellationToken cancellationToken)
+    {
+        if (documents)
+        {
+            var list = await Material.ListDocumentsAsync(cancellationToken);
+            if (!Accept(list))
+            {
+                return false;
+            }
+
+            latest = list.Value!.FirstOrDefault();
+        }
+
+        if (loading || !IsAnalyzing)
+        {
+            var found = await Material.ListTopicsAsync(cancellationToken);
+            if (!Accept(found))
+            {
+                return false;
+            }
+
+            topics = found.Value!;
+        }
+
+        loadFailed = false;
+        return true;
+    }
+
+    private bool Accept<T>(CallOutcome<T> outcome)
+    {
+        switch (outcome.Result)
+        {
+            case CallResult.Ok:
+                return true;
+            case CallResult.SignedOut:
+                signedOut = true;
+                return false;
+            default:
+                loadFailed = true;
+                loadTrace = outcome.TraceId;
+                return false;
+        }
+    }
+
+    // Asks again and again while the newest text is analyzed or its topics are on their way, and stops when they are
+    // there, when it has waited long enough, or when the user leaves the page.
+    private void StartFollowing()
+    {
+        follow?.Cancel();
+        follow?.Dispose();
+        gaveUp = false;
+        if (!IsAnalyzing && !TopicsMissing)
+        {
+            follow = null;
+            return;
+        }
+
+        follow = CancellationTokenSource.CreateLinkedTokenSource(life.Token);
+        _ = FollowAsync(follow.Token);
+    }
+
+    private async Task FollowAsync(CancellationToken cancellationToken)
+    {
+        var waited = TimeSpan.Zero;
+        var analyzing = IsAnalyzing;
+        try
+        {
+            while (IsAnalyzing || TopicsMissing)
+            {
+                // The topics get their own time once the analysis is done.
+                if (analyzing != IsAnalyzing)
+                {
+                    analyzing = IsAnalyzing;
+                    waited = TimeSpan.Zero;
+                }
+
+                if (waited >= (analyzing ? polling.AnalysisLimit : polling.TopicsLimit))
+                {
+                    gaveUp = true;
+                    StateHasChanged();
+                    return;
+                }
+
+                var wait = polling.Wait(waited);
+                await Task.Delay(wait, cancellationToken);
+                waited += wait;
+
+                var through = await RefreshAsync(documents: analyzing, cancellationToken);
+                StateHasChanged();
+                if (!through)
+                {
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (submitting)
+        {
+            return;
+        }
+
+        var problem = string.IsNullOrWhiteSpace(text) ? HttpLearningMaterial.EmptyText
+            : text.Length > HttpLearningMaterial.TextMaxLength ? HttpLearningMaterial.TextTooLong
+            : title.Trim().Length > HttpLearningMaterial.TitleMaxLength ? HttpLearningMaterial.TitleTooLong
+            : null;
+        if (problem is not null)
+        {
+            Show([problem]);
+            return;
+        }
+
+        await PasteAsync(string.IsNullOrWhiteSpace(title) ? null : title.Trim(), text);
+    }
+
+    private async Task RetryAnalysisAsync()
+    {
+        if (kept is { } paste && paste.DocumentId == latest?.Id)
+        {
+            await PasteAsync(paste.Title, paste.Text);
+            return;
+        }
+
+        await textArea.FocusAsync();
+    }
+
+    private async Task PasteAsync(string? pastedTitle, string pastedText)
+    {
+        if (submitting)
+        {
+            return;
+        }
+
+        submitting = true;
+        Show([]);
+        CallOutcome<DocumentInfo> outcome;
+        try
+        {
+            outcome = await Material.PasteAsync(pastedTitle, pastedText, life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            submitting = false;
+        }
+
+        switch (outcome.Result)
+        {
+            case CallResult.Ok:
+                latest = outcome.Value!;
+                kept = (latest.Id, pastedTitle, pastedText);
+                title = "";
+                text = "";
+                loadFailed = false;
+                StartFollowing();
+                break;
+            case CallResult.SignedOut:
+                signedOut = true;
+                follow?.Cancel();
+                break;
+            case CallResult.Rejected or CallResult.TooLarge:
+                Show(outcome.Messages ?? [NotThrough]);
+                break;
+            default:
+                Show([NotThrough], outcome.TraceId);
+                break;
+        }
+    }
+
+    private void Show(IReadOnlyList<string> messages, string? trace = null)
+    {
+        formMessages = messages;
+        formTrace = trace;
+    }
+
+    public void Dispose()
+    {
+        life.Cancel();
+        life.Dispose();
+        follow?.Dispose();
+    }
+}

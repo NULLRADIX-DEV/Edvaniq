@@ -26,7 +26,7 @@ public static class MauiProgram
 			Timeout = TimeSpan.FromSeconds(5),
 		}));
 
-		// Login and ping share one client, so the ping carries the session cookie of the login. The host answers within
+		// Login, ping and the learning material share one client, so they carry the session cookie of the login. The host answers within
 		// 9 seconds, its wait for a token or for Identity included, with an error of its own if need be.
 		var session = new HttpClient
 		{
@@ -35,6 +35,7 @@ public static class MauiProgram
 		};
 		builder.Services.AddSingleton<IPing>(new HttpPing(session));
 		builder.Services.AddSingleton<IWebSession>(new HttpWebSession(session));
+		builder.Services.AddSingleton<ILearningMaterial>(new HttpLearningMaterial(session));
 
 		builder.Services.AddAuthorizationCore();
 		builder.Services.AddCascadingAuthenticationState();

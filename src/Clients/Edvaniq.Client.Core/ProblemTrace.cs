@@ -18,13 +18,17 @@ internal sealed record ProblemTrace(string? TraceId = null)
         try
         {
             var problem = await response.Content.ReadFromJsonAsync(ProblemJson.Default.ProblemTrace, cancellationToken);
-            return problem?.TraceId is { Length: 32 } id && id.All(char.IsAsciiHexDigitLower) ? id : null;
+            return Check(problem?.TraceId);
         }
         catch (JsonException)
         {
             return null;
         }
     }
+
+    // The id if it is one as ServiceDefaults writes it, else null.
+    public static string? Check(string? traceId) =>
+        traceId is { Length: 32 } id && id.All(char.IsAsciiHexDigitLower) ? id : null;
 }
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]

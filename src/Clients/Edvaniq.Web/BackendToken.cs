@@ -31,10 +31,11 @@ public static class BackendToken
         proxy.Services.AddHttpClient(nameof(BackendTokens));
         proxy.Services.AddSingleton<BackendTokens>();
 
-        // Anyone can start a guest session and send what carries the token, and the ping writes a row each time. So
-        // these calls count, per client address and in total, and the database gets at most TotalPerMinute writes a
-        // minute however many addresses send. Beyond that the answer is 429, other calls pass freely. The client
-        // address is the browser's, behind nginx from X-Forwarded-For (Program.cs).
+        // Anyone can start a guest session and send what carries the technical token, and the ping writes a row each
+        // time. So these calls count, per client address and in total, and the database gets at most TotalPerMinute
+        // writes a minute however many addresses send. Beyond that the answer is 429. Calls of a signed-in user carry
+        // the user's own token and pass freely like all other calls: a class behind one address polls its documents. The
+        // client address is the browser's, behind nginx from X-Forwarded-For (Program.cs).
         proxy.Services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -56,11 +57,12 @@ public static class BackendToken
         return proxy;
     }
 
-    // A window of a minute per key for calls with the token. The keys never meet the one of the calls without it.
+    // A window of a minute per key for calls with the technical token. The keys never meet the one of the other calls.
     private static PartitionedRateLimiter<HttpContext> Limit(Func<HttpContext, string> key, Func<BackendTokenOptions, int> permits) =>
         PartitionedRateLimiter.Create<HttpContext, string>(context =>
         {
-            if (context.GetEndpoint()?.Metadata.GetMetadata<RouteModel>()?.Config.Metadata?.GetValueOrDefault(MetadataKey) != "true")
+            if (context.GetEndpoint()?.Metadata.GetMetadata<RouteModel>()?.Config.Metadata?.GetValueOrDefault(MetadataKey) != "true"
+                || WebSession.IsUser(context.User))
             {
                 return RateLimitPartition.GetNoLimiter("free");
             }

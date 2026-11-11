@@ -19,6 +19,11 @@ builder.Services.AddSingleton<IPing>(new HttpPing(new HttpClient
     BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
     Timeout = TimeSpan.FromSeconds(20),
 }));
+builder.Services.AddSingleton<ILearningMaterial>(new HttpLearningMaterial(new HttpClient
+{
+    BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
+    Timeout = TimeSpan.FromSeconds(20),
+}));
 builder.Services.AddSingleton<IWebSession>(new HttpWebSession(new HttpClient
 {
     BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
