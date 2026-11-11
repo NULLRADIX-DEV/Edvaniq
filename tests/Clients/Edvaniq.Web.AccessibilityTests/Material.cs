@@ -52,10 +52,52 @@ internal static class Material
             FulfillAsync(route, topics[Math.Min(Interlocked.Increment(ref topicCalls) - 1, topics.Count - 1)]));
     }
 
-    private static Task FulfillAsync(IRoute route, object body) =>
+    public static readonly Guid TopicId = Guid.Parse("5f0c4a3e-1b2d-4c5e-8f9a-0b1c2d3e4f50");
+
+    // A question of the topic as Assessment asks it, or 409 while there are none. The answer is graded with the given
+    // option against the second one being right.
+    public static async Task AnswerQuizAsync(IPage page, bool ready = true)
+    {
+        var attempt = Guid.Parse("8c9d0e1f-2a3b-4c4d-9e5f-6a7b8c9d0e1f");
+        await AnswerAsync(page, documents: [new[] { Document("Ready") }], topics: [Topics]);
+        await page.RouteAsync("**/api/assessment/attempts", route => ready
+            ? FulfillAsync(route, new
+            {
+                id = attempt,
+                topicId = TopicId,
+                questionId = Guid.NewGuid(),
+                text = $"Wo findet die Lichtreaktion statt? ({LongWord})",
+                options = new[] { "Im Zellkern", "In den Thylakoiden", LongWord },
+                difficulty = 1,
+            }, 201)
+            : route.FulfillAsync(new RouteFulfillOptions
+            {
+                Status = 409,
+                ContentType = "application/problem+json",
+                Body = """{"status":409,"title":"Zu diesem Thema gibt es noch keine Fragen."}""",
+            }));
+        await page.RouteAsync("**/api/assessment/attempts/*/answer", route =>
+        {
+            var option = JsonDocument.Parse(route.Request.PostData!).RootElement.GetProperty("option").GetInt32();
+            return FulfillAsync(route, new
+            {
+                id = attempt,
+                topicId = TopicId,
+                questionId = Guid.NewGuid(),
+                option,
+                correct = option == 1,
+                answer = 1,
+                explanation = "Die Lichtreaktion läuft an den Membranen der Thylakoide ab.",
+                responseTimeMs = 1000,
+                answeredAt = DateTime.UtcNow,
+            });
+        });
+    }
+
+    private static Task FulfillAsync(IRoute route, object body, int status = 200) =>
         route.FulfillAsync(new RouteFulfillOptions
         {
-            Status = 200,
+            Status = status,
             ContentType = "application/json",
             Body = JsonSerializer.Serialize(body, JsonSerializerOptions.Web),
         });

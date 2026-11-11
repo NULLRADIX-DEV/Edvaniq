@@ -19,6 +19,7 @@ public sealed class ThirdPartyTests(WebShell shell)
     [Theory]
     [InlineData("/systemstatus")]
     [InlineData("/themen")]
+    [InlineData("/themen/5f0c4a3e-1b2d-4c5e-8f9a-0b1c2d3e4f50/ueben")]
     public async Task SignedInPage_LoadsNothingFromAnotherHost(string path)
     {
         await using var page = await shell.OpenSignedInAsync(path, WebShell.DesktopWidth);

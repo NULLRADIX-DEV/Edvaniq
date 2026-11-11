@@ -1,0 +1,395 @@
+@using Microsoft.Extensions.DependencyInjection
+@using Microsoft.JSInterop
+@implements IDisposable
+@inject IQuiz Quiz
+@inject ILearningMaterial Material
+@inject IServiceProvider Services
+
+@* Question, options and explanation are text from the AI, Razor writes them as text. *@
+<h1 tabindex="-1" @ref="pageHeading">@(topicName is null ? "Frage üben" : $"Frage zu „{topicName}“")</h1>
+
+<div class="quiz-status" role="status">
+    @switch (State)
+    {
+        case ViewState.Loading:
+            <p>Wird geladen …</p>
+            break;
+        case ViewState.SignedOut:
+            @* The login ran out or ended in another tab. Until #197 the way back is simply a new login. *@
+            <div class="quiz-note quiz-alert">
+                <p><strong>Du bist nicht mehr angemeldet.</strong> Melde dich neu an, dann geht es hier weiter.</p>
+                <p><a href="@ReturnUrl.LoginFor($"/themen/{TopicId:D}/ueben")">Neu anmelden</a></p>
+            </div>
+            break;
+        case ViewState.NotReady:
+            <p class="quiz-note">
+                <strong>Zu diesem Thema gibt es noch keine Fragen.</strong> Sie entstehen nach dem Einfügen im Hintergrund
+                und brauchen meist ein paar Minuten. Versuch es gleich noch einmal oder wähl ein anderes Thema.
+            </p>
+            break;
+        case ViewState.NotFound:
+            <p class="quiz-note quiz-alert"><strong>Dieses Thema gibt es nicht oder nicht mehr.</strong></p>
+            break;
+        case ViewState.LoadFailed:
+            <div class="quiz-note quiz-alert">
+                <p><strong>Die Frage ließ sich gerade nicht laden.</strong> Edvaniq ist vielleicht kurz nicht erreichbar.</p>
+                <RequestId Value="@loadTrace" />
+            </div>
+            break;
+    }
+</div>
+
+@switch (State)
+{
+    case ViewState.NotReady:
+        <div class="quiz-actions">
+            <button type="button" class="button" @onclick="() => AskAsync(focus: true)">Noch einmal versuchen</button>
+            <a href="themen">Anderes Thema wählen</a>
+        </div>
+        break;
+    case ViewState.NotFound:
+        <div class="quiz-actions">
+            <a href="themen">Zurück zu den Themen</a>
+        </div>
+        break;
+    case ViewState.LoadFailed:
+        <div class="quiz-actions">
+            <button type="button" class="button" @onclick="() => AskAsync(focus: true)">Erneut laden</button>
+            <a href="themen">Zurück zu den Themen</a>
+        </div>
+        break;
+    case ViewState.Asking or ViewState.Graded:
+        <form class="quiz-form" @onsubmit="SubmitAsync" novalidate>
+            <fieldset class="quiz-question" disabled="@(graded is not null)">
+                <legend tabindex="-1" @ref="questionLegend">@asked!.Text</legend>
+                <ul class="quiz-options">
+                    @for (var i = 0; i < asked.Options.Count; i++)
+                    {
+                        var option = i;
+                        <li @key="option" class="@OptionClass(option)">
+                            <input type="radio" id="option-@option" name="quiz-option" value="@option"
+                                   checked="@(Chosen == option)" @onchange="() => Choose(option)" />
+                            <label for="option-@option">
+                                <span class="quiz-option-text">@asked.Options[option]</span>
+                                @if (graded is not null && option == graded.Option)
+                                {
+                                    <span class="quiz-mark quiz-mark-own">
+                                        <span aria-hidden="true">@(graded.Correct ? "✓" : "✗")</span> Deine Antwort
+                                    </span>
+                                }
+                                @if (graded is not null && option == graded.Answer)
+                                {
+                                    <span class="quiz-mark quiz-mark-right"><span aria-hidden="true">✓</span> Richtige Antwort</span>
+                                }
+                            </label>
+                        </li>
+                    }
+                </ul>
+            </fieldset>
+
+            @* Always there, so a screen reader announces each hint. *@
+            <div role="alert">
+                @if (answerMessage is not null)
+                {
+                    <div class="quiz-note quiz-alert">
+                        <p>@answerMessage</p>
+                        <RequestId Value="@answerTrace" />
+                    </div>
+                }
+            </div>
+
+            @if (graded is null)
+            {
+                @* Stays enabled while it sends: a disabled button would lose the keyboard focus. *@
+                <button type="submit" class="button">@(answering ? "Wird geprüft …" : "Antwort prüfen")</button>
+            }
+        </form>
+
+        @if (graded is not null)
+        {
+            @* Room below the explanation for how the answer moved the mastery, once there is one (#222). *@
+            <section class="quiz-feedback @(graded.Correct ? "quiz-right" : "")" aria-labelledby="feedback-heading">
+                <h2 id="feedback-heading" tabindex="-1" @ref="feedbackHeading">
+                    <span aria-hidden="true">@(graded.Correct ? "✓" : "✗")</span>
+                    @(graded.Correct ? "Richtig! Gut gemacht." : "Diesmal nicht richtig.")
+                </h2>
+                @if (!graded.Correct)
+                {
+                    <p>Mit der Erklärung sitzt es beim nächsten Mal.</p>
+                }
+                <p><strong>Richtige Antwort:</strong> @RightOption</p>
+                <p><strong>Erklärung:</strong> @graded.Explanation</p>
+            </section>
+
+            <div class="quiz-actions">
+                <button type="button" class="button" @onclick="() => AskAsync(focus: true)">Nächste Frage</button>
+                <a href="themen">Zurück zu den Themen</a>
+            </div>
+        }
+        break;
+}
+
+@code {
+    private const string NotThrough =
+        "Deine Antwort ist nicht angekommen. Edvaniq ist gerade nicht erreichbar. Versuch es in ein paar Sekunden noch einmal.";
+
+    private const string NothingChosen = "Wähl zuerst eine Antwort aus.";
+
+    [Parameter]
+    public Guid TopicId { get; set; }
+
+    private readonly CancellationTokenSource life = new();
+    private TimeProvider time = TimeProvider.System;
+    private Guid? loadedTopic;
+
+    private bool loading = true;
+    private bool askingNow;
+    private bool signedOut;
+    private CallResult? askFailure;
+    private string? loadTrace;
+    private string? topicName;
+
+    private AskedQuestion? asked;
+    private long shownAt;
+    private int? selected;
+    private bool answering;
+
+    // Measured once on the first submit, so a retry after a failed call sends the same time.
+    private int? responseTimeMs;
+    private string? answerMessage;
+    private string? answerTrace;
+    private GradedAnswer? graded;
+
+    private ElementReference pageHeading;
+    private ElementReference questionLegend;
+    private ElementReference feedbackHeading;
+    private FocusTarget focusNext;
+
+    private enum ViewState
+    {
+        Loading,
+        SignedOut,
+        NotReady,
+        NotFound,
+        LoadFailed,
+        Asking,
+        Graded,
+    }
+
+    private enum FocusTarget
+    {
+        None,
+        Page,
+        Question,
+        Feedback,
+    }
+
+    private ViewState State => this switch
+    {
+        { signedOut: true } => ViewState.SignedOut,
+        { loading: true } => ViewState.Loading,
+        { askFailure: CallResult.NotReady } => ViewState.NotReady,
+        { askFailure: CallResult.NotFound } => ViewState.NotFound,
+        { askFailure: not null } => ViewState.LoadFailed,
+        { graded: not null } => ViewState.Graded,
+        _ => ViewState.Asking,
+    };
+
+    // What the server graded counts, not what is ticked here: a second answer to the same attempt brings the first.
+    private int? Chosen => graded?.Option ?? selected;
+
+    private string RightOption =>
+        graded!.Answer < asked!.Options.Count ? asked.Options[graded.Answer] : "";
+
+    protected override void OnInitialized() => time = Services.GetService<TimeProvider>() ?? TimeProvider.System;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedTopic == TopicId)
+        {
+            return;
+        }
+
+        loadedTopic = TopicId;
+        topicName = null;
+        await Task.WhenAll(AskAsync(focus: false), LoadTopicNameAsync());
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var target = focusNext;
+        focusNext = FocusTarget.None;
+        try
+        {
+            switch (target)
+            {
+                case FocusTarget.Page:
+                    await pageHeading.FocusAsync();
+                    break;
+                case FocusTarget.Question:
+                    await questionLegend.FocusAsync();
+                    break;
+                case FocusTarget.Feedback:
+                    await feedbackHeading.FocusAsync();
+                    break;
+            }
+        }
+        catch (JSException)
+        {
+            // The element went away between render and focus, nothing to do.
+        }
+    }
+
+    // The heading names the topic. Without it the page still works, so a failure here shows nothing.
+    private async Task LoadTopicNameAsync()
+    {
+        CallOutcome<IReadOnlyList<TopicInfo>> topics;
+        try
+        {
+            topics = await Material.ListTopicsAsync(life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (topics is { Result: CallResult.Ok, Value: { } list })
+        {
+            topicName = list.Select(topic => topic.Id == TopicId ? topic.Name : null)
+                .Concat(list.SelectMany(topic => topic.Subtopics).Select(subtopic => subtopic.Id == TopicId ? subtopic.Name : null))
+                .FirstOrDefault(name => name is not null);
+        }
+    }
+
+    // A new attempt with a new question. Opened again, the page asks anew: an attempt left open counts nowhere.
+    private async Task AskAsync(bool focus)
+    {
+        if (askingNow)
+        {
+            return;
+        }
+
+        askingNow = true;
+        loading = true;
+        CallOutcome<AskedQuestion> outcome;
+        try
+        {
+            outcome = await Quiz.AskAsync(TopicId, life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            askingNow = false;
+            loading = false;
+        }
+
+        asked = null;
+        graded = null;
+        selected = null;
+        responseTimeMs = null;
+        answerMessage = null;
+        answerTrace = null;
+        askFailure = null;
+        loadTrace = null;
+        switch (outcome.Result)
+        {
+            case CallResult.Ok:
+                asked = outcome.Value!;
+                shownAt = time.GetTimestamp();
+                break;
+            case CallResult.SignedOut:
+                signedOut = true;
+                break;
+            default:
+                askFailure = outcome.Result is CallResult.NotReady or CallResult.NotFound ? outcome.Result : CallResult.Failed;
+                loadTrace = outcome.TraceId;
+                break;
+        }
+
+        if (focus)
+        {
+            focusNext = asked is null ? FocusTarget.Page : FocusTarget.Question;
+        }
+    }
+
+    private void Choose(int option)
+    {
+        if (graded is null)
+        {
+            selected = option;
+            answerMessage = null;
+        }
+    }
+
+    // One answer at a time: a second click while the first is on its way does nothing. What still comes in twice, a
+    // retry after a lost answer or another tab, the server answers with the stored grade.
+    private async Task SubmitAsync()
+    {
+        if (answering || graded is not null || asked is null)
+        {
+            return;
+        }
+
+        if (selected is not { } option)
+        {
+            answerMessage = NothingChosen;
+            answerTrace = null;
+            return;
+        }
+
+        responseTimeMs ??= (int)Math.Min(time.GetElapsedTime(shownAt).TotalMilliseconds, int.MaxValue);
+        answering = true;
+        answerMessage = null;
+        answerTrace = null;
+        CallOutcome<GradedAnswer> outcome;
+        try
+        {
+            outcome = await Quiz.AnswerAsync(asked.Id, option, responseTimeMs.Value, life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            answering = false;
+        }
+
+        switch (outcome.Result)
+        {
+            case CallResult.Ok when outcome.Value!.Option < asked.Options.Count && outcome.Value.Answer < asked.Options.Count:
+                graded = outcome.Value;
+                focusNext = FocusTarget.Feedback;
+                break;
+            case CallResult.SignedOut:
+                signedOut = true;
+                break;
+            case CallResult.NotFound:
+                asked = null;
+                askFailure = CallResult.NotFound;
+                focusNext = FocusTarget.Page;
+                break;
+            default:
+                answerMessage = NotThrough;
+                answerTrace = outcome.TraceId;
+                break;
+        }
+    }
+
+    private string? OptionClass(int option) => graded switch
+    {
+        null => null,
+        _ when option == graded.Answer => "quiz-option-right",
+        _ when option == graded.Option => "quiz-option-own",
+        _ => null,
+    };
+
+    public void Dispose()
+    {
+        life.Cancel();
+        life.Dispose();
+    }
+}

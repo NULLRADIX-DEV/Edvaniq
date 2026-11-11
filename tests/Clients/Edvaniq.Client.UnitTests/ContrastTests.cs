@@ -22,6 +22,9 @@ public sealed partial class ContrastTests
         { "--color-on-alert-surface", "--color-alert-surface", 4.5 },
         { "--color-accent", "--color-alert-surface", 3.0 },
         { "--color-alert", "--color-alert-surface", 3.0 },
+        { "--color-on-right-surface", "--color-right-surface", 4.5 },
+        { "--color-right", "--color-right-surface", 3.0 },
+        { "--color-right", "--color-surface", 4.5 },
     };
 
     [Theory]

@@ -24,6 +24,11 @@ builder.Services.AddSingleton<ILearningMaterial>(new HttpLearningMaterial(new Ht
     BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
     Timeout = TimeSpan.FromSeconds(20),
 }));
+builder.Services.AddSingleton<IQuiz>(new HttpQuiz(new HttpClient
+{
+    BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
+    Timeout = TimeSpan.FromSeconds(20),
+}));
 builder.Services.AddSingleton<IWebSession>(new HttpWebSession(new HttpClient
 {
     BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),

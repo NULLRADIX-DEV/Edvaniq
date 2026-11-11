@@ -46,6 +46,12 @@ public enum CallResult
     // Too big to get through at all.
     TooLarge,
 
+    // There is no such thing for this user, or not any more.
+    NotFound,
+
+    // It's there, but what was asked for isn't ready yet, the questions of a new topic for instance.
+    NotReady,
+
     // Did not get through: no connection, no answer in time, an error of the server.
     Failed,
 }
