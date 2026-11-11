@@ -22,6 +22,8 @@ public sealed class PlanningDbContext(DbContextOptions<PlanningDbContext> option
 
     public DbSet<LearningGoal> LearningGoals => Set<LearningGoal>();
 
+    public DbSet<DailyBudgetSetting> DailyBudgets => Set<DailyBudgetSetting>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ExampleItem>().Property(item => item.Text).HasMaxLength(ExampleItem.TextMaxLength);
@@ -54,5 +56,8 @@ public sealed class PlanningDbContext(DbContextOptions<PlanningDbContext> option
         var snapshot = modelBuilder.Entity<TopicsSnapshot>();
         snapshot.HasKey(item => new { item.OwnerId, item.LearningGoalId });
         snapshot.Property(item => item.ChangedAt).IsConcurrencyToken();
+
+        // One stored budget per user.
+        modelBuilder.Entity<DailyBudgetSetting>().HasKey(item => item.OwnerId);
     }
 }

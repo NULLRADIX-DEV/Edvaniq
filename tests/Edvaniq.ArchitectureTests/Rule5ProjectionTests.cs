@@ -25,6 +25,7 @@ public class Rule5ProjectionTests
 
         Assert.Equal(
             [
+                "PlanningDbContext maps Edvaniq.Services.Planning.Domain.DailyBudgetSetting from Planning at DailyBudgetSetting",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.ExamType from Planning at LearningGoal.ExamType",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.ExampleItem from Planning at ExampleItem",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.KnownTopic from Planning at KnownTopic",

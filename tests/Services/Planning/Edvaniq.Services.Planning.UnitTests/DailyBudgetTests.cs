@@ -1,4 +1,3 @@
-using Edvaniq.Services.Planning.Application;
 using Edvaniq.Services.Planning.Domain;
 
 namespace Edvaniq.Services.Planning.UnitTests;
@@ -74,25 +73,51 @@ public class DailyBudgetTests
         Assert.Equal(10 + (int)expected, budget.MinutesAt(DateTime.Parse(utc, null, System.Globalization.DateTimeStyles.AdjustToUniversal)));
     }
 
-    // AK1 and AK2: a user nobody has seen before gets the configured default for every study day.
     [Fact]
-    public async Task DefaultDailyBudgets_GiveEveryUserTheConfiguredMinutesOnEveryDay()
+    public void Parse_WithMinutesWithinTheBounds_GivesEachDayItsMinutes()
     {
-        IDailyBudgets budgets = new DefaultDailyBudgets(new DailyBudgetOptions { DefaultMinutes = 25 });
+        var budget = DailyBudget.Parse(Week(day => (int?)(DailyBudget.MinMinutes + (int)day)), out var errors);
 
-        foreach (var user in new[] { "alice", "bob" })
-        {
-            var budget = await budgets.ForUserAsync(user, TestContext.Current.CancellationToken);
+        Assert.Empty(errors);
+        Assert.NotNull(budget);
+        Assert.All(Enum.GetValues<DayOfWeek>(), day => Assert.Equal(DailyBudget.MinMinutes + (int)day, budget.MinutesOn(day)));
+    }
 
-            Assert.All(Enumerable.Range(0, 7), offset => Assert.Equal(25, budget.MinutesOn(Monday.AddDays(offset))));
-        }
+    [Theory]
+    [InlineData(null)]
+    [InlineData(-5)]
+    [InlineData(DailyBudget.MinMinutes - 1)]
+    [InlineData(DailyBudget.MaxMinutes + 1)]
+    public void Parse_WithAnInvalidDay_NamesThatDayOnly(int? minutes)
+    {
+        var week = Week(_ => (int?)30);
+        week[DayOfWeek.Wednesday] = minutes;
+
+        var budget = DailyBudget.Parse(week, out var errors);
+
+        Assert.Null(budget);
+        var error = Assert.Single(errors);
+        Assert.Equal("Wednesday", error.Key);
+        Assert.Equal(["Gib für jeden Tag zwischen 1 und 720 Minuten an."], error.Value);
     }
 
     [Fact]
-    public void DefaultDailyBudgets_WithMinutesOutsideTheBounds_Throws() =>
-        Assert.Throws<ArgumentOutOfRangeException>(
-            () => new DefaultDailyBudgets(new DailyBudgetOptions { DefaultMinutes = 0 }));
+    public void Parse_WithoutDays_NamesEveryDay()
+    {
+        Assert.Null(DailyBudget.Parse(new Dictionary<DayOfWeek, int?>(), out var errors));
+        Assert.Equal(Enum.GetNames<DayOfWeek>().Order(), errors.Keys.Order());
+    }
 
-    private static Dictionary<DayOfWeek, int> Week(Func<DayOfWeek, int> minutes) =>
+    [Fact]
+    public void Setting_KeepsTheMinutesOfEachDay()
+    {
+        var budget = DailyBudget.Of(Week(day => 10 + (int)day));
+
+        var setting = DailyBudgetSetting.Create("alice", budget, new DateTime(2026, 11, 11, 12, 0, 0, DateTimeKind.Utc));
+
+        Assert.All(Enum.GetValues<DayOfWeek>(), day => Assert.Equal(10 + (int)day, setting.ToBudget().MinutesOn(day)));
+    }
+
+    private static Dictionary<DayOfWeek, T> Week<T>(Func<DayOfWeek, T> minutes) =>
         Enum.GetValues<DayOfWeek>().ToDictionary(day => day, minutes);
 }
