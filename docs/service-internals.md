@@ -248,7 +248,7 @@ rm -rf src/Services/Sample tests/Services/Sample
 git restore Edvaniq.slnx
 ```
 
-Genau das macht die CI bei jedem Lauf im Schritt „Check service template“ des Jobs „Build & test backend“. Zusätzlich prüft sie, dass alle sieben Projekte in der Solution stehen. Im nächsten Schritt baut sie das Image des Probe-Service und startet es (siehe [Container-Image](#container-image)).
+Genau das macht die CI bei jedem Lauf im Schritt „Check service template“ des Jobs „Architecture & template“. Zusätzlich prüft sie, dass alle sieben Projekte in der Solution stehen. Im nächsten Schritt baut sie das Image des Probe-Service und startet es (siehe [Container-Image](#container-image)).
 
 ## Stolperfallen
 
