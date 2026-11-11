@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <Compile Include="..\Edvaniq.Web.IntegrationTests\WebFactory.cs" Link="WebFactory.cs" />
+    <Compile Include="..\Edvaniq.Client.UnitTests\HostileText.cs" Link="HostileText.cs" />
   </ItemGroup>
 
   <ItemGroup>

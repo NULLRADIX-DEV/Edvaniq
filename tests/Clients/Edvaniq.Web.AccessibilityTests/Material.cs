@@ -29,10 +29,10 @@ internal static class Material
         },
     ];
 
-    public static object Document(string status, string? failureReason = null) => new
+    public static object Document(string status, string? failureReason = null, string title = "Skript Biologie") => new
     {
         id = DocumentId,
-        title = "Skript Biologie",
+        title,
         status,
         failureReason,
         createdAt = new DateTime(2026, 11, 11, 9, 0, 0, DateTimeKind.Utc),
