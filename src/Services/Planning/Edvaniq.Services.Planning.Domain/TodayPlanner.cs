@@ -3,24 +3,26 @@ using Edvaniq.SharedKernel;
 namespace Edvaniq.Services.Planning.Domain;
 
 // Today's blocks for the topics of one learning goal, weaker topics first (#210). The first day of the rolling plan
-// without an exam (#371), so today gets its share of the week: weight 100 - mastery, the heaviest topic gets the review
-// block first and the first learn block after it, ties go by topic id. Every topic counts as introduced until Planning
-// learns which are new (#364). A pure function, the same input always gives the same plan.
+// without an exam (#371), so today gets its share of the week: weight 100 - mastery, the heaviest introduced topic gets
+// the review block first, the heaviest the first learn block, ties go by topic id. Mastery and state are LearningEngine's
+// (#367): a topic is new exactly when LearningEngine says so or knows nothing of it. A pure function, the same input
+// always gives the same plan.
 public static class TodayPlanner
 {
     // There is no size per topic yet, so every topic counts the same and only the mastery decides.
     public const int Size = 1;
 
     // LearningEngine starts a topic it knows at 50, even before the first answer. No entry at all means it hasn't heard
-    // of the topic yet (TopicsChanged still on its way), so nothing has been learned there: the topic counts as weakest.
+    // of the topic yet (TopicsChanged still on its way, or LearningEngine couldn't be asked), so nothing has been learned
+    // there: the topic counts as weakest, and as new, so it gets no review before it was ever introduced.
     public const int MasteryOfATopicLearningEngineDoesNotKnow = 0;
 
     // Today is the study day of now, so 03:30 still plans yesterday.
     public static TodayPlan Plan(
-        IReadOnlyCollection<Guid> topicIds, IReadOnlyDictionary<Guid, int> masteries, DailyBudget budget, DateTime utcNow)
+        IReadOnlyCollection<Guid> topicIds, IReadOnlyDictionary<Guid, TopicStanding> standings, DailyBudget budget, DateTime utcNow)
     {
         ArgumentNullException.ThrowIfNull(topicIds);
-        ArgumentNullException.ThrowIfNull(masteries);
+        ArgumentNullException.ThrowIfNull(standings);
         ArgumentNullException.ThrowIfNull(budget);
 
         var today = StudyDay.Of(utcNow);
@@ -32,18 +34,19 @@ public static class TodayPlanner
 
         var topics = topicIds
             .Distinct()
-            .Select(id => new TopicToPlan(id, Size, MasteryOf(id, masteries)))
+            .Select(id => ToPlan(id, standings))
             .ToList();
         var blocks = StudyPlanner.Plan(topics, budget, today, examDay: null)
             .Days.FirstOrDefault(day => day.StudyDay == today)?.Blocks ?? [];
         return new TodayPlan(today, blocks, blocks.Count == 0 ? TodayPlanEmpty.AllMastered : null);
     }
 
-    // Kept in 0 to 100, so a wrong value from outside can't break the plan.
-    private static int MasteryOf(Guid topicId, IReadOnlyDictionary<Guid, int> masteries) =>
-        masteries.TryGetValue(topicId, out var mastery)
-            ? Math.Clamp(mastery, 0, 100)
-            : MasteryOfATopicLearningEngineDoesNotKnow;
+    // Mastery kept in 0 to 100, so a wrong value from outside can't break the plan. A state Planning doesn't know is
+    // one LearningEngine worked out for a topic it knows, so it isn't new.
+    private static TopicToPlan ToPlan(Guid topicId, IReadOnlyDictionary<Guid, TopicStanding> standings) =>
+        standings.TryGetValue(topicId, out var standing)
+            ? new TopicToPlan(topicId, Size, Math.Clamp(standing.Mastery, 0, 100), IsNew: standing.State == TopicState.New)
+            : new TopicToPlan(topicId, Size, MasteryOfATopicLearningEngineDoesNotKnow, IsNew: true);
 }
 
 // The blocks of today in the order they come up. Empty says why there are none, null while there are blocks.

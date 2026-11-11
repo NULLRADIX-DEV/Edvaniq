@@ -73,6 +73,41 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
         Assert.Equal(30, plan.Blocks.Sum(block => block.Minutes));
     }
 
+    // #367: the state comes from LearningEngine over HTTP. The same mastery as new gives no review, as weakness one, so
+    // a changed threshold in LearningEngine reaches the plan without a change here.
+    [Fact]
+    public async Task Plan_TakesTheStateFromLearningEngine()
+    {
+        var (alice, aliceToken) = NewUser("alice");
+        var (bob, bobToken) = NewUser("bob");
+        var (alicesTopic, bobsTopic) = (Guid.NewGuid(), Guid.NewGuid());
+        Seed(KnownTopic.Create(alice, alicesTopic, LearningGoal.DefaultIdFor(alice), hidden: false));
+        Seed(KnownTopic.Create(bob, bobsTopic, LearningGoal.DefaultIdFor(bob), hidden: false));
+        service.LearningEngine.Set(aliceToken, alicesTopic, 50, "new");
+        service.LearningEngine.Set(bobToken, bobsTopic, 50, "weakness");
+
+        var alicePlan = await PlanAsync(aliceToken);
+        var bobPlan = await PlanAsync(bobToken);
+
+        Assert.All(alicePlan.Blocks, block => Assert.Equal("learn", block.Kind));
+        Assert.Equal(new PlannedBlock(bobsTopic, 5, "review"), bobPlan.Blocks[0]);
+    }
+
+    // A state Planning doesn't know yet still gives a plan, with the mastery.
+    [Fact]
+    public async Task Plan_WithAStatePlanningDoesNotKnow_StillComes()
+    {
+        var (alice, token) = NewUser("alice");
+        var topic = Guid.NewGuid();
+        Seed(KnownTopic.Create(alice, topic, LearningGoal.DefaultIdFor(alice), hidden: false));
+        service.LearningEngine.Set(token, topic, 40, "forgotten");
+
+        var plan = await PlanAsync(token);
+
+        Assert.True(plan.MasteryAvailable);
+        Assert.Equal([topic], plan.Blocks.Select(block => block.TopicId).Distinct());
+    }
+
     [Fact]
     public async Task Plan_TakesTheStudyDayOfNow()
     {
