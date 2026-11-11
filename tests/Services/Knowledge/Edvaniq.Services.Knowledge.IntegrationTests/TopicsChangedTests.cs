@@ -15,7 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Edvaniq.Services.Knowledge.IntegrationTests;
 
 // Every save that changes the topics of a learning goal stores exactly one TopicsChanged with it, carrying all topics
-// of the goal. A redelivered analysis stores none.
+// of the goal. A redelivered analysis stores none, and neither does one that only brings known topics (#208).
 public sealed class TopicsChangedTests(ServiceFactory service) : IClassFixture<ServiceFactory>
 {
     private const string Consumer = $"{InfrastructureExtensions.ServiceKey}-DocumentAnalyzedHandler";
@@ -144,7 +144,88 @@ public sealed class TopicsChangedTests(ServiceFactory service) : IClassFixture<S
         Assert.Single(Events(alice));
     }
 
+    // #208: the same text pasted again is a new document with the same topics.
+    [Fact]
+    public async Task SameTextAsAnotherDocument_KeepsTheTopicIds_AddsNoDuplicate_AndStoresNoSecondEvent()
+    {
+        var alice = NewUser();
+        await DeliverAsync(Analysis(alice, "Zelle", "pH-Wert"));
+        var ids = TopicIds(alice);
+        var again = Analysis(alice, "Zelle", "pH-Wert");
+
+        await DeliverAsync(again);
+
+        Assert.Equal(ids, TopicIds(alice));
+        Assert.Single(Events(alice));
+        Assert.Equal(
+            ids.Zip(again.Topics.Select(topic => topic.SectionIds[0])).Order(),
+            Sections(alice, again.DocumentId).Order());
+    }
+
+    [Fact]
+    public async Task AnotherDocument_AddsItsNewTopic_ReplacesNone_AndNamesTheKnownIdsInItsEvent()
+    {
+        var alice = NewUser();
+        var first = Analysis(alice, "Zelle", "Kern");
+        await DeliverAsync(first);
+        var ids = TopicIds(alice);
+
+        await DeliverAsync(Analysis(alice, "zelle", "Genetik"));
+
+        var now = TopicIds(alice);
+        Assert.Equal(3, now.Count);
+        Assert.Subset(now.ToHashSet(), ids.ToHashSet());
+        Assert.Equal(ids.Order(), Sections(alice, first.DocumentId).Select(row => row.Topic).Order());
+        var events = Events(alice);
+        Assert.Equal(2, events.Count);
+        Assert.Equal(now.Order(), events[1].TopicIds.Order());
+    }
+
+    // A retry of the analysis (#237) sends the same document again, with its sections cut anew.
+    [Fact]
+    public async Task SameDocumentAgain_WithNewSections_ReplacesTheAssignments_KeepsTheIds_AndStoresNoEvent()
+    {
+        var alice = NewUser();
+        var first = Analysis(alice, "Zelle", "Kern");
+        await DeliverAsync(first);
+        var ids = TopicIds(alice);
+        var retry = Analysis(alice, "Zelle", "Kern") with { DocumentId = first.DocumentId };
+
+        await DeliverAsync(retry);
+
+        Assert.Equal(ids, TopicIds(alice));
+        Assert.Equal(
+            ids.Zip(retry.Topics.Select(topic => topic.SectionIds[0])).Order(),
+            Sections(alice, first.DocumentId).Order());
+        Assert.Single(Events(alice));
+    }
+
+    [Fact]
+    public async Task RenamedTopic_KeepsItsName_WhenAnAnalysisBringsTheOldOneAgain()
+    {
+        var alice = NewUser();
+        await DeliverAsync(Analysis(alice, "Zelle"));
+        var topic = Assert.Single(TopicIds(alice));
+        using var client = service.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.Create(alice));
+        using var response = await client.PatchAsJsonAsync($"/topics/{topic}", new { name = "Zellbiologie" }, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await DeliverAsync(Analysis(alice, "Zelle"));
+
+        Assert.Equal([topic], TopicIds(alice));
+        Assert.Equal("Zellbiologie", Query(db => db.Topics.IgnoreQueryFilters().Single(item => item.Id == topic).Name));
+        Assert.Equal(2, Events(alice).Count);
+    }
+
     private static string NewUser() => $"alice-{Guid.NewGuid():N}";
+
+    private List<(Guid Topic, Guid Section)> Sections(string user, Guid documentId) =>
+        [.. Query(db => db.TopicSections.IgnoreQueryFilters()
+                .Where(section => section.OwnerId == user && section.DocumentId == documentId)
+                .Select(section => new { section.TopicId, section.SectionId })
+                .ToList())
+            .Select(row => (row.TopicId, row.SectionId))];
 
     private static DocumentAnalyzed Analysis(string user, params string[] names) =>
         new(user, Guid.NewGuid(), [.. names.Select(name => new TopicSuggestion(name, null, [Guid.NewGuid()]))]);

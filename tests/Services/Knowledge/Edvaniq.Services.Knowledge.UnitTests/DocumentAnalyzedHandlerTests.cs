@@ -7,7 +7,7 @@ using Edvaniq.Services.Knowledge.Domain;
 
 namespace Edvaniq.Services.Knowledge.UnitTests;
 
-// The handler takes the topics over once per document into the learning goal of the event and announces the new state
+// The handler takes the topics over into the learning goal of the event, known ones only once, and announces the new state
 // of the goal once. The first analysis with a goal moves the user's topics without one there and announces both goals.
 public class DocumentAnalyzedHandlerTests
 {
@@ -27,7 +27,6 @@ public class DocumentAnalyzedHandlerTests
         var topic = Assert.Single(import.Topics);
         Assert.Equal((Goal, Now.UtcDateTime), (topic.LearningGoalId, topic.CreatedAt));
         Assert.Single(import.Sections);
-        Assert.Equal(("alice", analysis.DocumentId), topics.AskedFor);
     }
 
     // A message from before the default goal still finds a place.
@@ -95,18 +94,57 @@ public class DocumentAnalyzedHandlerTests
         Assert.Equal(3, changed.TopicIds.Count);
     }
 
+    // A retry of the analysis (#237) sends the same document with sections cut anew.
     [Fact]
-    public async Task DocumentWhoseTopicsAreThere_AddsMovesAndAnnouncesNothing()
+    public async Task SameDocumentAgain_WithNewSections_KeepsTheTopics_ReplacesTheSections_AndAnnouncesNothing()
     {
-        var old = Topic.Create("alice", DocumentAnalyzedHandler.NoLearningGoal, "Alt", Now.UtcDateTime);
-        var topics = new FakeTopics { Exist = true, Stored = [old] };
+        var topics = new FakeTopics();
+        var document = Guid.NewGuid();
+        await Handler(topics, new FakeOutbox()).HandleAsync(
+            new("alice", document, [new("Zelle", null, [Guid.NewGuid()]), new("Kern", 0, [Guid.NewGuid()])], Goal),
+            TestContext.Current.CancellationToken);
+        var first = topics.Added[0].Topics;
         var outbox = new FakeOutbox();
+        var sections = new[] { Guid.NewGuid(), Guid.NewGuid() };
 
-        await Handler(topics, outbox).HandleAsync(new("alice", Guid.NewGuid(), [new("Zelle", null, [])], Goal), TestContext.Current.CancellationToken);
+        await Handler(topics, outbox).HandleAsync(
+            new("alice", document, [new("Zelle", null, [sections[0]]), new("Kern", 0, [sections[1]])], Goal),
+            TestContext.Current.CancellationToken);
 
-        Assert.Empty(topics.Added);
+        Assert.Empty(topics.Added[1].Topics);
+        Assert.Equal(
+            [(first[0].Id, sections[0]), (first[1].Id, sections[1])],
+            topics.Sections[document].Select(section => (section.TopicId, section.SectionId)));
         Assert.Empty(outbox.Added);
-        Assert.Equal(DocumentAnalyzedHandler.NoLearningGoal, old.LearningGoalId);
+    }
+
+    [Fact]
+    public async Task AnotherDocumentOnKnownTopicsOnly_AddsAndAnnouncesNothing()
+    {
+        var known = Topic.Create("alice", Goal, "Zelle", Now.UtcDateTime, Guid.NewGuid());
+        var topics = new FakeTopics { Stored = [known] };
+        var outbox = new FakeOutbox();
+        var document = Guid.NewGuid();
+
+        await Handler(topics, outbox).HandleAsync(new("alice", document, [new("zelle", null, [Guid.NewGuid()])], Goal), TestContext.Current.CancellationToken);
+
+        Assert.Empty(Assert.Single(topics.Added).Topics);
+        Assert.Equal(known.Id, Assert.Single(topics.Sections[document]).TopicId);
+        Assert.Empty(outbox.Added);
+    }
+
+    // The moved topics count as known in the goal they joined.
+    [Fact]
+    public async Task FirstDocumentWithAGoal_TakesAMovedTopicOfTheSameName()
+    {
+        var old = Topic.Create("alice", DocumentAnalyzedHandler.NoLearningGoal, "Zelle", Now.UtcDateTime, Guid.NewGuid());
+        var topics = new FakeTopics { Stored = [old] };
+
+        await Handler(topics, new FakeOutbox()).HandleAsync(
+            new("alice", Guid.NewGuid(), [new("Zelle", null, [Guid.NewGuid()])], Goal), TestContext.Current.CancellationToken);
+
+        Assert.Empty(Assert.Single(topics.Added).Topics);
+        Assert.Equal(old.Id, Assert.Single(topics.Added[0].Sections).TopicId);
     }
 
     [Fact]
@@ -137,23 +175,21 @@ public class DocumentAnalyzedHandlerTests
     // for the next handler, as after a save.
     private sealed class FakeTopics : IAnalyzedTopics, ITopicState
     {
-        public bool Exist { get; init; }
-
         public List<Topic> Stored { get; init; } = [];
-
-        public (string, Guid)? AskedFor { get; private set; }
 
         public List<TopicImport> Added { get; } = [];
 
+        // The sections of each document, replaced by every import of it.
+        public Dictionary<Guid, IReadOnlyList<TopicSection>> Sections { get; } = [];
+
         private IEnumerable<Topic> All => Stored.Concat(Added.SelectMany(import => import.Topics));
 
-        public Task<bool> ExistForAsync(string ownerId, Guid documentId, CancellationToken cancellationToken)
+        public Task ImportAsync(TopicImport import, CancellationToken cancellationToken)
         {
-            AskedFor = (ownerId, documentId);
-            return Task.FromResult(Exist);
+            Added.Add(import);
+            Sections[import.DocumentId] = import.Sections;
+            return Task.CompletedTask;
         }
-
-        public void Add(TopicImport import) => Added.Add(import);
 
         public Task<IReadOnlyList<Topic>> OfGoalAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<Topic>>([.. All.Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId)]);

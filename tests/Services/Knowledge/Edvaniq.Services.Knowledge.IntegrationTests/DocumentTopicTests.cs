@@ -25,7 +25,7 @@ public sealed class DocumentTopicTests(ServiceFactory service) : IClassFixture<S
         var cell = Topic.Create(alice, Guid.Empty, "Zelle", Seed.Now, document, 0);
         var nucleus = cell.AddSubtopic("Zellkern", Seed.Now, document, 1);
         var other = Topic.Create(alice, Guid.Empty, "Genetik", Seed.Now, Guid.NewGuid(), 0);
-        await AddAsync([nucleus, other, cell], [cell.AssignSection(first), nucleus.AssignSection(second)]);
+        await AddAsync([nucleus, other, cell], [cell.AssignSection(document, first), nucleus.AssignSection(document, second)]);
         using var client = ClientWith(TestTokens.CreateForClient(Content));
 
         var topics = await client.GetFromJsonAsync<DocumentTopic[]>($"/documents/{document}/topics", TestContext.Current.CancellationToken);
@@ -34,6 +34,24 @@ public sealed class DocumentTopicTests(ServiceFactory service) : IClassFixture<S
             [new DocumentTopic(cell.Id, null, 0, [first]), new DocumentTopic(nucleus.Id, cell.Id, 1, [second])],
             topics!,
             DocumentTopic.Comparer);
+    }
+
+    // #208: a later document whose analysis only hangs sections on known topics still has topics, else Content would wait
+    // for them in vain. Each topic shows only its sections of the document asked for.
+    [Fact(Timeout = 60_000)]
+    public async Task DocumentOnKnownTopicsOnly_GetsThoseTopics_WithItsOwnSections()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        var (earlier, later) = (Guid.NewGuid(), Guid.NewGuid());
+        var (old, fresh) = (Guid.NewGuid(), Guid.NewGuid());
+        var cell = Topic.Create(alice, Guid.Empty, "Zelle", Seed.Now, earlier, 0);
+        var nucleus = cell.AddSubtopic("Zellkern", Seed.Now, earlier, 1);
+        await AddAsync([cell, nucleus], [cell.AssignSection(earlier, old), nucleus.AssignSection(later, fresh)]);
+        using var client = ClientWith(TestTokens.CreateForClient(Content));
+
+        var topics = await client.GetFromJsonAsync<DocumentTopic[]>($"/documents/{later}/topics", TestContext.Current.CancellationToken);
+
+        Assert.Equal([new DocumentTopic(nucleus.Id, cell.Id, 1, [fresh])], topics!, DocumentTopic.Comparer);
     }
 
     // Knowledge hasn't taken the analysis over yet, or the document is someone else's that doesn't exist here.

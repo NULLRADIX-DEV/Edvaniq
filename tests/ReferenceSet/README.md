@@ -33,7 +33,7 @@ Ein **Anker** ist ein kurzer, wörtlicher Ausschnitt aus dem Dokument, der genau
 
 ## Was als Treffer zählt
 
-Verglichen werden die Namen nach einer Normalisierung: ä, ö, ü und ß werden zu ae, oe, ue und ss, alles wird klein geschrieben, jedes Zeichen außer Buchstaben und Ziffern wird zum Leerzeichen, und mehrere Leerzeichen werden zu einem. Aus „pH-Wert“ wird so „ph wert“. Die Funktion dazu ist `ReferenceSet.Normalize` im selben Testprojekt.
+Verglichen werden die Namen nach einer Normalisierung: ä, ö, ü und ß werden zu ae, oe, ue und ss, alles wird klein geschrieben, jedes Zeichen außer Buchstaben und Ziffern wird zum Leerzeichen, und mehrere Leerzeichen werden zu einem. Aus „pH-Wert“ wird so „ph wert“. Die Funktion dazu ist `TopicName.Normalize` in `Edvaniq.SharedKernel`, nach derselben Regel führt Knowledge gleiche Themen zusammen.
 
 1. Ein erzeugtes Thema **trifft** ein erwartetes, wenn sein normalisierter Name gleich dem normalisierten Namen oder einem der Aliase ist. Jedes erwartete Thema kann nur einmal getroffen werden, ein zweites Thema mit demselben Namen zählt als erfunden.
 2. Die **Ebene** zählt getrennt. Trifft ein Hauptthema ein erwartetes Unterthema oder umgekehrt, ist das ein Treffer mit einem Ebenenfehler.

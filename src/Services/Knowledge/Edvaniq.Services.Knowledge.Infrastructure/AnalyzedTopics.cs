@@ -10,14 +10,18 @@ namespace Edvaniq.Services.Knowledge.Infrastructure;
 // drop it and name the owner or the document.
 internal sealed class AnalyzedTopics(KnowledgeDbContext db) : IAnalyzedTopics
 {
-    public Task<bool> ExistForAsync(string ownerId, Guid documentId, CancellationToken cancellationToken) =>
-        db.Topics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
-            .AnyAsync(topic => topic.OwnerId == ownerId && topic.DocumentId == documentId, cancellationToken);
-
-    public void Add(TopicImport import)
+    public async Task ImportAsync(TopicImport import, CancellationToken cancellationToken)
     {
         db.Topics.AddRange(import.Topics);
-        db.TopicSections.AddRange(import.Sections);
+
+        // Only the difference, so an assignment that stays is not deleted and added again under the same key.
+        var stored = await db.TopicSections.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .Where(section => section.OwnerId == import.OwnerId && section.DocumentId == import.DocumentId)
+            .ToListAsync(cancellationToken);
+        var wanted = import.Sections.Select(section => (section.TopicId, section.SectionId)).ToHashSet();
+        var kept = stored.Select(section => (section.TopicId, section.SectionId)).ToHashSet();
+        db.TopicSections.RemoveRange(stored.Where(section => !wanted.Contains((section.TopicId, section.SectionId))));
+        db.TopicSections.AddRange(import.Sections.Where(section => !kept.Contains((section.TopicId, section.SectionId))));
     }
 
     public async Task<IReadOnlyList<Topic>> OfGoalAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
@@ -27,17 +31,20 @@ internal sealed class AnalyzedTopics(KnowledgeDbContext db) : IAnalyzedTopics
 
     public async Task<IReadOnlyList<DocumentTopic>> OfDocumentAsync(Guid documentId, CancellationToken cancellationToken)
     {
-        var topics = await db.Topics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
-            .Where(topic => topic.DocumentId == documentId)
-            .OrderBy(topic => topic.Position)
-            .Select(topic => new { topic.Id, topic.ParentId, topic.Position })
-            .ToListAsync(cancellationToken);
-        var ids = topics.Select(topic => topic.Id).ToList();
         var sections = (await db.TopicSections.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
-                .Where(section => ids.Contains(section.TopicId))
+                .Where(section => section.DocumentId == documentId)
                 .Select(section => new { section.TopicId, section.SectionId })
                 .ToListAsync(cancellationToken))
             .ToLookup(section => section.TopicId, section => section.SectionId);
+        var withSections = sections.Select(group => group.Key).ToList();
+
+        // A topic the document made may have no sections of its own, only its subtopics have some.
+        var topics = await db.Topics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .Where(topic => topic.DocumentId == documentId || withSections.Contains(topic.Id))
+            .OrderBy(topic => topic.CreatedAt)
+            .ThenBy(topic => topic.Position)
+            .Select(topic => new { topic.Id, topic.ParentId, topic.Position })
+            .ToListAsync(cancellationToken);
 
         return [.. topics.Select(topic => new DocumentTopic(topic.Id, topic.ParentId, topic.Position, [.. sections[topic.Id]]))];
     }

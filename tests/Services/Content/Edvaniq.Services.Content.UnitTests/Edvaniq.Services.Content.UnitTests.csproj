@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Services\Content\Edvaniq.Services.Content.Domain\Edvaniq.Services.Content.Domain.csproj" />
     <ProjectReference Include="..\..\..\..\src\Services\Content\Edvaniq.Services.Content.Application\Edvaniq.Services.Content.Application.csproj" />
+    <ProjectReference Include="..\..\..\..\src\SharedKernel\Edvaniq.SharedKernel\Edvaniq.SharedKernel.csproj" />
     <ProjectReference Include="..\..\..\Edvaniq.Testing\Edvaniq.Testing.csproj" />
   </ItemGroup>
 

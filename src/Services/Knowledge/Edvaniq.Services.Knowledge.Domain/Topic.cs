@@ -1,10 +1,11 @@
 using Edvaniq.BuildingBlocks.Domain;
+using Edvaniq.SharedKernel;
 
 namespace Edvaniq.Services.Knowledge.Domain;
 
 // A topic of a learning goal (docs/spec/glossary.md#thema). Other services keep nothing of it but its id, so the id never
-// changes: not on a rename, and not when a topic later belongs to more than one learning goal. A subtopic is a topic
-// with a parent, there is no third level.
+// changes: not on a rename, not when a later analysis brings it again, and not when a topic later belongs to more than
+// one learning goal. A subtopic is a topic with a parent, there is no third level.
 public sealed class Topic : IOwnedByUser
 {
     public const int NameMaxLength = 80;
@@ -18,6 +19,7 @@ public sealed class Topic : IOwnedByUser
         CreatedAt = createdAt;
         DocumentId = documentId;
         Position = position;
+        AnalysisName = documentId is null ? null : name;
     }
 
     public Guid Id { get; private set; } = Guid.NewGuid();
@@ -32,10 +34,14 @@ public sealed class Topic : IOwnedByUser
 
     public string Name { get; private set; }
 
+    // The name the analysis gave it first. A rename leaves it, so a later analysis with that name still finds the topic.
+    // Null for a topic the user adds.
+    public string? AnalysisName { get; private set; }
+
     // UTC.
     public DateTime CreatedAt { get; private set; }
 
-    // Content's document whose analysis brought the topic, only a reference. Null for a topic the user adds.
+    // Content's document whose analysis brought the topic first, only a reference. Null for a topic the user adds.
     public Guid? DocumentId { get; private set; }
 
     // The place in the analysis, keeps its order among topics created at the same time.
@@ -59,8 +65,16 @@ public sealed class Topic : IOwnedByUser
             ? throw new InvalidOperationException("A subtopic has no subtopics, topics have two levels.")
             : new(OwnerId, LearningGoalId, Id, name.Trim(), createdAt, documentId, position);
 
-    // Content's section belongs to this topic.
-    public TopicSection AssignSection(Guid sectionId) => new(OwnerId, Id, sectionId);
+    // Whether a name means this topic, its name now or the one the analysis gave it, compared after TopicName.Normalize.
+    public bool IsCalled(string name)
+    {
+        var normalized = TopicName.Normalize(name);
+        return TopicName.Normalize(Name) == normalized
+            || (AnalysisName is not null && TopicName.Normalize(AnalysisName) == normalized);
+    }
+
+    // Content's section of the document belongs to this topic.
+    public TopicSection AssignSection(Guid documentId, Guid sectionId) => new(OwnerId, Id, documentId, sectionId);
 
     // Call it only with a name that passed CheckName.
     public void Rename(string name) => Name = name.Trim();

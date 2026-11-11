@@ -1,5 +1,6 @@
-using System.Text;
 using System.Text.Json;
+
+using Edvaniq.SharedKernel;
 
 namespace Edvaniq.Services.Content.UnitTests;
 
@@ -22,26 +23,8 @@ internal sealed record ReferenceSet(int Version, IReadOnlyList<ReferenceDocument
             ?? throw new InvalidDataException("The manifest of the reference set is empty: " + ManifestPath);
     }
 
-    // A topic name as it gets compared: umlauts and ß spelled out, lower case, only letters and digits, single spaces.
-    public static string Normalize(string name)
-    {
-        var builder = new StringBuilder();
-        foreach (var c in name.ToLowerInvariant())
-        {
-            var replacement = c switch
-            {
-                'ä' => "ae",
-                'ö' => "oe",
-                'ü' => "ue",
-                'ß' => "ss",
-                _ when char.IsLetterOrDigit(c) => c.ToString(),
-                _ => " ",
-            };
-            builder.Append(replacement);
-        }
-
-        return string.Join(' ', builder.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries));
-    }
+    // The same rule Knowledge merges topics by.
+    public static string Normalize(string name) => TopicName.Normalize(name);
 
     private static string FindRoot()
     {
