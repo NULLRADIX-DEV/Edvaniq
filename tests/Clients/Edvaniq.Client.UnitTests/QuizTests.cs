@@ -312,8 +312,11 @@ public sealed class QuizTests : BunitContext
 
         Assert.Equal((Attempt, 7000), Assert.Single(quiz.Revealed));
         Assert.Empty(quiz.Answered);
-        Assert.Equal("✗ Diesmal nicht richtig.", Squeeze(page.Find("#feedback-heading").TextContent));
+        // Nobody answered, so the heading gives the solution instead of a verdict.
+        Assert.Equal("✗ Hier ist die Lösung.", Squeeze(page.Find("#feedback-heading").TextContent));
         var feedback = Squeeze(page.Find(".quiz-feedback").TextContent);
+        Assert.Contains("Schau dir die Erklärung in Ruhe an, so bleibt sie hängen.", feedback);
+        Assert.DoesNotContain("nicht richtig", feedback, StringComparison.Ordinal);
         Assert.Contains("Richtige Antwort: In den Thylakoiden", feedback);
         Assert.Contains("Erklärung: Die Lichtreaktion läuft an den Membranen der Thylakoide ab.", feedback);
         Assert.Equal(["Richtige Antwort"], Marks(page, 1));

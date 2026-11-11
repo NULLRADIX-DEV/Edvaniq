@@ -8,8 +8,8 @@
     @if (!RendererInfo.IsInteractive)
     {
         <p class="page-loading-help">
-            Bleibt das so, prüf deine Internetverbindung und
-            <a href="@Navigation.Uri" data-enhance-nav="false">lade die Seite neu</a>.
+            @FeedbackTexts.Connection.LoadingStuck
+            <a href="@Navigation.Uri" data-enhance-nav="false">@FeedbackTexts.Connection.LoadingStuckLink</a>.
         </p>
     }
 </div>
