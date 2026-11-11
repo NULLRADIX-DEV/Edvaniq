@@ -3,8 +3,9 @@ using Edvaniq.SharedKernel;
 namespace Edvaniq.Services.Planning.Domain;
 
 // Today's blocks for the topics of one learning goal, weaker topics first (#210). The StudyPlanner with an exam
-// tomorrow, so every minute falls on today: weight 100 - mastery, the heaviest topic gets the first block, ties go by
-// topic id. A pure function, the same input always gives the same plan.
+// tomorrow, so every minute falls on today: weight 100 - mastery, the heaviest topic gets the review block first and
+// the first learn block after it, ties go by topic id. Every topic counts as introduced until Planning learns which are
+// new (#364). A pure function, the same input always gives the same plan.
 public static class TodayPlanner
 {
     // There is no size per topic yet, so every topic counts the same and only the mastery decides.

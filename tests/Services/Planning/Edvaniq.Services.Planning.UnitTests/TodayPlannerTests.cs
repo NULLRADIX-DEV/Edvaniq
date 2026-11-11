@@ -18,7 +18,8 @@ public class TodayPlannerTests
     {
         var plan = TodayPlanner.Plan([A, B, C], new Dictionary<Guid, int> { [A] = 80, [B] = 20, [C] = 0 }, Budget, Now);
 
-        Assert.Equal([new Block(C, 15), new Block(B, 10), new Block(A, 5)], plan.Blocks);
+        // Since #369 the day starts with a review block of the weakest topic, so 25 minutes are left to learn.
+        Assert.Equal([new Block(C, 5, BlockKind.Review), new Block(C, 15), new Block(B, 10)], plan.Blocks);
         Assert.Equal(Monday, plan.StudyDay);
         Assert.Null(plan.Empty);
     }
@@ -75,7 +76,8 @@ public class TodayPlannerTests
     {
         var plan = TodayPlanner.Plan([C, A, B], new Dictionary<Guid, int>(), Budget, Now);
 
-        Assert.Equal([A, B, C], plan.Blocks.Select(block => block.TopicId));
+        Assert.Equal(A, plan.Blocks[0].TopicId);
+        Assert.Equal([A, B, C], plan.Blocks.Where(block => block.Kind == BlockKind.Learn).Select(block => block.TopicId));
     }
 
     [Fact]

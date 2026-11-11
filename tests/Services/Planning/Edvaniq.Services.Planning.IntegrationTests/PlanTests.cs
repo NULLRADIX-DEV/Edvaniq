@@ -35,7 +35,7 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
         Seed(KnownTopic.Create(alice, strong, LearningGoal.DefaultIdFor(alice), hidden: false));
         Seed(KnownTopic.Create(alice, weak, LearningGoal.DefaultIdFor(alice), hidden: false));
         Seed(KnownTopic.Create(bob, bobsTopic, LearningGoal.DefaultIdFor(bob), hidden: false));
-        service.LearningEngine.Set(aliceToken, strong, 90);
+        service.LearningEngine.Set(aliceToken, strong, 70);
         service.LearningEngine.Set(aliceToken, weak, 10);
         service.LearningEngine.Set(bobToken, bobsTopic, 40);
 
@@ -53,6 +53,24 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
         var aliceCalls = service.LearningEngine.RequestsWith(aliceToken);
         Assert.Equal($"/mastery?learningGoalId={LearningGoal.DefaultIdFor(alice)}", Assert.Single(aliceCalls).PathAndQuery);
         Assert.Equal($"/mastery?learningGoalId={LearningGoal.DefaultIdFor(bob)}", Assert.Single(service.LearningEngine.RequestsWith(bobToken)).PathAndQuery);
+    }
+
+    // #369: the day starts with the review block, the rest are learn blocks, the kind in lower case.
+    [Fact]
+    public async Task Plan_StartsWithAReviewBlock_TheOthersAreLearnBlocks()
+    {
+        var (alice, token) = NewUser("alice");
+        var (first, second) = (Guid.NewGuid(), Guid.NewGuid());
+        Seed(KnownTopic.Create(alice, first, LearningGoal.DefaultIdFor(alice), hidden: false));
+        Seed(KnownTopic.Create(alice, second, LearningGoal.DefaultIdFor(alice), hidden: false));
+        service.LearningEngine.Set(token, first, 20);
+        service.LearningEngine.Set(token, second, 40);
+
+        var plan = await PlanAsync(token);
+
+        Assert.Equal(new PlannedBlock(first, 5, "review"), plan.Blocks[0]);
+        Assert.All(plan.Blocks.Skip(1), block => Assert.Equal("learn", block.Kind));
+        Assert.Equal(30, plan.Blocks.Sum(block => block.Minutes));
     }
 
     [Fact]
@@ -192,5 +210,5 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
 
     private sealed record Plan(DateOnly StudyDay, Guid LearningGoalId, List<PlannedBlock> Blocks, string? EmptyReason, bool MasteryAvailable);
 
-    private sealed record PlannedBlock(Guid TopicId, int Minutes);
+    private sealed record PlannedBlock(Guid TopicId, int Minutes, string Kind);
 }
