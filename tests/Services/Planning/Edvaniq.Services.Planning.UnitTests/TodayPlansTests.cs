@@ -147,8 +147,13 @@ public class TodayPlansTests
 
     private sealed class FakeBudgets : IDailyBudgets
     {
-        public Task<DailyBudget> ForUserAsync(string ownerId, CancellationToken cancellationToken) =>
-            Task.FromResult(DailyBudget.Uniform(30));
+        public DailyBudget Default { get; } = DailyBudget.Uniform(30);
+
+        public Task<DailyBudget> ForUserAsync(string ownerId, CancellationToken cancellationToken) => Task.FromResult(Default);
+
+        public Task<DailyBudget?> StoredAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task SetAsync(DailyBudget budget, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
     private sealed class FakeUser : ICurrentUser

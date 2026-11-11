@@ -35,8 +35,7 @@ public static class InfrastructureExtensions
                 options => options.DefaultMinutes is >= DailyBudget.MinMinutes and <= DailyBudget.MaxMinutes,
                 $"{DailyBudgetOptions.Section}:DefaultMinutes must be between {DailyBudget.MinMinutes} and {DailyBudget.MaxMinutes}.")
             .ValidateOnStart();
-        builder.Services.AddSingleton<IDailyBudgets>(services =>
-            new DefaultDailyBudgets(services.GetRequiredService<IOptions<DailyBudgetOptions>>().Value));
+        builder.Services.AddScoped<IDailyBudgets, DailyBudgets>();
 
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<PlanningDbContext>(ServiceKey);

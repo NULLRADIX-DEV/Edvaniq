@@ -54,6 +54,21 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         Assert.Equal(1, GoalsOf(bob));
     }
 
+    [Fact]
+    public async Task DeletedUser_LosesTheirDailyBudget_OthersKeepTheirs()
+    {
+        var alice = NewUser("alice");
+        var bob = NewUser("bob");
+        await SetDailyBudgetAsync(alice);
+        await SetDailyBudgetAsync(bob);
+
+        var messageId = await DeleteAsync(alice);
+
+        await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
+        Assert.Equal(0, BudgetsOf(alice));
+        Assert.Equal(1, BudgetsOf(bob));
+    }
+
     // "Alice" and "alice" are two users, deleting one keeps the data of the other.
     [Fact]
     public async Task DeletedUser_KeepsTheDataOfTheSameNameInOtherCase()
@@ -135,6 +150,19 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         using var response = await client.PostAsync("/learning-goals/default", content: null, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
+
+    private async Task SetDailyBudgetAsync(string user)
+    {
+        using var client = service.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.Create(user));
+
+        var week = new { monday = 20, tuesday = 20, wednesday = 20, thursday = 20, friday = 20, saturday = 20, sunday = 20 };
+        using var response = await client.PutAsJsonAsync("/daily-budget", week, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    private int BudgetsOf(string user) =>
+        Query(db => db.DailyBudgets.IgnoreQueryFilters().Count(budget => budget.OwnerId == user));
 
     private int GoalsOf(string user) =>
         Query(db => db.LearningGoals.IgnoreQueryFilters().Count(goal => goal.OwnerId == user));

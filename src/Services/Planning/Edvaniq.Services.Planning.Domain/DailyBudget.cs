@@ -3,7 +3,7 @@ using Edvaniq.SharedKernel;
 namespace Edvaniq.Services.Planning.Domain;
 
 // The minutes a user wants to learn on each weekday, for all learning goals together (docs/spec/glossary.md#tagesbudget).
-// The model knows a value per weekday, until M5 every user gets the same value for all days.
+// Each user can store one (DailyBudgetSetting), until then the configured default applies on every day.
 public sealed class DailyBudget
 {
     public const int MinMinutes = 1;
@@ -34,6 +34,24 @@ public sealed class DailyBudget
 
         return new DailyBudget(minutes);
     }
+
+    // The minutes a user entered, null where a day is missing. Errors are keyed by the day's name (Monday …), so each
+    // gets its message at its field.
+    public static DailyBudget? Parse(IReadOnlyDictionary<DayOfWeek, int?> minutesPerDay, out Dictionary<string, string[]> errors)
+    {
+        errors = [];
+        foreach (var day in Enum.GetValues<DayOfWeek>())
+        {
+            if (minutesPerDay.GetValueOrDefault(day) is not (>= MinMinutes and <= MaxMinutes))
+            {
+                errors[day.ToString()] = [$"Gib für jeden Tag zwischen {MinMinutes} und {MaxMinutes} Minuten an."];
+            }
+        }
+
+        return errors.Count > 0 ? null : Of(minutesPerDay.ToDictionary(pair => pair.Key, pair => pair.Value!.Value));
+    }
+
+    public int MinutesOn(DayOfWeek day) => minutes[(int)day];
 
     // The weekday of the study day counts, not the calendar day.
     public int MinutesOn(DateOnly studyDay) => minutes[(int)studyDay.DayOfWeek];

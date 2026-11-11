@@ -83,6 +83,44 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                     b.ToTable("outbox_messages", (string)null);
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Planning.Domain.DailyBudgetSetting", b =>
+                {
+                    b.Property<string>("OwnerId")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<int>("FridayMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MondayMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SaturdayMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SundayMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ThursdayMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TuesdayMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("WednesdayMinutes")
+                        .HasColumnType("int");
+
+                    b.HasKey("OwnerId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("DailyBudgets");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Planning.Domain.ExampleItem", b =>
                 {
                     b.Property<Guid>("Id")

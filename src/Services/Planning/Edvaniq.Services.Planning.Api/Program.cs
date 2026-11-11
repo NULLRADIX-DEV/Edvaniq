@@ -40,6 +40,7 @@ app.UseAuthorization();
 app.MapGet("/me", (ICurrentUser user) => new { user.Id });
 app.MapPingEndpoints();
 app.MapLearningGoalEndpoints();
+app.MapDailyBudgetEndpoints();
 app.MapPlanEndpoints();
 app.MapExampleEndpoints();
 
