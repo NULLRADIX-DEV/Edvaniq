@@ -52,6 +52,69 @@ public sealed class QuizTests
     }
 
     [Fact]
+    public async Task Check_AsksThreeEasiestInOneSave_AndRecordsNothingYet()
+    {
+        var topicId = CheckQuestionsTests.TopicId;
+        attempts.KnownTopics.Add(topicId);
+        attempts.Questions.AddRange(CheckQuestionsTests.Pool(3, 1, 2, 1));
+        attempts.Questions.Add(AttemptTests.Question("alice"));
+
+        var check = await Quiz.CheckAsync(topicId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(CheckOutcome.Ready, check.Outcome);
+        Assert.Equal([1, 1, 2], check.Asked.Select(asked => asked.Question.Difficulty));
+        Assert.Equal(check.Asked.Select(asked => asked.Attempt), attempts.Stored);
+        Assert.All(check.Asked, asked => Assert.Equal((asked.Question.Id, topicId, Now), (asked.Attempt.QuestionId, asked.Attempt.TopicId, asked.Attempt.AskedAt)));
+        Assert.Equal(1, attempts.Saves);
+        Assert.Empty(outbox.Events);
+    }
+
+    // Each check question is an attempt, answered once with one learning record.
+    [Fact]
+    public async Task Check_EachAnswerIsRecordedOnce()
+    {
+        var topicId = CheckQuestionsTests.TopicId;
+        attempts.KnownTopics.Add(topicId);
+        attempts.Questions.AddRange(CheckQuestionsTests.Pool(1, 1));
+        var check = await Quiz.CheckAsync(topicId, TestContext.Current.CancellationToken);
+
+        foreach (var (attempt, _) in check.Asked)
+        {
+            await Quiz.AnswerAsync(attempt.Id, 1, 1_000, TestContext.Current.CancellationToken);
+            await Quiz.RevealAsync(attempt.Id, 1_000, TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal(
+            check.Asked.Select(asked => (asked.Attempt.Id, true)),
+            outbox.Events.Cast<AnswerRecorded>().Select(record => (record.AnswerId, record.Correct)));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task Check_WithFewerThanTwoQuestions_IsNotReady(int count)
+    {
+        var topicId = CheckQuestionsTests.TopicId;
+        attempts.KnownTopics.Add(topicId);
+        attempts.Questions.AddRange(CheckQuestionsTests.Pool([.. Enumerable.Repeat(1, count)]));
+
+        var check = await Quiz.CheckAsync(topicId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(CheckOutcome.NotReady, check.Outcome);
+        Assert.Empty(check.Asked);
+        Assert.Empty(attempts.Stored);
+    }
+
+    [Fact]
+    public async Task Check_ForATopicTheUserDoesNotHave_IsUnknown()
+    {
+        var check = await Quiz.CheckAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(CheckOutcome.UnknownTopic, check.Outcome);
+        Assert.Empty(attempts.Stored);
+    }
+
+    [Fact]
     public async Task Answer_IsGradedAndRecordedOnce()
     {
         var topicId = Guid.NewGuid();
@@ -233,8 +296,11 @@ public sealed class QuizTests
 
         public void Add(Attempt attempt) => Stored.Add(attempt);
 
+        public int Saves { get; private set; }
+
         public Task<bool> SaveAsync(CancellationToken cancellationToken)
         {
+            Saves++;
             if (winner is { } stored)
             {
                 Stored.RemoveAll(attempt => attempt.Id == stored.Id);

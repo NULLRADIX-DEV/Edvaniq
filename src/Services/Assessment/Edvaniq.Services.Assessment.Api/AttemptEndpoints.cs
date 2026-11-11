@@ -58,6 +58,26 @@ internal static class AttemptEndpoints
             };
         });
 
+        // Two or three questions for a new topic, each an attempt answered at /attempts/{id}/answer. A pool that isn't
+        // there yet is a status, not an error: the unit can go on without it.
+        app.MapPost("/check-questions", async (AskRequest request, Quiz quiz, CancellationToken cancellationToken) =>
+        {
+            if (request.TopicId is not { } topicId)
+            {
+                return Invalid(nameof(request.TopicId), "Es fehlt das Thema.");
+            }
+
+            var check = await quiz.CheckAsync(topicId, cancellationToken);
+            return check.Outcome switch
+            {
+                CheckOutcome.UnknownTopic => Results.NotFound(),
+                _ => Results.Ok(new CheckResponse(
+                    topicId,
+                    check.Outcome == CheckOutcome.Ready ? "ready" : "notReady",
+                    [.. check.Asked.Select(asked => AskedResponse.From(asked.Attempt, asked.Question))])),
+            };
+        });
+
         return app;
     }
 
@@ -75,6 +95,9 @@ internal sealed record AskedResponse(Guid Id, Guid TopicId, Guid QuestionId, str
     public static AskedResponse From(Attempt attempt, Question question) =>
         new(attempt.Id, attempt.TopicId, question.Id, AttemptEndpoints.Name(question.Type), question.Text, question.Options, question.Difficulty);
 }
+
+// Status is ready with two or three questions, or notReady with none.
+internal sealed record CheckResponse(Guid TopicId, string Status, IReadOnlyList<AskedResponse> Questions);
 
 // Exactly one of Option (single choice, true/false), Options (multiple choice, order doesn't matter) or ShowSolution.
 // ResponseTimeMs: the time the client measured from showing the question to the answer, in milliseconds.

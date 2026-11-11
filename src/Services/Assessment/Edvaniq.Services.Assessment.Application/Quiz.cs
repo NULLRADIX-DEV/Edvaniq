@@ -30,6 +30,31 @@ public sealed class Quiz(IAttempts attempts, IEventOutbox outbox, TimeProvider t
         return new(AskOutcome.Asked, attempt, question);
     }
 
+    // Asks the check questions in one save. Asking again brings a new set and leaves the open ones unanswered, keeping
+    // one unit together across reloads is the session's job in Planning.
+    public async Task<Checked> CheckAsync(Guid topicId, CancellationToken cancellationToken)
+    {
+        if (!await attempts.KnowsTopicAsync(topicId, cancellationToken))
+        {
+            return new(CheckOutcome.UnknownTopic, []);
+        }
+
+        if (CheckQuestions.Pick(await attempts.QuestionsOfAsync(topicId, cancellationToken), Random.Shared) is not { } picked)
+        {
+            return new(CheckOutcome.NotReady, []);
+        }
+
+        var now = time.GetUtcNow().UtcDateTime;
+        var asked = picked.Select(question => (Attempt.Ask(question, topicId, now), question)).ToList();
+        foreach (var (attempt, _) in asked)
+        {
+            attempts.Add(attempt);
+        }
+
+        await attempts.SaveAsync(cancellationToken);
+        return new(CheckOutcome.Ready, asked);
+    }
+
     public Task<Graded> AnswerAsync(Guid attemptId, int option, int responseTimeMs, CancellationToken cancellationToken) =>
         AnswerAsync(attemptId, [option], responseTimeMs, cancellationToken);
 
