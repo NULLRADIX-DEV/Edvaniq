@@ -47,7 +47,8 @@ public sealed class IntroductionTests(ServiceFactory service) : IClassFixture<Se
         Assert.Equal(62, (await ListAsync(alice)).Single(item => item.TopicId == topic).Mastery);
     }
 
-    // The same session again and a later one keep the first introduction: the answer between the two still counts.
+    // The same session again, as a redelivery the inbox drops and under a new message id, and a later one keep the first
+    // introduction: the answer between the two still counts.
     [Fact]
     public async Task SessionDeliveredAgain_OrALaterSession_KeepsTheFirstIntroduction()
     {
@@ -55,11 +56,23 @@ public sealed class IntroductionTests(ServiceFactory service) : IClassFixture<Se
         var topic = await KnowAsync(alice);
         var first = new SessionCompleted(alice, Guid.NewGuid(), DateTime.UtcNow.AddMinutes(-10), true, [topic]);
 
-        await DeliverAsync(first);
+        var messageId = await DeliverAsync(first);
         await DeliverAsync(Answer(alice, topic, Guid.NewGuid(), TimeSpan.FromMinutes(5)));
-        await DeliverAsync(first);
+        Broker.DropsDuplicates = false;
+        try
+        {
+            await PublishAsync(first, messageId);
+            await DeliverAsync(first);
+        }
+        finally
+        {
+            Broker.DropsDuplicates = true;
+        }
+
         await DeliverAsync(new SessionCompleted(alice, Guid.NewGuid(), DateTime.UtcNow, true, [topic]));
 
+        // One consumer, in order: once the later session is through, so is the redelivery.
+        Assert.Equal(1, InboxEntries<SessionCompleted>(messageId));
         Assert.Equal(62, await MasteryAsync(alice, topic));
         var introduction = Assert.Single(Query(db => db.TopicIntroductions.IgnoreQueryFilters().Where(item => item.TopicId == topic).ToList()));
         Assert.Equal(first.SessionId, introduction.SessionId);
@@ -132,21 +145,33 @@ public sealed class IntroductionTests(ServiceFactory service) : IClassFixture<Se
     }
 
     // Like the senders' dispatchers would, then wait until this service's consumer has it.
-    private async Task DeliverAsync<TEvent>(TEvent integrationEvent)
+    private async Task<Guid> DeliverAsync<TEvent>(TEvent integrationEvent)
     {
-        var consumer = $"{InfrastructureExtensions.ServiceKey}-{typeof(TEvent).Name}Handler";
-        var id = Guid.NewGuid();
-        await Broker.PublishAsync(
-            new OutgoingMessage(
-                EventRoute.For(typeof(TEvent)).Subject, id, JsonSerializer.Serialize(integrationEvent, JsonSerializerOptions.Web), null),
-            TestContext.Current.CancellationToken);
-
+        var id = await PublishAsync(integrationEvent);
         var deadline = DateTime.UtcNow + Timeout;
-        while (Query(db => db.Set<InboxMessage>().Count(entry => entry.MessageId == id && entry.Consumer == consumer)) == 0)
+        while (InboxEntries<TEvent>(id) == 0)
         {
             Assert.True(DateTime.UtcNow < deadline, $"{typeof(TEvent).Name} was not handled.");
             await Task.Delay(100, TestContext.Current.CancellationToken);
         }
+
+        return id;
+    }
+
+    private async Task<Guid> PublishAsync<TEvent>(TEvent integrationEvent, Guid? messageId = null)
+    {
+        var id = messageId ?? Guid.NewGuid();
+        await Broker.PublishAsync(
+            new OutgoingMessage(
+                EventRoute.For(typeof(TEvent)).Subject, id, JsonSerializer.Serialize(integrationEvent, JsonSerializerOptions.Web), null),
+            TestContext.Current.CancellationToken);
+        return id;
+    }
+
+    private int InboxEntries<TEvent>(Guid messageId)
+    {
+        var consumer = $"{InfrastructureExtensions.ServiceKey}-{typeof(TEvent).Name}Handler";
+        return Query(db => db.Set<InboxMessage>().Count(entry => entry.MessageId == messageId && entry.Consumer == consumer));
     }
 
     private T Query<T>(Func<LearningEngineDbContext, T> query)

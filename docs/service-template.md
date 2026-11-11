@@ -27,7 +27,7 @@ Den Namen schreibst du in PascalCase, etwa `LearningEngine`. Daraus werden die P
 
    1. Die eigene Entity nach demselben Muster anlegen, mit `IOwnedByUser`, wenn sie einem Nutzer gehört.
    2. `ExampleItem`, `IExampleItems`, `ExampleItems`, `ExampleEndpoints` und die beiden Zeilen dafür (`AddScoped`, `MapExampleEndpoints`) löschen, dazu in `<Name>DbContext` das `DbSet` und die Zeile in `ConfigureModel`.
-   3. `ExampleItemCreated`, `ExampleItemCreatedHandler` und die Zeile `AddIntegrationEventHandler<ExampleItemCreated, ExampleItemCreatedHandler>` löschen. `AddMessaging`, die Tabellen für Outbox und Inbox und der `UserDeletedHandler` mit seinen beiden Zeilen bleiben.
+   3. `ExampleItemCreated`, `ExampleItemCreatedHandler` und die Zeile `AddIntegrationEventHandler<ExampleItemCreated, ExampleItemCreatedHandler>` löschen. `AddMessaging`, die Tabellen für Outbox und Inbox und der `UserDeletedHandler` mit seinen beiden Zeilen bleiben. Für den `UserDeletedHandler` kommt eine Zeile mit `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` in die Tabelle [Doppelte Zustellung](service-internals.md#doppelte-zustellung), ebenso später für jeden echten Handler mit seinem Test, der das Ereignis doppelt zustellt. Sonst wird `DuplicateDeliveryTests` rot.
    4. Eine Migration anlegen. Sie entfernt die Tabelle `ExampleItems` und legt die eigene an:
 
       ```

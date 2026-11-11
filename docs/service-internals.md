@@ -153,6 +153,27 @@ Ein Consumer arbeitet in der Trace der Anfrage, die das Ereignis ausgelöst hat.
 
 Die Vorlage hört auf ihr eigenes `ExampleItemCreated`, damit der Weg von der Outbox bis in den Handler schon im Beispiel zu sehen ist. Ein echter Handler hört auf ein Event eines anderen Service. Eine Nachricht kann mehr als einmal und in anderer Reihenfolge ankommen, ein Handler verlässt sich auf beides nicht.
 
+### Doppelte Zustellung
+
+Dasselbe Ereignis kann auf zwei Wegen zweimal ankommen. Kommt dieselbe Nachricht noch einmal, also mit derselben `MessageId`, fängt sie die Inbox ab. Schickt der Absender dasselbe Ereignis noch einmal unter einer neuen `MessageId`, muss der Handler selbst erkennen, dass es nichts mehr zu tun gibt. Für jeden Consumer zeigt ein Integrationstest beide Fälle: Er stellt das Ereignis doppelt zu und prüft, dass sich der Zustand nach der ersten Zustellung nicht mehr ändert. Mit `Broker.DropsDuplicates = false` lässt der Broker im Test die doppelte `MessageId` durch.
+
+Die Tabelle nennt diesen Test je Consumer als `Klasse.Methode` aus den Integrationstests des Service. `DuplicateDeliveryTests` in `Edvaniq.ArchitectureTests` vergleicht sie mit den Handlern im Code. Ein neuer Handler braucht deshalb eine Zeile, sonst wird der Test rot. Nur das Beispiel `ExampleItemCreated` der Vorlage braucht keine.
+
+| Service | Ereignis | Test |
+|---|---|---|
+| Assessment | `ItemsGenerated` | `QuestionTests.ItemsDeliveredTwice_OrSentTwice_StoreEachQuestionOnce` |
+| Assessment | `TopicsChanged` | `KnownTopicTests.StateDeliveredTwice_SentTwice_OrOlder_ChangesNothing` |
+| Assessment | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
+| Content | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
+| Knowledge | `DocumentAnalyzed` | `AnalysisTests.AnalysisDeliveredTwice_OrSentTwice_AddsNoTopicTwice`, `TopicsChangedTests.AnalysisDeliveredTwice_OrSentTwice_StoresNoSecondEvent` |
+| Knowledge | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
+| LearningEngine | `AnswerRecorded` | `LearningRecordTests.AnswerDeliveredTwice_OrSentTwice_CountsOnce`, `MasteryTests.AnswerDeliveredTwice_OrSentTwice_MovesItOnce` |
+| LearningEngine | `SessionCompleted` | `IntroductionTests.SessionDeliveredAgain_OrALaterSession_KeepsTheFirstIntroduction` |
+| LearningEngine | `TopicsChanged` | `KnownTopicTests.StateDeliveredTwice_SentTwice_OrOlder_ChangesNothing` |
+| LearningEngine | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
+| Planning | `TopicsChanged` | `KnownTopicTests.StateDeliveredTwice_SentTwice_OrOlder_ChangesNothing` |
+| Planning | `UserDeleted` | `UserDeletionTests.DeletionDeliveredTwice_OrSentTwice_DoesNoHarm` |
+
 ### Ohne Broker und in Tests
 
 Die Adresse von NATS kommt nur von außen, als `ConnectionStrings:nats`. Lokal setzt sie der AppHost mit `WithMessaging(nats)`, auf dem Server der Anker `x-messaging-environment` in `deploy/compose.yml`. Fehlt die Adresse, starten weder Dispatcher noch Consumer, und der Service verhält sich, als gäbe es keine Nachrichten: Die Events bleiben in der Outbox, bis ein Broker da ist. Gesendete Outbox-Zeilen und Inbox-Einträge löscht der Service nach 14 Tagen (`Messaging:Retention`), ungesendete bleiben.
