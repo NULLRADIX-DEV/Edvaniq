@@ -172,9 +172,9 @@ jobs:
             | sort | diff <(printf '%s\n' 'db 127.0.0.1 3306' 'web 127.0.0.1 8080') - \
             || { echo "::error::Only web and db may publish a port in deploy/compose.yml, and only on 127.0.0.1 (< expected, > found)"; exit 1; }
           compose --profile '*' config --no-env-resolution --format json \
-            | python3 -c 'import json, os, sys; [print(s, v["type"], os.path.relpath(v["source"], os.environ["RUNNER_TEMP"]), v["target"]) for s, sv in json.load(sys.stdin)["services"].items() for v in sv.get("volumes", [])]' \
-            | sort | diff <(printf '%s\n' 'db bind db /var/lib/mysql' 'nats bind nats /data' 'web bind data/web-keys /keys') - \
-            || { echo "::error::Only db and nats mount their data and web its session keys in deploy/compose.yml (< expected, > found)"; exit 1; }
+            | python3 -c 'import json, os, sys; [print(s, v["type"], os.path.relpath(v["source"], os.environ["RUNNER_TEMP"]), v["target"], *(["ro"] if v.get("read_only") else [])) for s, sv in json.load(sys.stdin)["services"].items() for v in sv.get("volumes", [])]' \
+            | sort | diff <(printf '%s\n' 'content-api bind data/content-files /files' 'content-worker bind data/content-files /files ro' 'db bind db /var/lib/mysql' 'nats bind nats /data' 'web bind data/web-keys /keys') - \
+            || { echo "::error::Only db and nats mount their data, web its session keys, content-api the uploaded files and content-worker the same files read-only in deploy/compose.yml (< expected, > found)"; exit 1; }
           compose --profile '*' config --no-env-resolution --format json \
             | python3 -c 'import json, sys; c = json.load(sys.stdin); s = c["services"]; [print(n, *(["internal"] if v.get("internal") else sorted(k for k, sv in s.items() if n in sv.get("networks", {})))) for n, v in sorted(c["networks"].items())]; print("web", *sorted(s["web"]["networks"]))' \
             | diff <(printf '%s\n' 'backend db' 'data internal' 'default web' 'egress content-worker' 'inner internal' 'web default inner') - \

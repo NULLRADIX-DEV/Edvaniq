@@ -2,6 +2,7 @@ using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Content.Application;
+using Edvaniq.Services.Content.Infrastructure.Files;
 using Edvaniq.Services.Identity.Contracts;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +24,11 @@ public static class InfrastructureExtensions
         builder.Services.AddMySqlDbContext<ContentDbContext>(DatabaseName);
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddScoped<IDocuments, Documents>();
+        builder.Services.AddFileStore();
+        builder.Services.AddScoped<StoredFiles>();
+        builder.Services.AddScoped<IFiles>(services => services.GetRequiredService<StoredFiles>());
+        builder.Services.AddScoped<IUserFiles>(services => services.GetRequiredService<StoredFiles>());
+        builder.Services.AddHostedService<FileSweeper>();
         builder.Services.AddScoped<AiUsageReport>();
         builder.Services.AddSingleton<AiUsageLog>();
 
@@ -49,6 +55,7 @@ public static class InfrastructureExtensions
         builder.Services.AddMySqlDbContext<ContentDbContext>(DatabaseName);
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<ICurrentUser, NoUser>();
+        builder.Services.AddFileStore();
         builder.Services.AddMessaging<ContentDbContext>(ServiceKey);
         builder.Services.AddSingleton<AiUsageLog>();
         builder.Services.AddHostedService<DocumentSplitter>();
@@ -56,6 +63,16 @@ public static class InfrastructureExtensions
         builder.Services.AddHostedService<QuestionPools>();
 
         return builder;
+    }
+
+    // Without a directory neither process starts. The API writes to it, the worker only reads (FileStorage:Directory).
+    private static void AddFileStore(this IServiceCollection services)
+    {
+        services.AddOptions<FileStorageOptions>()
+            .BindConfiguration(FileStorageOptions.Section)
+            .Validate(options => options.Directory.Length > 0, "FileStorage:Directory is missing.")
+            .ValidateOnStart();
+        services.AddSingleton<FileStore>();
     }
 
     // Brings the database to the latest migration and returns the exit code.

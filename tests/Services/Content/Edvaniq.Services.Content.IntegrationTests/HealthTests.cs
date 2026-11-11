@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Sockets;
+
 using Edvaniq.Services.Content.Infrastructure;
+
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -12,8 +14,8 @@ using Microsoft.Extensions.Options;
 namespace Edvaniq.Services.Content.IntegrationTests;
 
 // The service starts and tells alive (/alive) apart from ready (/health), which also needs its own database.
-public sealed class HealthTests(WebApplicationFactory<Program> factory, ServiceFactory service)
-    : IClassFixture<WebApplicationFactory<Program>>, IClassFixture<ServiceFactory>
+public sealed class HealthTests(HealthTests.BareFactory factory, ServiceFactory service)
+    : IClassFixture<HealthTests.BareFactory>, IClassFixture<ServiceFactory>
 {
     // Nothing listens on port 1, so the connection is refused at once.
     private const string UnreachableDatabase = "Server=127.0.0.1;Port=1;Database=contentdb;User ID=test";
@@ -91,6 +93,15 @@ public sealed class HealthTests(WebApplicationFactory<Program> factory, ServiceF
         Assert.Contains("ValidIssuer", exception.Message);
     }
 
+    [Fact]
+    public void Start_WithoutFileDirectory_Fails()
+    {
+        using var service = factory.WithWebHostBuilder(builder => builder.UseSetting("FileStorage:Directory", ""));
+
+        var exception = Assert.ThrowsAny<OptionsValidationException>(() => service.CreateClient());
+        Assert.Contains("FileStorage:Directory", exception.Message);
+    }
+
     private WebApplicationFactory<Program> WithDatabase(string connectionString) =>
         factory.WithWebHostBuilder(builder =>
             builder.UseSetting($"ConnectionStrings:{InfrastructureExtensions.DatabaseName}", connectionString));
@@ -102,6 +113,25 @@ public sealed class HealthTests(WebApplicationFactory<Program> factory, ServiceF
 
         Assert.Equal(status, response.StatusCode);
         Assert.Equal(body, await response.Content.ReadAsStringAsync(cancellationToken));
+    }
+
+    // The service without a database of its own, only with the file directory it needs to start.
+    public sealed class BareFactory : WebApplicationFactory<Program>
+    {
+        private readonly string files = Path.Combine(Path.GetTempPath(), "edvaniq-content-files", Guid.NewGuid().ToString("N"));
+
+        protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.UseSetting("FileStorage:Directory", files);
+
+        public override async ValueTask DisposeAsync()
+        {
+            await base.DisposeAsync();
+            if (Directory.Exists(files))
+            {
+                Directory.Delete(files, recursive: true);
+            }
+
+            GC.SuppressFinalize(this);
+        }
     }
 
     // The test server has no ports, so every request pretends to come in on the internal health port.

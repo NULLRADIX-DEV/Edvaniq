@@ -2,13 +2,16 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text.Json;
 
 using Edvaniq.BuildingBlocks.Messaging;
+using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Infrastructure;
 using Edvaniq.Services.Identity.Contracts;
 using Edvaniq.Testing;
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -37,6 +40,26 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
         Assert.Equal(0, ItemsOf(alice));
         Assert.Equal(1, ItemsOf(bob));
+    }
+
+    // The bytes in the file store go too, not only the rows.
+    [Fact]
+    public async Task DeletedUser_LosesTheirFiles_OthersKeepTheirs()
+    {
+        var alice = NewUser("alice");
+        var bob = NewUser("bob");
+        var first = await SaveFileAsync(alice);
+        var second = await SaveFileAsync(alice);
+        var bobs = await SaveFileAsync(bob);
+
+        var messageId = await DeleteAsync(alice);
+
+        await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
+        Assert.False(File.Exists(FilePath(first)));
+        Assert.False(File.Exists(FilePath(second)));
+        Assert.Equal(0, Query(db => db.StoredFiles.IgnoreQueryFilters().Count(file => file.OwnerId == alice)));
+        Assert.True(File.Exists(FilePath(bobs)));
+        Assert.Equal(1, Query(db => db.StoredFiles.IgnoreQueryFilters().Count(file => file.OwnerId == bob)));
     }
 
     // "Alice" and "alice" are two users, deleting one keeps the data of the other.
@@ -147,6 +170,21 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Note(text) }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
+
+    // As the user's request would, through IFiles.
+    private async Task<Guid> SaveFileAsync(string user)
+    {
+        using var scope = service.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", user)], "test")),
+        };
+        var file = await scope.ServiceProvider.GetRequiredService<IFiles>()
+            .SaveAsync(new MemoryStream([1, 2, 3]), TestContext.Current.CancellationToken);
+        return file.Id;
+    }
+
+    private string FilePath(Guid id) => Path.Combine(service.FilesDirectory, id.ToString("N"));
 
     // Like Identity's dispatcher would.
     private async Task<Guid> DeleteAsync(string user, Guid? messageId = null, string? traceParent = null)

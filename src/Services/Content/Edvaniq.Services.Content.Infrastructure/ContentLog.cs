@@ -41,4 +41,10 @@ internal static partial class ContentLog
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Knowledge has no topics of document {DocumentId} long after its analysis, it is marked as failed")]
     public static partial void TopicsMissing(ILogger logger, Guid documentId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sweeping the file store failed, trying again in {Delay}")]
+    public static partial void SweepFailed(ILogger logger, Exception exception, TimeSpan delay);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "File {FileId} had no row and was removed from the file store")]
+    public static partial void FileSwept(ILogger logger, Guid fileId);
 }

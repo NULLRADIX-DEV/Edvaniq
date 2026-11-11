@@ -51,10 +51,13 @@ var identityApi = builder.AddProject<Projects.Edvaniq_Services_Identity_Api>("id
 var planningApi = AddService<Projects.Edvaniq_Services_Planning_Api>("planning-api", planningDb)
     .WaitForCompletion(planningMigrate)
     .WithMessaging(nats);
+// Uploaded files, one directory for the API that writes and the worker that reads.
+var contentFiles = Path.Combine(builder.AppHostDirectory, ".data", "content-files");
 var contentApi = AddService<Projects.Edvaniq_Services_Content_Api>("content-api", contentDb)
     .WaitForCompletion(contentMigrate)
     .WithMessaging(nats)
-    .WithReference(planningApi);
+    .WithReference(planningApi)
+    .WithEnvironment("FileStorage__Directory", contentFiles);
 var knowledgeApi = AddService<Projects.Edvaniq_Services_Knowledge_Api>("knowledge-api", knowledgeDb)
     .WaitForCompletion(knowledgeMigrate)
     .WithMessaging(nats);
@@ -77,7 +80,8 @@ AddService<Projects.Edvaniq_Services_Content_Worker>("content-worker", contentDb
     .WithMessaging(nats)
     .WithReference(identityApi)
     .WithReference(knowledgeApi)
-    .WithEnvironment("InternalToken__ClientSecret", contentClientSecret);
+    .WithEnvironment("InternalToken__ClientSecret", contentClientSecret)
+    .WithEnvironment("FileStorage__Directory", contentFiles);
 AddService<Projects.Edvaniq_Services_Notifications_Worker>("notifications-worker", notificationsDb);
 
 // Gateway

@@ -195,6 +195,12 @@ Den Connection String bekommt ein Service von Aspire als `ConnectionStrings:<ser
 
 Das Schema ändert sich nur über EF-Core-Migrationen, und Migrieren ist ein eigener Schritt (`<Api>.dll migrate`), nie Teil des Starts ([Aufbau eines Service](service-internals.md#datenbank-und-migrationen)). Als Provider dient `MySql.EntityFrameworkCore` von Oracle, weil er EF Core 10 kann. `Pomelo.EntityFrameworkCore.MySql` gibt es bisher nur bis EF Core 9.
 
+## Dateien
+
+Hochgeladene Dateien liegen nicht in der Datenbank, sondern auf einem Volume, das Neustarts und Deployments überlebt. Nur Content kommt daran: Die API schreibt, der Worker liest nur, und kein anderer Dienst bindet das Volume ein, das prüft die CI. Von außen führt kein Weg direkt zu einer Datei.
+
+Jede Datei heißt nach einer ID, die Content selbst vergibt. Was der Nutzer mitschickt, auch der Dateiname, wird nie Teil eines Pfads. Wem eine Datei gehört, steht in einer Zeile mit `IOwnedByUser` in `contentdb`. Content gibt eine Datei also nur ihrem Besitzer, eine fremde sieht aus wie eine, die es nicht gibt. Wird ein Nutzer gelöscht, gehen seine Dateien mit seinen Zeilen ([Nutzer löschen](service-internals.md#nutzer-löschen)). Dateien ohne Zeile, etwa nach einem Absturz mitten im Hochladen, räumt Content selbst ab. Lokal setzt der AppHost das Verzeichnis (`FileStorage:Directory`), ohne diesen Wert starten API und Worker nicht.
+
 ## Nachrichten
 
 Services melden sich Ereignisse über NATS JetStream. Damit ein Ereignis weder verloren geht noch ohne seine Änderung hinausgeht, schreibt ein Service es mit der Änderung in die Tabelle `outbox_messages` seiner eigenen Datenbank, im selben `SaveChanges`. Ein Dispatcher im Prozess des Service schickt die Zeilen von dort an den Broker. Jeder Service hat beim Broker einen eigenen Stream, der nach ihm heißt, und seine Ereignisse liegen darunter. Wer ein Ereignis hören will, braucht nur dessen Typ aus den `.Contracts` des Absenders, Stream und Subject ergeben sich aus dem Namensraum. Welche Ereignisse es gibt und was sie tragen, steht im [Ereigniskatalog](spec/events.md).

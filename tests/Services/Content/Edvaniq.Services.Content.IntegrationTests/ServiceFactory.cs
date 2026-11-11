@@ -29,6 +29,9 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
     // Answers the Api's question for the default goal in place of Planning, behind the real client.
     public PlanningStub Planning { get; } = new();
 
+    // The file store of this factory, empty at the start and gone at the end.
+    public string FilesDirectory { get; } = Path.Combine(Path.GetTempPath(), "edvaniq-content-files", Guid.NewGuid().ToString("N"));
+
     public async ValueTask InitializeAsync()
     {
         ConnectionString = await mysql.CreateDatabaseAsync(InfrastructureExtensions.DatabaseName);
@@ -42,6 +45,7 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
         builder
             .UseSetting($"ConnectionStrings:{InfrastructureExtensions.DatabaseName}", ConnectionString)
             .UseSetting("services:planning-api:http:0", "http://planning-api")
+            .UseSetting("FileStorage:Directory", FilesDirectory)
             .ConfigureTestServices(services =>
             {
                 services.PostConfigure<JwtBearerOptions>(
@@ -58,4 +62,15 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
                 services.AddSingleton<IKnowledgeTopics>(Knowledge);
                 services.AddHttpClient<IDefaultLearningGoal, PlanningLearningGoals>().ConfigurePrimaryHttpMessageHandler(() => Planning);
             });
+
+    public override async ValueTask DisposeAsync()
+    {
+        await base.DisposeAsync();
+        if (Directory.Exists(FilesDirectory))
+        {
+            Directory.Delete(FilesDirectory, recursive: true);
+        }
+
+        GC.SuppressFinalize(this);
+    }
 }
