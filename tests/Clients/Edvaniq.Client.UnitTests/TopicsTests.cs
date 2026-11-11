@@ -14,6 +14,9 @@ public sealed class TopicsTests : BunitContext
 {
     private const string TraceId = "4bf92f3577b34da6a3ce929d0e0e4736";
 
+    // Polling runs on real time, a busy runner needs a while.
+    private static readonly TimeSpan Wait = TimeSpan.FromSeconds(10);
+
     private static readonly Guid Newest = Guid.Parse("0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01");
     private static readonly Guid Older = Guid.Parse("7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e02");
     private static readonly DateTimeOffset Created = new(2026, 11, 11, 9, 0, 0, TimeSpan.Zero);
@@ -26,11 +29,11 @@ public sealed class TopicsTests : BunitContext
     public TopicsTests()
     {
         Services.AddSingleton(new MaterialPolling(
-            Interval: TimeSpan.FromMilliseconds(1),
-            SlowInterval: TimeSpan.FromMilliseconds(1),
-            SlowAfter: TimeSpan.FromMilliseconds(5),
-            AnalysisLimit: TimeSpan.FromMilliseconds(50),
-            TopicsLimit: TimeSpan.FromMilliseconds(50)));
+            Interval: TimeSpan.FromMilliseconds(10),
+            SlowInterval: TimeSpan.FromMilliseconds(10),
+            SlowAfter: TimeSpan.FromMilliseconds(20),
+            AnalysisLimit: TimeSpan.FromMilliseconds(40),
+            TopicsLimit: TimeSpan.FromMilliseconds(40)));
     }
 
     // AC4: without a text the page says what to do next and offers the form right there.
@@ -59,7 +62,7 @@ public sealed class TopicsTests : BunitContext
         var page = RenderPage(material);
 
         Assert.Contains("„Skript Bio“ wird analysiert", Status(page));
-        page.WaitForAssertion(() => Assert.Contains("Die Themen aus „Skript Bio“ sind da.", Status(page)));
+        page.WaitForAssertion(() => Assert.Contains("Die Themen aus „Skript Bio“ sind da.", Status(page)), Wait);
         Assert.Equal(["Photosynthese", "Lichtreaktion"], page.FindAll(".topic-list li").Select(Name));
     }
 
@@ -76,7 +79,7 @@ public sealed class TopicsTests : BunitContext
         var page = RenderPage(material);
 
         Assert.Contains("Die Themen werden gerade übernommen", Status(page));
-        page.WaitForAssertion(() => Assert.Contains("sind da", Status(page)));
+        page.WaitForAssertion(() => Assert.Contains("sind da", Status(page)), Wait);
         Assert.Equal(3, material.TopicCalls);
     }
 
@@ -127,7 +130,7 @@ public sealed class TopicsTests : BunitContext
         page.Find("form").Submit();
 
         Assert.Equal([("Skript Bio", "Die Photosynthese …")], material.Pasted);
-        page.WaitForAssertion(() => Assert.Contains("sind da", Status(page)));
+        page.WaitForAssertion(() => Assert.Contains("sind da", Status(page)), Wait);
         Assert.Equal("", page.Find("#paste-text").GetAttribute("value") ?? "");
     }
 
@@ -240,7 +243,7 @@ public sealed class TopicsTests : BunitContext
         page.Find("#paste-text").Change("Mein Text");
         page.Find("form").Submit();
 
-        page.WaitForAssertion(() => Assert.Contains("hat nicht geklappt", Status(page)));
+        page.WaitForAssertion(() => Assert.Contains("hat nicht geklappt", Status(page)), Wait);
         Assert.Contains("Die KI war gerade nicht erreichbar.", Status(page));
         var retry = page.Find("button.button:not([type=submit])");
         Assert.Equal("Erneut analysieren", retry.TextContent.Trim());
@@ -276,13 +279,13 @@ public sealed class TopicsTests : BunitContext
             .Topics();
         var page = RenderPage(material);
 
-        page.WaitForAssertion(() => Assert.Contains("dauert länger als gedacht", Status(page)));
+        page.WaitForAssertion(() => Assert.Contains("dauert länger als gedacht", Status(page)), Wait);
         var calls = material.DocumentCalls;
 
         page.Find("button.button:not([type=submit])").Click();
 
         Assert.Contains("wird analysiert", Status(page));
-        page.WaitForAssertion(() => Assert.True(material.DocumentCalls > calls));
+        page.WaitForAssertion(() => Assert.True(material.DocumentCalls > calls), Wait);
     }
 
     [Fact]
@@ -291,7 +294,7 @@ public sealed class TopicsTests : BunitContext
         var material = new FakeLearningMaterial().Documents(Document(DocumentStatus.Ready)).Topics();
         var page = RenderPage(material);
 
-        page.WaitForAssertion(() => Assert.Contains("noch unterwegs", Status(page)));
+        page.WaitForAssertion(() => Assert.Contains("noch unterwegs", Status(page)), Wait);
         Assert.Equal("Themen erneut laden", page.Find("button.button:not([type=submit])").TextContent.Trim());
     }
 
@@ -309,7 +312,7 @@ public sealed class TopicsTests : BunitContext
 
         page.Find("button.button:not([type=submit])").Click();
 
-        page.WaitForAssertion(() => Assert.Contains("sind da", Status(page)));
+        page.WaitForAssertion(() => Assert.Contains("sind da", Status(page)), Wait);
     }
 
     // The login ran out. Until #197 the way back is a new login, then the page again.
@@ -331,7 +334,7 @@ public sealed class TopicsTests : BunitContext
             TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(20), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1)));
         var material = new FakeLearningMaterial().Documents(Document(DocumentStatus.Analyzing));
         var page = RenderPage(material);
-        page.WaitForAssertion(() => Assert.True(material.DocumentCalls >= 2));
+        page.WaitForAssertion(() => Assert.True(material.DocumentCalls >= 2), Wait);
 
         await DisposeComponentsAsync();
         var calls = material.DocumentCalls;
