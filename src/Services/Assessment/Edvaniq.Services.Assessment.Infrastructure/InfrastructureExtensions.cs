@@ -3,6 +3,7 @@ using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Assessment.Application;
 using Edvaniq.Services.Content.Contracts;
 using Edvaniq.Services.Identity.Contracts;
+using Edvaniq.Services.Knowledge.Contracts;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -27,6 +28,8 @@ public static class InfrastructureExtensions
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<AssessmentDbContext>(ServiceKey);
         builder.Services.AddIntegrationEventHandler<ItemsGenerated, ItemsGeneratedHandler>();
+        builder.Services.AddScoped<IKnownTopics, KnownTopics>();
+        builder.Services.AddIntegrationEventHandler<TopicsChanged, TopicsChangedHandler>();
 
         // Every IOwnedByUser entity, questions included.
         builder.Services.AddUserDataRemover<AssessmentDbContext>();

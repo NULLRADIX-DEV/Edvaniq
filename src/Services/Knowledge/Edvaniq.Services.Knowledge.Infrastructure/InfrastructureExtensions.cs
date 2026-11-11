@@ -23,6 +23,8 @@ public static class InfrastructureExtensions
         builder.Services.AddMySqlDbContext<KnowledgeDbContext>(DatabaseName);
         builder.Services.AddScoped<ITopics, Topics>();
         builder.Services.AddScoped<IAnalyzedTopics, AnalyzedTopics>();
+        builder.Services.AddScoped<ITopicState, TopicState>();
+        builder.Services.AddScoped<TopicsChangedEvents>();
         builder.Services.TryAddSingleton(TimeProvider.System);
 
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).

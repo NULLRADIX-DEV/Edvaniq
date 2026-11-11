@@ -13,10 +13,24 @@ public sealed class LearningEngineDbContext(DbContextOptions<LearningEngineDbCon
 {
     public DbSet<LearningRecord> LearningRecords => Set<LearningRecord>();
 
+    public DbSet<KnownTopic> KnownTopics => Set<KnownTopic>();
+
+    public DbSet<TopicsSnapshot> TopicsSnapshots => Set<TopicsSnapshot>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         var record = modelBuilder.Entity<LearningRecord>();
         record.HasKey(entry => entry.AnswerId);
         record.Property(entry => entry.AnswerId).ValueGeneratedNever();
+
+        // Topics of Knowledge, only ids (TopicsChanged).
+        var topic = modelBuilder.Entity<KnownTopic>();
+        topic.HasKey(item => item.TopicId);
+        topic.Property(item => item.TopicId).ValueGeneratedNever();
+        topic.HasIndex(item => new { item.OwnerId, item.LearningGoalId });
+
+        var snapshot = modelBuilder.Entity<TopicsSnapshot>();
+        snapshot.HasKey(item => new { item.OwnerId, item.LearningGoalId });
+        snapshot.Property(item => item.ChangedAt).IsConcurrencyToken();
     }
 }

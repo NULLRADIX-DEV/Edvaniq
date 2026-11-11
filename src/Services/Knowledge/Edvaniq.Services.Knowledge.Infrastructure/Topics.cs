@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Edvaniq.Services.Knowledge.Infrastructure;
 
 // No query here mentions the owner: the filter of ServiceDbContext adds it to every one of them.
-internal sealed class Topics(KnowledgeDbContext db) : ITopics
+internal sealed class Topics(KnowledgeDbContext db, TopicsChangedEvents changes) : ITopics
 {
     public async Task<IReadOnlyList<Topic>> ListAsync(Guid? learningGoalId, CancellationToken cancellationToken)
     {
@@ -31,6 +31,7 @@ internal sealed class Topics(KnowledgeDbContext db) : ITopics
         }
 
         topic.Rename(name);
+        await changes.AnnounceAsync(topic.OwnerId, topic.LearningGoalId, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return topic;
     }

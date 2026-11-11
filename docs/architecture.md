@@ -227,6 +227,12 @@ Das Ereignis trägt die Themen als flache Liste. `Parent` ist der Index eines Vo
 
 Der Worker liest Dokumente aller Nutzer und fragt deshalb mit `IgnoreQueryFilters([ServiceDbContext.OwnerFilter])`. Einen angemeldeten Nutzer hat er nicht, eine Abfrage unter dem Filter scheitert deshalb, statt alle Zeilen zu zeigen. Ereignisse sendet er über die Outbox, empfängt aber keine: Die empfängt die API, und ein zweiter Empfänger würde jedes doppelt verarbeiten. Die Outbox leeren API und Worker beide, jeder nimmt andere Zeilen.
 
+## Themen bei den Empfängern
+
+Ändern sich die Themen eines Lernziels in Knowledge, geht im selben Speichern genau ein `TopicsChanged` über die Outbox hinaus. Auslöser sind bisher neue Themen aus einer Analyse (`DocumentAnalyzedHandler`) und das Umbenennen eines Themas. Das Ereignis nennt alle Themen des Lernziels, die neuen und die umbenannten gehören dazu. Den Stand berechnet `TopicsChangedEvents` aus der Datenbank und den Themen, die im selben Speichern dazukommen. Jede spätere Änderung, etwa ergänzte Abschnitte aus einer erneuten Analyse (#208), ruft ihn genauso auf.
+
+Planning, Assessment und LearningEngine übernehmen den Stand gleich (`TopicsChangedHandler`). Sie speichern je Thema nur die ID, das Lernziel und ob es ausgeblendet ist (`KnownTopic`), dazu je Lernziel den Zeitpunkt des zuletzt übernommenen Stands (`TopicsSnapshot`). Ein Stand, der nicht neuer ist, ändert nichts. So bleibt dasselbe Ereignis unter einer neuen Nachrichten-ID ohne Wirkung, und ein älterer Stand überschreibt keinen neueren. Ein Thema, das in keiner der beiden Listen steht, entfernen sie. Beide Tabellen gehören dem Nutzer und gehen mit `UserDeleted`. Den ganzen Weg über NATS prüft `Edvaniq.EventFlowTests`.
+
 ## Fragen in Assessment
 
 Assessment übernimmt die Fragen aus `ItemsGenerated` und besitzt sie ab dann (`ItemsGeneratedHandler`). Eine `Question` gehört dem Nutzer aus dem Ereignis und hat als Schlüssel die `itemId`, die Content vergeben hat. Kommt dieselbe Nachricht noch einmal, verwirft sie die Inbox. Kommen dieselben Items unter einer neuen Nachrichten-ID, findet der Handler sie schon in der Tabelle und legt nur fehlende an. Karten überspringt er, die gehören Flashcards. Ein Item, das den Vertrag verletzt, etwa mit einer Lösung außerhalb der Optionen, lässt er mit einer Logzeile weg, die nur die IDs nennt. Die übrigen Fragen des Themas kommen trotzdem an.

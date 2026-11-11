@@ -1,6 +1,7 @@
 using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Identity.Contracts;
+using Edvaniq.Services.Knowledge.Contracts;
 using Edvaniq.Services.Planning.Application;
 using Edvaniq.Services.Planning.Contracts;
 
@@ -28,6 +29,8 @@ public static class InfrastructureExtensions
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<PlanningDbContext>(ServiceKey);
         builder.Services.AddIntegrationEventHandler<ExampleItemCreated, ExampleItemCreatedHandler>();
+        builder.Services.AddScoped<IKnownTopics, KnownTopics>();
+        builder.Services.AddIntegrationEventHandler<TopicsChanged, TopicsChangedHandler>();
 
         // Stays when the example goes.
         builder.Services.AddUserDataRemover<PlanningDbContext>();

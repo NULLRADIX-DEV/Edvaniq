@@ -39,3 +39,8 @@ Content.TopicSuggestion.Name: string
 Content.TopicSuggestion.Parent: int?
 Content.TopicSuggestion.SectionIds: IReadOnlyList<Guid>
 Identity.UserDeleted.UserId: string
+Knowledge.TopicsChanged.ChangedAt: DateTime
+Knowledge.TopicsChanged.HiddenTopicIds: IReadOnlyList<Guid>
+Knowledge.TopicsChanged.LearningGoalId: Guid
+Knowledge.TopicsChanged.TopicIds: IReadOnlyList<Guid>
+Knowledge.TopicsChanged.UserId: string
