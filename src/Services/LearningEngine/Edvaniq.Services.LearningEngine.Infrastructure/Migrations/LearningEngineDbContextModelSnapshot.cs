@@ -151,6 +151,8 @@ namespace Edvaniq.Services.LearningEngine.Infrastructure.Migrations
 
                     b.HasIndex("OwnerId");
 
+                    b.HasIndex("OwnerId", "TopicId");
+
                     b.ToTable("LearningRecords");
                 });
 
