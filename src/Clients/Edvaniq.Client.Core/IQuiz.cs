@@ -9,10 +9,14 @@ public interface IQuiz
 
     // Grades the answer once. Any further call for the same attempt brings back the stored grade, whatever option it sends.
     Task<CallOutcome<GradedAnswer>> AnswerAsync(Guid attemptId, int option, int responseTimeMs, CancellationToken cancellationToken = default);
+
+    // "Show solution": answers the attempt as wrong and brings the solution. Like an answer it counts only if it's first.
+    Task<CallOutcome<GradedAnswer>> RevealAsync(Guid attemptId, int responseTimeMs, CancellationToken cancellationToken = default);
 }
 
 // Id is the attempt the answer goes to. Single choice: exactly one of the options is right.
 public sealed record AskedQuestion(Guid Id, Guid TopicId, Guid QuestionId, string Text, IReadOnlyList<string> Options, int Difficulty);
 
-// Option is the one the attempt was graded with, Answer the index of the right one.
-public sealed record GradedAnswer(Guid Id, int Option, bool Correct, int Answer, string Explanation, int ResponseTimeMs);
+// Option is the one the attempt was graded with, none if the solution was shown (Revealed). Answer is the index of the
+// right one.
+public sealed record GradedAnswer(Guid Id, int? Option, bool Correct, int Answer, string Explanation, int ResponseTimeMs, bool Revealed = false);

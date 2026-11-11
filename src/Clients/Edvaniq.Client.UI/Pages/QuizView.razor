@@ -107,8 +107,14 @@
 
             @if (graded is null)
             {
-                @* Stays enabled while it sends: a disabled button would lose the keyboard focus. *@
-                <button type="submit" class="button">@(answering ? "Wird geprüft …" : "Antwort prüfen")</button>
+                @* Both stay enabled while one sends: a disabled button would lose the keyboard focus. Showing the
+                   solution counts as a wrong answer (docs/spec/modes.md). *@
+                <div class="quiz-actions">
+                    <button type="submit" class="button">@(answering && !revealing ? "Wird geprüft …" : "Antwort prüfen")</button>
+                    <button type="button" class="quiz-reveal" @onclick="RevealAsync">
+                        @(answering && revealing ? "Wird geladen …" : "Lösung anzeigen")
+                    </button>
+                </div>
             }
         </form>
 
@@ -160,6 +166,7 @@
     private long shownAt;
     private int? selected;
     private bool answering;
+    private bool revealing;
 
     // Measured once on the first submit, so a retry after a failed call sends the same time.
     private int? responseTimeMs;
@@ -373,14 +380,31 @@
             return;
         }
 
+        await SendAsync((attemptId, ms) => Quiz.AnswerAsync(attemptId, option, ms, life.Token), reveal: false);
+    }
+
+    // Counts as a wrong answer, with the time measured like one. Whatever is ticked doesn't count then.
+    private async Task RevealAsync()
+    {
+        if (answering || graded is not null || asked is null)
+        {
+            return;
+        }
+
+        await SendAsync((attemptId, ms) => Quiz.RevealAsync(attemptId, ms, life.Token), reveal: true);
+    }
+
+    private async Task SendAsync(Func<Guid, int, Task<CallOutcome<GradedAnswer>>> send, bool reveal)
+    {
         responseTimeMs ??= (int)Math.Min(time.GetElapsedTime(shownAt).TotalMilliseconds, int.MaxValue);
         answering = true;
+        revealing = reveal;
         answerMessage = null;
         answerTrace = null;
         CallOutcome<GradedAnswer> outcome;
         try
         {
-            outcome = await Quiz.AnswerAsync(asked.Id, option, responseTimeMs.Value, life.Token);
+            outcome = await send(asked!.Id, responseTimeMs.Value);
         }
         catch (OperationCanceledException)
         {
@@ -393,7 +417,7 @@
 
         switch (outcome.Result)
         {
-            case CallResult.Ok when outcome.Value!.Option < asked.Options.Count && outcome.Value.Answer < asked.Options.Count:
+            case CallResult.Ok when (outcome.Value!.Option ?? 0) < asked.Options.Count && outcome.Value.Answer < asked.Options.Count:
                 graded = outcome.Value;
                 focusNext = FocusTarget.Feedback;
                 break;

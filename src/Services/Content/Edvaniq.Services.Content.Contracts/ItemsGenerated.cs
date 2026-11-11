@@ -21,10 +21,27 @@ public sealed record GeneratedItem(
     string PromptVersion,
     GeneratedQuestion? Question);
 
-// Answer is the index of the one right option.
-public sealed record GeneratedQuestion(string Text, IReadOnlyList<string> Options, int Answer, string Explanation, int Difficulty);
+// Answer is the index of the one right option. Type null is single choice, true/false has two options. For multiple
+// choice Answers holds every right option and Answer one of them, so a receiver from before still reads a valid question.
+// Type and Answers came later, today the worker sends single choice only.
+public sealed record GeneratedQuestion(
+    string Text,
+    IReadOnlyList<string> Options,
+    int Answer,
+    string Explanation,
+    int Difficulty,
+    QuestionType? Type = null,
+    IReadOnlyList<int>? Answers = null);
 
 public enum ItemKind
 {
     Question = 0,
+}
+
+// The number goes over the broker, so it never changes.
+public enum QuestionType
+{
+    SingleChoice = 0,
+    MultipleChoice = 1,
+    TrueFalse = 2,
 }

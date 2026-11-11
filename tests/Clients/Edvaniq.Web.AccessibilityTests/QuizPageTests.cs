@@ -26,6 +26,7 @@ public sealed class QuizPageTests(WebShell shell)
         var check = page.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Antwort prüfen" });
         await AssertLargeEnoughAsync(page.Page.Locator("label[for=option-1]"));
         await AssertLargeEnoughAsync(check);
+        await AssertLargeEnoughAsync(page.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Lösung anzeigen" }));
         await AssertNoSidewaysScrollAsync(page.Page);
         await AxeScan.AssertNoViolationsAsync(page.Page, $"{Path} with a question at {WebShell.PhoneWidth} px");
 
