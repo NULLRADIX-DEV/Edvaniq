@@ -37,6 +37,9 @@ public sealed class QuestionPools(
     // Knowledge or the broker. After that the document fails, a retry gives Knowledge the same time again.
     public TimeSpan TopicsTimeout { get; set; } = TimeSpan.FromMinutes(10);
 
+    // How long a document waits after each outage of the AI, the worker goes on with the others meanwhile.
+    public IReadOnlyList<TimeSpan> OutageDelays { get; set; } = Document.OutageDelays;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
@@ -79,14 +82,17 @@ public sealed class QuestionPools(
         return finished;
     }
 
-    // The documents of all users whose topics went out longest ago and that are still in analysis.
+    // The documents of all users whose topics went out longest ago and that are still in analysis. One postponed after
+    // an outage only counts once it's due, and then from that time on.
     public async Task<IReadOnlyList<Guid>> WaitingAsync(CancellationToken cancellationToken)
     {
+        var now = time.GetUtcNow().UtcDateTime;
         using var scope = scopes.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<ContentDbContext>().Documents
             .IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .Where(document => document.Status == DocumentStatus.Analyzing && document.AnalyzedAt != null)
-            .OrderBy(document => document.AnalyzedAt)
+            .Where(document => document.NextAttemptAt == null || document.NextAttemptAt <= now)
+            .OrderBy(document => document.NextAttemptAt ?? document.AnalyzedAt)
             .Select(document => document.Id)
             .Take(Batch)
             .ToListAsync(cancellationToken);
@@ -99,7 +105,7 @@ public sealed class QuestionPools(
         var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
         var document = await db.Documents.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .SingleOrDefaultAsync(item => item.Id == documentId, cancellationToken);
-        if (document is not { WaitsForQuestions: true })
+        if (document is not { WaitsForQuestions: true } || document.NextAttemptAt > time.GetUtcNow().UtcDateTime)
         {
             return false;
         }
@@ -129,14 +135,22 @@ public sealed class QuestionPools(
         var texts = sections.ToDictionary(section => section.Id, section => document.Text.Substring(section.Start, section.Length));
 
         // Every AI call comes before the one save, nothing holds the database meanwhile. A topic without questions fails
-        // the document and nothing of the others goes out.
+        // the document and nothing of the others goes out. An outage postpones it, then all its topics are asked again.
         var made = new List<(KnowledgeTopic Topic, List<GeneratedItem> Items)>();
         foreach (var topic in topics.Where(topic => !pooled.Contains(topic.Id)))
         {
-            var items = await PoolAsync(document, SectionsOf(topics, topic, texts), texts, cancellationToken);
+            var (items, failure) = await PoolAsync(document, SectionsOf(topics, topic, texts), texts, cancellationToken);
             if (items is null)
             {
-                document.Fail(Document.QuestionsFailed);
+                if (failure is not null)
+                {
+                    AiOutage.Handle(document, AiAttempt.Questions, failure, time.GetUtcNow().UtcDateTime, OutageDelays, logger);
+                }
+                else
+                {
+                    document.Fail(Document.QuestionsFailed);
+                }
+
                 await db.SaveChangesAsync(cancellationToken);
                 return true;
             }
@@ -183,10 +197,11 @@ public sealed class QuestionPools(
         return [.. own.Where(texts.ContainsKey)];
     }
 
-    // The questions of one topic, or null if it got none. An answer without a valid question gets asked again, up to
-    // StructuredOutput.DefaultAttempts, since a real model may just have had a bad moment. A provider that fails or takes
-    // too long fails at once, retries for that come with #300. Every attempt goes into the cost log.
-    private async Task<List<GeneratedItem>?> PoolAsync(
+    // The questions of one topic, or null if it got none, then with the failure of the provider if that was why. An
+    // answer without a valid question gets asked again, up to StructuredOutput.DefaultAttempts, since a real model may
+    // just have had a bad moment. A provider that fails or takes too long ends at once. Every attempt goes into the cost
+    // log.
+    private async Task<(List<GeneratedItem>? Items, Exception? Failure)> PoolAsync(
         Document document, IReadOnlyList<Guid> sectionIds, Dictionary<Guid, string> texts, CancellationToken cancellationToken)
     {
         var answer = await ai.AskAsync(
@@ -202,19 +217,18 @@ public sealed class QuestionPools(
             document, AiAttempt.Questions, QuestionGeneration.PromptVersion, answer.Tries, ContentAi.ModelOf(ai, null), cancellationToken);
         if (answer.Failure is { } failure)
         {
-            ContentLog.QuestionsFailed(logger, failure, document.Id);
-            return null;
+            return (null, failure);
         }
 
         if (answer.Value is not { } drafts)
         {
             ContentLog.QuestionsAnswerUnusable(logger, document.Id, answer.Attempts);
-            return null;
+            return (null, null);
         }
 
         var model = ContentAi.ModelOf(ai, answer.ModelId);
-        return [.. drafts.Select(draft => new GeneratedItem(
+        return ([.. drafts.Select(draft => new GeneratedItem(
             Guid.NewGuid(), ItemKind.Question, document.Id, draft.SectionId, model, QuestionGeneration.PromptVersion,
-            new GeneratedQuestion(draft.Text, draft.Options, draft.Answer, draft.Explanation, draft.Difficulty)))];
+            new GeneratedQuestion(draft.Text, draft.Options, draft.Answer, draft.Explanation, draft.Difficulty)))], null);
     }
 }

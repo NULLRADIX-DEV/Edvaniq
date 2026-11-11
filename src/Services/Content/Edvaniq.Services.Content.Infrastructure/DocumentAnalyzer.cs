@@ -26,12 +26,15 @@ public sealed class DocumentAnalyzer(
     ILogger<DocumentAnalyzer> logger) : BackgroundService
 {
     // Documents per round. A full round means more are waiting, the next one starts without a pause.
-    private const int Batch = 10;
+    public int Batch { get; set; } = 10;
 
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(2);
 
     // How long the AI may take for one document. A provider that hangs fails the document instead of the worker.
     public TimeSpan AiTimeout { get; set; } = TimeSpan.FromMinutes(2);
+
+    // How long a document waits after each outage of the AI, the worker goes on with the others meanwhile.
+    public IReadOnlyList<TimeSpan> OutageDelays { get; set; } = Document.OutageDelays;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -71,14 +74,17 @@ public sealed class DocumentAnalyzer(
         return waiting.Count;
     }
 
-    // The oldest documents in analysis of all users whose topics are still to come.
+    // The documents in analysis of all users whose topics are still to come, oldest first. One postponed after an outage
+    // only counts once it's due, and then from that time on.
     public async Task<IReadOnlyList<Guid>> WaitingAsync(CancellationToken cancellationToken)
     {
+        var now = time.GetUtcNow().UtcDateTime;
         using var scope = scopes.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<ContentDbContext>().Documents
             .IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .Where(document => document.Status == DocumentStatus.Analyzing && document.AnalyzedAt == null)
-            .OrderBy(document => document.CreatedAt)
+            .Where(document => document.NextAttemptAt == null || document.NextAttemptAt <= now)
+            .OrderBy(document => document.NextAttemptAt ?? document.CreatedAt)
             .Select(document => document.Id)
             .Take(Batch)
             .ToListAsync(cancellationToken);
@@ -90,7 +96,7 @@ public sealed class DocumentAnalyzer(
         var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
         var document = await db.Documents.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .SingleOrDefaultAsync(item => item.Id == documentId, cancellationToken);
-        if (document is not { Status: DocumentStatus.Analyzing, AnalyzedAt: null })
+        if (document is not { Status: DocumentStatus.Analyzing, AnalyzedAt: null } || document.NextAttemptAt > time.GetUtcNow().UtcDateTime)
         {
             return;
         }
@@ -101,10 +107,15 @@ public sealed class DocumentAnalyzer(
             .ToListAsync(cancellationToken);
 
         // The AI call comes before the one save, nothing holds the database meanwhile.
-        if (await TopicsAsync(document, sections, cancellationToken) is { } topics)
+        var answer = await TopicsAsync(document, sections, cancellationToken);
+        if (answer.Value is { } topics)
         {
             document.ReportTopics(time.GetUtcNow().UtcDateTime);
             scope.ServiceProvider.GetRequiredService<IEventOutbox>().Add(new DocumentAnalyzed(document.OwnerId, document.Id, topics, document.LearningGoalId));
+        }
+        else if (answer.Failure is { } failure)
+        {
+            AiOutage.Handle(document, AiAttempt.Topics, failure, time.GetUtcNow().UtcDateTime, OutageDelays, logger);
         }
         else
         {
@@ -114,9 +125,8 @@ public sealed class DocumentAnalyzer(
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    // The topics from the AI, or null if it failed, took too long or gave no usable answer in all attempts. Retries of
-    // outages with a pause come with #300, until then the user starts the analysis again.
-    private async Task<IReadOnlyList<TopicSuggestion>?> TopicsAsync(
+    // The answer of the AI with the topics, if any. Every attempt goes into the cost log.
+    private async Task<StructuredAnswer<IReadOnlyList<TopicSuggestion>>> TopicsAsync(
         Document document, IReadOnlyList<Section> sections, CancellationToken cancellationToken)
     {
         IReadOnlyList<Guid> ids = [.. sections.Select(section => section.Id)];
@@ -131,15 +141,11 @@ public sealed class DocumentAnalyzer(
             cancellationToken);
         await usage.RecordAsync(
             document, AiAttempt.Topics, TopicAnalysis.PromptVersion, answer.Tries, ContentAi.ModelOf(ai, null), cancellationToken);
-        if (answer.Failure is { } failure)
-        {
-            ContentLog.AnalysisFailed(logger, failure, document.Id);
-        }
-        else if (answer.Value is null)
+        if (answer is { Value: null, Failure: null })
         {
             ContentLog.AnalysisAnswerUnusable(logger, document.Id, answer.Attempts);
         }
 
-        return answer.Value;
+        return answer;
     }
 }

@@ -31,9 +31,18 @@ internal sealed class AiStub : HttpMessageHandler
          "usage":{"prompt_tokens":12,"completion_tokens":3,"total_tokens":15}}
         """;
 
-    public AiStub Answer(HttpStatusCode status, string body)
+    public AiStub Answer(HttpStatusCode status, string body, TimeSpan? retryAfter = null)
     {
-        answers.Enqueue(() => new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") });
+        answers.Enqueue(() =>
+        {
+            var response = new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+            if (retryAfter is { } wait)
+            {
+                response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(wait);
+            }
+
+            return response;
+        });
         return this;
     }
 

@@ -22,7 +22,7 @@ internal sealed class OpenAiCompatibleChatClient(IHttpClientFactory httpClients,
         using var response = await http.PostAsJsonAsync("chat/completions", Request(messages, options), cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            throw new HttpRequestException($"The AI provider answered {(int)response.StatusCode}.", null, response.StatusCode);
+            throw new AiProviderException(response.StatusCode, response.Headers.RetryAfter);
         }
 
         JsonDocument answer;

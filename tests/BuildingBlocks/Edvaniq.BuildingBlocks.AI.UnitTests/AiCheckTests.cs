@@ -29,7 +29,7 @@ public class AiCheckTests
         var exitCode = await AiCheck.RunAsync(host.Services, output);
 
         Assert.Equal(1, exitCode);
-        Assert.Matches(@"^AI check failed: provider OpenAiCompatible, after \d+ ms: HttpRequestException: The AI provider answered 401\.\r?\n$", output.ToString());
+        Assert.Matches(@"^AI check failed: provider OpenAiCompatible, after \d+ ms: AiProviderException: The AI provider answered 401\.\r?\n$", output.ToString());
         Assert.DoesNotContain(AiStub.Key, output.ToString(), StringComparison.Ordinal);
     }
 

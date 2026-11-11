@@ -202,12 +202,26 @@ public class OpenAiCompatibleChatClientTests
         var stub = new AiStub().Answer(status, """{"error":{"message":"Photosynthese"}}""");
         using var host = stub.Host();
 
-        var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
+        var exception = await Assert.ThrowsAsync<AiProviderException>(() =>
             AiStub.Client(host).GetResponseAsync(Prompt, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal(status, exception.StatusCode);
         Assert.DoesNotContain("Photosynthese", exception.ToString(), StringComparison.Ordinal);
         Assert.Single(stub.Requests);
+    }
+
+    // The caller decides when to ask again, so the wait the provider asked for comes along.
+    [Fact]
+    public async Task TooManyRequests_CarriesItsRetryAfter()
+    {
+        var stub = new AiStub().Answer(HttpStatusCode.TooManyRequests, "{}", TimeSpan.FromSeconds(42));
+        using var host = stub.Host();
+
+        var exception = await Assert.ThrowsAsync<AiProviderException>(() =>
+            AiStub.Client(host).GetResponseAsync(Prompt, cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(TimeSpan.FromSeconds(42), exception.RetryAfter?.Delta);
+        Assert.True(AiFailure.IsTransient(exception));
     }
 
     [Theory]

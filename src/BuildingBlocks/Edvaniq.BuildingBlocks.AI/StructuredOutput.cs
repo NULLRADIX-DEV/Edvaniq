@@ -3,9 +3,9 @@ using Microsoft.Extensions.AI;
 namespace Edvaniq.BuildingBlocks.AI;
 
 // Asks for an answer in a fixed form and checks it, asking again when the answer is no use, up to MaxAttempts. Only an
-// unusable answer counts for that: a provider that fails or takes too long ends at once, every new request would be
-// another paid one (outages are #300). The usage of every attempt adds up in the result, failed or not, and each
-// attempt is in Tries with its own tokens, cost and duration.
+// unusable answer counts for that: a provider that fails or takes too long ends at once and the result says whether it
+// may pass, so the caller can try later without waiting here. The usage of every attempt adds up in the result,
+// failed or not, and each attempt is in Tries with its own tokens, cost and duration.
 public static class StructuredOutput
 {
     // One more try catches a model's bad moment. Two bad answers in a row point to the prompt or the model, and a
@@ -71,7 +71,11 @@ public sealed record StructuredRequest(TimeSpan AttemptTimeout, ChatResponseForm
 // Attempts includes that attempt.
 public sealed record StructuredAnswer<T>(
     T? Value, int Attempts, UsageDetails Usage, string? ModelId, Exception? Failure, IReadOnlyList<AiTry> Tries)
-    where T : class;
+    where T : class
+{
+    // The provider failed in a way that may pass, asking later may help (AiFailure.IsTransient).
+    public bool Transient => Failure is not null && AiFailure.IsTransient(Failure);
+}
 
 // One request to the provider. ModelId is the one that answered, null when it didn't say or nothing came back. Cost is
 // null when it is unknown: a failed attempt, or a model without a price.

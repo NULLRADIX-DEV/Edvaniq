@@ -250,6 +250,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(2, questions.Calls);
     }
 
+    // Without delays left an outage fails the document at once.
     [Fact]
     public async Task FailingAiForQuestions_FailsTheDocumentAtOnce_AndSendsNoQuestions()
     {
@@ -259,8 +260,152 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
 
         await AnalyzeAsync(id, questions, withQuestions: true);
 
-        await AssertQuestionsFailedAsync(client, id);
+        await AssertQuestionsFailedAsync(client, id, Document.AiUnavailable);
         Assert.Equal(1, questions.Calls);
+    }
+
+    // An outage of the provider postpones the document instead of failing it, each attempt in the cost log. After the
+    // last delay it fails as "KI derzeit nicht verfügbar", and a retry with the provider back makes it ready.
+    [Theory]
+    [InlineData(SimulatedFault.Outage)]
+    [InlineData(SimulatedFault.Timeout)]
+    public async Task OutageOfTheTopics_PostponesTheDocument_FailsAfterTheLastDelay_AndRetryHelps(SimulatedFault fault)
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        Simulated.Fault = fault;
+        var analyzer = Analyzer(delays: [TimeSpan.Zero, TimeSpan.Zero]);
+        await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(id, TestContext.Current.CancellationToken);
+
+        for (var outage = 1; outage <= 2; outage++)
+        {
+            await analyzer.AnalyzeAsync(id, TestContext.Current.CancellationToken);
+            var waiting = Stored(id);
+            Assert.Equal((DocumentStatus.Analyzing, outage, (string?)null), (waiting.Status, waiting.AiOutages, waiting.FailureReason));
+            Assert.NotNull(waiting.NextAttemptAt);
+        }
+
+        await analyzer.AnalyzeAsync(id, TestContext.Current.CancellationToken);
+
+        var failed = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
+        Assert.Equal(("Failed", "KI derzeit nicht verfügbar. Versuch es später noch einmal."), (failed!.Status, failed.FailureReason));
+        Assert.Empty(await ReportedAsync(id));
+        Assert.Equal(3, Asked(ContentAi.TopicsTask));
+        Assert.Equal([AiAttemptOutcome.Failed, AiAttemptOutcome.Failed, AiAttemptOutcome.Failed], AttemptsOf(id).Select(attempt => attempt.Outcome));
+        Assert.Contains(logs.Entries, entry => entry.Level == LogLevel.Error
+            && entry.Message == $"The AI stayed unavailable for the {AiAttempt.Topics} of document {id} in 3 attempts, it is marked as failed");
+
+        Simulated.Fault = SimulatedFault.None;
+        await RetryAsync(client, id, HttpStatusCode.Accepted);
+        Assert.Equal((0, (DateTime?)null), (Stored(id).AiOutages, Stored(id).NextAttemptAt));
+        await AnalyzeAsync(id, withQuestions: true);
+
+        Assert.Equal("Ready", (await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken))!.Status);
+        Assert.Single(await ReportedAsync(id));
+    }
+
+    // The same for the questions: the topics stay out once, the questions follow when the provider is back.
+    [Fact]
+    public async Task OutageOfTheQuestions_PostponesTheDocument_ThenItGetsReady()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        var questions = new BrokenAnswers(failures: 1, outage: true);
+        await AnalyzeAsync(id);
+        service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
+        var pools = Pools(questions, delays: [TimeSpan.Zero]);
+
+        Assert.True(await pools.FinishAsync(id, TestContext.Current.CancellationToken));
+        var waiting = Stored(id);
+        Assert.Equal((DocumentStatus.Analyzing, 1), (waiting.Status, waiting.AiOutages));
+        Assert.Empty(await GeneratedAsync(id));
+
+        Assert.True(await pools.FinishAsync(id, TestContext.Current.CancellationToken));
+
+        Assert.Equal("Ready", (await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken))!.Status);
+        Assert.Single(await ReportedAsync(id));
+        Assert.NotEmpty(await GeneratedAsync(id));
+        Assert.Contains(AttemptsOf(id), attempt => attempt is { Purpose: AiAttempt.Questions, Outcome: AiAttemptOutcome.Failed });
+    }
+
+    // A provider that says when to come back is asked no earlier, and the document waits outside the round meanwhile.
+    [Fact]
+    public async Task RetryAfterOfTheProvider_PostponesTheDocument_AtLeastThatLong()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        var topics = new BrokenAnswers(failures: 1, task: ContentAi.TopicsTask, status: HttpStatusCode.TooManyRequests, retryAfter: TimeSpan.FromMinutes(5));
+        var analyzer = Analyzer(topics, delays: [TimeSpan.FromSeconds(1)]);
+        analyzer.Batch = 1000;
+
+        var before = DateTime.UtcNow;
+        await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(id, TestContext.Current.CancellationToken);
+        await analyzer.AnalyzeAsync(id, TestContext.Current.CancellationToken);
+
+        var waiting = Stored(id);
+        Assert.Equal(DocumentStatus.Analyzing, waiting.Status);
+        Assert.InRange(waiting.NextAttemptAt!.Value, before.AddMinutes(5), DateTime.UtcNow.AddMinutes(5));
+        Assert.DoesNotContain(id, await analyzer.WaitingAsync(TestContext.Current.CancellationToken));
+        await analyzer.AnalyzeAsync(id, TestContext.Current.CancellationToken);
+        Assert.Equal(1, topics.Calls);
+    }
+
+    // A wrong key or a refused request fails the same way every time: no second attempt, the document fails at once,
+    // and whoever runs the app finds the status in the log.
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.BadRequest)]
+    public async Task RefusalOfTheProvider_FailsTheDocumentAtOnce_WithALineForTheOperator(HttpStatusCode status)
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        var topics = new BrokenAnswers(failures: int.MaxValue, task: ContentAi.TopicsTask, status: status);
+
+        await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(id, TestContext.Current.CancellationToken);
+        await Analyzer(topics, delays: [TimeSpan.Zero, TimeSpan.Zero]).AnalyzeAsync(id, TestContext.Current.CancellationToken);
+
+        var failed = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
+        Assert.Equal(("Failed", Document.AiUnavailable), (failed!.Status, failed.FailureReason));
+        Assert.Equal(1, topics.Calls);
+        Assert.Contains(logs.Entries, entry => entry.Level == LogLevel.Error
+            && entry.Message.StartsWith($"The AI provider refused the {AiAttempt.Topics} of document {id} with status {(int)status} ", StringComparison.Ordinal));
+    }
+
+    // Alice's document waits for the provider, Bob's goes on: a postponed document is out of the round until it's due
+    // and then lines up by that time, behind Bob's older one, not by its own age.
+    [Fact]
+    public async Task OutageOfOneUsersDocument_HoldsUpNoOtherUser_AndTheOrderStaysFair()
+    {
+        using var alice = ClientFor($"alice-{Guid.NewGuid():N}");
+        using var bob = ClientFor($"bob-{Guid.NewGuid():N}");
+        var due = await PasteAsync(alice, Text);
+        var later = await PasteAsync(alice, Text);
+        var waiting = await PasteAsync(bob, Text);
+        var splitter = ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services);
+        foreach (var id in new[] { due, later, waiting })
+        {
+            await splitter.SplitAsync(id, TestContext.Current.CancellationToken);
+        }
+
+        var analyzer = Analyzer();
+        analyzer.Batch = 1000;
+        var before = (await analyzer.WaitingAsync(TestContext.Current.CancellationToken)).ToList();
+        Assert.True(before.IndexOf(due) < before.IndexOf(waiting));
+
+        await Analyzer(new BrokenAnswers(failures: int.MaxValue, outage: true, task: ContentAi.TopicsTask), delays: [TimeSpan.Zero])
+            .AnalyzeAsync(due, TestContext.Current.CancellationToken);
+        await Analyzer(new BrokenAnswers(failures: int.MaxValue, outage: true, task: ContentAi.TopicsTask), delays: [TimeSpan.FromHours(1)])
+            .AnalyzeAsync(later, TestContext.Current.CancellationToken);
+
+        var after = (await analyzer.WaitingAsync(TestContext.Current.CancellationToken)).ToList();
+        Assert.DoesNotContain(later, after);
+        Assert.True(after.IndexOf(waiting) >= 0 && after.IndexOf(waiting) < after.IndexOf(due));
+
+        await analyzer.AnalyzeAsync(waiting, TestContext.Current.CancellationToken);
+        service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(waiting)));
+        Assert.True(await Pools().FinishAsync(waiting, TestContext.Current.CancellationToken));
+        Assert.Equal("Ready", (await bob.GetFromJsonAsync<DocumentDto>($"/documents/{waiting}", TestContext.Current.CancellationToken))!.Status);
+        Assert.Equal(DocumentStatus.Analyzing, Stored(later).Status);
     }
 
     [Fact]
@@ -299,12 +444,13 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         });
     }
 
-    // An invalid answer is asked again up to the limit, a provider that fails is not (#300). Every attempt is in the cost.
+    // An invalid answer is asked again up to the limit, a provider that fails is not, within one attempt. Without delays
+    // left an outage fails the document. Every attempt is in the cost.
     [Theory]
-    [InlineData(SimulatedFault.Outage, 1)]
-    [InlineData(SimulatedFault.Timeout, 1)]
-    [InlineData(SimulatedFault.InvalidOutput, StructuredOutput.DefaultAttempts)]
-    public async Task FailingAi_FailsTheDocumentWithAReason_AndReportsNothing(SimulatedFault fault, int attempts)
+    [InlineData(SimulatedFault.Outage, 1, Document.AiUnavailable)]
+    [InlineData(SimulatedFault.Timeout, 1, Document.AiUnavailable)]
+    [InlineData(SimulatedFault.InvalidOutput, StructuredOutput.DefaultAttempts, "Die Themen ließen sich gerade nicht erkennen. Versuch es später noch einmal.")]
+    public async Task FailingAi_FailsTheDocumentWithAReason_AndReportsNothing(SimulatedFault fault, int attempts, string reason)
     {
         using var client = ClientFor($"alice-{Guid.NewGuid():N}");
         var id = await PasteAsync(client, Text);
@@ -313,9 +459,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         await AnalyzeAsync(id);
 
         var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
-        Assert.Equal(
-            ("Failed", "Die Themen ließen sich gerade nicht erkennen. Versuch es später noch einmal."),
-            (found!.Status, found.FailureReason));
+        Assert.Equal(("Failed", reason), (found!.Status, found.FailureReason));
         Assert.Empty(await ReportedAsync(id));
         Assert.Equal(attempts, Asked(ContentAi.TopicsTask));
         Assert.Equal(attempts, UsageOf("topics", id).Attempts);
@@ -441,7 +585,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Simulated.Fault = SimulatedFault.Outage;
         await AnalyzeAsync(id);
         var failed = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
-        Assert.Equal(("Failed", Document.AnalysisFailed), (failed!.Status, failed.FailureReason));
+        Assert.Equal(("Failed", Document.AiUnavailable), (failed!.Status, failed.FailureReason));
 
         Simulated.Fault = SimulatedFault.None;
         var retried = await RetryAsync(client, id, HttpStatusCode.Accepted);
@@ -466,7 +610,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         using var client = ClientFor($"alice-{Guid.NewGuid():N}");
         var id = await PasteAsync(client, Text);
         await AnalyzeAsync(id, new BrokenAnswers(failures: int.MaxValue, outage: true), withQuestions: true);
-        await AssertQuestionsFailedAsync(client, id);
+        await AssertQuestionsFailedAsync(client, id, Document.AiUnavailable);
         var topics = await service.Knowledge.OfDocumentAsync(id, TestContext.Current.CancellationToken);
         var sections = SectionIds(id);
 
@@ -612,20 +756,29 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         return questions;
     }
 
-    // The analyzer of the worker, on the service's database.
-    private DocumentAnalyzer Analyzer(BrokenAnswers? questions = null)
+    // The analyzer of the worker, on the service's database. Without delays an outage fails the document at once.
+    private DocumentAnalyzer Analyzer(BrokenAnswers? questions = null, IReadOnlyList<TimeSpan>? delays = null)
     {
         var analyzer = ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, Chat(questions), LoggerOf<DocumentAnalyzer>());
         analyzer.AiTimeout = TimeSpan.FromMilliseconds(500);
+        analyzer.OutageDelays = delays ?? [];
         return analyzer;
     }
 
     // The question pools of the worker, asking the KnowledgeStub of the service.
-    private QuestionPools Pools(BrokenAnswers? questions = null)
+    private QuestionPools Pools(BrokenAnswers? questions = null, IReadOnlyList<TimeSpan>? delays = null)
     {
         var pools = ActivatorUtilities.CreateInstance<QuestionPools>(service.Services, Chat(questions), LoggerOf<QuestionPools>());
         pools.AiTimeout = TimeSpan.FromMilliseconds(500);
+        pools.OutageDelays = delays ?? [];
         return pools;
+    }
+
+    private Document Stored(Guid documentId)
+    {
+        using var scope = service.Services.CreateScope();
+        return scope.ServiceProvider.GetRequiredService<ContentDbContext>().Documents.IgnoreQueryFilters().AsNoTracking()
+            .Single(document => document.Id == documentId);
     }
 
     // Splits the document as the worker does and analyzes it. With questions Knowledge takes the topics over and the
@@ -677,10 +830,10 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     }
 
     // The topics are out, their questions are not.
-    private async Task AssertQuestionsFailedAsync(HttpClient client, Guid id)
+    private async Task AssertQuestionsFailedAsync(HttpClient client, Guid id, string reason = Document.QuestionsFailed)
     {
         var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
-        Assert.Equal(("Failed", Document.QuestionsFailed), (found!.Status, found.FailureReason));
+        Assert.Equal(("Failed", reason), (found!.Status, found.FailureReason));
         Assert.Single(await ReportedAsync(id));
         Assert.Empty(await GeneratedAsync(id));
         Assert.Empty(PooledTopics(id));
@@ -765,7 +918,9 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     // Answers the first prompts of the task with a question that has no answer, which is no use for topics either, or
     // fails them like a provider that is down. Other tasks go through untouched. One instance counts the calls of
     // analyzer and pools together.
-    private sealed class BrokenAnswers(int failures, bool outage = false, string task = ContentAi.QuestionsTask) : IChatClient
+    private sealed class BrokenAnswers(
+        int failures, bool outage = false, string task = ContentAi.QuestionsTask, HttpStatusCode? status = null, TimeSpan? retryAfter = null)
+        : IChatClient
     {
         public IChatClient InnerClient { get; set; } = null!;
 
@@ -783,6 +938,11 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             if (++Calls > failures)
             {
                 return await InnerClient.GetResponseAsync(list, options, cancellationToken);
+            }
+
+            if (status is { } refused)
+            {
+                throw new AiProviderException(refused, retryAfter is { } wait ? new RetryConditionHeaderValue(wait) : null);
             }
 
             return outage

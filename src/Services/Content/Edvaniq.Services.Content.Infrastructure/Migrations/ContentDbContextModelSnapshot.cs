@@ -204,6 +204,9 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("char(36)");
 
+                    b.Property<int>("AiOutages")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("AnalyzedAt")
                         .IsConcurrencyToken()
                         .HasColumnType("datetime(6)");
@@ -217,6 +220,9 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
 
                     b.Property<Guid?>("LearningGoalId")
                         .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("OwnerId")
                         .IsRequired()

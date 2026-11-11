@@ -51,7 +51,8 @@ public class StructuredOutputTests
         Assert.Equal(("ok", 3, 3), (answer.Value, answer.Attempts, ai.Calls));
     }
 
-    // A retry after an outage would be another paid request, that is #300. The usage before it stays.
+    // Asking again at once after an outage would be another paid request that most likely fails too, the caller tries
+    // later. The usage before it stays, and the answer says the outage may pass.
     [Fact]
     public async Task Outage_IsNotAskedAgain_AndKeepsTheUsageBefore()
     {
@@ -63,8 +64,19 @@ public class StructuredOutputTests
 
         Assert.Null(answer.Value);
         Assert.IsType<HttpRequestException>(answer.Failure);
+        Assert.True(answer.Transient);
         Assert.Equal((2, 2), (answer.Attempts, ai.Calls));
         Assert.Equal(12L, answer.Usage.TotalTokenCount);
+    }
+
+    [Fact]
+    public async Task Refusal_IsNoOutageThatMayPass_AndAnUnusableAnswerNoFailure()
+    {
+        var refused = await AskAsync(new Scripted(() => throw new AiProviderException(HttpStatusCode.Unauthorized, null)));
+        var unusable = await AskAsync(new Scripted(Answer("kaputt", 1, 1), Answer("kaputt", 1, 1)));
+
+        Assert.Equal((false, 1), (refused.Transient, refused.Attempts));
+        Assert.Equal(((Exception?)null, false), (unusable.Failure, unusable.Transient));
     }
 
     // The cost log keeps every attempt on its own: its tokens, cost, model and how it ended.
@@ -101,6 +113,7 @@ public class StructuredOutputTests
         var answer = await AskAsync(ai, timeout: TimeSpan.FromMilliseconds(100));
 
         Assert.IsAssignableFrom<OperationCanceledException>(answer.Failure);
+        Assert.True(answer.Transient);
         Assert.Equal(1, ai.Calls);
     }
 
