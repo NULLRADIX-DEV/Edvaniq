@@ -110,6 +110,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Edvaniq.ArchitectureTests/Edvaniq.ArchitectureTests.csproj" />
     <Project Path="tests/Edvaniq.EndToEndTests/Edvaniq.EndToEndTests.csproj" />
+    <Project Path="tests/Edvaniq.EventFlowTests/Edvaniq.EventFlowTests.csproj" />
     <Project Path="tests/Edvaniq.Testing/Edvaniq.Testing.csproj" />
   </Folder>
   <Folder Name="/tests/BuildingBlocks/">

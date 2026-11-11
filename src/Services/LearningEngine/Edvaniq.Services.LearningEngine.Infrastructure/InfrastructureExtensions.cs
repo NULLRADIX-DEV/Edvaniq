@@ -2,6 +2,7 @@ using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Assessment.Contracts;
 using Edvaniq.Services.Identity.Contracts;
+using Edvaniq.Services.Knowledge.Contracts;
 using Edvaniq.Services.LearningEngine.Application;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -21,10 +22,12 @@ public static class InfrastructureExtensions
     {
         builder.Services.AddMySqlDbContext<LearningEngineDbContext>(DatabaseName);
         builder.Services.AddScoped<ILearningRecords, LearningRecords>();
+        builder.Services.AddScoped<IKnownTopics, KnownTopics>();
 
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<LearningEngineDbContext>(ServiceKey);
         builder.Services.AddIntegrationEventHandler<AnswerRecorded, AnswerRecordedHandler>();
+        builder.Services.AddIntegrationEventHandler<TopicsChanged, TopicsChangedHandler>();
 
         // Every IOwnedByUser entity, learning records included.
         builder.Services.AddUserDataRemover<LearningEngineDbContext>();

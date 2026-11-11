@@ -107,6 +107,32 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                     b.ToTable("ExampleItems");
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Planning.Domain.KnownTopic", b =>
+                {
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<bool>("Hidden")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<Guid>("LearningGoalId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.HasKey("TopicId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("OwnerId", "LearningGoalId");
+
+                    b.ToTable("KnownTopics");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Planning.Domain.PingRecord", b =>
                 {
                     b.Property<int>("Id")
@@ -119,6 +145,27 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Pings");
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Planning.Domain.TopicsSnapshot", b =>
+                {
+                    b.Property<string>("OwnerId")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<Guid>("LearningGoalId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("OwnerId", "LearningGoalId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("TopicsSnapshots");
                 });
 #pragma warning restore 612, 618
         }
