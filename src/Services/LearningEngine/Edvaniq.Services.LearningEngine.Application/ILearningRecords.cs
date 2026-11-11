@@ -7,5 +7,8 @@ public interface ILearningRecords
 {
     Task<bool> ExistsAsync(Guid answerId, CancellationToken cancellationToken);
 
+    // Whether TopicsChanged has named the topic for the owner yet.
+    Task<bool> IsTopicKnownAsync(string ownerId, Guid topicId, CancellationToken cancellationToken);
+
     void Add(LearningRecord record);
 }

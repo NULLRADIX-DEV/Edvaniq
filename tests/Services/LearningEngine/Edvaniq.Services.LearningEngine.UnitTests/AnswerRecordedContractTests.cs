@@ -7,6 +7,8 @@ using Edvaniq.Services.LearningEngine.Application;
 using Edvaniq.Services.LearningEngine.Domain;
 using Edvaniq.Testing;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace Edvaniq.Services.LearningEngine.UnitTests;
 
 // LearningEngine as the receiver of the learning record: every shipped sample from tests/EventSamples, read the way the
@@ -29,7 +31,7 @@ public class AnswerRecordedContractTests
 
         var records = new FakeRecords();
         var answer = JsonSerializer.Deserialize<AnswerRecorded>(message.ToJsonString(), EventJson.Options)!;
-        await new AnswerRecordedHandler(records).HandleAsync(answer, TestContext.Current.CancellationToken);
+        await new AnswerRecordedHandler(records, NullLogger<AnswerRecordedHandler>.Instance).HandleAsync(answer, TestContext.Current.CancellationToken);
 
         var record = Assert.Single(records.Added);
         Assert.Equal(
@@ -53,7 +55,7 @@ public class AnswerRecordedContractTests
         var records = new FakeRecords();
         var sample = EventSamples.For("Assessment.AnswerRecorded").First(sample => sample is { Version: 1, Minimal: false });
 
-        await new AnswerRecordedHandler(records).HandleAsync(
+        await new AnswerRecordedHandler(records, NullLogger<AnswerRecordedHandler>.Instance).HandleAsync(
             JsonSerializer.Deserialize<AnswerRecorded>(sample.Json, EventJson.Options)!, TestContext.Current.CancellationToken);
 
         Assert.Equal(Domain.Mode.Placement, Assert.Single(records.Added).Source);
@@ -64,6 +66,10 @@ public class AnswerRecordedContractTests
         public List<LearningRecord> Added { get; } = [];
 
         public Task<bool> ExistsAsync(Guid answerId, CancellationToken cancellationToken) => Task.FromResult(false);
+
+        public bool TopicKnown { get; init; } = true;
+
+        public Task<bool> IsTopicKnownAsync(string ownerId, Guid topicId, CancellationToken cancellationToken) => Task.FromResult(TopicKnown);
 
         public void Add(LearningRecord record) => Added.Add(record);
     }
