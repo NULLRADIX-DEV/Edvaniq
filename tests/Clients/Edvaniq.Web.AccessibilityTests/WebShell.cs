@@ -18,6 +18,7 @@ namespace Edvaniq.Web.AccessibilityTests;
 public sealed class WebShell : IAsyncLifetime
 {
     public const int PhoneWidth = 375;
+    public const int TabletWidth = 768;
     public const int DesktopWidth = 1280;
 
     private StubService? gateway;
@@ -37,6 +38,7 @@ public sealed class WebShell : IAsyncLifetime
         gateway.Answer("POST", "/planning/ping", new { id = 42, pingedAt = new DateTimeOffset(2026, 10, 21, 8, 30, 0, TimeSpan.Zero) });
         gateway.Answer("GET", "/content/documents", new[] { Material.Document("Ready") });
         gateway.Answer("GET", "/knowledge/topics", Material.Topics);
+        gateway.Answer("GET", "/planning/plan/today", Material.Plan());
 
         (healthyHost, Address) = Start(gateway.Address);
         (downHost, AddressWithoutGateway) = Start("http://127.0.0.1:9");
