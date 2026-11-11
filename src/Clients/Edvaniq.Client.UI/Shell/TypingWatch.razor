@@ -1,0 +1,81 @@
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@* Renders nothing. Tells whether the field ElementId holds typed text before its binding has heard of it, without
+   sending the text across with every key. *@
+
+@code {
+    public const string Module = "./_content/Edvaniq.Client.UI/typing-watch.js";
+
+    [Parameter, EditorRequired]
+    public string ElementId { get; set; } = "";
+
+    [Parameter]
+    public EventCallback<bool> OnFilledChanged { get; set; }
+
+    private DotNetObjectReference<TypingWatch>? self;
+    private IJSObjectReference? module;
+    private IJSObjectReference? watch;
+    private bool disposed;
+
+    // Only after the first render: while the page is prerendered there is no script to listen with.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        self = DotNetObjectReference.Create(this);
+        try
+        {
+            module = await JS.InvokeAsync<IJSObjectReference>("import", Module);
+            watch = await module.InvokeAsync<IJSObjectReference>("watch", ElementId, self);
+        }
+        catch (JSException)
+        {
+            // Without the watch the binding still tells once the field loses the focus.
+        }
+
+        if (disposed)
+        {
+            await StopAsync();
+        }
+    }
+
+    [JSInvokable]
+    public Task Filled(bool filled) => OnFilledChanged.InvokeAsync(filled);
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        await StopAsync();
+    }
+
+    private async ValueTask StopAsync()
+    {
+        try
+        {
+            if (watch is not null)
+            {
+                await watch.InvokeVoidAsync("stop");
+                await watch.DisposeAsync();
+            }
+
+            if (module is not null)
+            {
+                await module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // The page is gone, and its listener with it.
+        }
+
+        watch = null;
+        module = null;
+        self?.Dispose();
+        self = null;
+    }
+}

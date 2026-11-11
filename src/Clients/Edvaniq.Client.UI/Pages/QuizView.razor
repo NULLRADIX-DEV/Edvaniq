@@ -5,6 +5,13 @@
 @inject ILearningMaterial Material
 @inject IServiceProvider Services
 
+@* Back on the page, a hint gives way to a question once there is one, and the topic's name follows a rename. An open
+   attempt stays as it is: it belongs to the question asked, a new one with each return would be wrong. *@
+<RefreshOnReturn OnReturn="RefreshOnReturnAsync" />
+
+@* Reloading or closing the page would throw away a ticked answer not checked yet, so the browser asks first. *@
+<NavigationLock ConfirmExternalNavigation="Unchecked" />
+
 @* Question, options and explanation are text from the AI, Razor writes them as text. *@
 <h1 tabindex="-1" @ref="pageHeading">@(topicName is null ? "Frage üben" : $"Frage zu „{topicName}“")</h1>
 
@@ -198,6 +205,8 @@
     // What the server graded counts, not what is ticked here: a second answer to the same attempt brings the first.
     private int? Chosen => graded?.Option ?? selected;
 
+    private bool Unchecked => asked is not null && graded is null && selected is not null;
+
     private string RightOption =>
         graded!.Answer < asked!.Options.Count ? asked.Options[graded.Answer] : "";
 
@@ -261,8 +270,27 @@
         }
     }
 
+    // Quietly, without a loading hint, so the live region only speaks when the answer is new. Assessment only starts an
+    // attempt when it has a question, so asking again after 409 leaves nothing open.
+    private async Task RefreshOnReturnAsync()
+    {
+        if (loading || askingNow || answering)
+        {
+            return;
+        }
+
+        var name = LoadTopicNameAsync();
+        if (State is ViewState.NotReady or ViewState.LoadFailed)
+        {
+            await Task.WhenAll(name, AskAsync(focus: false, quiet: true));
+            return;
+        }
+
+        await name;
+    }
+
     // A new attempt with a new question. Opened again, the page asks anew: an attempt left open counts nowhere.
-    private async Task AskAsync(bool focus)
+    private async Task AskAsync(bool focus, bool quiet = false)
     {
         if (askingNow)
         {
@@ -270,7 +298,7 @@
         }
 
         askingNow = true;
-        loading = true;
+        loading = !quiet;
         CallOutcome<AskedQuestion> outcome;
         try
         {
@@ -312,6 +340,11 @@
         if (focus)
         {
             focusNext = asked is null ? FocusTarget.Page : FocusTarget.Question;
+        }
+        else if (quiet && asked is not null)
+        {
+            // The hint and its button are gone, the focus goes where the button would have taken it.
+            focusNext = FocusTarget.Question;
         }
     }
 

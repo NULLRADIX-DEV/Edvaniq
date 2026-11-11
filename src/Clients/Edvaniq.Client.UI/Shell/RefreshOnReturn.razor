@@ -1,0 +1,72 @@
+@using Microsoft.Extensions.DependencyInjection
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IServiceProvider Services
+
+@* Renders nothing. Calls OnReturn when the user comes back to the tab, the window or the app, so a page can fetch the
+   server's state anew. Returns in quick succession count once. *@
+
+@code {
+    // Alt-tabbing back and forth should not send a request each time.
+    public static readonly TimeSpan Quiet = TimeSpan.FromSeconds(2);
+
+    [Parameter]
+    public EventCallback OnReturn { get; set; }
+
+    private TimeProvider time = TimeProvider.System;
+    private IAsyncDisposable? subscription;
+    private long? lastReturn;
+    private bool disposed;
+
+    protected override void OnInitialized() => time = Services.GetService<TimeProvider>() ?? TimeProvider.System;
+
+    // Only after the first render: while the page is prerendered there is no script to listen with.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || Services.GetService<IReturnSignal>() is not { } signal)
+        {
+            return;
+        }
+
+        IAsyncDisposable subscribed;
+        try
+        {
+            subscribed = await signal.SubscribeAsync(Returned);
+        }
+        catch (JSException)
+        {
+            // Without the signal the page still works, it just doesn't refresh by itself.
+            return;
+        }
+
+        if (disposed)
+        {
+            await subscribed.DisposeAsync();
+            return;
+        }
+
+        subscription = subscribed;
+    }
+
+    private void Returned() => _ = InvokeAsync(async () =>
+    {
+        var now = time.GetTimestamp();
+        if (disposed || (lastReturn is { } last && time.GetElapsedTime(last, now) < Quiet))
+        {
+            return;
+        }
+
+        lastReturn = now;
+        await OnReturn.InvokeAsync();
+    });
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        if (subscription is not null)
+        {
+            await subscription.DisposeAsync();
+            subscription = null;
+        }
+    }
+}

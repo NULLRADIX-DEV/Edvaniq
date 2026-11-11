@@ -142,7 +142,7 @@ public sealed class TopicsTests : BunitContext
             .Topics(NewTopic);
         var page = RenderPage(material);
 
-        page.Find("#paste-title").Change("  Skript Bio  ");
+        page.Find("#paste-title").Input("  Skript Bio  ");
         page.Find("#paste-text").Change("Die Photosynthese …");
         page.Find("form").Submit();
 
@@ -203,7 +203,7 @@ public sealed class TopicsTests : BunitContext
         var material = new FakeLearningMaterial();
         var page = RenderPage(material);
 
-        page.Find("#paste-title").Change(new string('t', 81));
+        page.Find("#paste-title").Input(new string('t', 81));
         page.Find("#paste-text").Change("Text");
         page.Find("form").Submit();
 
@@ -289,7 +289,7 @@ public sealed class TopicsTests : BunitContext
     }
 
     [Fact]
-    public void AnalysisTakingLong_SaysSo_AndWaitingOnFollowsAgain()
+    public async Task AnalysisTakingLong_SaysSo_AndWaitingOnFollowsAgain()
     {
         var material = new FakeLearningMaterial()
             .Documents(Document(DocumentStatus.Analyzing))
@@ -299,7 +299,8 @@ public sealed class TopicsTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("dauert länger als gedacht", Status(page)), Wait);
         var calls = material.DocumentCalls;
 
-        page.Find("button.button:not([type=submit])").Click();
+        // The click may come while the page still renders the end of its polling, so it waits for its handler.
+        await page.Find("button.button:not([type=submit])").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
 
         Assert.Contains("wird analysiert", Status(page));
         page.WaitForAssertion(() => Assert.True(material.DocumentCalls > calls), Wait);
@@ -340,7 +341,9 @@ public sealed class TopicsTests : BunitContext
 
         Assert.Contains("Du bist nicht mehr angemeldet.", Status(page));
         Assert.Equal("login?returnUrl=%2Fthemen", page.Find("[role=status] a").GetAttribute("href"));
-        Assert.Empty(page.FindAll("form"));
+        // The form stays, so a text typed but not sent is still there (#218).
+        Assert.Single(page.FindAll("form"));
+        Assert.Empty(page.FindAll(".topic-list"));
     }
 
     // Leaving the page ends the asking.

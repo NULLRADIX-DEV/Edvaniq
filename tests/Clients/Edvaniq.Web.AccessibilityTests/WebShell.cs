@@ -75,9 +75,11 @@ public sealed class WebShell : IAsyncLifetime
     // A page that wants a login, opened by a team member who has signed in. The login goes to the web host from the
     // page's own browser context, so the context keeps the session cookie for the page.
     // A prepare step runs before the page loads, to intercept what the page asks for.
-    public async Task<ShellPage> OpenSignedInAsync(string path, int width, Func<IPage, Task>? prepare = null)
+    // A reloading step runs before a load that broke off gets another go.
+    public async Task<ShellPage> OpenSignedInAsync(string path, int width, Func<IPage, Task>? prepare = null, Action? reloading = null)
     {
         var page = await NewPageAsync(width);
+        page.Reloading += reloading;
         try
         {
             var login = await page.Page.Context.APIRequest.PostAsync(Address + "/session/login", new APIRequestContextOptions

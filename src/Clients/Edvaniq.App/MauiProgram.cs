@@ -38,6 +38,9 @@ public static class MauiProgram
 		builder.Services.AddSingleton<ILearningMaterial>(new HttpLearningMaterial(session));
 		builder.Services.AddSingleton<IQuiz>(new HttpQuiz(session));
 
+		builder.Services.AddSingleton<WindowReturnSignal>();
+		builder.Services.AddSingleton<IReturnSignal>(services => services.GetRequiredService<WindowReturnSignal>());
+
 		builder.Services.AddAuthorizationCore();
 		builder.Services.AddCascadingAuthenticationState();
 		builder.Services.AddScoped<AuthenticationStateProvider, SessionAuthenticationState>();

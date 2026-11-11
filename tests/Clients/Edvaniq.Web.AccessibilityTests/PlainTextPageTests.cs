@@ -31,7 +31,7 @@ public sealed class PlainTextPageTests(WebShell shell)
                 subtopics = new[] { new { id = Id(100 + index), name = text, documentId = Material.DocumentId, position = 100 + index } },
             })];
             await Material.AnswerAsync(browser, documents: [new[] { Material.Document("Failed", All, title: All) }], topics: [topics]);
-        });
+        }, reloading: watch.Reset);
 
         var list = page.Page.Locator(".topic-list");
         await Assertions.Expect(page.Page.Locator(".material-status")).ToContainTextAsync($"Die Analyse von „{All}“ hat nicht geklappt.");
@@ -73,7 +73,7 @@ public sealed class PlainTextPageTests(WebShell shell)
                 responseTimeMs = 1000,
                 answeredAt = DateTime.UtcNow,
             }));
-        });
+        }, reloading: watch.Reset);
 
         await Assertions.Expect(page.Page.Locator("legend")).ToHaveTextAsync(All);
         await Assertions.Expect(page.Page.Locator("h1")).ToHaveTextAsync($"Frage zu „{All}“");
@@ -132,6 +132,20 @@ public sealed class PlainTextPageTests(WebShell shell)
                 {
                     return [.. errors];
                 }
+            }
+        }
+
+        // A load that broke off on the runner's network counts for nothing, only the load that got through does.
+        public void Reset()
+        {
+            lock (dialogs)
+            {
+                dialogs.Clear();
+            }
+
+            lock (errors)
+            {
+                errors.Clear();
             }
         }
 
