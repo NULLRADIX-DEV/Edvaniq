@@ -16,12 +16,16 @@ internal sealed class TopicState(KnowledgeDbContext db) : ITopicState
             .Select(topic => topic.Id)
             .ToListAsync(cancellationToken);
 
-        var pending = db.ChangeTracker.Entries<Topic>()
-            .Where(entry => entry.Entity.OwnerId == ownerId && entry.Entity.LearningGoalId == learningGoalId)
-            .ToList();
-        var deleted = pending.Where(entry => entry.State == EntityState.Deleted).Select(entry => entry.Entity.Id).ToHashSet();
-        var added = pending.Where(entry => entry.State == EntityState.Added).Select(entry => entry.Entity.Id);
+        // The tracker knows what the save will change: topics added, deleted or moved to another goal.
+        var pending = db.ChangeTracker.Entries<Topic>().Where(entry => entry.Entity.OwnerId == ownerId).ToList();
+        var leaving = pending
+            .Where(entry => entry.State == EntityState.Deleted || entry.Entity.LearningGoalId != learningGoalId)
+            .Select(entry => entry.Entity.Id)
+            .ToHashSet();
+        var joining = pending
+            .Where(entry => entry.State != EntityState.Deleted && entry.Entity.LearningGoalId == learningGoalId)
+            .Select(entry => entry.Entity.Id);
 
-        return [.. stored.Concat(added).Distinct().Where(id => !deleted.Contains(id))];
+        return [.. stored.Concat(joining).Distinct().Where(id => !leaving.Contains(id))];
     }
 }

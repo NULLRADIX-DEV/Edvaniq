@@ -24,9 +24,10 @@ public sealed class Document : IOwnedByUser
 
     public const string TopicsMissing = "Die Themen kamen nicht an. Füge den Text später noch einmal ein.";
 
-    private Document(string ownerId, string title, string text, DateTime createdAt)
+    private Document(string ownerId, Guid? learningGoalId, string title, string text, DateTime createdAt)
     {
         OwnerId = ownerId;
+        LearningGoalId = learningGoalId;
         Title = title;
         Text = text;
         CreatedAt = createdAt;
@@ -35,6 +36,10 @@ public sealed class Document : IOwnedByUser
     public Guid Id { get; private set; } = Guid.NewGuid();
 
     public string OwnerId { get; private set; }
+
+    // Planning's learning goal the text was pasted into, only a reference. Null for a document from before the default
+    // goal (#215).
+    public Guid? LearningGoalId { get; private set; }
 
     public string Title { get; private set; }
 
@@ -66,8 +71,8 @@ public sealed class Document : IOwnedByUser
         title?.Trim().Length > TitleMaxLength ? "Der Titel ist zu lang. Erlaubt sind höchstens 80 Zeichen." : null;
 
     // A new document in status Uploaded. Call it only with a text and a title that passed the checks.
-    public static Document Paste(string ownerId, string? title, string text, DateTime createdAt) =>
-        new(ownerId, string.IsNullOrWhiteSpace(title) ? FirstLine(text) : title.Trim(), text, createdAt);
+    public static Document Paste(string ownerId, Guid learningGoalId, string? title, string text, DateTime createdAt) =>
+        new(ownerId, learningGoalId, string.IsNullOrWhiteSpace(title) ? FirstLine(text) : title.Trim(), text, createdAt);
 
     // Cuts the text into sections and moves the document on to the analysis. A text with nothing but white space fails
     // instead and has no sections. Only an uploaded document can be split.

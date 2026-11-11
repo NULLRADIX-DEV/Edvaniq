@@ -16,6 +16,7 @@ Assessment.Mode.MockExam: = 2
 Assessment.Mode.Placement: = 1
 Assessment.Mode.Practice: = 0
 Content.DocumentAnalyzed.DocumentId: Guid
+Content.DocumentAnalyzed.LearningGoalId: Guid?
 Content.DocumentAnalyzed.Topics: IReadOnlyList<TopicSuggestion>
 Content.DocumentAnalyzed.UserId: string
 Content.GeneratedItem.DocumentId: Guid

@@ -7,6 +7,8 @@ public class DocumentTests
 {
     private static readonly DateTime Now = new(2026, 10, 27, 9, 0, 0, DateTimeKind.Utc);
 
+    private static readonly Guid Goal = Guid.NewGuid();
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -47,9 +49,9 @@ public class DocumentTests
     {
         const string text = "\r\n  Photosynthese \r\nLicht wird zu Zucker.  ";
 
-        var document = Document.Paste("alice", "  Biologie  ", text, Now);
+        var document = Document.Paste("alice", Goal, "  Biologie  ", text, Now);
 
-        Assert.Equal("alice", document.OwnerId);
+        Assert.Equal(("alice", Goal), (document.OwnerId, document.LearningGoalId));
         Assert.Equal("Biologie", document.Title);
         Assert.Equal(text, document.Text);
         Assert.Equal(DocumentStatus.Uploaded, document.Status);
@@ -61,12 +63,12 @@ public class DocumentTests
     [InlineData(null)]
     [InlineData("   ")]
     public void PasteWithoutTitle_TakesTheFirstLineWithContent(string? title) =>
-        Assert.Equal("Photosynthese", Document.Paste("alice", title, "\r\n  \r\n  Photosynthese \r\nLicht wird zu Zucker.", Now).Title);
+        Assert.Equal("Photosynthese", Document.Paste("alice", Goal, title, "\r\n  \r\n  Photosynthese \r\nLicht wird zu Zucker.", Now).Title);
 
     [Fact]
     public void Split_GivesSectionsOfTheDocument_AndStartsTheAnalysis()
     {
-        var document = Document.Paste("alice", null, "# Photosynthese\nLicht spaltet Wasser.\n\n# Zellatmung\nZucker wird zu Energie.", Now);
+        var document = Document.Paste("alice", Goal, null, "# Photosynthese\nLicht spaltet Wasser.\n\n# Zellatmung\nZucker wird zu Energie.", Now);
 
         var sections = document.Split();
 
@@ -79,7 +81,7 @@ public class DocumentTests
     [Fact]
     public void Split_OfWhiteSpace_FailsTheDocumentWithAReason()
     {
-        var document = Document.Paste("alice", "Leer", " \r\n ", Now);
+        var document = Document.Paste("alice", Goal, "Leer", " \r\n ", Now);
 
         Assert.Empty(document.Split());
         Assert.Equal(DocumentStatus.Failed, document.Status);
@@ -89,7 +91,7 @@ public class DocumentTests
     [Fact]
     public void Split_Twice_IsRefused()
     {
-        var document = Document.Paste("alice", null, "Licht spaltet Wasser.", Now);
+        var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
         document.Split();
 
         Assert.Throws<InvalidOperationException>(() => document.Split());
@@ -99,7 +101,7 @@ public class DocumentTests
     [Fact]
     public void ReportTopics_KeepsTheDocumentInAnalysis_UntilItsQuestionsAreThere()
     {
-        var document = Document.Paste("alice", null, "Licht spaltet Wasser.", Now);
+        var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
         document.Split();
 
         document.ReportTopics(Now.AddMinutes(1));
@@ -112,7 +114,7 @@ public class DocumentTests
     [Fact]
     public void ReportTopics_Twice_IsRefused()
     {
-        var document = Document.Paste("alice", null, "Licht spaltet Wasser.", Now);
+        var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
         document.Split();
         document.ReportTopics(Now);
 
@@ -122,7 +124,7 @@ public class DocumentTests
     [Fact]
     public void FinishAnalysis_BeforeTheTopicsAreReported_IsRefused()
     {
-        var document = Document.Paste("alice", null, "Licht spaltet Wasser.", Now);
+        var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
         Assert.Throws<InvalidOperationException>(document.FinishAnalysis);
 
         document.Split();
@@ -132,7 +134,7 @@ public class DocumentTests
     [Fact]
     public void Fail_CutsALongReason()
     {
-        var document = Document.Paste("alice", null, "Licht spaltet Wasser.", Now);
+        var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
 
         document.Fail(new string('x', Document.FailureReasonMaxLength + 1));
 
@@ -144,6 +146,6 @@ public class DocumentTests
     {
         var line = new string('a', Document.TitleMaxLength - 1) + " und noch viel mehr";
 
-        Assert.Equal(new string('a', Document.TitleMaxLength - 1), Document.Paste("alice", null, line, Now).Title);
+        Assert.Equal(new string('a', Document.TitleMaxLength - 1), Document.Paste("alice", Goal, null, line, Now).Title);
     }
 }

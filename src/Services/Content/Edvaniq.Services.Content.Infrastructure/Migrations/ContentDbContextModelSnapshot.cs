@@ -100,6 +100,9 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("varchar(200)");
 
+                    b.Property<Guid?>("LearningGoalId")
+                        .HasColumnType("char(36)");
+
                     b.Property<string>("OwnerId")
                         .IsRequired()
                         .HasMaxLength(128)

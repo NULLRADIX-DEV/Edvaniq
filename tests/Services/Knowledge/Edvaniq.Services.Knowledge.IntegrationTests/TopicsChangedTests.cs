@@ -78,6 +78,41 @@ public sealed class TopicsChangedTests(ServiceFactory service) : IClassFixture<S
         }
     }
 
+    // Topics from before the default goal join it with the first analysis that names it, in the save of its own
+    // topics. The event of the old goal names no topic any more, so the receivers drop them there.
+    [Fact]
+    public async Task FirstAnalysisWithAGoal_MovesTheTopicsWithoutOne_AndStoresAnEventForEachGoal()
+    {
+        var alice = NewUser();
+        var goal = Guid.NewGuid();
+        await DeliverAsync(Analysis(alice, "Zelle", "Kern"));
+
+        await DeliverAsync(Analysis(alice, "Genetik") with { LearningGoalId = goal });
+
+        var events = Events(alice);
+        Assert.Equal([Guid.Empty, goal, Guid.Empty], events.Select(changed => changed.LearningGoalId));
+        Assert.Equal(TopicIds(alice).Order(), events[1].TopicIds.Order());
+        Assert.Equal(3, events[1].TopicIds.Count);
+        Assert.Empty(events[2].TopicIds);
+        Assert.Equal([goal], Query(db => db.Topics.IgnoreQueryFilters().Where(topic => topic.OwnerId == alice).Select(topic => topic.LearningGoalId).Distinct().ToList()));
+    }
+
+    [Fact]
+    public async Task SecondAnalysisWithAGoal_MovesNothing_AndStoresOnlyTheEventOfItsGoal()
+    {
+        var alice = NewUser();
+        var goal = Guid.NewGuid();
+        await DeliverAsync(Analysis(alice, "Zelle"));
+        await DeliverAsync(Analysis(alice, "Kern") with { LearningGoalId = goal });
+
+        await DeliverAsync(Analysis(alice, "Genetik") with { LearningGoalId = goal });
+
+        var events = Events(alice);
+        Assert.Equal(4, events.Count);
+        Assert.Equal(goal, events[3].LearningGoalId);
+        Assert.Equal(TopicIds(alice).Order(), events[3].TopicIds.Order());
+    }
+
     [Fact]
     public async Task Rename_StoresOneEvent_WithAllTopicsOfTheGoal()
     {

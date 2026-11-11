@@ -69,17 +69,43 @@ public sealed class TopicFlowTests(FlowServices services)
         }
     }
 
+    // Topics from before the default goal move to it with the first analysis that names it. Every receiver ends with
+    // all topics in that goal, whichever of the two events it handles first.
+    [Fact]
+    public async Task TopicsWithoutAGoal_MoveToTheFirstGoal_AtEveryReceiver()
+    {
+        var carol = NewUser("carol");
+        var goal = Guid.NewGuid();
+        await AnalyseAsync(carol, "Zelle");
+        await WaitForEventsAsync(carol, 1);
+
+        await AnalyseAsync(carol, goal, ["Genetik"]);
+
+        var topics = await WaitForTopicsAsync(carol, 2);
+        var events = await WaitForEventsAsync(carol, 3);
+        Assert.Equal([Guid.Empty, goal, Guid.Empty], events.Select(changed => changed.LearningGoalId));
+        foreach (var receiver in services.Receivers)
+        {
+            await WaitForAsync(
+                () => receiver.Goals(carol) is [var only] && only == goal && receiver.KnownTopics(carol).Count == topics.Count,
+                $"{receiver} did not move the topics to the goal.");
+            Assert.Equal(topics.Order(), receiver.KnownTopics(carol).Order());
+        }
+    }
+
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
 
+    private Task AnalyseAsync(string user, params string[] names) => AnalyseAsync(user, null, names);
+
     // Like Content's dispatcher would: into Content's stream.
-    private async Task AnalyseAsync(string user, params string[] names)
+    private async Task AnalyseAsync(string user, Guid? learningGoalId, string[] names)
     {
         await services.Broker.EnsureStreamAsync(
             new StreamSpec(EventRoute.StreamOf("content"), EventRoute.SubjectsOf("content")),
             TestContext.Current.CancellationToken);
         await PublishAsync(
             EventRoute.For(typeof(DocumentAnalyzed)).Subject,
-            new DocumentAnalyzed(user, Guid.NewGuid(), [.. names.Select(name => new TopicSuggestion(name, null, [Guid.NewGuid()]))]));
+            new DocumentAnalyzed(user, Guid.NewGuid(), [.. names.Select(name => new TopicSuggestion(name, null, [Guid.NewGuid()]))], learningGoalId));
     }
 
     private async Task<Guid> PublishAsync<TEvent>(string subject, TEvent integrationEvent)

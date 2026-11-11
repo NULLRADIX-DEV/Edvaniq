@@ -11,7 +11,7 @@ internal static class DocumentEndpoints
     {
         var documents = app.MapGroup("/documents");
 
-        documents.MapPost("/", async (PastedText request, IDocuments documents, CancellationToken cancellationToken) =>
+        documents.MapPost("/", async (PastedText request, IDefaultLearningGoal goal, IDocuments documents, CancellationToken cancellationToken) =>
         {
             var errors = new Dictionary<string, string[]>();
             if (Document.CheckText(request.Text) is { } text)
@@ -29,7 +29,20 @@ internal static class DocumentEndpoints
                 return Results.ValidationProblem(errors);
             }
 
-            var document = await documents.PasteAsync(request.Title, request.Text!, cancellationToken);
+            // The goal before the save: without Planning nothing is stored, the user just sends the text again.
+            Guid learningGoalId;
+            try
+            {
+                learningGoalId = await goal.IdAsync(cancellationToken);
+            }
+            catch (LearningGoalUnavailableException)
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status503ServiceUnavailable,
+                    title: "Der Text ließ sich gerade nicht speichern. Versuch es gleich noch einmal.");
+            }
+
+            var document = await documents.PasteAsync(learningGoalId, request.Title, request.Text!, cancellationToken);
             return Results.Created($"/documents/{document.Id}", DocumentResponse.From(document));
         });
 

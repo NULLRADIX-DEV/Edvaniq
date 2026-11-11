@@ -12,6 +12,9 @@ public interface IAnalyzedTopics
     // Only adds them to the context, the consumer saves them together with its inbox entry.
     void Add(TopicImport import);
 
+    // The user's topics of the learning goal, tracked, so a change goes out with the next save.
+    Task<IReadOnlyList<Topic>> OfGoalAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken);
+
     // The topics that came from the analysis of the document, in the order of the analysis. A document belongs to one
     // user, so these are that user's topics, whoever asks.
     Task<IReadOnlyList<DocumentTopic>> OfDocumentAsync(Guid documentId, CancellationToken cancellationToken);

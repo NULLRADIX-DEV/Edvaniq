@@ -6,7 +6,7 @@ namespace Edvaniq.Services.Content.Application;
 public interface IDocuments
 {
     // Text and title must have passed Document.CheckText and Document.CheckTitle.
-    Task<Document> PasteAsync(string? title, string text, CancellationToken cancellationToken);
+    Task<Document> PasteAsync(Guid learningGoalId, string? title, string text, CancellationToken cancellationToken);
 
     // Newest first.
     Task<IReadOnlyList<DocumentSummary>> ListAsync(CancellationToken cancellationToken);
