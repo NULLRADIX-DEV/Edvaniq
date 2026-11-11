@@ -191,6 +191,66 @@ public class TodayPlannerTests
         Assert.Empty(enoughTime.Shortened);
     }
 
+    // #374: a topic without a ready question pool can't be practised, so it gets neither learn time nor a review, even
+    // as the weakest, and the plan names it.
+    [Fact]
+    public void TopicWithoutReadyPool_GetsNoBlock_AndIsNamed()
+    {
+        var standings = new Dictionary<Guid, TopicStanding>
+        {
+            [A] = new(10, TopicState.Weakness),
+            [B] = new(60, TopicState.Building),
+            [C] = new(40, TopicState.Building),
+        };
+
+        var plan = TodayPlanner.Plan([A, B, C], standings, Budget, Now, readyTopics: new HashSet<Guid> { B, C });
+
+        Assert.DoesNotContain(plan.Blocks, block => block.TopicId == A);
+        Assert.Equal(30, plan.Blocks.Sum(block => block.Minutes));
+        Assert.Equal([A], plan.NotReady);
+        Assert.Null(plan.Empty);
+    }
+
+    [Fact]
+    public void NoReadyPoolAtAll_GivesAnEmptyPlan_WithTheQuestionsPendingHint()
+    {
+        var plan = TodayPlanner.Plan([B, A], Introduced(new() { [A] = 20, [B] = 30 }), Budget, Now, readyTopics: new HashSet<Guid>());
+
+        Assert.Empty(plan.Blocks);
+        Assert.Equal(TodayPlanEmpty.QuestionsPending, plan.Empty);
+        Assert.Equal([A, B], plan.NotReady);
+    }
+
+    // Unknown pools (Assessment down) plan every topic as before #374.
+    [Fact]
+    public void UnknownPools_PlanEveryTopic_AsBefore()
+    {
+        var standings = Introduced(new() { [A] = 80, [B] = 20, [C] = 0 });
+
+        var unknown = TodayPlanner.Plan([A, B, C], standings, Budget, Now, readyTopics: null);
+        var allReady = TodayPlanner.Plan([A, B, C], standings, Budget, Now, readyTopics: new HashSet<Guid> { A, B, C });
+
+        Assert.Equal(TodayPlanner.Plan([A, B, C], standings, Budget, Now).Blocks, unknown.Blocks);
+        Assert.Equal(unknown.Blocks, allReady.Blocks);
+        Assert.Empty(unknown.NotReady);
+        Assert.Empty(allReady.NotReady);
+    }
+
+    // A pool that isn't ready doesn't take part in shortening: with 4 of 6 topics waiting for questions, the week has
+    // room for the other two, nothing is shortened.
+    [Fact]
+    public void TopicsWithoutReadyPool_DoNotCountWhenShortening()
+    {
+        var ids = Enumerable.Range(1, 6).Select(i => new Guid($"00000000-0000-0000-0000-00000000000{i}")).ToArray();
+        var standings = ids.ToDictionary(id => id, _ => new TopicStanding(50, TopicState.Building));
+
+        var plan = TodayPlanner.Plan(ids, standings, DailyBudget.Uniform(15), Now, readyTopics: new HashSet<Guid> { ids[4], ids[5] });
+
+        Assert.Empty(plan.Shortened);
+        Assert.Equal(ids[..4], plan.NotReady);
+        Assert.All(plan.Blocks, block => Assert.Contains(block.TopicId, ids[4..]));
+    }
+
     private static Dictionary<Guid, TopicStanding> Introduced(Dictionary<Guid, int> masteries) =>
         Standings(TopicState.Building, masteries);
 

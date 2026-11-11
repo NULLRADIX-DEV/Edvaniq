@@ -2,8 +2,8 @@ using Microsoft.Net.Http.Headers;
 
 namespace Edvaniq.Services.Planning.Api;
 
-// Hands the caller's own token on to the LearningEngine client, so LearningEngine answers for that user and nobody
-// else. Only that client gets this handler.
+// Hands the caller's own token on to the LearningEngine and Assessment clients, so they answer for that user and nobody
+// else. Only those two clients get this handler.
 internal sealed class ForwardUserToken(IHttpContextAccessor context) : DelegatingHandler
 {
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
