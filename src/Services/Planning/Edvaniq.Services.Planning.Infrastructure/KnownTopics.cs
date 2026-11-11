@@ -19,6 +19,13 @@ internal sealed class KnownTopics(PlanningDbContext db) : IKnownTopics
             .Where(topic => topic.OwnerId == ownerId && (topic.LearningGoalId == learningGoalId || topicIds.Contains(topic.TopicId)))
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Guid>> ActiveAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
+        await db.KnownTopics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId && !topic.Hidden)
+            .OrderBy(topic => topic.TopicId)
+            .Select(topic => topic.TopicId)
+            .ToListAsync(cancellationToken);
+
     public void Add(TopicsSnapshot snapshot) => db.TopicsSnapshots.Add(snapshot);
 
     public void Add(KnownTopic topic) => db.KnownTopics.Add(topic);

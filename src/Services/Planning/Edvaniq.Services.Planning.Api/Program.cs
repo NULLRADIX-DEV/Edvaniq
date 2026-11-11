@@ -1,6 +1,7 @@
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Web;
 using Edvaniq.Services.Planning.Api;
+using Edvaniq.Services.Planning.Application;
 using Edvaniq.Services.Planning.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,6 +9,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 builder.AddTokenValidation();
 builder.AddInfrastructure();
+
+// LearningEngine gives the mastery for the plan, asked with the caller's own token.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddTransient<ForwardUserToken>();
+builder.Services.AddHttpClient<IMasterySource, LearningEngineMastery>(client => client.BaseAddress = LearningEngineMastery.Address)
+    .AddHttpMessageHandler<ForwardUserToken>();
 
 var app = builder.Build();
 
@@ -30,6 +37,7 @@ app.UseAuthorization();
 app.MapGet("/me", (ICurrentUser user) => new { user.Id });
 app.MapPingEndpoints();
 app.MapLearningGoalEndpoints();
+app.MapPlanEndpoints();
 app.MapExampleEndpoints();
 
 app.Run();
