@@ -63,7 +63,7 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
     private static async Task<Item> CreateAsync(HttpClient client, string text)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        using var response = await client.PostAsJsonAsync("/documents", new { text }, cancellationToken);
+        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Note(text) }, cancellationToken);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         return (await response.Content.ReadFromJsonAsync<Item>(cancellationToken))!;

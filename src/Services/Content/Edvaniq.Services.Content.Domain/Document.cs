@@ -60,11 +60,45 @@ public sealed class Document : IOwnedByUser
     // The topics are reported, the question pool is what's left before the document is ready.
     public bool WaitsForQuestions => Status == DocumentStatus.Analyzing && AnalyzedAt is not null;
 
+    // A word counts from this many letters in a row, so page numbers and stray marks from a scan don't.
+    public const int WordMinLetters = 3;
+
+    // Below this many words there's nothing the analysis could learn from (docs/spec/acceptance.md, MVP4).
+    public const int MinWords = 8;
+
+    public const string TooFewWords =
+        "Der Text enthält zu wenig lesbaren Inhalt, etwa weil er aus einem Scan stammt. Füge einen Text mit ganzen Sätzen ein, zum Beispiel aus einer Textversion des Materials.";
+
     // Why the text can't become a document, or null if it can. The client shows the message as it is.
     public static string? CheckText(string? text) =>
         string.IsNullOrWhiteSpace(text) ? "Der Text ist leer. Füge den Text ein, aus dem du lernen willst."
         : text.Length > TextMaxLength ? "Der Text ist zu lang. Erlaubt sind höchstens 200.000 Zeichen."
+        : !HasEnoughWords(text) ? TooFewWords
         : null;
+
+    // Counts runs of letters, digits and marks end a run. Stops as soon as there are enough.
+    public static bool HasEnoughWords(string text)
+    {
+        var words = 0;
+        var run = 0;
+        foreach (var c in text)
+        {
+            if (char.IsLetter(c))
+            {
+                run++;
+                continue;
+            }
+
+            if (run >= WordMinLetters && ++words >= MinWords)
+            {
+                return true;
+            }
+
+            run = 0;
+        }
+
+        return run >= WordMinLetters && words + 1 >= MinWords;
+    }
 
     // Why the title can't stay, or null if it can. No title is fine, Paste takes one from the text.
     public static string? CheckTitle(string? title) =>

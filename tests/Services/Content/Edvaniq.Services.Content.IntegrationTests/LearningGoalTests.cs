@@ -34,7 +34,7 @@ public sealed class LearningGoalTests(ServiceFactory service) : IClassFixture<Se
         var alice = $"alice-{Guid.NewGuid():N}";
         var token = TestTokens.Create(alice);
         using var client = service.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/documents") { Content = JsonContent.Create(new { text = "Licht wird zu Zucker." }) };
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/documents") { Content = JsonContent.Create(new { text = TestTexts.Lesson }) };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Headers.Add("Cookie", "__Host-edvaniq-session=secret");
         request.Headers.Add("X-Forwarded-For", "203.0.113.7");
@@ -72,7 +72,7 @@ public sealed class LearningGoalTests(ServiceFactory service) : IClassFixture<Se
         service.Planning.Down(alice, status);
         using var client = ClientFor(alice);
 
-        using var response = await client.PostAsJsonAsync("/documents", new { text = "Licht wird zu Zucker." }, TestContext.Current.CancellationToken);
+        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson }, TestContext.Current.CancellationToken);
 
         await AssertUnavailableAsync(response);
         Assert.Empty(await StoredAsync(alice));
@@ -87,7 +87,7 @@ public sealed class LearningGoalTests(ServiceFactory service) : IClassFixture<Se
         using var client = ClientFor(alice);
         var watch = Stopwatch.StartNew();
 
-        using var response = await client.PostAsJsonAsync("/documents", new { text = "Licht wird zu Zucker." }, TestContext.Current.CancellationToken);
+        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson }, TestContext.Current.CancellationToken);
 
         watch.Stop();
         await AssertUnavailableAsync(response);
@@ -105,7 +105,7 @@ public sealed class LearningGoalTests(ServiceFactory service) : IClassFixture<Se
 
     private static async Task<Guid> PasteAsync(HttpClient client)
     {
-        using var response = await client.PostAsJsonAsync("/documents", new { text = "Licht wird zu Zucker." }, TestContext.Current.CancellationToken);
+        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("id").GetGuid();
     }

@@ -18,7 +18,25 @@ public class DocumentTests
 
     [Fact]
     public void TextAtTheLimit_IsAccepted() =>
-        Assert.Null(Document.CheckText(new string('a', Document.TextMaxLength)));
+        Assert.Null(Document.CheckText(string.Concat(Enumerable.Repeat("Wort ", Document.TextMaxLength / 5))));
+
+    [Theory]
+    [InlineData("- 1 -\n\n  .   ,    '   .\n |  .  _   ,   ~  .\n\n- 2 -")]
+    [InlineData("12 34 56 78 90 12 34 56 78 90 = + - * / % 3,14")]
+    [InlineData("ab cd ef gh ij kl mn op qr st uv wx yz")]
+    [InlineData("Licht spaltet Wasser, dabei entsteht Sauerstoff und")]
+    public void TextWithTooFewRealWords_IsRejectedWithTheNextStep(string text) =>
+        Assert.Equal(
+            "Der Text enthält zu wenig lesbaren Inhalt, etwa weil er aus einem Scan stammt. Füge einen Text mit ganzen Sätzen ein, zum Beispiel aus einer Textversion des Materials.",
+            Document.CheckText(text));
+
+    [Theory]
+    [InlineData("Licht spaltet Wasser, dabei entsteht Sauerstoff und Zucker")]
+    [InlineData("Ein Atom ist der kleinste Baustein eines Elements. Es besteht aus Kern und Hülle. Im Kern liegen Protonen und Neutronen.")]
+    [InlineData("Säure: CO2, H2O, pH 7, NaCl, HCl, H2SO4, OH-, H3O+, c = n/V, pH = -lg c(H3O+).\nEine Säure gibt Protonen ab. Eine Base nimmt sie auf.")]
+    [InlineData("Größe Übung Ärger Öl-Spur Maß Straße Süße Tür")]
+    public void ShortTextWithRealWords_IsAccepted(string text) =>
+        Assert.Null(Document.CheckText(text));
 
     [Fact]
     public void TextOverTheLimit_IsRejected() =>
