@@ -407,3 +407,6 @@ FodyWeavers.xsd
 secrets/
 *.key
 *.pem
+
+# Uploaded files of a local run (AppHost)
+src/Aspire/Edvaniq.AppHost/.data/

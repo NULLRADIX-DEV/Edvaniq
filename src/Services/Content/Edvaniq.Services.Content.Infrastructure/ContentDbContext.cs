@@ -21,6 +21,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
     public DbSet<AiUsageDay> AiUsageDays => Set<AiUsageDay>();
 
+    public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         var document = modelBuilder.Entity<Document>();
@@ -64,5 +66,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         day.Property(item => item.Model).HasMaxLength(AiAttempt.ModelMaxLength);
         day.Property(item => item.PromptVersion).HasMaxLength(AiAttempt.PromptVersionMaxLength);
         day.Property(item => item.Cost).HasPrecision(18, 10);
+
+        // The id names the bytes in the file store, so the code that wrote them sets it.
+        modelBuilder.Entity<StoredFile>().Property(item => item.Id).ValueGeneratedNever();
     }
 }

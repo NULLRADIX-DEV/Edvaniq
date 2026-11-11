@@ -211,9 +211,12 @@ services:
   content-api:
     <<: *content
     image: ghcr.io/nullradix-dev/edvaniq/content-api:sha-${APP_COMMIT:?}
+    volumes:
+      - ./data/content-files:/files
     environment:
       <<: *messaging-environment
       services__planning-api__http__0: http://planning-api:8080
+      FileStorage__Directory: /files
   content-migrate:
     <<: *content
     image: ghcr.io/nullradix-dev/edvaniq/content-api:sha-${APP_COMMIT:?}
@@ -285,10 +288,13 @@ services:
       - path: content-worker.env
         required: true
     networks: [inner, data, egress]
+    volumes:
+      - ./data/content-files:/files:ro
     environment:
       <<: *messaging-environment
       services__identity-api__http__0: http://identity-api:8080
       services__knowledge-api__http__0: http://knowledge-api:8080
+      FileStorage__Directory: /files
     healthcheck:
       disable: true
   notifications-worker:

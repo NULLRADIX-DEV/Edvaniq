@@ -67,7 +67,11 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
                 services.AddHttpClient<IDefaultLearningGoal, ContentInfra.PlanningLearningGoals>()
                     .ConfigurePrimaryHttpMessageHandler(() => planningHost.Server.CreateHandler());
             },
-            new() { ["services:planning-api:http:0"] = "http://planning-api" });
+            new()
+            {
+                ["services:planning-api:http:0"] = "http://planning-api",
+                ["FileStorage:Directory"] = Path.Combine(Path.GetTempPath(), "edvaniq-flow-files", Guid.NewGuid().ToString("N")),
+            });
         Planning = planningHost;
         var learningEngineHost = await StartAsync<learningengine::Program, LearningEngineInfra.LearningEngineDbContext>(LearningEngineInfra.InfrastructureExtensions.DatabaseName);
         learningEngine = learningEngineHost;
