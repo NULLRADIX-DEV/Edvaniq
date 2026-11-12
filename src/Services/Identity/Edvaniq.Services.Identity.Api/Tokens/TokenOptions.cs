@@ -21,6 +21,9 @@ internal sealed class TokenOptions
     // A P-256 private key, PKCS#8 in Base64.
     public string SigningKey { get; set; } = "";
 
+    // Only while the key is changed: the key before, in the same form. Its public half stays in the key set.
+    public string? PreviousSigningKey { get; set; }
+
     // The clients by id: web, the web host, and content, Content's worker asking Knowledge.
     public Dictionary<string, TokenClient> Clients { get; set; } = new(StringComparer.Ordinal);
 }
@@ -73,6 +76,31 @@ internal sealed class TokenOptionsValidation : IValidateOptions<TokenOptions>
         else
         {
             failures.Add("Tokens:SigningKey must be a P-256 private key, PKCS#8 in Base64.");
+        }
+
+        if (!string.IsNullOrEmpty(options.PreviousSigningKey))
+        {
+            if (!SigningKey.TryLoad(options.PreviousSigningKey, out var previous))
+            {
+                failures.Add("Tokens:PreviousSigningKey must be a P-256 private key, PKCS#8 in Base64.");
+            }
+            else
+            {
+                using (previous)
+                {
+                    // The same key twice would leave the key set with one kid twice, and the change undone.
+                    if (SigningKey.TryLoad(options.SigningKey, out var current))
+                    {
+                        using (current)
+                        {
+                            if (SigningKey.PublicKeyOf(current).Kid == SigningKey.PublicKeyOf(previous).Kid)
+                            {
+                                failures.Add("Tokens:PreviousSigningKey is the same key as Tokens:SigningKey.");
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         if (options.Clients.Count == 0)

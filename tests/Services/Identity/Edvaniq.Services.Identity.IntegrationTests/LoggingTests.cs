@@ -19,18 +19,20 @@ public sealed class LoggingTests(IdentityDatabase database) : IClassFixture<Iden
     public async Task TokenRequests_LogNoSecret()
     {
         var signingKey = IdentityFactory.NewSigningKey();
+        var previousKey = IdentityFactory.NewSigningKey();
         var wrongSecret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         await using var identity = new IdentityFactory(new Dictionary<string, string?>
         {
             [WebHostDefaults.EnvironmentKey] = Environments.Production,
             ["Tokens:SigningKey"] = signingKey,
+            ["Tokens:PreviousSigningKey"] = previousKey,
         });
 
         var token = await identity.GetTokenAsync();
         using var rejected = await identity.RequestTokenAsync(clientSecret: wrongSecret);
 
         Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
-        Assert.Empty(identity.Logs.Containing(identity.ClientSecret, wrongSecret, signingKey, token));
+        Assert.Empty(identity.Logs.Containing(identity.ClientSecret, wrongSecret, signingKey, previousKey, token));
     }
 
     // Setting up the account, a login, a wrong password and a throttled one, as on the server.

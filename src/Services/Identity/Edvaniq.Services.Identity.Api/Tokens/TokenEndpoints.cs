@@ -48,7 +48,7 @@ internal static class TokenEndpoints
                 ["client_secret_post"]);
         }).AllowAnonymous();
 
-        app.MapGet(KeySetPath, (SigningKey key) => new KeySet([key.PublicKey])).AllowAnonymous();
+        app.MapGet(KeySetPath, (SigningKey key) => new KeySet(key.PublicKeys)).AllowAnonymous();
 
         app.MapPost(TokenPath, IssueAsync).AllowAnonymous();
 
