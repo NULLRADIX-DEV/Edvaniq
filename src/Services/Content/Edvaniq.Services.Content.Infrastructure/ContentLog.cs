@@ -70,4 +70,7 @@ internal static partial class ContentLog
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Read {Pages} pages and {Characters} characters from the file of document {DocumentId} in {DurationMs} ms")]
     public static partial void FileRead(ILogger logger, Guid documentId, int pages, int characters, long durationMs);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Topic {TopicId} has no material in document {DocumentId}, it gets no questions from it")]
+    public static partial void TopicWithoutMaterial(ILogger logger, Guid topicId, Guid documentId);
 }

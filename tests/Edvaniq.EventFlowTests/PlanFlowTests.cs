@@ -137,9 +137,10 @@ public sealed class PlanFlowTests(FlowServices services) : IDisposable
         var topics = services.QueryKnowledge(db => db.Topics.IgnoreQueryFilters()
             .Where(topic => topic.DocumentId == documentId).Select(topic => topic.Id).ToList());
         Assert.NotEmpty(topics);
-        await WaitForAsync(
+        await FlowServices.WaitForAsync(
             () => Task.FromResult(QuestionTopics(user).Count == topics.Count),
-            "Assessment did not take the questions of every topic over.");
+            () => $"Assessment did not take the questions of every topic over. {services.QuestionsOf(documentId, user)}",
+            Timeout);
         foreach (var receiver in services.Receivers)
         {
             await WaitForAsync(

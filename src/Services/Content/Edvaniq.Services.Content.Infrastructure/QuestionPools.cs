@@ -143,6 +143,7 @@ public sealed class QuestionPools(
             var material = SectionsOf(topics, topic, texts);
             if (material.Count == 0)
             {
+                ContentLog.TopicWithoutMaterial(logger, topic.Id, documentId);
                 continue;
             }
 

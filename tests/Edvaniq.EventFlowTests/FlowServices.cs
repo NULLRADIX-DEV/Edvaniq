@@ -120,6 +120,47 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
 
     public T QueryLearningEngine<T>(Func<LearningEngineInfra.LearningEngineDbContext, T> query) => Query(LearningEngine.Services, query);
 
+    // Waits like the tests do, but works the message out only when the time is up, so it shows the state at the end.
+    public static async Task WaitForAsync(Func<Task<bool>> condition, Func<string> because, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!await condition())
+        {
+            if (DateTime.UtcNow >= deadline)
+            {
+                Assert.Fail(because());
+            }
+
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+        }
+    }
+
+    // Where the questions of a document got stuck, topic by topic: its sections in Knowledge (here and in all), the pool
+    // in Content, the questions and the known topic in Assessment. For the message of a wait that ran out.
+    public string QuestionsOf(Guid documentId, string user)
+    {
+        var status = QueryContent(db => db.Documents.IgnoreQueryFilters()
+            .Where(document => document.Id == documentId).Select(document => document.Status.ToString()).FirstOrDefault()) ?? "missing";
+        var topics = QueryKnowledge(db => db.Topics.IgnoreQueryFilters()
+            .Where(topic => topic.DocumentId == documentId).Select(topic => new { topic.Id, topic.ParentId }).ToList());
+        var ids = topics.Select(topic => topic.Id).ToList();
+        var sections = QueryKnowledge(db => db.TopicSections.IgnoreQueryFilters()
+            .Where(section => ids.Contains(section.TopicId)).Select(section => new { section.TopicId, section.DocumentId }).ToList());
+        var pools = QueryContent(db => db.QuestionPools.IgnoreQueryFilters()
+            .Where(pool => ids.Contains(pool.TopicId)).Select(pool => pool.TopicId).ToList());
+        var questions = QueryAssessment(db => db.Questions.IgnoreQueryFilters()
+            .Where(question => question.OwnerId == user && question.TopicId != null).Select(question => question.TopicId!.Value).ToList());
+        var known = QueryAssessment(db => db.KnownTopics.IgnoreQueryFilters()
+            .Where(topic => topic.OwnerId == user).Select(topic => topic.TopicId).ToList());
+        var lines = topics.Select(topic =>
+            $"topic {topic.Id} parent {topic.ParentId?.ToString() ?? "-"}: "
+            + $"sections here {sections.Count(section => section.TopicId == topic.Id && section.DocumentId == documentId)} "
+            + $"of {sections.Count(section => section.TopicId == topic.Id)}, pool {pools.Contains(topic.Id)}, "
+            + $"questions {questions.Count(question => question == topic.Id)}, known in Assessment {known.Contains(topic.Id)}");
+        return $"Document {documentId} is {status}, {topics.Count} topics in Knowledge:{Environment.NewLine}"
+            + string.Join(Environment.NewLine, lines);
+    }
+
     private async Task<WebApplicationFactory<TEntryPoint>> StartAsync<TEntryPoint, TContext>(
         string database, Action<IServiceCollection>? services = null, Dictionary<string, string>? settings = null)
         where TEntryPoint : class
