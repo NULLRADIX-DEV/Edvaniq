@@ -13,7 +13,7 @@ internal sealed class TopicState(KnowledgeDbContext db) : ITopicState
     {
         var stored = await db.Topics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId)
-            .Select(topic => new TopicInState(topic.Id, topic.ParentId))
+            .Select(topic => new TopicInState(topic.Id, topic.ParentId, topic.Hidden))
             .ToListAsync(cancellationToken);
 
         // The tracker knows what the save will change: topics added, deleted, moved to another goal or hung under another
@@ -25,7 +25,7 @@ internal sealed class TopicState(KnowledgeDbContext db) : ITopicState
             .ToHashSet();
         var joining = pending
             .Where(entry => entry.State != EntityState.Deleted && entry.Entity.LearningGoalId == learningGoalId)
-            .Select(entry => new TopicInState(entry.Entity.Id, entry.Entity.ParentId));
+            .Select(entry => new TopicInState(entry.Entity.Id, entry.Entity.ParentId, entry.Entity.Hidden));
 
         return [.. joining.Concat(stored).DistinctBy(topic => topic.Id).Where(topic => !leaving.Contains(topic.Id))];
     }

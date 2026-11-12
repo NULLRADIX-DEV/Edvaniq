@@ -47,6 +47,10 @@ public sealed class Topic : IOwnedByUser
     // The place in the analysis, keeps its order among topics created at the same time.
     public int Position { get; private set; }
 
+    // Hidden by the user, Show brings it back. Only the topic's own state: a subtopic of a hidden topic is hidden too,
+    // whatever it says here, and comes back in its own state when the topic does (IsHiddenUnder).
+    public bool Hidden { get; private set; }
+
     public bool IsSubtopic => ParentId is not null;
 
     // Why the name can't stay, or null if it can. The client shows the message as it is.
@@ -78,6 +82,13 @@ public sealed class Topic : IOwnedByUser
 
     // Call it only with a name that passed CheckName.
     public void Rename(string name) => Name = name.Trim();
+
+    public void Hide() => Hidden = true;
+
+    public void Show() => Hidden = false;
+
+    // Whether the user sees the topic: its own state, and for a subtopic also that of parent, its topic.
+    public bool IsHiddenUnder(Topic? parent) => Hidden || (parent is { Hidden: true } && parent.Id == ParentId);
 
     // The topic goes to another learning goal and keeps its id, so whatever points to it stays valid.
     public void MoveTo(Guid learningGoalId) => LearningGoalId = learningGoalId;

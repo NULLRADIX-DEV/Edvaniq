@@ -209,5 +209,32 @@ public class TopicImportTests
     private static TopicSuggestion[] Cell() =>
         [new("Zelle", null, [Guid.NewGuid()]), new("Zellkern", 0, [Guid.NewGuid(), Guid.NewGuid()])];
 
+    // A hidden topic stays hidden when an analysis brings it again: it only gets the sections, nothing new appears.
+    [Fact]
+    public void HiddenTopic_TakesTheSections_AndNoNewTopicComes()
+    {
+        var hidden = Topic.Create("alice", Goal, "Zelle", Now);
+        hidden.Hide();
+        var section = Guid.NewGuid();
+
+        var import = TopicImport.From(Analysis(new TopicSuggestion("Zelle", null, [section])), Goal, Now, [hidden]);
+
+        Assert.Empty(import.Topics);
+        Assert.Equal((hidden.Id, section), (Assert.Single(import.Sections).TopicId, import.Sections[0].SectionId));
+        Assert.True(hidden.Hidden);
+    }
+
+    // A topic the user added is found by its name like one from an analysis.
+    [Fact]
+    public void AddedTopic_IsFoundByItsName()
+    {
+        var added = Topic.Create("alice", Goal, "Zelle", Now);
+
+        var import = TopicImport.From(Analysis(new TopicSuggestion(" zelle ", null, [Guid.NewGuid()])), Goal, Now, [added]);
+
+        Assert.Empty(import.Topics);
+        Assert.Equal(added.Id, Assert.Single(import.Sections).TopicId);
+    }
+
     private static DocumentAnalyzed Analysis(params TopicSuggestion[] topics) => new("alice", Guid.NewGuid(), topics);
 }
