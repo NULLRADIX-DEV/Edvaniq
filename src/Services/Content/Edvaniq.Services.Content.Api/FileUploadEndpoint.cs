@@ -143,7 +143,7 @@ internal static class FileUploadEndpoint
         }
 
         await using var content = await files.OpenAsync(stored.Id, cancellationToken);
-        return content is not null && FileCheck.Matches(content, format) ? null : FileCheck.Mismatch;
+        return content is null ? FileCheck.Mismatch : FileCheck.Refusal(content, format);
     }
 
     private static IResult TooLarge() =>

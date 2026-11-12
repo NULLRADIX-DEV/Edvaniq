@@ -29,9 +29,24 @@ public static class FileCheck
 
     public const string Empty = "Die Datei ist leer. Lade eine Datei mit Inhalt hoch.";
 
+    // A Word file with a password is no zip but an old compound file, as a .doc is. Either way it can't be read.
+    public const string Protected =
+        "Die Datei ist mit einem Passwort geschützt oder im alten Word-Format. Entferne den Schutz oder speichere sie als .docx und lade sie noch einmal hoch.";
+
+    public const string PdfProtected =
+        "Die Datei ist mit einem Passwort geschützt. Entferne den Schutz und lade sie noch einmal hoch.";
+
+    public const string PackedTooTightly =
+        "Die Datei lässt sich nicht lesen, weil sie ungewöhnlich stark gepackt ist. Speichere sie neu, zum Beispiel als PDF, und lade sie noch einmal hoch.";
+
+    public const string TakesTooLong =
+        "Die Datei braucht zu lange zum Lesen. Teile sie in kleinere Dateien auf und lade sie einzeln hoch.";
+
     private static readonly byte[] PdfMagic = "%PDF-"u8.ToArray();
 
     private static readonly byte[] ZipMagic = [0x50, 0x4B, 0x03, 0x04];
+
+    private static readonly byte[] CompoundMagic = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
 
     // The format the name claims, or null for anything else.
     public static FileFormat? FormatOf(string? fileName) =>
@@ -43,6 +58,18 @@ public static class FileCheck
             ".md" or ".markdown" => FileFormat.Markdown,
             _ => null,
         };
+
+    // Why the content can't be taken as the format, or null if it can. Needs a stream it can seek in.
+    public static string? Refusal(Stream content, FileFormat format)
+    {
+        if (Matches(content, format))
+        {
+            return null;
+        }
+
+        content.Position = 0;
+        return format == FileFormat.Docx && StartsWith(content, CompoundMagic) ? Protected : Mismatch;
+    }
 
     // Whether the content is really of the format. Needs a stream it can seek in, reads it from the start.
     public static bool Matches(Stream content, FileFormat format)

@@ -24,6 +24,31 @@ public sealed class FileStore
 
     public string Root { get; }
 
+    // Read and write for the owner only, never executable. API and worker run as the same user, the worker reads through
+    // a mount it can't write to. Windows has no such modes.
+    public static UnixFileMode Mode => UnixFileMode.UserRead | UnixFileMode.UserWrite;
+
+    private static FileStreamOptions WriteOptions
+    {
+        get
+        {
+            var options = new FileStreamOptions
+            {
+                Mode = FileMode.CreateNew,
+                Access = FileAccess.Write,
+                Share = FileShare.None,
+                BufferSize = 81920,
+                Options = FileOptions.Asynchronous,
+            };
+            if (!OperatingSystem.IsWindows())
+            {
+                options.UnixCreateMode = Mode;
+            }
+
+            return options;
+        }
+    }
+
     public string PathOf(Guid id) => PathIn(Root, id.ToString("N"));
 
     // The full path of the name in the root, or an exception if it would end up anywhere else.
@@ -47,7 +72,7 @@ public sealed class FileStore
         try
         {
             long length;
-            await using (var file = new FileStream(part, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, FileOptions.Asynchronous))
+            await using (var file = new FileStream(part, WriteOptions))
             {
                 await content.CopyToAsync(file, cancellationToken);
                 await file.FlushAsync(cancellationToken);

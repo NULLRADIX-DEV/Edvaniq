@@ -53,6 +53,20 @@ public sealed class FileCheckTests
     public void Utf8Text_WithByteOrderMark_Matches() =>
         Assert.True(FileCheck.Matches(Bytes([.. Encoding.UTF8.GetPreamble(), .. "Text"u8.ToArray()]), FileFormat.Text));
 
+    // #318: a Word file with a password, or an old .doc renamed, is a compound file. The user learns what to do about it.
+    [Fact]
+    public void CompoundFileAsDocx_IsRefusedAsProtected() =>
+        Assert.Equal(FileCheck.Protected, FileCheck.Refusal(Bytes([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, .. new byte[504]]), FileFormat.Docx));
+
+    // A real PDF marks itself as binary in its second line.
+    [Fact]
+    public void PdfNamedAsText_IsRefusedAsMismatch() =>
+        Assert.Equal(FileCheck.Mismatch, FileCheck.Refusal(Bytes([.. "%PDF-1.7\n%"u8.ToArray(), 0xE2, 0xE3, 0xCF, 0xD3, (byte)'\n']), FileFormat.Text));
+
+    [Fact]
+    public void MatchingFile_IsNotRefused() =>
+        Assert.Null(FileCheck.Refusal(Zip("word/document.xml"), FileFormat.Docx));
+
     // A text longer than one read of the checker, with the bad byte at the end.
     [Fact]
     public void LongText_WithABinaryByteAtTheEnd_DoesNotMatch() =>
