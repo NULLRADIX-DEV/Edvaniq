@@ -130,7 +130,8 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
             () => service.Logs.Entries.Any(entry => entry.Message == $"Consumer {Consumer} has handled message {messageId}" && entry.TraceId == traceId),
             "No log line says with the TraceId of the request that the deletion was handled.");
         Assert.Equal(1, InboxEntries(messageId));
-        Assert.Contains(service.Logs.Entries, entry => entry.Message == "Rows of a deleted user to remove: 1" && entry.TraceId == traceId);
+        // The topic and the TopicSet of its learning goal.
+        Assert.Contains(service.Logs.Entries, entry => entry.Message == "Rows of a deleted user to remove: 2" && entry.TraceId == traceId);
     }
 
     // #953: once the deletion is through, a token issued before it is turned away like an invalid one. Others still work.
