@@ -46,7 +46,15 @@ public sealed class DocumentDeletionTests(ServiceFactory service) : IClassFixtur
         Assert.Equal(before + 1, changes.Count);
         Assert.Equal(goal, changes[^1].LearningGoalId);
         Assert.Equal(2, changes[^1].TopicIds.Count);
+
+        // #380: Zellatmung had a section in both documents, now only that of the one kept.
+        var zellatmung = IdOf(alice, "Zellatmung");
+        Assert.Equal(2, changes[before - 1].Topics!.Single(facts => facts.TopicId == zellatmung).Sections);
+        Assert.Equal([1, 1], changes[^1].Topics!.Select(facts => facts.Sections));
     }
+
+    private Guid IdOf(string user, string name) =>
+        Query(db => db.Topics.IgnoreQueryFilters().Single(topic => topic.OwnerId == user && topic.Name == name).Id);
 
     [Fact]
     public async Task OtherUsersAndDocuments_KeepTheirTopics()

@@ -12,5 +12,7 @@ public interface ITopicState
 }
 
 // ParentId is the topic of the upper level, null for a topic of the upper level itself. Hidden is the topic's own state
-// (Topic.Hidden), not the one it gets from its parent.
-public sealed record TopicInState(Guid Id, Guid? ParentId, bool Hidden = false);
+// (Topic.Hidden), not the one it gets from its parent. CreatedAt, Position and Name give the order of the material as the
+// topic list shows it, Sections counts the sections of the topic, also those about to be added or deleted (#380).
+public sealed record TopicInState(
+    Guid Id, Guid? ParentId, bool Hidden = false, DateTime CreatedAt = default, int Position = 0, string Name = "", int Sections = 0);
