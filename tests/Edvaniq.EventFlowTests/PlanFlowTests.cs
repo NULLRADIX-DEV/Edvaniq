@@ -15,6 +15,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
+using PlanningDomain = Edvaniq.Services.Planning.Domain;
+using PlanningInfra = Edvaniq.Services.Planning.Infrastructure;
+
 namespace Edvaniq.EventFlowTests;
 
 // #211: an answer changes today's plan. Assessment grades it and sends AnswerRecorded, LearningEngine stores the
@@ -107,7 +110,140 @@ public sealed class PlanFlowTests(FlowServices services) : IDisposable
         Assert.True(median < TimeSpan.FromSeconds(5), $"Median {median.TotalMilliseconds:F0} ms, Q4 allows 5000 ms.");
     }
 
+    // #378, A46, Q3: the demo session. A session on the first learn block, every quiz answer right, then finished in
+    // Planning. Once LearningEngine has the answers (they arrive late, through the broker) A's mastery has risen, the
+    // block is done, and today's plan follows the new mastery: A has less learn time today, or the planner's own rule
+    // gives A the same time with the old and the new mastery (then the plan confirms it). Each recomputation takes under
+    // 2 s. The known flake point ("Assessment did not take the questions of every topic over", Manager 1's notes) sits
+    // in TopicsWithQuestionsAsync, shared with the tests above.
+    [Fact(Timeout = 180_000)]
+    public async Task DemoSession_ReplansTheRest_InUnderTwoSeconds()
+    {
+        var carol = $"carol-{Guid.NewGuid():N}";
+        var token = TestTokens.Create(carol);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await TopicsWithQuestionsAsync(token, carol);
+        var goal = PlanningDomain.LearningGoal.DefaultIdFor(carol);
+        using var planning = Client(services.Planning.CreateClient(), token);
+        using var learningEngine = Client(services.LearningEngine.CreateClient(), token);
+
+        var before = await PlanWithIdsAsync(planning, cancellationToken);
+        var block = before.Blocks.First(entry => entry.Kind == "learn");
+        var standingsBefore = await StandingsAsync(learningEngine, goal, cancellationToken);
+
+        var session = await SendAsync(planning, "/sessions", new { blockId = block.Id }, HttpStatusCode.Created, cancellationToken);
+        var sessionId = session.GetProperty("id").GetGuid();
+        await SendAsync(planning, $"/sessions/{sessionId}/advance", new { step = session.GetProperty("steps").GetArrayLength() - 1 }, HttpStatusCode.OK, cancellationToken);
+        var last = await AnswerCheckQuestionsRightAsync(token, block.TopicId, sessionId, cancellationToken);
+
+        await SendAsync(planning, $"/sessions/{sessionId}/complete", new { }, HttpStatusCode.OK, cancellationToken);
+
+        // Late on purpose: the plan is only checked once LearningEngine has the last answer, and A has to have risen.
+        await WaitForAsync(async () => await LastAnswerAsync(learningEngine, block.TopicId, cancellationToken) == last, "LearningEngine never got the answers.");
+        var standingsAfter = await StandingsAsync(learningEngine, goal, cancellationToken);
+        Assert.True(
+            standingsAfter[block.TopicId].Mastery > standingsBefore[block.TopicId].Mastery,
+            $"A's mastery went from {standingsBefore[block.TopicId].Mastery} to {standingsAfter[block.TopicId].Mastery}.");
+
+        var times = new List<TimeSpan>();
+        Plan after = null!;
+        for (var call = 0; call < 5; call++)
+        {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            after = await PlanWithIdsAsync(planning, cancellationToken);
+            times.Add(watch.Elapsed);
+        }
+
+        Assert.True(after.Blocks.Single(entry => entry.Id == block.Id).Done);
+        var measured = string.Join(", ", times.Select(time => $"{time.TotalMilliseconds:F0}"));
+        Assert.True(times.Max() < TimeSpan.FromSeconds(2), $"Q3 allows 2000 ms per recomputation, measured {measured} ms.");
+
+        var learnBefore = LearnMinutes(before, block.TopicId);
+        var learnAfter = LearnMinutes(after, block.TopicId);
+        if (learnAfter >= learnBefore)
+        {
+            // Confirmed only if the planner, with everything else as it is now, gives A the same time at its old mastery.
+            var budget = await BudgetAsync(planning, cancellationToken);
+            var foundations = services.QueryPlanning(db => db.KnownTopics.IgnoreQueryFilters()
+                .Where(topic => topic.OwnerId == carol && topic.IsFoundation).Select(topic => topic.TopicId).ToHashSet());
+            var withOld = new Dictionary<Guid, PlanningDomain.TopicStanding>(standingsAfter) { [block.TopicId] = standingsBefore[block.TopicId] };
+            int PlannedFor(IReadOnlyDictionary<Guid, PlanningDomain.TopicStanding> standings) =>
+                PlanningDomain.TodayPlanner.Plan([.. standings.Keys], standings, budget, DateTime.UtcNow, foundations: foundations).Blocks
+                    .Where(entry => entry.TopicId == block.TopicId && entry.Kind == PlanningDomain.BlockKind.Learn)
+                    .Sum(entry => entry.Minutes);
+            Assert.True(
+                PlannedFor(standingsAfter) == PlannedFor(withOld) && learnAfter == learnBefore,
+                $"A has {learnAfter} learn minutes today after the session, {learnBefore} before, and the planner doesn't confirm them.");
+        }
+    }
+
     public void Dispose() => ai.Dispose();
+
+    // The check questions of the unit under the session's id, so they count for the introduction (TopicIntroduction),
+    // each answered right with the solution read from Assessment's database. Gives the id of the last answer.
+    private async Task<Guid> AnswerCheckQuestionsRightAsync(string token, Guid topicId, Guid sessionId, CancellationToken cancellationToken)
+    {
+        using var assessment = Client(services.Assessment.CreateClient(), token);
+        using var asked = await assessment.PostAsJsonAsync("/check-questions", new { topicId, sessionId }, cancellationToken);
+        Assert.Equal(HttpStatusCode.OK, asked.StatusCode);
+        var check = await asked.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        Assert.Equal("ready", check.GetProperty("status").GetString());
+
+        var last = Guid.Empty;
+        foreach (var attemptId in check.GetProperty("questions").EnumerateArray().Select(question => question.GetProperty("id").GetGuid()))
+        {
+            var question = services.QueryAssessment(db =>
+            {
+                var questionId = db.Attempts.IgnoreQueryFilters().Single(attempt => attempt.Id == attemptId).QuestionId;
+                return db.Questions.IgnoreQueryFilters().Single(item => item.Id == questionId);
+            });
+            object answer = question.Type == QuestionType.MultipleChoice
+                ? new { options = question.Answers, responseTimeMs = 5000 }
+                : new { option = question.Answer, responseTimeMs = 5000 };
+            using var graded = await assessment.PostAsJsonAsync($"/attempts/{attemptId}/answer", answer, cancellationToken);
+            Assert.Equal(HttpStatusCode.OK, graded.StatusCode);
+            Assert.True((await graded.Content.ReadFromJsonAsync<JsonElement>(cancellationToken)).GetProperty("correct").GetBoolean());
+            last = attemptId;
+        }
+
+        Assert.NotEqual(Guid.Empty, last);
+        return last;
+    }
+
+    private async Task<Dictionary<Guid, PlanningDomain.TopicStanding>> StandingsAsync(HttpClient learningEngine, Guid goal, CancellationToken cancellationToken)
+    {
+        using var response = await learningEngine.GetAsync($"/mastery?learningGoalId={goal}", cancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        return body.GetProperty("topics").EnumerateArray().ToDictionary(
+            topic => topic.GetProperty("topicId").GetGuid(),
+            topic => new PlanningDomain.TopicStanding(
+                topic.GetProperty("mastery").GetInt32(),
+                PlanningInfra.LearningEngineMastery.StateOf(topic.GetProperty("state").GetString())));
+    }
+
+    private static async Task<PlanningDomain.DailyBudget> BudgetAsync(HttpClient planning, CancellationToken cancellationToken)
+    {
+        var week = await planning.GetFromJsonAsync<JsonElement>("/daily-budget", cancellationToken);
+        return PlanningDomain.DailyBudget.Of(Enum.GetValues<DayOfWeek>().ToDictionary(
+            day => day, day => week.GetProperty(day.ToString().ToLowerInvariant()).GetInt32()));
+    }
+
+    private static async Task<Plan> PlanWithIdsAsync(HttpClient planning, CancellationToken cancellationToken)
+    {
+        using var response = await planning.GetAsync("/plan/today", cancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var plan = (await response.Content.ReadFromJsonAsync<Plan>(JsonSerializerOptions.Web, cancellationToken))!;
+        Assert.True(plan.MasteryAvailable);
+        return plan;
+    }
+
+    private static async Task<JsonElement> SendAsync(HttpClient planning, string path, object body, HttpStatusCode expected, CancellationToken cancellationToken)
+    {
+        using var response = await planning.PostAsJsonAsync(path, body, cancellationToken);
+        Assert.Equal(expected, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+    }
 
     private static async Task<Guid?> LastAnswerAsync(HttpClient learningEngine, Guid topic, CancellationToken cancellationToken)
     {
@@ -224,5 +360,5 @@ public sealed class PlanFlowTests(FlowServices services) : IDisposable
 
     private sealed record Plan(DateOnly StudyDay, List<PlannedBlock> Blocks, bool MasteryAvailable);
 
-    private sealed record PlannedBlock(Guid TopicId, int Minutes, string Kind);
+    private sealed record PlannedBlock(Guid TopicId, int Minutes, string Kind, Guid Id = default, bool Done = false);
 }

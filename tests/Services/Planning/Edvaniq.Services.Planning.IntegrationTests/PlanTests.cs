@@ -387,6 +387,38 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
         Assert.Empty(service.Logs.Containing(token, answer));
     }
 
+    // #378 AC3, Q3: at demo scope, one learning goal with 30 topics (the most one text can bring), working the plan out
+    // takes under 2 s, on every one of ten calls. Real MySQL, LearningEngine and Assessment as stubs in the process. The
+    // measured times go into the message, a passing test shows no output.
+    [Fact]
+    public async Task DemoScope_ThePlanIsWorkedOutInUnderTwoSeconds()
+    {
+        var (alice, token) = NewUser("alice");
+        for (var i = 0; i < 30; i++)
+        {
+            var topic = Guid.NewGuid();
+            Seed(KnownTopic.Create(alice, topic, LearningGoal.DefaultIdFor(alice), hidden: false));
+            service.LearningEngine.Set(token, topic, (i * 7) % 100);
+        }
+
+        await SetBudgetAsync(token, 60);
+
+        // One call first, as a running service has had its first: the JIT is no recomputation.
+        await PlanAsync(token);
+
+        var times = new List<TimeSpan>();
+        for (var call = 0; call < 10; call++)
+        {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var plan = await PlanAsync(token);
+            times.Add(watch.Elapsed);
+            Assert.NotEmpty(plan.Blocks);
+        }
+
+        var measured = string.Join(", ", times.Select(time => $"{time.TotalMilliseconds:F0}"));
+        Assert.True(times.Max() < TimeSpan.FromSeconds(2), $"Q3 allows 2000 ms per plan, measured {measured} ms.");
+    }
+
     // #512 AC3: the plan is computed on every call, so a new budget counts on the very next one.
     [Fact]
     public async Task BudgetChange_ChangesTodaysPlan()

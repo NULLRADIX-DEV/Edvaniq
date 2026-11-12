@@ -171,6 +171,41 @@ public sealed class PlannerScenarioTests
         Assert.DoesNotContain(plan.Shortened, id => standings[id].State == TopicState.Weakness);
     }
 
+    // #378, A46: after a session that lifted the weakness A, the rest of the plan gives A strictly less time over the
+    // week, the time goes to the others, and today's block that was done stays done.
+    [Theory]
+    [InlineData(30)]
+    [InlineData(60)]
+    public void HigherMasteryAfterASession_GivesTheTopicLessTimeInTheRestOfThePlan(int minutes)
+    {
+        var budget = DailyBudget.Uniform(minutes);
+        var (a, b, c) = (Id(1), Id(2), Id(3));
+        List<TopicToPlan> Topics(int masteryOfA, bool weakness) =>
+        [
+            new(a, TodayPlanner.Size, masteryOfA, IsNew: false, IsWeakness: weakness),
+            new(b, TodayPlanner.Size, 50, IsNew: false),
+            new(c, TodayPlanner.Size, 50, IsNew: false),
+        ];
+
+        var before = StudyPlanner.Plan(Topics(20, weakness: true), budget, Today, examDay: null);
+        var after = StudyPlanner.Plan(Topics(70, weakness: false), budget, Today, examDay: null);
+
+        AssertSound(after, budget, Topics(70, weakness: false), examDay: null);
+        Assert.True(
+            WeekMinutes(after, a) < WeekMinutes(before, a),
+            $"A has {WeekMinutes(after, a)} minutes after the session, {WeekMinutes(before, a)} before.");
+        Assert.True(WeekMinutes(after, b) + WeekMinutes(after, c) > WeekMinutes(before, b) + WeekMinutes(before, c));
+
+        // The block of the session, done today, stays done whatever the new plan does with the rest of the day.
+        var done = DayBlocks.WithIds("alice", Guid.Empty, Today, before.Days[0].Blocks)[0];
+        var stored = DoneBlock.Create(done.Id, "alice", Guid.Empty, Today, done.Block, Now);
+        var today = DayBlocks.WithDone("alice", Guid.Empty, Today, after.Days[0].Blocks, [stored], budget.MinutesOn(Today));
+        Assert.Contains(today, block => block.Id == done.Id && block.Done && block.Block == done.Block);
+    }
+
+    private static int WeekMinutes(StudyPlan plan, Guid topic) =>
+        plan.Days.SelectMany(day => day.Blocks).Where(block => block.TopicId == topic).Sum(block => block.Minutes);
+
     // No crash, no block without minutes, no day over its budget, review only once and first, days ascending within the
     // plan, blocks only for the topics given, and no weakness among the shortened topics.
     private static void AssertSound(StudyPlan plan, DailyBudget budget, IReadOnlyCollection<TopicToPlan> topics, DateOnly? examDay)
