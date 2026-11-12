@@ -60,8 +60,16 @@ public sealed class LoggingTests(IdentityDatabase database) : IClassFixture<Iden
             .Select(account => account.PasswordHash)
             .SingleAsync(TestContext.Current.CancellationToken);
 
+        // #244: an address is no secret, but it names a person, so it stays out of the log as well, also when throttled.
+        var email = $"logged-{Guid.NewGuid():N}@example.org";
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            using var byAddress = await identity.LoginAsync(email, wrongPassword);
+        }
+
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         Assert.NotEmpty(identity.Logs.Entries);
+        Assert.Empty(identity.Logs.Containing(email, email.Split('@')[0]));
         Assert.Empty(identity.Logs.Containing(password, newPassword, wrongPassword, hash, hash.Split('$')[^1], token, identity.ClientSecret));
     }
 }

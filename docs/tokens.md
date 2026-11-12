@@ -32,7 +32,7 @@ Zwischen dem Löschen und der Ablehnung liegt höchstens eine Minute, solange Br
 
 Beide Wege laufen über `POST /connect/token` mit einem Formular (`application/x-www-form-urlencoded`) nach RFC 6749. Das Gateway leitet den Endpunkt als `POST /identity/connect/token` weiter, der Browser erreicht ihn nie. Jede Anfrage trägt `client_id` und `client_secret` des Clients.
 
-Der Login eines Teamkontos nutzt den Password-Grant: `grant_type=password` mit `username` und `password`. Erlaubt ist er nur einem Client, der in der Konfiguration `AllowPassword` hat, heute nur dem Web-Host `web`. Der Web-Host fragt ihn für den Login in der Web-Shell an und behält das Token bei sich, der Browser bekommt es nie zu sehen ([Architektur](architecture.md#tokens)). Groß- und Kleinschreibung und Leerzeichen am Rand des Namens zählen nicht, „Ben“ und „ben“ sind dasselbe Konto. Ein Client-Token holt der Web-Host mit `grant_type=client_credentials`.
+Der Login eines Kontos nutzt den Password-Grant: `grant_type=password` mit `username` und `password`. Erlaubt ist er nur einem Client, der in der Konfiguration `AllowPassword` hat, heute nur dem Web-Host `web`. Der Web-Host fragt ihn für den Login in der Web-Shell an und behält das Token bei sich, der Browser bekommt es nie zu sehen ([Architektur](architecture.md#tokens)). Ein Teamkonto meldet sich mit seinem Namen an, ein Nutzerkonto mit seiner E-Mail-Adresse. Enthält `username` ein `@`, gilt er als Adresse, ein Name hat nie eins (siehe [Kontoarten](#kontoarten)). Groß- und Kleinschreibung und Leerzeichen am Rand zählen bei beiden nicht, „Ben“ und „ben“ sind dasselbe Konto. Ein Client-Token holt der Web-Host mit `grant_type=client_credentials`.
 
 Eine erfolgreiche Antwort ist `200` mit `access_token`, `token_type` (`Bearer`) und `expires_in` in Sekunden. Keine Antwort darf in einen Cache, deshalb steht in jeder `Cache-Control: no-store`.
 
@@ -42,8 +42,18 @@ Eine erfolgreiche Antwort ist `200` mit `access_token`, `token_type` (`Bearer`) 
 | 400 | `unsupported_grant_type` | ein anderer Grant als die beiden oben |
 | 400 | `invalid_client` | Client unbekannt oder Secret falsch |
 | 400 | `unauthorized_client` | der Client darf keinen Login anfragen |
-| 400 | `invalid_grant` | Name oder Passwort falsch. Ob es das Konto gibt, sagt die Antwort nicht. |
+| 400 | `invalid_grant` | Name, Adresse oder Passwort falsch. Ob es das Konto gibt, sagt die Antwort nicht. |
+| 400 | `invalid_grant` mit `reason` | das Passwort stimmt, aber das Konto darf sich noch nicht anmelden: `unconfirmed` (Adresse nicht bestätigt) oder `awaiting_approval` (wartet auf die Freigabe). Nur mit dem richtigen Passwort kommt `reason` mit, sonst wüsste jeder, dass es die Adresse gibt. |
 | 429 | `too_many_attempts` | zu viele Versuche für dieses Konto in kurzer Zeit, `Retry-After` nennt die Wartezeit in Sekunden |
+
+## Kontoarten
+
+Identity kennt zwei Arten von Konten, für die Token ist das gleich: Beide bekommen dasselbe Token mit ihrer Konto-ID als `sub`, mit denselben Claims, und kein Service merkt einen Unterschied.
+
+- **Nutzerkonto:** meldet sich mit seiner E-Mail-Adresse an. Dazu kommen Pseudonym und Geburtsjahr. Adresse, Pseudonym und Geburtsjahr bleiben in Identity, sie stehen nie im Token und nie im Log, auch nicht in der Sperre für zu viele Versuche: Die zählt eine Adresse nur über ihren SHA-256-Hash. Ein neues Konto ist erst nutzbar, wenn die Adresse bestätigt und bei Minderjährigen die Freigabe erteilt ist. Registrierung, Bestätigung und Freigabe kommen mit eigenen Issues, bis dahin gibt es keine Nutzerkonten auf dem Server.
+- **Teamkonto:** meldet sich mit einem Namen an, wird nur per Befehl angelegt und gelöscht (siehe unten) und ist immer aktiv. Es dient dem Team, dem Smoke-Test nach jedem Deploy und den Konten für automatische Tests.
+
+Teamkonten bleiben neben den Nutzerkonten bestehen und behalten ihre ID, damit gehen auch ihre Daten in den Services nicht verloren. Das ist vorläufig, die Bestätigung durch den Betreiber steht noch aus (#244).
 
 ## Interne Tokens
 
@@ -57,7 +67,7 @@ Identity speichert ein Passwort nur als Hash, PBKDF2 mit HMAC-SHA256 und eigenem
 
 ## Teamkonto anlegen
 
-Bis es eine Registrierung gibt, legt der Betreiber Teamkonten mit einem Befehl der Api an, so wie er auch die Migrationen startet. Es wird nichts von Hand in die Datenbank geschrieben.
+Der Betreiber legt Teamkonten mit einem Befehl der Api an, so wie er auch die Migrationen startet. Es wird nichts von Hand in die Datenbank geschrieben.
 
 ```bash
 dotnet Edvaniq.Services.Identity.Api.dll account set <name> < passwort.txt

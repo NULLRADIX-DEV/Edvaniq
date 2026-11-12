@@ -59,12 +59,66 @@ public sealed class AccountServiceTests
         Assert.Empty(accounts.All);
     }
 
+    // #244: a user account logs in with its address, spelled any way, and a team name with an @ is no name.
+    [Theory]
+    [InlineData("anna@example.org")]
+    [InlineData(" Anna@Example.ORG ")]
+    public async Task UserAccount_LogsInWithItsAddress(string login)
+    {
+        var account = AddUser("anna@example.org", AccountStatus.Active);
+
+        var result = await service.AuthenticateAsync(login, Password, TestContext.Current.CancellationToken);
+
+        Assert.Equal((account, (LoginRefusal?)null), (result.Account, result.Refusal));
+        Assert.Equal(account.Id, await service.LoginAsync(login, Password, TestContext.Current.CancellationToken));
+    }
+
+    // Why an account can't log in yet is told only with the right password.
+    [Theory]
+    [InlineData(AccountStatus.Unconfirmed, LoginRefusal.Unconfirmed)]
+    [InlineData(AccountStatus.AwaitingApproval, LoginRefusal.AwaitingApproval)]
+    public async Task UserAccountNotActive_IsRefusedWithItsReason_OnlyWithTheRightPassword(AccountStatus status, LoginRefusal refusal)
+    {
+        AddUser("anna@example.org", status);
+
+        var right = await service.AuthenticateAsync("anna@example.org", Password, TestContext.Current.CancellationToken);
+        var wrong = await service.AuthenticateAsync("anna@example.org", "a wrong long password", TestContext.Current.CancellationToken);
+
+        Assert.Equal(refusal, right.Refusal);
+        Assert.Equal((null, (LoginRefusal?)LoginRefusal.InvalidCredentials), (wrong.Account, wrong.Refusal));
+        Assert.Null(await service.LoginAsync("anna@example.org", Password, TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("bob@example.org")]
+    [InlineData("not@an address")]
+    [InlineData("@")]
+    public async Task UnknownOrInvalidAddress_IsInvalidCredentials(string login)
+    {
+        AddUser("anna@example.org", AccountStatus.Active);
+
+        var result = await service.AuthenticateAsync(login, Password, TestContext.Current.CancellationToken);
+
+        Assert.Equal((null, (LoginRefusal?)LoginRefusal.InvalidCredentials), (result.Account, result.Refusal));
+    }
+
+    private Account AddUser(string email, AccountStatus status)
+    {
+        var account = Account.CreateUser(email, "Anna", 2001, PasswordHasher.Hash(Password), DateTime.UnixEpoch);
+        typeof(Account).GetProperty(nameof(Account.Status))!.SetValue(account, status);
+        accounts.Add(account);
+        return account;
+    }
+
     private sealed class InMemoryAccounts : IAccounts
     {
         public List<Account> All { get; } = [];
 
         public Task<Account?> FindAsync(string name, CancellationToken cancellationToken) =>
             Task.FromResult(All.FirstOrDefault(account => account.Name == name));
+
+        public Task<Account?> FindByEmailAsync(string email, CancellationToken cancellationToken) =>
+            Task.FromResult(All.FirstOrDefault(account => account.Email == email));
 
         public void Add(Account account) => All.Add(account);
 
