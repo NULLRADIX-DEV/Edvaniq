@@ -68,12 +68,12 @@ public sealed class IdentityFactory(
     }
 
     // Sets up an account the way the operator does on the server, through the account command.
-    public async Task<(int ExitCode, string Output, string Error)> SetAccountAsync(string name, string password)
+    public async Task<(int ExitCode, string Output, string Error)> SetAccountAsync(string name, string password, bool testDouble = false)
     {
         using var output = new StringWriter();
         using var error = new StringWriter();
-        var exitCode = await AccountCommand.RunAsync(
-            Services, ["account", "set", name], new StringReader(password + "\n"), output, error);
+        string[] args = testDouble ? ["account", "set", name, AccountCommand.TestDoubleOption] : ["account", "set", name];
+        var exitCode = await AccountCommand.RunAsync(Services, args, new StringReader(password + "\n"), output, error);
         return (exitCode, output.ToString(), error.ToString());
     }
 

@@ -66,6 +66,7 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
             services =>
             {
                 services.AddSingleton<IKnowledgeTopics>(new ContentInfra.KnowledgeTopics(knowledge));
+                ContentInfra.Ai.ContentAi.AddContentTestDouble(services);
                 services.AddHttpClient<Edvaniq.Services.Content.Application.ILearningGoals, ContentInfra.PlanningLearningGoals>()
                     .ConfigurePrimaryHttpMessageHandler(() => planningHost.Server.CreateHandler());
             },

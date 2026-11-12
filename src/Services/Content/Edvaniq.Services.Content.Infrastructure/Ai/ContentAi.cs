@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using Edvaniq.BuildingBlocks.AI;
 using Edvaniq.Services.Content.Application;
+using Edvaniq.Services.Content.Domain;
 
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,10 +28,22 @@ public static class ContentAi
 
     public static TBuilder AddContentAi<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
-        builder.Services.AddSingleton<ISimulatedAnswer, SimulatedTopics>();
-        builder.Services.AddSingleton<ISimulatedAnswer, SimulatedQuestions>();
+        builder.Services.AddContentTestDouble();
         return builder.AddAi();
     }
+
+    // The simulated answers, and the simulated AI for documents of a test account whatever Ai:Provider says.
+    public static IServiceCollection AddContentTestDouble(this IServiceCollection services)
+    {
+        services.AddSingleton<ISimulatedAnswer, SimulatedTopics>();
+        services.AddSingleton<ISimulatedAnswer, SimulatedQuestions>();
+        services.AddSingleton<TestDoubleAi>();
+        return services;
+    }
+
+    // The AI for this document: the test double if it uses one, else the configured provider.
+    internal static IChatClient For(Document document, IChatClient ai, TestDoubleAi testDouble) =>
+        document.UsesTestDouble ? testDouble.Client : ai;
 
     // The model that answered. Some providers leave it out of the answer, then it is the configured one, never empty.
     internal static string ModelOf(IChatClient ai, string? answered) =>

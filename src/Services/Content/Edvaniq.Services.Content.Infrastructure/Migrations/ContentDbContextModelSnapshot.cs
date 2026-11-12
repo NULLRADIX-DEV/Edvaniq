@@ -287,6 +287,9 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("varchar(80)");
 
+                    b.Property<bool>("UsesTestDouble")
+                        .HasColumnType("tinyint(1)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("OwnerId");

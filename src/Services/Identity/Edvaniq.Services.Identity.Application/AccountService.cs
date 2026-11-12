@@ -7,16 +7,21 @@ public sealed class AccountService(IAccounts accounts, TimeProvider time)
 {
     // The id of the account, or null for a wrong name or password. Both cost one hash, so the time tells them apart no
     // more than the answer does.
-    public async Task<Guid?> LoginAsync(string? name, string password, CancellationToken cancellationToken)
+    public async Task<Guid?> LoginAsync(string? name, string password, CancellationToken cancellationToken) =>
+        (await AuthenticateAsync(name, password, cancellationToken))?.Id;
+
+    // The account, or null for a wrong name or password.
+    public async Task<Account?> AuthenticateAsync(string? name, string password, CancellationToken cancellationToken)
     {
         var normalized = AccountName.Normalize(name);
         var account = normalized is null ? null : await accounts.FindAsync(normalized, cancellationToken);
-        return PasswordHasher.Verify(password, account?.PasswordHash) ? account!.Id : null;
+        return PasswordHasher.Verify(password, account?.PasswordHash) ? account : null;
     }
 
-    // Creates the account or gives an existing one a new password. Throws ArgumentException for an invalid name or
-    // password, the message names the rule, never the value.
-    public async Task<(Account Account, bool Created)> SetPasswordAsync(string name, string password, CancellationToken cancellationToken)
+    // Creates the account or gives an existing one a new password, and marks it for tests or not. Throws
+    // ArgumentException for an invalid name or password, the message names the rule, never the value.
+    public async Task<(Account Account, bool Created)> SetPasswordAsync(
+        string name, string password, CancellationToken cancellationToken, bool usesTestDouble = false)
     {
         var normalized = AccountName.Normalize(name)
             ?? throw new ArgumentException($"The name may only have a-z, 0-9, dot, dash and underscore, at most {Account.NameMaxLength} characters.");
@@ -37,6 +42,8 @@ public sealed class AccountService(IAccounts accounts, TimeProvider time)
         {
             account.SetPasswordHash(hash);
         }
+
+        account.SetTestDouble(usesTestDouble);
 
         await accounts.SaveAsync(cancellationToken);
         return (account, created);

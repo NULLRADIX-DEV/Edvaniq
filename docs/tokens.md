@@ -16,6 +16,7 @@ Ein Token ist ein JWT mit dem Typ `at+jwt` nach RFC 9068, signiert mit ES256. De
 | `client_id` | der Client, der das Token geholt hat: `web` oder `content` |
 | `jti` | eine eigene ID je Token |
 | `iat`, `nbf`, `exp` | ausgestellt, gültig ab, gültig bis |
+| `test_double` | nur beim Login eines Teamkontos für automatische Tests: `true`. Sonst fehlt der Claim ([Teamkonto für Tests](#teamkonto-für-tests)). |
 
 Name, Mail-Adresse oder andere Angaben zur Person stehen nie im Token. Ein Service, der den Nutzer braucht, nimmt `sub` als `OwnerId`. Die Konto-ID ändert sich nie, auch nicht, wenn ein Konto ein neues Passwort bekommt.
 
@@ -59,6 +60,14 @@ dotnet Edvaniq.Services.Identity.Api.dll account set <name> < passwort.txt
 ```
 
 Das Passwort kommt nur über die Standardeingabe, nie als Argument, sonst stünde es in der Prozessliste und der Shell-History. Ein Zeilenumbruch am Ende gehört nicht dazu. Gibt es das Konto schon, bekommt es das neue Passwort und behält seine ID, der Befehl lässt sich also beliebig oft ausführen. Er schreibt eine Zeile wie `created ben 3f2b9c1e-8d4a-4e0f-9b6a-2c7d1e5f4a10` oder `updated ben …` und endet mit 0. Ist der Name oder das Passwort ungültig, endet er mit 2 und nennt die Regel, bei einem anderen Fehler mit 1. Der Name besteht aus Kleinbuchstaben, Ziffern, Punkt, Bindestrich und Unterstrich, höchstens 64 Zeichen.
+
+### Teamkonto für Tests
+
+```bash
+dotnet Edvaniq.Services.Identity.Api.dll account set <name> --test-double < passwort.txt
+```
+
+Mit `--test-double` ist das Konto für automatische Tests markiert, die Ausgabe endet dann mit `--test-double`. Seine Tokens tragen `test_double: true`. Content merkt sich das an jedem Dokument, das mit so einem Token eingefügt oder hochgeladen wird, und der Worker analysiert es mit der simulierten KI statt mit dem eingestellten Anbieter. So läuft ein Test gegen das ausgelieferte System ohne Kosten und mit festen Antworten. Setzen kann die Markierung nur dieser Befehl, keine Anfrage und kein Feld im Body. Ein `account set` ohne die Option nimmt sie wieder weg, schon eingefügte Dokumente behalten ihre.
 
 ## Teamkonto löschen
 
