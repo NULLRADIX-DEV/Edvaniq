@@ -265,6 +265,19 @@ Pausiert erreicht kein KI-Aufruf von Content den Anbieter, auch `ai-check` nicht
 
 Der Schalter sitzt vor dem `IChatClient` des Content-Workers (`PausableChatClient`), den jeder KI-Aufruf passiert. Ruft später ein anderer Service eine KI, muss er denselben Schalter beachten.
 
+## Zeitgrenzen der Analyse
+
+Kein Dokument bleibt für immer „in Analyse“. Die Grenzen des Content-Workers stehen im Abschnitt `Content:Analysis` der Konfiguration, ohne gültige Werte startet der Worker nicht:
+
+| Schlüssel | Standard | Wofür |
+|---|---|---|
+| `AiTimeout` | 2 min | ein Aufruf der KI, danach gilt er als Ausfall |
+| `TopicsTimeout` | 10 min | Warten auf die Themen von Knowledge, danach scheitert das Dokument |
+| `Timeout` | 60 min | ein ganzer Lauf, gezählt ab Einfügen, Upload oder Neustart, muss größer als `TopicsTimeout` sein |
+| `SweepInterval` | 1 min | wie oft der Worker nach zu langen Läufen sucht |
+
+Ist ein Dokument nach `Timeout` noch „hochgeladen“ oder „in Analyse“, scheitert es mit „Die Analyse hat zu lange gedauert. Starte sie neu.“, etwa weil sein Worker immer wieder abstürzt. Der Nutzer startet es neu wie jedes gescheiterte Dokument. Ein Dokument, das nach einem Ausfall der KI absichtlich wartet, zählt erst wieder, wenn es an der Reihe ist. Beendet ein Worker das Dokument im selben Moment, gewinnt nur einer, es geht nichts doppelt hinaus. Jedes so beendete Dokument steht als Warnung im Log, dazu je Runde die Zahl. Häufen sich diese Zeilen, ist die Grenze zu knapp oder der Worker überlastet.
+
 ## Tests
 
 `ServiceFactory` ist der Prüfstand: Er startet den echten Service, so wie er läuft, mit einer frischen MySQL-Datenbank, auf die alle Migrationen angewendet sind, und vertraut den Tokens aus `Edvaniq.Testing/TestTokens`. Den Broker tauscht er gegen einen im Prozess aus. Eine Testklasse holt ihn sich per `IClassFixture<ServiceFactory>`.
