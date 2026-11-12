@@ -41,6 +41,36 @@ internal static class TestPdfs
         return builder.Build();
     }
 
+    // A scanned script without OCR (#284): every page one big picture, and as text only what a scanner leaves, page
+    // numbers and stray marks. The pages of the text are its parts between the page numbers ("- 1 -").
+    public static byte[] Scan(string leftovers)
+    {
+        var builder = new PdfDocumentBuilder();
+        var font = builder.AddStandard14Font(Standard14Font.Helvetica);
+        var pages = leftovers.Split('\n').Aggregate(new List<List<string>>(), (all, line) =>
+        {
+            if (line.TrimStart().StartsWith("- ", StringComparison.Ordinal) || all.Count == 0)
+            {
+                all.Add([]);
+            }
+
+            all[^1].Add(line);
+            return all;
+        });
+        for (var number = 0; number < pages.Count; number++)
+        {
+            var page = builder.AddPage(PageSize.A4);
+            page.AddPng(NoisePng(600, number), new PdfRectangle(40, 60, 555, 800));
+            var lines = pages[number].Where(line => line.Trim().Length > 0).ToList();
+            for (var line = 0; line < lines.Count; line++)
+            {
+                page.AddText(Ascii(lines[line]), FontSize, new PdfPoint(50, Top - (line * LineHeight)), font);
+            }
+        }
+
+        return builder.Build();
+    }
+
     // A large file as a scanned script is one: pages of text and a few big pictures that make up most of its size.
     public static byte[] Large(int pages, int pictures, int linesPerPage)
     {

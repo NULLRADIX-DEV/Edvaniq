@@ -59,12 +59,12 @@ public sealed class UploadedDocumentTests
     {
         var document = Upload();
 
-        var pages = document.TakeText(["  Erste Seite.\n", "", "Dritte Seite mit mehr Text."], Now);
+        var pages = document.TakeText(["  Erste Seite.\n", "", "Dritte Seite mit mehr Text über Licht."], Now);
 
-        Assert.Equal("Erste Seite.\n\n\n\nDritte Seite mit mehr Text.", document.Text);
-        Assert.Equal([(1, 0, 12), (2, 14, 0), (3, 16, 27)], pages.Select(page => (page.Number, page.Start, page.Length)));
+        Assert.Equal("Erste Seite.\n\n\n\nDritte Seite mit mehr Text über Licht.", document.Text);
+        Assert.Equal([(1, 0, 12), (2, 14, 0), (3, 16, 38)], pages.Select(page => (page.Number, page.Start, page.Length)));
         Assert.All(pages, page => Assert.Equal((document.Id, "alice"), (page.DocumentId, page.OwnerId)));
-        Assert.Equal(["Erste Seite.", "", "Dritte Seite mit mehr Text."], pages.Select(page => document.Text.Substring(page.Start, page.Length)));
+        Assert.Equal(["Erste Seite.", "", "Dritte Seite mit mehr Text über Licht."], pages.Select(page => document.Text.Substring(page.Start, page.Length)));
         Assert.Equal((DocumentStatus.Uploaded, (DateTime?)Now, false), (document.Status, document.TextExtractedAt, document.WaitsForText));
     }
 
@@ -98,10 +98,42 @@ public sealed class UploadedDocumentTests
     public void TakeText_Twice_IsRefused()
     {
         var document = Upload();
-        document.TakeText(["Licht spaltet Wasser."], Now);
+        document.TakeText(["Licht spaltet Wasser in der Lichtreaktion der grünen Pflanzen."], Now);
 
         Assert.Throws<InvalidOperationException>(() => document.TakeText(["Noch einmal."], Now));
     }
+
+    // #284: a scan leaves page numbers and stray marks. Over the whole file the words don't reach what a pasted text needs,
+    // so the document fails with the hint for scans and keeps nothing.
+    [Fact]
+    public void TakeText_WithoutEnoughWords_FailsWithTheScanHint()
+    {
+        var document = Upload();
+
+        var pages = document.TakeText(["- 1 -", "", "~~ 2 ~~ ,;. 3"], Now);
+
+        Assert.Empty(pages);
+        Assert.Equal((DocumentStatus.Failed, Document.NoTextInFile, (DateTime?)null, ""), (document.Status, document.FailureReason, document.TextExtractedAt, document.Text));
+    }
+
+    // The edge case (A12): what counts are the words of the whole file. Seven are not enough, eight spread over pages are,
+    // even if other pages are images only.
+    [Theory]
+    [InlineData(7, DocumentStatus.Failed)]
+    [InlineData(8, DocumentStatus.Uploaded)]
+    public void TakeText_CountsTheWordsOfTheWholeFile(int words, DocumentStatus status)
+    {
+        var document = Upload();
+        var text = string.Join(' ', Enumerable.Range(0, words).Select(index => "Wort" + (char)('a' + index)));
+
+        document.TakeText([text[..(text.Length / 2)], "", text[(text.Length / 2)..]], Now);
+
+        Assert.Equal(status, document.Status);
+    }
+
+    [Fact]
+    public void ScanHint_FitsAsAReason() =>
+        Assert.InRange(Document.NoTextInFile.Length, 1, Document.FailureReasonMaxLength);
 
     private static Document Upload() => Document.Upload("alice", Guid.NewGuid(), "Skript.pdf", Guid.NewGuid(), FileFormat.Pdf, Now);
 }

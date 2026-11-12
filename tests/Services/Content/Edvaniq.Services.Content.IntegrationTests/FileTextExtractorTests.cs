@@ -146,18 +146,17 @@ public sealed class FileTextExtractorTests(ServiceFactory service) : IClassFixtu
         Assert.Equal((DocumentStatus.Failed, Document.FileUnreadable), Query(db => Stored(db, id) is var d ? (d.Status, d.FailureReason) : default));
     }
 
-    // A scan has no text layer: its pages are empty, and the splitter finds nothing to learn from (the hint for scans
-    // comes with #284).
+    // A scan has no text layer: its pages are empty, so the document fails with the hint for scans before the splitter
+    // (#284). The whole way with the scan of the reference set is in ScanTests.
     [Fact]
-    public async Task Scan_HasEmptyPages_AndNothingToLearn()
+    public async Task Scan_FailsWithTheHint_WithoutPages()
     {
         var id = await UploadAsync(NewUser(), "Scan.pdf", TestPdfs.Empty(2));
 
         await Extractor().ReadAsync(id, Cancel);
-        await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(id, Cancel);
 
-        Assert.Equal([0, 0], Query(db => db.DocumentPages.IgnoreQueryFilters().Where(page => page.DocumentId == id).OrderBy(page => page.Number).Select(page => page.Length).ToList()));
-        Assert.Equal((DocumentStatus.Failed, Document.NothingToLearn), Query(db => Stored(db, id) is var d ? (d.Status, d.FailureReason) : default));
+        Assert.Equal(0, Query(db => db.DocumentPages.IgnoreQueryFilters().Count(page => page.DocumentId == id)));
+        Assert.Equal((DocumentStatus.Failed, Document.NoTextInFile), Query(db => Stored(db, id) is var d ? (d.Status, d.FailureReason) : default));
     }
 
     // #320: a Word file is one page, its headings start the sections and name them, and an embedded object adds nothing.
@@ -191,12 +190,12 @@ public sealed class FileTextExtractorTests(ServiceFactory service) : IClassFixtu
     [Fact]
     public async Task MarkdownFile_LosesItsMarkup()
     {
-        const string markdown = "Säuren\n======\n\nEine **Säure** gibt ein [Proton](https://example.org/p) ab. ![Bild](x.png)\n\n<div>Kasten</div>\n";
+        const string markdown = "Säuren\n======\n\nEine **Säure** gibt ein [Proton](https://example.org/p) an eine Base ab. ![Bild](x.png)\n\n<div>Kasten</div>\n";
         var id = await UploadAsync(NewUser(), "Notizen.md", Encoding.UTF8.GetBytes(markdown));
 
         await Extractor().ReadAsync(id, Cancel);
 
-        Assert.Equal("# Säuren\n\nEine Säure gibt ein Proton ab.", Query(db => Stored(db, id).Text));
+        Assert.Equal("# Säuren\n\nEine Säure gibt ein Proton an eine Base ab.", Query(db => Stored(db, id).Text));
     }
 
     private static List<string> Paragraphs(string id) =>

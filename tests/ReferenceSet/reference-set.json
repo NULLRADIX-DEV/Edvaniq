@@ -236,7 +236,7 @@
       "subject": "Erdkunde",
       "kind": "scan",
       "analyzable": false,
-      "note": "Ersatz für ein gescanntes PDF ohne Textebene: der Text, der beim Auslesen eines solchen PDFs übrig bleibt, nur Seitenzahlen und Bildreste. Das echte PDF kommt, sobald es den Upload gibt (#284).",
+      "note": "Der Text, der beim Auslesen eines gescannten PDFs ohne Textebene übrig bleibt, nur Seitenzahlen und Bildreste. Das PDF dazu erzeugt der Test (TestPdfs.Scan).",
       "topics": []
     }
   ]

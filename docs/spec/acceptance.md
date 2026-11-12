@@ -46,6 +46,8 @@ Die Reihenfolge folgt der MVP-Liste.
 
 Ab M1 nimmt die App eingefügten Text nur an, wenn er mindestens 8 echte Wörter enthält. Ein echtes Wort sind mindestens 3 Buchstaben am Stück. Ziffern, Satz- und Sonderzeichen zählen nicht und trennen Wörter. Seitenzahlen und die Zeichen, die von einem Scan übrig bleiben, reichen also nicht, eine kurze Definition in zwei, drei Sätzen reicht auch mit Formeln und Kürzeln darin. Bei zu wenig Wörtern lehnt die App den Text beim Einfügen mit dem Hinweis ab, einen Text mit ganzen Sätzen einzufügen, etwa aus einer Textversion des Materials. Es entsteht kein Dokument, also auch keine Themen, keine Fragen und kein KI-Aufruf. Das Scan-Dokument des Referenzsets wird so abgelehnt, alle anderen kommen durch. Das prüfen `ReferenceSetTests` und `DocumentTests` in Content (#238).
 
+Dieselbe Regel gilt ab M2 für den Text einer hochgeladenen Datei, nachdem der Worker ihn ausgelesen hat, und zwar über die ganze Datei, nicht je Seite. Hat sie weniger als 8 echte Wörter, gilt sie als Scan oder Foto ohne Textebene: Das Dokument endet als „fehlgeschlagen“ mit dem Hinweis, eine Textversion hochzuladen oder den Text einzufügen, behält keinen Text und kommt nie zur KI. Das ist der Grenzfall mit wenig Text: Eine Datei, in der nur einzelne Seiten Text tragen und der Rest Bilder sind, kommt durch, sobald diese Seiten zusammen 8 Wörter haben. Analysiert wird dann nur ihr Text, die Bildseiten zählen nicht, und dass dort Inhalt fehlt, erkennt die App erst mit der Texterkennung im MVP-Plus. Das prüfen `ScanTests` und `UploadedDocumentTests` in Content (#284).
+
 ### MVP5 Inhaltsanalyse
 
 | ID | Kriterium | Testfall | Messweise | Ab |

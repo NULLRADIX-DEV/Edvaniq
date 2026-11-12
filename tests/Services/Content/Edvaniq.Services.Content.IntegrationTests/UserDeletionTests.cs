@@ -78,7 +78,7 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         db.GenerationCharges.Add(GenerationCharge.For(document, Guid.NewGuid(), DateTime.UtcNow));
         var fromFile = Document.Upload(user, Guid.NewGuid(), "Notizen.txt", fileId, FileFormat.Text, DateTime.UtcNow);
         db.Documents.Add(fromFile);
-        db.DocumentPages.AddRange(fromFile.TakeText(["Licht spaltet Wasser in der Lichtreaktion."], DateTime.UtcNow));
+        db.DocumentPages.AddRange(fromFile.TakeText(["Licht spaltet Wasser in der Lichtreaktion der grünen Pflanzen."], DateTime.UtcNow));
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
