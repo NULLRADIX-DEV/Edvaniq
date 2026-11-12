@@ -116,7 +116,23 @@ jobs:
             fi
             git show "$1:$DEPLOY_DIR/smoke-test.sh" > "$RUNNER_TEMP/smoke-test.sh"
             outcome="Smoke test of \`$1\` passed"
-            DEPLOY_ENVIRONMENT="$DEPLOY_ENVIRONMENT" bash "$RUNNER_TEMP/smoke-test.sh"
+            local creds key value account='' password='' result=0
+            if ! creds=$(remote smoke-prepare < /dev/null); then
+              echo "::error::Smoke account for $1 could not be prepared"
+              return 1
+            fi
+            while IFS='=' read -r key value; do
+              case $key in
+                account) account=$value ;;
+                password) password=$value ;;
+              esac
+            done <<< "$creds"
+            if [ -n "$password" ]; then
+              echo "::add-mask::$password"
+            fi
+            SMOKE_ACCOUNT="$account" SMOKE_PASSWORD="$password" DEPLOY_ENVIRONMENT="$DEPLOY_ENVIRONMENT" bash "$RUNNER_TEMP/smoke-test.sh" || result=$?
+            remote smoke-cleanup < /dev/null || echo "::warning::Smoke account of $1 could not be removed"
+            return $result
           }
           deployed=$(sed -n 's/^Deployed //p' "$RUNNER_TEMP/deploy.log")
           previous=$(sed -n 's/^Previous release: //p' "$RUNNER_TEMP/deploy.log")
@@ -144,3 +160,13 @@ jobs:
             echo "Smoke test of \`$restored\` failed too, check the server" >> "$GITHUB_STEP_SUMMARY"
           fi
           exit 1
+      - name: Remove smoke account
+        if: ${{ always() }}
+        env:
+          DEPLOY_TARGET: ${{ secrets.DEPLOY_TARGET }}
+        run: |
+          if [ ! -s ~/.ssh/deploy_key ] || [ ! -s ~/.ssh/known_hosts ] || [ -z "$DEPLOY_TARGET" ]; then
+            exit 0
+          fi
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_TARGET" smoke-cleanup < /dev/null \
+            || echo "::warning::Smoke account could not be removed"
