@@ -22,6 +22,7 @@ public sealed class TopicsPageTests(WebShell shell)
         await AssertLargeEnoughAsync(send);
         await AssertLargeEnoughAsync(page.Page.GetByLabel("Titel"));
 
+        await Material.ConfirmAsync(page.Page);
         await text.FillAsync("Die Photosynthese wandelt Lichtenergie in chemische Energie um.");
         await send.ClickAsync();
 
@@ -30,6 +31,45 @@ public sealed class TopicsPageTests(WebShell shell)
         await Assertions.Expect(text).ToHaveValueAsync("");
         await AssertNoSidewaysScrollAsync(page.Page);
         await AxeScan.AssertNoViolationsAsync(page.Page, $"/themen with topics at {WebShell.PhoneWidth} px");
+    }
+
+    // #278: without the tick nothing goes up and the field says why, with it the text carries the version.
+    [Fact]
+    public async Task PasteWithoutTheTick_OnAPhone_IsHeldBack_AndWithItGoesUp()
+    {
+        var posted = new List<string?>();
+        await using var page = await shell.OpenSignedInAsync("/themen", WebShell.PhoneWidth, prepare: async browser =>
+        {
+            await Material.AnswerAsync(browser, documents: [Array.Empty<object>(), new[] { Material.Document("Ready") }], topics: [Array.Empty<object>(), Material.Topics]);
+            browser.Request += (_, request) =>
+            {
+                if (request.Method == "POST" && request.Url.EndsWith("/api/content/documents", StringComparison.Ordinal))
+                {
+                    posted.Add(request.PostData);
+                }
+            };
+        });
+        var confirmation = Material.Confirmation(page.Page);
+        await Assertions.Expect(page.Page.Locator(".material-status")).ToContainTextAsync("Du hast noch keinen Text eingefügt.");
+        await AssertLargeEnoughAsync(page.Page.Locator("label[for=material-confirm]"));
+
+        await page.Page.GetByLabel("Text", new PageGetByLabelOptions { Exact = true }).FillAsync("Die Photosynthese wandelt Lichtenergie in chemische Energie um.");
+        await page.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Themen erkennen" }).ClickAsync();
+
+        await Assertions.Expect(page.Page.Locator("#material-confirm-message")).ToHaveTextAsync(
+            "Bestätige, dass du nur eigenes oder erlaubtes Material ohne Daten anderer Personen hochlädst.");
+        await Assertions.Expect(confirmation).ToHaveAttributeAsync("aria-invalid", "true");
+        await AssertNoSidewaysScrollAsync(page.Page);
+        await AxeScan.AssertNoViolationsAsync(page.Page, $"/themen without the confirmation at {WebShell.PhoneWidth} px");
+        Assert.Empty(posted);
+
+        await confirmation.CheckAsync();
+        await page.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Themen erkennen" }).ClickAsync();
+
+        await Assertions.Expect(page.Page.Locator(".topic-list")).ToContainTextAsync("Photosynthese", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });
+        await Assertions.Expect(page.Page.Locator("#material-confirm-message")).ToHaveTextAsync("");
+        Assert.Contains("\"confirmation\":\"material-1\"", Assert.Single(posted));
+        await AxeScan.AssertNoViolationsAsync(page.Page, $"/themen confirmed at {WebShell.PhoneWidth} px");
     }
 
     [Theory]
@@ -95,6 +135,7 @@ public sealed class TopicsPageTests(WebShell shell)
         var text = page.Page.GetByLabel("Text", new PageGetByLabelOptions { Exact = true });
         await Assertions.Expect(page.Page.Locator(".material-status")).ToContainTextAsync("Du hast noch keinen Text eingefügt.");
 
+        await Material.ConfirmAsync(page.Page);
         await text.FillAsync("Die Photosynthese wandelt Lichtenergie in chemische Energie um.");
         await page.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Themen erkennen" }).ClickAsync();
 

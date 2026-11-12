@@ -143,6 +143,7 @@ public sealed class TopicsTests : BunitContext
             .Topics()
             .Topics(NewTopic);
         var page = RenderPage(material);
+        page.Confirm();
 
         page.Find("#paste-title").Input("  Skript Bio  ");
         page.Find("#paste-text").Change("Die Photosynthese …");
@@ -158,6 +159,7 @@ public sealed class TopicsTests : BunitContext
     {
         var material = new FakeLearningMaterial().Paste(CallOutcome<DocumentInfo>.Ok(Document(DocumentStatus.Uploaded)));
         var page = RenderPage(material);
+        page.Confirm();
 
         page.Find("#paste-text").Change("Text");
         page.Find("form").Submit();
@@ -186,6 +188,7 @@ public sealed class TopicsTests : BunitContext
     {
         var material = new FakeLearningMaterial().Paste(CallOutcome<DocumentInfo>.Ok(Document(DocumentStatus.Uploaded)));
         var page = RenderPage(material);
+        page.Confirm();
 
         page.Find("#paste-text").Change(new string('a', HttpLearningMaterial.TextMaxLength + 1));
         page.Find("form").Submit();
@@ -219,6 +222,7 @@ public sealed class TopicsTests : BunitContext
     {
         var material = new FakeLearningMaterial().Paste(new CallOutcome<DocumentInfo>(CallResult.Rejected, Messages: ["Grund von Content."]));
         var page = RenderPage(material);
+        page.Confirm();
 
         page.Find("#paste-text").Change("Text");
         page.Find("form").Submit();
@@ -234,6 +238,7 @@ public sealed class TopicsTests : BunitContext
             .Paste(CallOutcome<DocumentInfo>.Failed(TraceId))
             .Paste(CallOutcome<DocumentInfo>.Ok(Document(DocumentStatus.Uploaded)));
         var page = RenderPage(material);
+        page.Confirm();
 
         page.Find("#paste-text").Change("Mein Text");
         page.Find("form").Submit();
@@ -318,6 +323,7 @@ public sealed class TopicsTests : BunitContext
         var material = new FakeLearningMaterial()
             .Paste(new CallOutcome<DocumentInfo>(CallResult.Limited, Messages: sentence is null ? [] : [sentence]));
         var page = RenderPage(material);
+        page.Confirm();
 
         page.Find("#paste-title").Input("Skript");
         page.Find("#paste-text").Change("Mein Text");

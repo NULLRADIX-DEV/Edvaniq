@@ -26,6 +26,7 @@ public sealed class SessionExpiryPageTests(WebShell shell)
             await browser.RouteAsync("**/api/content/documents", route =>
                 ended && route.Request.Method == "POST" ? route.ContinueAsync() : route.FallbackAsync());
         });
+        await Material.ConfirmAsync(page.Page);
         await page.Page.GetByLabel("Text", new PageGetByLabelOptions { Exact = true }).FillAsync("Die Lichtreaktion läuft in den Thylakoiden ab.");
 
         ended = await EndLoginAsync(page);

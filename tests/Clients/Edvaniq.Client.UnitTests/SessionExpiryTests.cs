@@ -121,6 +121,7 @@ public sealed class SessionExpiryTests : BunitContext
             .Paste(CallOutcome<DocumentInfo>.Ok(new DocumentInfo(Guid.NewGuid(), "Fotosynthese", DocumentStatus.Uploaded, DateTimeOffset.UnixEpoch)));
         var before = Render<MaterialView>();
 
+        before.Confirm();
         before.Find("#paste-title").Input("Fotosynthese");
         before.Find("#paste-text").Change("Die Lichtreaktion läuft in den Thylakoiden ab.");
         before.Find("form").Submit();
@@ -135,6 +136,8 @@ public sealed class SessionExpiryTests : BunitContext
 
         // Never sent by itself: only the user's own click sends it, once.
         Assert.Single(material.Pasted);
+        // The tick isn't kept with the draft, the user confirms again.
+        after.Confirm();
         after.Find("form").Submit();
         Assert.Equal(2, material.Pasted.Count);
     }

@@ -47,6 +47,7 @@ public sealed class UploadTests : BunitContext
             .Documents(FileDocument() with { Status = DocumentStatus.Ready })
             .Upload(CallOutcome<DocumentInfo>.Ok(FileDocument()));
         var page = RenderPage(material);
+        page.Confirm();
 
         Choose(page, InputFileContent.CreateFromText("Ein kurzer Text.", "Notizen.txt"));
         await page.Find("#upload-heading ~ button").ClickAsync(new());
@@ -92,6 +93,7 @@ public sealed class UploadTests : BunitContext
         var material = new FakeLearningMaterial()
             .Upload(new CallOutcome<DocumentInfo>(CallResult.Rejected, Messages: [mismatch]));
         var page = RenderPage(material);
+        page.Confirm();
 
         Choose(page, InputFileContent.CreateFromBinary([0x89, 0x50, 0x4E, 0x47], "Bild.pdf"));
         await page.Find("#upload-heading ~ button").ClickAsync(new());
@@ -105,6 +107,7 @@ public sealed class UploadTests : BunitContext
     {
         var material = new FakeLearningMaterial().Upload(new CallOutcome<DocumentInfo>(CallResult.TooLarge, Messages: []));
         var page = RenderPage(material);
+        page.Confirm();
 
         Choose(page, InputFileContent.CreateFromText("Ein kurzer Text.", "Notizen.md"));
         await page.Find("#upload-heading ~ button").ClickAsync(new());
@@ -123,6 +126,7 @@ public sealed class UploadTests : BunitContext
             .Upload(new CallOutcome<DocumentInfo>(CallResult.Limited, Messages: sentence is null ? [] : [sentence]))
             .Upload(new CallOutcome<DocumentInfo>(CallResult.Limited, Messages: sentence is null ? [] : [sentence]));
         var page = RenderPage(material);
+        page.Confirm();
 
         Choose(page, InputFileContent.CreateFromText("Ein kurzer Text.", "Notizen.txt"));
         await page.Find("#upload-heading ~ button").ClickAsync(new());

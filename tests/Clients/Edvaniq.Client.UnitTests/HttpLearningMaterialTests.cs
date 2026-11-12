@@ -86,7 +86,7 @@ public sealed class HttpLearningMaterialTests
         var request = Assert.Single(requests);
         Assert.Equal(HttpMethod.Post, request.Method);
         Assert.Equal(new Uri("https://edvaniq.test/api/content/documents"), request.RequestUri);
-        Assert.Equal("""{"title":"Skript","text":"Text"}""", Assert.Single(bodies));
+        Assert.Equal("""{"title":"Skript","text":"Text","confirmation":"material-1"}""", Assert.Single(bodies));
         Assert.Equal(CallResult.Ok, outcome.Result);
         Assert.Equal(Guid.Parse(DocumentId), outcome.Value!.Id);
     }
@@ -101,7 +101,44 @@ public sealed class HttpLearningMaterialTests
 
         await material.PasteAsync(null, "Grüße \"Ä\"\n", TestContext.Current.CancellationToken);
 
-        Assert.Equal("""{"title":null,"text":"Grüße \"Ä\"\n"}""", Assert.Single(bodies));
+        Assert.Equal("""{"title":null,"text":"Grüße \"Ä\"\n","confirmation":"material-1"}""", Assert.Single(bodies));
+    }
+
+    // #278: the file goes up with the confirmation in the query, Content checks it before it reads a byte.
+    [Fact]
+    public async Task Upload_PostsTheFile_WithTheConfirmation()
+    {
+        var requests = new List<HttpRequestMessage>();
+        var material = Material(requests, Created(DocumentJson));
+
+        using var file = new MemoryStream([1, 2, 3]);
+        var outcome = await material.UploadAsync("Skript.pdf", file, TestContext.Current.CancellationToken);
+
+        var request = Assert.Single(requests);
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Equal(new Uri("https://edvaniq.test/api/content/documents/files?confirmation=material-1"), request.RequestUri);
+        Assert.Equal(CallResult.Ok, outcome.Result);
+    }
+
+    // Content refuses a missing or outdated confirmation: 400 for a text, 422 for a file, both with its message.
+    [Fact]
+    public async Task ConfirmationRefused_GivesContentsMessage_ForTextAndFile()
+    {
+        var material = Material(
+            Problem(HttpStatusCode.BadRequest, $$"""
+                {"status":400,"errors":{"Confirmation":["{{MaterialConfirmationValues.Missing}}"]},"traceId":"{{TraceId}}"}
+                """),
+            Problem(HttpStatusCode.UnprocessableEntity, $$"""
+                {"status":422,"errors":{"confirmation":["{{MaterialConfirmationValues.Missing}}"]},"traceId":"{{TraceId}}"}
+                """));
+
+        var paste = await material.PasteAsync(null, "Text", TestContext.Current.CancellationToken);
+        using var file = new MemoryStream([1, 2, 3]);
+        var upload = await material.UploadAsync("Skript.pdf", file, TestContext.Current.CancellationToken);
+
+        Assert.Equal([CallResult.Rejected, CallResult.Rejected], [paste.Result, upload.Result]);
+        Assert.Equal([MaterialConfirmationValues.Missing], paste.Messages);
+        Assert.Equal([MaterialConfirmationValues.Missing], upload.Messages);
     }
 
     [Fact]

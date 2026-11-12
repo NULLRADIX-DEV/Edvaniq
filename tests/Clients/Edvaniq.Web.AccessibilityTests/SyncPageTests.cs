@@ -21,6 +21,7 @@ public sealed class SyncPageTests(WebShell shell)
         await second.Page.GetByLabel("Titel").FillAsync(Typed);
         await second.Page.EvaluateAsync("() => window.notReloaded = true");
 
+        await Material.ConfirmAsync(first.Page);
         await first.Page.GetByLabel("Text", new PageGetByLabelOptions { Exact = true }).FillAsync("Die Photosynthese wandelt Licht um.");
         await first.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Themen erkennen" }).ClickAsync();
         await Assertions.Expect(first.Page.Locator(".topic-list")).ToContainTextAsync("Photosynthese", new LocatorAssertionsToContainTextOptions { Timeout = 30_000 });

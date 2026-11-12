@@ -36,6 +36,15 @@ public sealed class PrivacyTests : BunitContext
         Assert.Contains("Aus PDF-, Word-, Text- und Markdown-Dateien liest Edvaniq den Text und übermittelt ihn wie einen eingefügten Text an den KI-Dienst", text);
     }
 
+    // Content keeps when and which version of the material confirmation came with each text and file (#278).
+    [Fact]
+    public void Notice_SaysTheConfirmationIsKept()
+    {
+        var text = string.Join(' ', Render<Privacy>().Find("h1").ParentElement!.TextContent.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+        Assert.Contains("Edvaniq speichert zu jedem Text und jeder Datei, wann es das bestätigt hat und in welcher Fassung dieser Bestätigung.", text);
+    }
+
     // The retention of learning records (Q27, #365).
     [Fact]
     public void Notice_NamesTheRetentionOfLearningRecords()

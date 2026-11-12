@@ -6,7 +6,8 @@ public interface ILearningMaterial
     // The user's documents, newest first, without their text.
     Task<CallOutcome<IReadOnlyList<DocumentInfo>>> ListDocumentsAsync(CancellationToken cancellationToken = default);
 
-    // A new document in status Uploaded. A text Content refuses comes back as Rejected with Content's messages.
+    // A new document in status Uploaded. Both calls carry the current MaterialConfirmationValues.Version: only call them
+    // once the user confirmed. A text Content refuses comes back as Rejected with Content's messages.
     Task<CallOutcome<DocumentInfo>> PasteAsync(string? title, string text, CancellationToken cancellationToken = default);
 
     // A new document in status Uploaded from a file, in the default learning goal. A file Content refuses comes back as

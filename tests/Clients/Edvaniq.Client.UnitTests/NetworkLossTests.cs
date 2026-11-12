@@ -159,6 +159,7 @@ public sealed partial class NetworkLossTests : BunitContext
         var ping = Render<SystemStatus>().Find("[role=status]").TextContent;
         var topics = Render<Topics>();
         var loadFailed = topics.Find("[role=status]").TextContent;
+        topics.Confirm();
         topics.Find("#paste-text").Change("Mein Text");
         topics.Find("form").Submit();
         var pasteFailed = topics.Find("form [role=alert]").TextContent;
