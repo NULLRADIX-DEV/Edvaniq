@@ -66,6 +66,10 @@ public static class InfrastructureExtensions
         return builder;
     }
 
+    // Only for the operator's document delete command, never in the running API.
+    public static IServiceCollection AddDocumentOwners(this IServiceCollection services) =>
+        services.AddScoped<IDocumentOwners, DocumentOwners>();
+
     // Without a directory neither process starts. The API writes to it, the worker only reads (FileStorage:Directory).
     private static void AddFileStore(this IServiceCollection services)
     {
