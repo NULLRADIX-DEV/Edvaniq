@@ -4,11 +4,12 @@ namespace Edvaniq.Services.Planning.Domain;
 
 // The run through one block of the plan (docs/spec/glossary.md#session). Bound to the block and its topic from the
 // moment it starts. A user has at most one active session: ActiveOwnerId is the owner while it runs and null once it
-// ended, and the database keeps it unique, so even two starts at once leave one. Ending it comes with #393/#395.
+// ended, and the database keeps it unique, so even two starts at once leave one. Broken off it ends as Aborted (#393),
+// finishing it comes with #395.
 public sealed class Session : IOwnedByUser
 {
     private Session(
-        Guid id, string ownerId, Guid learningGoalId, Guid blockId, DateOnly studyDay, Guid topicId, BlockKind kind, int minutes, bool topicIsNew, DateTime startedAt)
+        Guid id, string ownerId, Guid learningGoalId, Guid blockId, DateOnly studyDay, Guid topicId, BlockKind kind, int minutes, bool topicIsNew, int currentStep, DateTime startedAt)
     {
         Id = id;
         OwnerId = ownerId;
@@ -20,6 +21,7 @@ public sealed class Session : IOwnedByUser
         Kind = kind;
         Minutes = minutes;
         TopicIsNew = topicIsNew;
+        CurrentStep = currentStep;
         StartedAt = startedAt;
     }
 
@@ -57,7 +59,16 @@ public sealed class Session : IOwnedByUser
 
     public bool IsActive => EndedAt is null;
 
-    public static Session Start(Guid id, string ownerId, Guid learningGoalId, DateOnly studyDay, DayBlock block, DateTime startedAt, bool topicIsNew = false)
+    public SessionOutcome Outcome { get; private set; } = SessionOutcome.Running;
+
+    // The index in Steps the user is at (#393). Only ever moves forward, and a session started again on a block takes it
+    // over from the one broken off, so it goes on where that one stopped.
+    public int CurrentStep { get; private set; }
+
+    // previous: the session broken off last on this block. The new one goes on from its step with its steps, even if the
+    // topic got introduced since.
+    public static Session Start(
+        Guid id, string ownerId, Guid learningGoalId, DateOnly studyDay, DayBlock block, DateTime startedAt, bool topicIsNew = false, Session? previous = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(ownerId);
         ArgumentNullException.ThrowIfNull(block);
@@ -66,9 +77,77 @@ public sealed class Session : IOwnedByUser
             throw new InvalidOperationException("A block that is done can't be started again.");
         }
 
-        // Whole microseconds, as the database keeps them, so the session read back is the one started.
-        var stored = startedAt.AddTicks(-(startedAt.Ticks % 10));
+        if (previous is not null && (previous.BlockId != block.Id || previous.Outcome != SessionOutcome.Aborted))
+        {
+            throw new ArgumentException("Only a session broken off on the same block can be gone on from.", nameof(previous));
+        }
+
         return new Session(
-            id, ownerId, learningGoalId, block.Id, studyDay, block.Block.TopicId, block.Block.Kind, block.Block.Minutes, topicIsNew, stored);
+            id,
+            ownerId,
+            learningGoalId,
+            block.Id,
+            studyDay,
+            block.Block.TopicId,
+            block.Block.Kind,
+            block.Block.Minutes,
+            previous?.TopicIsNew ?? topicIsNew,
+            previous?.CurrentStep ?? 0,
+            Stored(startedAt));
     }
+
+    // Ends the session as broken off. False when it ended already, then nothing changes.
+    public bool Abort(DateTime endedAt)
+    {
+        if (!IsActive)
+        {
+            return false;
+        }
+
+        EndedAt = Stored(endedAt);
+        ActiveOwnerId = null;
+        Outcome = SessionOutcome.Aborted;
+        return true;
+    }
+
+    // Moves to the step, never back: a step at or before the current one changes nothing, so a repeated call is harmless.
+    public SessionAdvance Advance(int step)
+    {
+        if (!IsActive)
+        {
+            return SessionAdvance.Ended;
+        }
+
+        if (step < 0 || step >= Steps.Count)
+        {
+            return SessionAdvance.NoSuchStep;
+        }
+
+        if (step <= CurrentStep)
+        {
+            return SessionAdvance.Unchanged;
+        }
+
+        CurrentStep = step;
+        return SessionAdvance.Advanced;
+    }
+
+    // Whole microseconds, as the database keeps them, so the session read back is the one stored.
+    private static DateTime Stored(DateTime value) => value.AddTicks(-(value.Ticks % 10));
+}
+
+public enum SessionOutcome
+{
+    Running,
+
+    // Broken off (#393): the answers count, the block stays open and goes on from here.
+    Aborted,
+}
+
+public enum SessionAdvance
+{
+    Advanced,
+    Unchanged,
+    NoSuchStep,
+    Ended,
 }

@@ -32,9 +32,13 @@ public sealed class SessionStarts(
         // A session needs its goal in the database, the default goal may not be there yet.
         var goal = await goals.DefaultAsync(cancellationToken);
         var now = time.GetUtcNow();
-        // The steps are fixed here (#377): a topic LearningEngine can't vouch for gets the introduction unit.
+
+        // The steps are fixed here (#377): a topic LearningEngine can't vouch for gets the introduction unit. A block
+        // broken off before goes on from where it stopped, with the same steps (#393). Its id holds the day, so only a
+        // session of today's block can match.
+        var previous = await sessions.LastAbortedAsync(block.Id, cancellationToken);
         var session = Session.Start(
-            Guid.CreateVersion7(now), currentUser.Id, goal.Id, today.Plan.StudyDay, block, now.UtcDateTime, today.IsNew(block.Block.TopicId));
+            Guid.CreateVersion7(now), currentUser.Id, goal.Id, today.Plan.StudyDay, block, now.UtcDateTime, today.IsNew(block.Block.TopicId), previous);
         if (await sessions.TryAddAsync(session, cancellationToken))
         {
             return new SessionStart(SessionStartResult.Started, session);

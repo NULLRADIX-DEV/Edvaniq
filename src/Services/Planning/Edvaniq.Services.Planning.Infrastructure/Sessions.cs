@@ -18,6 +18,18 @@ internal sealed class Sessions(PlanningDbContext db) : ISessions
     public Task<Session?> FindAsync(Guid id, CancellationToken cancellationToken) =>
         db.Sessions.AsNoTracking().FirstOrDefaultAsync(session => session.Id == id, cancellationToken);
 
+    public Task<Session?> FindForChangeAsync(Guid id, CancellationToken cancellationToken) =>
+        db.Sessions.FirstOrDefaultAsync(session => session.Id == id, cancellationToken);
+
+    public Task<Session?> LastAbortedAsync(Guid blockId, CancellationToken cancellationToken) =>
+        db.Sessions.AsNoTracking()
+            .Where(session => session.BlockId == blockId && session.Outcome == SessionOutcome.Aborted)
+            .OrderByDescending(session => session.EndedAt)
+            .ThenByDescending(session => session.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task SaveAsync(CancellationToken cancellationToken) => db.SaveChangesAsync(cancellationToken);
+
     public async Task<bool> TryAddAsync(Session session, CancellationToken cancellationToken)
     {
         db.Sessions.Add(session);

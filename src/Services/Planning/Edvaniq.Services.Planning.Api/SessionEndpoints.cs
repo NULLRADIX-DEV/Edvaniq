@@ -3,12 +3,14 @@ using Edvaniq.Services.Planning.Domain;
 
 namespace Edvaniq.Services.Planning.Api;
 
-// Sessions of the user from the token (#376). Ending one comes with #393/#395.
+// Sessions of the user from the token (#376). Broken off and moved on with #393, finished with #395.
 internal static class SessionEndpoints
 {
     public const string BlockGone = "Diesen Block gibt es im aktuellen Plan nicht mehr. Lade den Plan neu.";
 
     public const string BlockDone = "Dieser Block ist schon erledigt.";
+
+    public const string SessionEnded = "Diese Session ist schon beendet.";
 
     public static IEndpointRouteBuilder MapSessionEndpoints(this IEndpointRouteBuilder app)
     {
@@ -38,15 +40,47 @@ internal static class SessionEndpoints
                 ? Results.Ok(SessionResponse.From(session, existing: true))
                 : Results.NotFound());
 
+        // Breaking off ends the session, the block stays open and the next start goes on from here. Doing it again
+        // gives the session as it is.
+        group.MapPost("/{id:guid}/abort", async (Guid id, SessionChanges changes, CancellationToken cancellationToken) =>
+            await changes.AbortAsync(id, cancellationToken) is { } session
+                ? Results.Ok(SessionResponse.From(session, existing: true))
+                : Results.NotFound());
+
+        // Only forward: a step at or before the current one changes nothing.
+        group.MapPost("/{id:guid}/advance", async (Guid id, AdvanceRequest request, SessionChanges changes, CancellationToken cancellationToken) =>
+        {
+            if (request.Step is not { } step)
+            {
+                return NoSuchStep();
+            }
+
+            var (result, session) = await changes.AdvanceAsync(id, step, cancellationToken);
+            return result switch
+            {
+                null => Results.NotFound(),
+                SessionAdvance.NoSuchStep => NoSuchStep(),
+                SessionAdvance.Ended => Results.Problem(title: SessionEnded, statusCode: StatusCodes.Status409Conflict),
+                _ => Results.Ok(SessionResponse.From(session!, existing: true)),
+            };
+        });
+
         return app;
     }
+
+    private static IResult NoSuchStep() =>
+        Results.ValidationProblem(new Dictionary<string, string[]> { [nameof(AdvanceRequest.Step)] = ["Diesen Schritt hat die Session nicht."] });
 }
 
 internal sealed record StartRequest(Guid BlockId);
 
+// Step: the index in Steps to move to.
+internal sealed record AdvanceRequest(int? Step);
+
 // Kind is "learn" or "review". Existing: the user had this session already, a start brought it back. EndedAt is null
 // while it runs. Steps: the fixed order of the session (#377), each "review", "introductionUnit" or "quiz", Empty when
-// there is nothing to do in it (the review until M4).
+// there is nothing to do in it (the review until M4), Questions the size the client passes to POST /quizzes of
+// Assessment for the quiz. CurrentStep: the index in Steps the user is at. Outcome: "running" or "aborted" (#393).
 internal sealed record SessionResponse(
     Guid Id,
     Guid BlockId,
@@ -58,7 +92,9 @@ internal sealed record SessionResponse(
     DateTime StartedAt,
     DateTime? EndedAt,
     bool Existing,
-    IReadOnlyList<StepResponse> Steps)
+    IReadOnlyList<StepResponse> Steps,
+    int CurrentStep,
+    string Outcome)
 {
     public static SessionResponse From(Session session, bool existing) =>
         new(
@@ -72,7 +108,9 @@ internal sealed record SessionResponse(
             session.StartedAt,
             session.EndedAt,
             existing,
-            [.. session.Steps.Select(step => new StepResponse(NameOf(step.Kind), step.Empty))]);
+            [.. session.Steps.Select(step => new StepResponse(NameOf(step.Kind), step.Empty, step.Questions))],
+            session.CurrentStep,
+            session.Outcome == SessionOutcome.Aborted ? "aborted" : "running");
 
     private static string NameOf(SessionStepKind kind) => kind switch
     {
@@ -82,4 +120,4 @@ internal sealed record SessionResponse(
     };
 }
 
-internal sealed record StepResponse(string Kind, bool Empty);
+internal sealed record StepResponse(string Kind, bool Empty, int? Questions);

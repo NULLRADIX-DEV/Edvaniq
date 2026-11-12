@@ -311,6 +311,9 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                     b.Property<Guid>("BlockId")
                         .HasColumnType("char(36)");
 
+                    b.Property<int>("CurrentStep")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("EndedAt")
                         .HasColumnType("datetime(6)");
 
@@ -324,6 +327,11 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
 
                     b.Property<int>("Minutes")
                         .HasColumnType("int");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)");
 
                     b.Property<string>("OwnerId")
                         .IsRequired()

@@ -16,7 +16,7 @@ public sealed class SessionStepTests(ServiceFactory service) : IClassFixture<Ser
 {
     private static readonly Step EmptyReview = new("review", true);
     private static readonly Step Unit = new("introductionUnit", false);
-    private static readonly Step Quiz = new("quiz", false);
+    private static readonly Step Quiz = new("quiz", false, 5);
 
     // AC1 and AC3.
     [Fact]
@@ -108,5 +108,5 @@ public sealed class SessionStepTests(ServiceFactory service) : IClassFixture<Ser
 
     private sealed record Session(Guid Id, List<Step> Steps);
 
-    private sealed record Step(string Kind, bool Empty);
+    private sealed record Step(string Kind, bool Empty, int? Questions = null);
 }
