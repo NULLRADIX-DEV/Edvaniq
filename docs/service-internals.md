@@ -276,7 +276,7 @@ Kein Dokument bleibt für immer „in Analyse“. Die Grenzen des Content-Worker
 | `Timeout` | 60 min | ein ganzer Lauf, gezählt ab Einfügen, Upload oder Neustart, muss größer als `TopicsTimeout` sein |
 | `SweepInterval` | 1 min | wie oft der Worker nach zu langen Läufen sucht |
 
-Ist ein Dokument nach `Timeout` noch „hochgeladen“ oder „in Analyse“, scheitert es mit „Die Analyse hat zu lange gedauert. Starte sie neu.“, etwa weil sein Worker immer wieder abstürzt. Der Nutzer startet es neu wie jedes gescheiterte Dokument. Ein Dokument, das nach einem Ausfall der KI absichtlich wartet, zählt erst wieder, wenn es an der Reihe ist. Beendet ein Worker das Dokument im selben Moment, gewinnt nur einer, es geht nichts doppelt hinaus. Jedes so beendete Dokument steht als Warnung im Log, dazu je Runde die Zahl. Häufen sich diese Zeilen, ist die Grenze zu knapp oder der Worker überlastet.
+Ist ein Dokument nach `Timeout` noch „hochgeladen“ oder „in Analyse“, scheitert es mit „Die Analyse hat zu lange gedauert. Starte sie neu.“, etwa weil sein Worker immer wieder abstürzt. Der Nutzer startet es neu wie jedes gescheiterte Dokument. Ein Dokument, das nach einem Ausfall der KI absichtlich wartet, zählt erst wieder, wenn es an der Reihe ist. Beendet ein Worker das Dokument im selben Moment, gewinnt nur einer, es geht nichts doppelt hinaus. Jedes so beendete Dokument steht als Warnung im Log, dazu je Runde die Zahl. Häufen sich diese Zeilen, ist die Grenze zu knapp oder der Worker überlastet. War der Worker länger als `Timeout` aus, lässt seine erste Suche danach alle Dokumente scheitern, die schon vorher warteten; ein Neustart durch den Nutzer bringt jedes davon zurück.
 
 ## Tests
 
