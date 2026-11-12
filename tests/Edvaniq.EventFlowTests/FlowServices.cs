@@ -14,6 +14,7 @@ using Edvaniq.Testing;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using AssessmentInfra = Edvaniq.Services.Assessment.Infrastructure;
 using ContentInfra = Edvaniq.Services.Content.Infrastructure;
@@ -60,12 +61,18 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
         // What the worker registers with its token, against the Knowledge above.
         var knowledge = Knowledge.CreateClient();
         knowledge.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.CreateForClient("content"));
+        // The worker asks the same Planning for the profile of a document's goal, with its own token (#323).
+        var planning = planningHost.CreateClient();
+        planning.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.CreateForClient("content"));
+
         // Content asks the Planning above for the default goal, through its real client with the user's token.
         Content = await StartAsync<content::Program, ContentInfra.ContentDbContext>(
             ContentInfra.InfrastructureExtensions.DatabaseName,
             services =>
             {
                 services.AddSingleton<IKnowledgeTopics>(new ContentInfra.KnowledgeTopics(knowledge));
+                services.AddSingleton<Edvaniq.Services.Content.Application.IGoalProfiles>(
+                    new ContentInfra.PlanningGoalProfiles(planning, NullLogger<ContentInfra.PlanningGoalProfiles>.Instance));
                 ContentInfra.Ai.ContentAi.AddContentTestDouble(services);
                 services.AddHttpClient<Edvaniq.Services.Content.Application.ILearningGoals, ContentInfra.PlanningLearningGoals>()
                     .ConfigurePrimaryHttpMessageHandler(() => planningHost.Server.CreateHandler());

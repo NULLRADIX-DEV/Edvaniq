@@ -138,6 +138,7 @@ public sealed class QuestionPools(
         // Every AI call comes before the one save, nothing holds the database meanwhile. A topic without questions fails
         // the document and nothing of the others goes out. An outage postpones it, then all its topics are asked again.
         var made = new List<(KnowledgeTopic Topic, List<GeneratedItem> Items)>();
+        LearnerProfile? profile = null;
         foreach (var topic in topics.Where(topic => !pooled.Contains(topic.Id)))
         {
             var material = SectionsOf(topics, topic, texts);
@@ -147,7 +148,15 @@ public sealed class QuestionPools(
                 continue;
             }
 
-            var (items, failure) = await PoolAsync(document, material, texts, cancellationToken);
+            // Asked once per round, only when a topic really needs the AI.
+            profile ??= await GoalContext.ProfileOfAsync(document, scope.ServiceProvider.GetRequiredService<IGoalProfiles>(), logger, cancellationToken);
+            if (profile is null)
+            {
+                await WorkerSave.SaveAsync(db, documentId, "questions", logger, cancellationToken);
+                return true;
+            }
+
+            var (items, failure) = await PoolAsync(document, profile, material, texts, cancellationToken);
             if (items is null)
             {
                 if (failure is not null)
@@ -211,12 +220,12 @@ public sealed class QuestionPools(
     // just have had a bad moment. A provider that fails or takes too long ends at once. Every attempt goes into the cost
     // log.
     private async Task<(List<GeneratedItem>? Items, Exception? Failure)> PoolAsync(
-        Document document, IReadOnlyList<Guid> sectionIds, Dictionary<Guid, string> texts, CancellationToken cancellationToken)
+        Document document, LearnerProfile profile, IReadOnlyList<Guid> sectionIds, Dictionary<Guid, string> texts, CancellationToken cancellationToken)
     {
         var chat = ContentAi.For(document, ai, testDouble);
         var answer = await chat.AskAsync(
             [
-                new ChatMessage(ChatRole.System, QuestionGeneration.System(LearnerProfile.Of(document.Level, document.OutputLanguage))),
+                new ChatMessage(ChatRole.System, QuestionGeneration.System(profile)),
                 new ChatMessage(ChatRole.User, QuestionGeneration.User(sectionIds.Select(id => texts[id]))),
             ],
             text => QuestionGeneration.Read(text, sectionIds) is { Count: > 0 } drafts ? drafts : null,

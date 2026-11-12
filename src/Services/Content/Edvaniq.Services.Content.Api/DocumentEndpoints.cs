@@ -30,11 +30,23 @@ internal static class DocumentEndpoints
                 return Results.ValidationProblem(errors);
             }
 
-            // The goal before the save: without Planning nothing is stored, the user just sends the text again.
+            // The goal before the save: without Planning nothing is stored, the user just sends the text again. Without
+            // learningGoalId the default goal. Someone else's goal gets the same answer as one that doesn't exist.
             LearningGoalInfo learningGoal;
             try
             {
-                learningGoal = await goal.GetDefaultAsync(cancellationToken);
+                if (request.LearningGoalId is not { } id)
+                {
+                    learningGoal = await goal.GetDefaultAsync(cancellationToken);
+                }
+                else if (await goal.FindAsync(id, cancellationToken) is { } found)
+                {
+                    learningGoal = found;
+                }
+                else
+                {
+                    return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: FileUploadEndpoint.GoalNotFound);
+                }
             }
             catch (LearningGoalUnavailableException)
             {
@@ -77,7 +89,7 @@ internal static class DocumentEndpoints
     }
 }
 
-internal sealed record PastedText(string? Title, string? Text);
+internal sealed record PastedText(string? Title, string? Text, Guid? LearningGoalId = null);
 
 // Status goes out by name (Uploaded, Analyzing, Ready, Failed), the client words it. A failed document says why. Source
 // says where it came from, Text or File: one from a file stays Uploaded until its text is extracted (#282).

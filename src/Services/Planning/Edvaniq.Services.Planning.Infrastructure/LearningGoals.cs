@@ -83,6 +83,9 @@ internal sealed class LearningGoals(PlanningDbContext db, ICurrentUser currentUs
     public Task<LearningGoal?> FindAsync(Guid id, CancellationToken cancellationToken) =>
         db.LearningGoals.AsNoTracking().FirstOrDefaultAsync(goal => goal.Id == id && goal.Name != null, cancellationToken);
 
+    public Task<LearningGoal?> FindWithDefaultAsync(Guid id, CancellationToken cancellationToken) =>
+        db.LearningGoals.AsNoTracking().FirstOrDefaultAsync(goal => goal.Id == id, cancellationToken);
+
     private async Task<bool> TryInsertAsync(LearningGoal goal, CancellationToken cancellationToken)
     {
         db.LearningGoals.Add(goal);

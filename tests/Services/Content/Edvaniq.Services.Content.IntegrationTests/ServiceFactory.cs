@@ -62,6 +62,7 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
                 services.AddContentTestDouble();
                 services.AddSingleton<ILoggerProvider>(Logs);
                 services.AddSingleton<IKnowledgeTopics>(Knowledge);
+                services.AddSingleton<IGoalProfiles>(Planning);
                 services.AddHttpClient<ILearningGoals, PlanningLearningGoals>().ConfigurePrimaryHttpMessageHandler(() => Planning);
             });
 

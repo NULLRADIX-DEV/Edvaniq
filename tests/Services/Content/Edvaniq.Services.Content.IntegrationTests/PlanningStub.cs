@@ -4,16 +4,19 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 
+using Edvaniq.Services.Content.Application;
+
 namespace Edvaniq.Services.Content.IntegrationTests;
 
 // Answers in place of Planning, behind the real client with its token handler and resilience. Every user gets one goal
 // of their own, as Planning gives the default goal. The user comes from the sub of the token that arrives, so a request
 // without the caller's token finds no goal. The tests share it, each with its own users.
-public sealed class PlanningStub : HttpMessageHandler
+public sealed class PlanningStub : HttpMessageHandler, IGoalProfiles
 {
     private readonly ConcurrentDictionary<string, Guid> goals = new();
     private readonly ConcurrentDictionary<string, HttpStatusCode> down = new();
     private readonly ConcurrentDictionary<string, bool> hanging = new();
+    private readonly ConcurrentDictionary<Guid, bool> forgotten = new();
     private readonly ConcurrentDictionary<string, (string? Level, string? OutputLanguage)> profiles = new();
 
     // Every request that came in, as it arrived.
@@ -63,13 +66,42 @@ public sealed class PlanningStub : HttpMessageHandler
 
         // Only the user's own goal is found, someone else's looks like none.
         return request.Method == HttpMethod.Get
-            && request.RequestUri.AbsolutePath.Split('/') is ["", "learning-goals", var id]
+            && request.RequestUri.AbsolutePath.Split('/') is ["", "learning-goals", var id, "profile"]
             && Guid.TryParse(id, out var goal)
             && goals.TryGetValue(user, out var own)
             && own == goal
             ? new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { id = goal, level, outputLanguage }) }
             : new HttpResponseMessage(HttpStatusCode.NotFound);
     }
+
+    // The worker's question for a goal's profile (IGoalProfiles), answered from the same goals and profiles, whoever owns
+    // the goal. A goal of a user marked down can't be asked, a forgotten goal is gone.
+    public Task<LearnerProfile?> OfAsync(Guid learningGoalId, CancellationToken cancellationToken)
+    {
+        WorkerAsked.Enqueue(learningGoalId);
+        var owner = goals.FirstOrDefault(goal => goal.Value == learningGoalId).Key;
+        if (owner is not null && down.ContainsKey(owner))
+        {
+            throw new LearningGoalUnavailableException(new HttpRequestException("Planning is down."));
+        }
+
+        if (owner is null || forgotten.ContainsKey(learningGoalId))
+        {
+            return Task.FromResult<LearnerProfile?>(null);
+        }
+
+        var (level, outputLanguage) = profiles.GetValueOrDefault(owner);
+        return Task.FromResult<LearnerProfile?>(LearnerProfile.Of(level, outputLanguage));
+    }
+
+    // Every goal the worker asked for, in order.
+    public ConcurrentQueue<Guid> WorkerAsked { get; } = new();
+
+    // Planning doesn't know the goal any more.
+    public void Forget(Guid learningGoalId) => forgotten[learningGoalId] = true;
+
+    // Planning is back for the user.
+    public void Up(string userId) => down.TryRemove(userId, out _);
 
     // The sub of a bearer token, unchecked: the service checked it before it asked.
     private static string? UserOf(string? authorization)

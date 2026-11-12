@@ -19,6 +19,12 @@ internal static partial class ContentLog
     [LoggerMessage(Level = LogLevel.Error, Message = "The AI stayed unavailable for the {Task} of document {DocumentId} in {Attempts} attempts, it is marked as failed")]
     public static partial void AiStaysUnavailable(ILogger logger, string task, Guid documentId, int attempts);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Planning could not say the profile of the learning goal of document {DocumentId}, it is marked as failed")]
+    public static partial void GoalUnavailable(ILogger logger, Guid documentId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "The learning goal of document {DocumentId} is gone, it is marked as failed")]
+    public static partial void GoalGone(ILogger logger, Guid documentId);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "The AI is paused, the {Task} of document {DocumentId} is marked as failed")]
     public static partial void AiPaused(ILogger logger, string task, Guid documentId);
 

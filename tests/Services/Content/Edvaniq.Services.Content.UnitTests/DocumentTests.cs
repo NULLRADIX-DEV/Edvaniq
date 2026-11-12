@@ -77,23 +77,14 @@ public class DocumentTests
         Assert.NotEqual(Guid.Empty, document.Id);
     }
 
+    // #323: the goal keeps level and output language, the document only its id.
     [Fact]
-    public void Paste_KeepsLevelAndOutputLanguageOfTheGoal()
+    public void PasteAndUpload_KeepNoCopyOfTheGoal()
     {
-        var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now, "University", "en");
+        var pasted = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
+        var uploaded = Document.Upload("alice", Goal, "Skript.pdf", Guid.NewGuid(), FileFormat.Pdf, Now);
 
-        Assert.Equal(("University", "en"), (document.Level, document.OutputLanguage));
-    }
-
-    // A cut name would read as another value, so one that is too long counts as none.
-    [Fact]
-    public void Paste_DropsALevelOrLanguageThatDoesntFit()
-    {
-        var document = Document.Paste(
-            "alice", Goal, null, "Licht spaltet Wasser.", Now,
-            new string('a', Document.LevelMaxLength + 1), new string('e', Document.OutputLanguageMaxLength + 1));
-
-        Assert.Equal((null, null), (document.Level, document.OutputLanguage));
+        Assert.All([pasted, uploaded], document => Assert.Equal((Goal, (string?)null, (string?)null), (document.LearningGoalId!.Value, document.Level, document.OutputLanguage)));
     }
 
     [Theory]

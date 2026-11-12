@@ -107,8 +107,15 @@ public sealed class DocumentAnalyzer(
             .OrderBy(section => section.Ordinal)
             .ToListAsync(cancellationToken);
 
+        var profile = await GoalContext.ProfileOfAsync(document, scope.ServiceProvider.GetRequiredService<IGoalProfiles>(), logger, cancellationToken);
+        if (profile is null)
+        {
+            await WorkerSave.SaveAsync(db, documentId, "analysis", logger, cancellationToken);
+            return;
+        }
+
         // The AI call comes before the one save, nothing holds the database meanwhile.
-        var answer = await TopicsAsync(document, sections, cancellationToken);
+        var answer = await TopicsAsync(document, profile, sections, cancellationToken);
         if (answer.Value is { } topics)
         {
             document.ReportTopics(time.GetUtcNow().UtcDateTime);
@@ -128,13 +135,13 @@ public sealed class DocumentAnalyzer(
 
     // The answer of the AI with the topics, if any. Every attempt goes into the cost log.
     private async Task<StructuredAnswer<IReadOnlyList<TopicSuggestion>>> TopicsAsync(
-        Document document, IReadOnlyList<Section> sections, CancellationToken cancellationToken)
+        Document document, LearnerProfile profile, IReadOnlyList<Section> sections, CancellationToken cancellationToken)
     {
         IReadOnlyList<Guid> ids = [.. sections.Select(section => section.Id)];
         var chat = ContentAi.For(document, ai, testDouble);
         var answer = await chat.AskAsync(
             [
-                new ChatMessage(ChatRole.System, TopicAnalysis.System(LearnerProfile.Of(document.Level, document.OutputLanguage))),
+                new ChatMessage(ChatRole.System, TopicAnalysis.System(profile)),
                 new ChatMessage(ChatRole.User, TopicAnalysis.User(sections.Select(section => document.Text.Substring(section.Start, section.Length)))),
             ],
             text => TopicAnalysis.Read(text, ids),
