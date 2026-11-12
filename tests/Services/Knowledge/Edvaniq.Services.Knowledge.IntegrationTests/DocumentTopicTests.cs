@@ -6,6 +6,7 @@ using Edvaniq.Services.Knowledge.Domain;
 using Edvaniq.Services.Knowledge.Infrastructure;
 using Edvaniq.Testing;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Edvaniq.Services.Knowledge.IntegrationTests;
@@ -34,6 +35,40 @@ public sealed class DocumentTopicTests(ServiceFactory service) : IClassFixture<S
             [new DocumentTopic(cell.Id, null, 0, [first]), new DocumentTopic(nucleus.Id, cell.Id, 1, [second])],
             topics!,
             DocumentTopic.Comparer);
+    }
+
+    // #293: the sections hang on the topic's id, so renaming a topic or its subtopic takes them nowhere.
+    [Fact(Timeout = 60_000)]
+    public async Task RenamedTopics_KeepTheirSections()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        var document = Guid.NewGuid();
+        var (first, second) = (Guid.NewGuid(), Guid.NewGuid());
+        var cell = Topic.Create(alice, Guid.Empty, "Zelle", Seed.Now, document, 0);
+        var nucleus = cell.AddSubtopic("Zellkern", Seed.Now, document, 1);
+        await AddAsync([cell, nucleus], [cell.AssignSection(document, first), nucleus.AssignSection(document, second)]);
+        using var user = ClientWith(TestTokens.Create(alice));
+
+        foreach (var (id, name) in new[] { (cell.Id, "Zellbiologie"), (nucleus.Id, "Der Zellkern") })
+        {
+            using var renamed = await user.PatchAsJsonAsync($"/topics/{id}", new { name }, TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
+        }
+
+        using var content = ClientWith(TestTokens.CreateForClient(Content));
+        var topics = await content.GetFromJsonAsync<DocumentTopic[]>($"/documents/{document}/topics", TestContext.Current.CancellationToken);
+        Assert.Equal(
+            [new DocumentTopic(cell.Id, null, 0, [first]), new DocumentTopic(nucleus.Id, cell.Id, 1, [second])],
+            topics!,
+            DocumentTopic.Comparer);
+        using var scope = service.Services.CreateScope();
+        var stored = scope.ServiceProvider.GetRequiredService<KnowledgeDbContext>().TopicSections.IgnoreQueryFilters()
+            .Where(section => section.DocumentId == document)
+            .Select(section => new { section.TopicId, section.SectionId })
+            .ToList()
+            .OrderBy(section => section.SectionId == first ? 0 : 1)
+            .Select(section => (section.TopicId, section.SectionId));
+        Assert.Equal([(cell.Id, first), (nucleus.Id, second)], stored);
     }
 
     // #208: a later document whose analysis only hangs sections on known topics still has topics, else Content would wait
