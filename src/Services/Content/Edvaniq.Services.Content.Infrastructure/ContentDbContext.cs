@@ -3,6 +3,7 @@ using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.Services.Content.Domain;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Edvaniq.Services.Content.Infrastructure;
 
@@ -28,6 +29,10 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
     public DbSet<PageCharge> PageCharges => Set<PageCharge>();
 
     public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
+
+    // Oracle's provider writes a DateOnly but reads a date column back as DateTime.
+    private static readonly ValueConverter<DateOnly, DateTime> StudyDayConverter =
+        new(date => date.ToDateTime(TimeOnly.MinValue), stored => DateOnly.FromDateTime(stored));
 
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
@@ -78,6 +83,7 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
         // One charge per document, a retry takes nothing twice. The sum of a day reads by owner and day.
         var charge = modelBuilder.Entity<PageCharge>();
+        charge.Property(item => item.StudyDay).HasConversion(StudyDayConverter).HasColumnType("date");
         charge.HasIndex(item => item.DocumentId).IsUnique();
         charge.HasIndex(item => new { item.OwnerId, item.StudyDay });
 
