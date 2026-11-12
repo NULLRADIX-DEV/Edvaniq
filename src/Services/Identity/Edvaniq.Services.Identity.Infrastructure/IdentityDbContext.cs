@@ -13,6 +13,8 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
 {
     public DbSet<Account> Accounts => Set<Account>();
 
+    public DbSet<InviteCode> InviteCodes => Set<InviteCode>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         var account = modelBuilder.Entity<Account>();
@@ -27,5 +29,13 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
         account.Property(item => item.Email).HasMaxLength(AccountEmail.MaxLength);
         account.Property(item => item.Pseudonym).HasMaxLength(Account.PseudonymMaxLength);
         account.HasIndex(item => item.Email).IsUnique();
+
+        // #245: invitation codes, only their hash. The status is computed from the two times.
+        var invite = modelBuilder.Entity<InviteCode>();
+        invite.Property(item => item.Label).HasMaxLength(InviteCode.LabelLength);
+        invite.Property(item => item.CodeHash).HasMaxLength(64);
+        invite.Ignore(item => item.Status);
+        invite.HasIndex(item => item.Label).IsUnique();
+        invite.HasIndex(item => item.CodeHash).IsUnique();
     }
 }

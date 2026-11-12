@@ -25,6 +25,8 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<IAccounts, Accounts>();
         builder.Services.AddScoped<AccountService>();
         builder.Services.AddScoped<AccountDeletion>();
+        builder.Services.AddScoped<IInviteCodes, InviteCodes>();
+        builder.Services.AddScoped<InviteService>();
 
         // Only the outbox and its dispatcher, Identity listens to nobody. Without ConnectionStrings:nats UserDeleted waits
         // in the outbox.
