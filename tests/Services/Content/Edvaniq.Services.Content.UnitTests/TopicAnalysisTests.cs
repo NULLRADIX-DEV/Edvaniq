@@ -14,6 +14,7 @@ public class TopicAnalysisTests
     {
         ["topics-1"] = "15281c86136864e658f604352b3925b9405000cd160c5f9f33b3c59fa99522ce",
         ["topics-2"] = "c86804ae23b7660eef644059a113bc7a63eeb8763ed76c29a68c26996ab0f0c3",
+        ["topics-3"] = "f9299a898edf6559075c8f14ae2a5a25b20e8f0998dfc3b7e88a632fd30157d1",
     };
 
     [Fact]
@@ -27,6 +28,23 @@ public class TopicAnalysisTests
         Assert.All(
             Enum.GetValues<LearnerLevel>(),
             level => Assert.Contains(instruction, TopicAnalysis.System(new LearnerProfile(level, language))));
+
+    // #291: the level words the names, one line of its own per level, and the split stays the material's in every variant.
+    [Fact]
+    public void System_WordsTheNamesForTheLevel_ButSplitsByTheMaterialOnly()
+    {
+        var lines = Enum.GetValues<LearnerLevel>()
+            .Select(level => TopicAnalysis.System(new LearnerProfile(level, LearnerProfile.German)).Split('\n')
+                .Single(line => line.StartsWith("Die Lernenden ", StringComparison.Ordinal)))
+            .ToList();
+
+        Assert.Equal(lines.Count, lines.Distinct().Count());
+        Assert.All(lines, line => Assert.Contains("für die Namen", line, StringComparison.Ordinal));
+        Assert.All(
+            LearnerProfile.All,
+            profile => Assert.Contains(
+                "Wie du das Material in Themen und Unterthemen gliederst, hängt nur vom Material ab", TopicAnalysis.System(profile)));
+    }
 
     [Fact]
     public void System_KeepsTechnicalTermsAsInTheMaterial() =>
@@ -88,6 +106,38 @@ public class TopicAnalysisTests
         const string answer = """{"topics":[{"title":"A","sections":[2]},{"title":"B","sections":[3]}]}""";
 
         Assert.Equal(["A - [0,1]", "B - [2,3]"], Shape(TopicAnalysis.Read(answer, Sections)));
+    }
+
+    // #291: whatever order the answer has, the topics come in the order of the material, each subtopic under its own
+    // topic, and every section stays where the answer put it.
+    [Fact]
+    public void Read_PutsTheTopicsInTheOrderOfTheMaterial()
+    {
+        const string answer = """
+            {"topics":[
+              {"title":"Zellatmung","sections":[4],"subtopics":[]},
+              {"title":"Photosynthese","sections":[],"subtopics":[{"title":"Calvin-Zyklus","sections":[3]},{"title":"Lichtreaktion","sections":[1,2]}]}
+            ]}
+            """;
+
+        Assert.Equal(
+            ["Photosynthese - []", "Lichtreaktion 0 [0,1]", "Calvin-Zyklus 0 [2]", "Zellatmung - [3]"],
+            Shape(TopicAnalysis.Read(answer, Sections)));
+    }
+
+    // A topic counts from the first section of its own or of a subtopic, whichever comes first.
+    [Fact]
+    public void Read_OrdersATopicByTheFirstSectionOfItsSubtopicsToo()
+    {
+        const string answer = """
+            {"topics":[
+              {"title":"B","sections":[2]},
+              {"title":"A","sections":[4],"subtopics":[{"title":"A1","sections":[1]}]},
+              {"title":"C","sections":[3]}
+            ]}
+            """;
+
+        Assert.Equal(["A - [3]", "A1 0 [0]", "B - [1]", "C - [2]"], Shape(TopicAnalysis.Read(answer, Sections)));
     }
 
     [Fact]
