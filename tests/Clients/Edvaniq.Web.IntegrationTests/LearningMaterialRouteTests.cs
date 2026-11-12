@@ -18,6 +18,9 @@ public sealed class LearningMaterialRouteTests
     [InlineData("POST", "/api/content/documents/files", "/content/documents/files")]
     [InlineData("GET", "/api/knowledge/topics", "/knowledge/topics")]
     [InlineData("GET", "/api/content/quota", "/content/quota")]
+    [InlineData("GET", "/api/knowledge/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/terms", "/knowledge/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/terms")]
+    [InlineData("GET", "/api/knowledge/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections", "/knowledge/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections")]
+    [InlineData("GET", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections", "/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections")]
     [InlineData("POST", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/retry", "/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/retry")]
     public async Task AfterLogin_TheCallReachesTheService_WithTheUsersToken(string method, string path, string arrives)
     {
@@ -37,6 +40,22 @@ public sealed class LearningMaterialRouteTests
         Assert.Equal(0, gateway.TokenRequests);
     }
 
+    // #294: the topic directory asks for the hidden topics too, the query has to arrive at Knowledge.
+    [Fact]
+    public async Task HiddenTopics_AreAskedFor_ThroughTheQuery()
+    {
+        await using var gateway = await StubService.StartAsync("gateway-stub");
+        await using var web = new WebFactory(gateway.Address);
+        using var browser = web.CreateBrowser();
+        await LoginTests.LoginCookieAsync(browser);
+
+        using var response = await browser.GetAsync("/api/knowledge/topics?includeHidden=true", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var echo = (await response.Content.ReadFromJsonAsync<Echo>(TestContext.Current.CancellationToken))!;
+        Assert.Equal(("/knowledge/topics", "?includeHidden=true"), (echo.Path, echo.Query));
+    }
+
     // Neither nobody nor a guest session of the smoke test gets to anyone's documents.
     [Theory]
     [InlineData("GET", "/api/content/documents")]
@@ -44,6 +63,9 @@ public sealed class LearningMaterialRouteTests
     [InlineData("POST", "/api/content/documents/files")]
     [InlineData("GET", "/api/knowledge/topics")]
     [InlineData("GET", "/api/content/quota")]
+    [InlineData("GET", "/api/knowledge/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/terms")]
+    [InlineData("GET", "/api/knowledge/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections")]
+    [InlineData("GET", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections")]
     [InlineData("POST", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/retry")]
     public async Task WithoutLogin_IsRefused_AndNothingIsForwarded(string method, string path)
     {
@@ -74,6 +96,10 @@ public sealed class LearningMaterialRouteTests
     [InlineData("PUT", "/api/content/documents/files")]
     [InlineData("GET", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/retry")]
     [InlineData("POST", "/api/content/documents/not-a-guid/retry")]
+    [InlineData("POST", "/api/knowledge/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/terms")]
+    [InlineData("GET", "/api/knowledge/topics/not-a-guid/sections")]
+    [InlineData("PUT", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections")]
+    [InlineData("GET", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01")]
     public async Task OtherMethodsAndPaths_AreNotForwarded(string method, string path)
     {
         await using var gateway = await StubService.StartAsync("gateway-stub");

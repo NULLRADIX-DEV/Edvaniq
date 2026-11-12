@@ -65,6 +65,9 @@ public sealed class TopicsTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("Die Themen aus „Skript Bio“ sind da.", Status(page)), Wait);
         Assert.Equal(["Photosynthese", "Lichtreaktion"], page.FindAll(".topic-list li").Select(Name));
         Assert.Equal(2, material.TopicCalls);
+
+        // #294: right after the analysis the directory is one step away.
+        Assert.Equal("themen/verzeichnis", page.Find("#topics-heading ~ p a").GetAttribute("href"));
     }
 
     // Content is Ready only once Knowledge has the topics. A text on known topics only brings no topic with its id (#208),

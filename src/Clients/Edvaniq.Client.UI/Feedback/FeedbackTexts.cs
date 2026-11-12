@@ -367,6 +367,62 @@ public static class FeedbackTexts
         public const string ExamWithoutDate = "{0}, noch ohne Termin";
     }
 
+    // The topic directory (#294).
+    public static class TopicDirectory
+    {
+        public const string Heading = "Themenverzeichnis";
+
+        public const string Link = "Themenverzeichnis";
+
+        public const string AiHintTitle = "Von der KI vorgeschlagen";
+
+        public const string AiHint =
+            "Themen und Kernbegriffe hat die KI aus deinem Material erkannt. Die KI kann sich irren, prüf deshalb, ob sie zu deinem Material passen.";
+
+        public const string LoadFailed = "Das Themenverzeichnis ließ sich gerade nicht laden.";
+
+        public const string Analyzing = "Die Analyse läuft noch.";
+
+        public const string AnalyzingHint = "Sobald dein Material ausgewertet ist, stehen die Themen hier.";
+
+        public const string ToMaterial = "Zum Material";
+
+        public const string NoMaterial = "Du hast noch kein Material.";
+
+        public const string NoMaterialHint = "Füge einen Text ein oder lade eine Datei hoch, dann erkennt Edvaniq daraus die Themen.";
+
+        public const string AddMaterial = "Material hinzufügen";
+
+        public const string DetailsLoading = "Details werden geladen …";
+
+        public const string DetailsFailed = "Die Details zu diesem Thema ließen sich gerade nicht laden.";
+
+        public const string Terms = "Kernbegriffe";
+
+        public const string NoTerms = "Zu diesem Thema gibt es keine Kernbegriffe.";
+
+        public const string Sources = "Wo es steht";
+
+        public const string NoSources = "Zu diesem Thema gibt es keinen Abschnitt aus deinem Material.";
+
+        // {0} is the first page, {1} the last.
+        public const string Pages = "S. {0}–{1}";
+
+        // {0} is the page.
+        public const string Page = "S. {0}";
+
+        // {0} counts from 1.
+        public const string Section = "Abschnitt {0}";
+
+        // {0} is the number of hidden topics.
+        public const string Hidden = "Ausgeblendete Themen ({0})";
+
+        public const string HiddenHint = "Diese Themen hast du ausgeblendet.";
+
+        // {0} is the name of the upper topic.
+        public const string SubtopicOf = "Unterthema von {0}";
+    }
+
     // A limit or the pause of the AI stops a text, a file or a new try. Content says why in its answer (#307), this is
     // only for an answer without a sentence of its own.
     public static class Limit

@@ -70,6 +70,21 @@ public sealed class GoalListTests : BunitContext
         Assert.Null(cards[1].QuerySelector(".goal-not-in-plan"));
     }
 
+    // #294: the topic directory is there from the goal at any time.
+    [Fact]
+    public void TheGoalInThePlan_LeadsToItsTopicDirectory()
+    {
+        goals.List(Csharp, Bio);
+
+        var page = Render<GoalList>();
+
+        var cards = page.FindAll(".goal-card");
+        var directory = cards[1].QuerySelector("a[href='themen/verzeichnis']")!;
+        Assert.Equal(FeedbackTexts.TopicDirectory.Link, directory.TextContent.Trim());
+        Assert.Equal($"{FeedbackTexts.TopicDirectory.Link}: {Bio.Name}", directory.GetAttribute("aria-label"));
+        Assert.Null(cards[0].QuerySelector("a[href='themen/verzeichnis']"));
+    }
+
     [Fact]
     public void ExamWithoutDate_SaysSo()
     {

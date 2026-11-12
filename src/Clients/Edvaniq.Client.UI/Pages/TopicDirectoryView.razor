@@ -1,0 +1,182 @@
+@implements IDisposable
+@inject ITopicDirectory Directory
+
+@* All topics on two levels, each opens to its key terms and its sources. Hidden ones sit apart at the end. *@
+<div class="directory-status" role="status">
+    @switch (state)
+    {
+        case ViewState.Loading:
+            <Loading />
+            break;
+        case ViewState.LoadFailed:
+            <ConnectionProblem Title="@FeedbackTexts.TopicDirectory.LoadFailed" TraceId="@trace" />
+            break;
+        case ViewState.Shown when topics.Count == 0 && Analyzing:
+            <EmptyState Title="@FeedbackTexts.TopicDirectory.Analyzing" Hint="@FeedbackTexts.TopicDirectory.AnalyzingHint" />
+            break;
+        case ViewState.Shown when topics.Count == 0:
+            <EmptyState Title="@FeedbackTexts.TopicDirectory.NoMaterial" Hint="@FeedbackTexts.TopicDirectory.NoMaterialHint" />
+            break;
+    }
+</div>
+
+@switch (state)
+{
+    case ViewState.LoadFailed:
+        <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="LoadAsync" />
+        break;
+    case ViewState.Shown when topics.Count == 0:
+        <StateActions Href="themen" LinkText="@(Analyzing ? FeedbackTexts.TopicDirectory.ToMaterial : FeedbackTexts.TopicDirectory.AddMaterial)" />
+        break;
+}
+
+@if (state == ViewState.Shown && loader is not null)
+{
+    @if (topics.Count > 0 || hidden.Count > 0)
+    {
+        <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.TopicDirectory.AiHintTitle" class="directory-ai-hint">
+            <p>@FeedbackTexts.TopicDirectory.AiHint</p>
+        </Notice>
+    }
+
+    @if (topics.Count > 0)
+    {
+        <ul class="directory-list">
+            @foreach (var topic in topics)
+            {
+                <li @key="topic.Id">
+                    <TopicEntry TopicId="topic.Id" Name="@topic.Name" Loader="loader" Life="life.Token">
+                        @if (topic.Subtopics.Count > 0)
+                        {
+                            <ul class="directory-list directory-sublist">
+                                @foreach (var subtopic in topic.Subtopics)
+                                {
+                                    <li @key="subtopic.Id">
+                                        <TopicEntry TopicId="subtopic.Id" Name="@subtopic.Name" Level="3" Loader="loader" Life="life.Token" />
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </TopicEntry>
+                </li>
+            }
+        </ul>
+    }
+
+    @if (hidden.Count > 0)
+    {
+        <section class="directory-hidden">
+            <h2>
+                <button type="button" class="disclosure" aria-expanded="@(showHidden ? "true" : "false")" aria-controls="hidden-topics"
+                        @onclick="() => showHidden = !showHidden">
+                    <span class="disclosure-mark" aria-hidden="true"></span>@string.Format(FeedbackTexts.TopicDirectory.Hidden, hidden.Count)
+                </button>
+            </h2>
+            <div id="hidden-topics" class="directory-hidden-panel" hidden="@(!showHidden)">
+                <p>@FeedbackTexts.TopicDirectory.HiddenHint</p>
+                <ul class="directory-list">
+                    @foreach (var entry in hidden)
+                    {
+                        <li @key="entry.Id">
+                            <TopicEntry TopicId="entry.Id" Name="@entry.Name" Level="3" Note="@entry.Note" Loader="loader" Life="life.Token">
+                                @if (entry.Subtopics.Count > 0)
+                                {
+                                    <ul class="directory-list directory-sublist">
+                                        @foreach (var subtopic in entry.Subtopics)
+                                        {
+                                            <li @key="subtopic.Id">
+                                                <TopicEntry TopicId="subtopic.Id" Name="@subtopic.Name" Level="4" Loader="loader" Life="life.Token" />
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </TopicEntry>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private readonly CancellationTokenSource life = new();
+    private ViewState state = ViewState.Loading;
+    private string? trace;
+
+    // Visible topics with their visible subtopics.
+    private IReadOnlyList<TopicInfo> topics = [];
+
+    // Hidden topics with their subtopics, then hidden subtopics of visible topics.
+    private IReadOnlyList<HiddenEntry> hidden = [];
+
+    private IReadOnlyList<DocumentInfo> documents = [];
+    private TopicDetailsLoader? loader;
+    private bool showHidden;
+
+    private bool Analyzing => documents.Any(document => document.Status is DocumentStatus.Analyzing or DocumentStatus.Uploaded);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        state = ViewState.Loading;
+        CallOutcome<IReadOnlyList<TopicInfo>> topicList;
+        CallOutcome<IReadOnlyList<DocumentInfo>> documentList;
+        try
+        {
+            var topicCall = Directory.ListTopicsAsync(life.Token);
+            var documentCall = Directory.ListDocumentsAsync(life.Token);
+            topicList = await topicCall;
+            documentList = await documentCall;
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (topicList.Result == CallResult.SignedOut || documentList.Result == CallResult.SignedOut)
+        {
+            // The shell says the login ran out (SessionEndedNotice).
+            state = ViewState.SignedOut;
+            return;
+        }
+
+        if (topicList.Result != CallResult.Ok || documentList.Result != CallResult.Ok)
+        {
+            trace = topicList.TraceId ?? documentList.TraceId;
+            state = ViewState.LoadFailed;
+            return;
+        }
+
+        documents = documentList.Value!;
+        var all = topicList.Value!;
+        topics = [.. all.Where(topic => !topic.Hidden).Select(topic => topic with { Subtopics = [.. topic.Subtopics.Where(subtopic => !subtopic.Hidden)] })];
+        hidden =
+        [
+            .. all.Where(topic => topic.Hidden).Select(topic => new HiddenEntry(topic.Id, topic.Name, null, topic.Subtopics)),
+            .. all.Where(topic => !topic.Hidden).SelectMany(topic => topic.Subtopics
+                .Where(subtopic => subtopic.Hidden)
+                .Select(subtopic => new HiddenEntry(
+                    subtopic.Id, subtopic.Name, string.Format(FeedbackTexts.TopicDirectory.SubtopicOf, topic.Name), []))),
+        ];
+        loader = new TopicDetailsLoader(Directory, documents);
+        state = ViewState.Shown;
+    }
+
+    private sealed record HiddenEntry(Guid Id, string Name, string? Note, IReadOnlyList<SubtopicInfo> Subtopics);
+
+    private enum ViewState
+    {
+        Loading,
+        SignedOut,
+        LoadFailed,
+        Shown,
+    }
+
+    public void Dispose()
+    {
+        life.Cancel();
+        life.Dispose();
+    }
+}

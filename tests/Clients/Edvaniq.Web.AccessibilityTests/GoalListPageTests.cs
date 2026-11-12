@@ -20,7 +20,14 @@ public sealed class GoalListPageTests(WebShell shell)
         await Assertions.Expect(cards.Nth(0)).ToContainTextAsync("Klausur am 1. März 2027");
         await Assertions.Expect(cards.Nth(1)).ToContainTextAsync("Freies Lernen");
 
-        await AssertLargeEnoughAsync(cards.Nth(0).GetByRole(AriaRole.Link));
+        // Material and, since #294, the topic directory.
+        var links = cards.Nth(0).GetByRole(AriaRole.Link);
+        await Assertions.Expect(links).ToHaveCountAsync(2);
+        foreach (var link in await links.AllAsync())
+        {
+            await AssertLargeEnoughAsync(link);
+        }
+
         await AssertLargeEnoughAsync(page.Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Neues Lernziel" }));
         await CheckAsync(page.Page, $"{Path} with goals at {width} px");
     }

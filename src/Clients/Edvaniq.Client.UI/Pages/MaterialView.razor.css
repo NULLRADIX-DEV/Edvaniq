@@ -51,6 +51,7 @@
 .button {
     min-height: 2.75rem;
 }
+
 .confirm-field {
     display: flex;
     align-items: flex-start;
@@ -69,4 +70,10 @@
     margin: var(--space-2) 0 0;
     color: var(--color-alert);
     font-weight: 600;
+}
+
+.material-directory {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
 }

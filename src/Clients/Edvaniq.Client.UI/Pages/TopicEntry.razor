@@ -1,0 +1,140 @@
+@* One topic of the directory: a button that opens it, and once open its key terms, where it stands and its subtopics.
+   The details load on the first opening only. Names, terms and definitions are text from the analysis or the user,
+   Razor writes them as text. *@
+<div class="topic-entry">
+    @Heading(Level, "topic-heading",
+        @<button type="button" class="disclosure" aria-expanded="@(open ? "true" : "false")" aria-controls="@panelId" @onclick="ToggleAsync">
+            <span class="disclosure-mark" aria-hidden="true"></span>@Name
+        </button>)
+    @if (Note is not null)
+    {
+        <p class="topic-note">@Note</p>
+    }
+
+    <div id="@panelId" class="topic-panel" hidden="@(!open)">
+        <div role="status">
+            @switch (details?.Result)
+            {
+                case null when open:
+                    <Loading Text="@FeedbackTexts.TopicDirectory.DetailsLoading" />
+                    break;
+                case CallResult.Failed:
+                    <ConnectionProblem Title="@FeedbackTexts.TopicDirectory.DetailsFailed" TraceId="@details.TraceId" />
+                    break;
+            }
+        </div>
+
+        @if (details?.Result == CallResult.Failed)
+        {
+            <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="LoadAsync" />
+        }
+        else if (details?.Result == CallResult.Ok)
+        {
+            @Heading(Level + 1, "topic-part", @<text>@FeedbackTexts.TopicDirectory.Terms</text>)
+            @if (details.Terms.Count == 0)
+            {
+                <p class="topic-none">@FeedbackTexts.TopicDirectory.NoTerms</p>
+            }
+            else
+            {
+                <dl class="topic-terms">
+                    @foreach (var term in details.Terms)
+                    {
+                        <dt>@term.Term</dt>
+                        <dd>@term.Definition</dd>
+                    }
+                </dl>
+            }
+
+            @Heading(Level + 1, "topic-part", @<text>@FeedbackTexts.TopicDirectory.Sources</text>)
+            @if (details.Sources.Count == 0)
+            {
+                <p class="topic-none">@FeedbackTexts.TopicDirectory.NoSources</p>
+            }
+            else
+            {
+                <ul class="topic-sources">
+                    @foreach (var source in details.Sources)
+                    {
+                        <li><span class="topic-source-title">@source.DocumentTitle</span>: @string.Join(", ", source.Places)</li>
+                    }
+                </ul>
+            }
+        }
+
+        @if (open)
+        {
+            @ChildContent
+        }
+    </div>
+</div>
+
+@code {
+    private readonly string panelId = $"topic-{Guid.NewGuid():N}";
+    private bool open;
+    private bool loading;
+    private TopicDetails? details;
+
+    [Parameter, EditorRequired]
+    public Guid TopicId { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Name { get; set; } = "";
+
+    // 2 for a topic, 3 for a subtopic; the parts of the panel are one deeper.
+    [Parameter]
+    public int Level { get; set; } = 2;
+
+    // A line under the name, for a hidden subtopic the topic it belongs to.
+    [Parameter]
+    public string? Note { get; set; }
+
+    [Parameter, EditorRequired]
+    public TopicDetailsLoader Loader { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public CancellationToken Life { get; set; }
+
+    // The subtopics, shown inside the open topic.
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private async Task ToggleAsync()
+    {
+        open = !open;
+        if (open && details is null)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (loading)
+        {
+            return;
+        }
+
+        loading = true;
+        details = null;
+        try
+        {
+            details = await Loader.LoadAsync(TopicId, Life);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private static RenderFragment Heading(int level, string css, RenderFragment content) => builder =>
+    {
+        builder.OpenElement(0, $"h{Math.Clamp(level, 2, 6)}");
+        builder.AddAttribute(1, "class", css);
+        builder.AddContent(2, content);
+        builder.CloseElement();
+    };
+}
