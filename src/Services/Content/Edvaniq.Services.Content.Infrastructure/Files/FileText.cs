@@ -12,17 +12,19 @@ using UglyToad.PdfPig.DocumentLayoutAnalysis.WordExtractor;
 namespace Edvaniq.Services.Content.Infrastructure.Files;
 
 // The text of an uploaded file, one entry per page. A PDF gives its text layer page by page in reading order: words, then
-// blocks of lines, then the blocks in the order a reader takes them, so two columns come one after the other. A text or
-// Markdown file is one page, as it is. Gives up early on more pages or text than a document may have, so a large file
-// never gets read in full. Pictures, tables and formulas count for nothing, a scan has no text layer and comes out empty.
+// blocks of lines, then the blocks in the order a reader takes them, so two columns come one after the other. A text file
+// is one page, as it is. A Markdown or Word file is one page too, its headings as "# " for the splitter and without its
+// markup (MarkdownText, WordText). Gives up early on more pages or text than a document may have, so a large file never
+// gets read in full. Pictures, tables and formulas count for nothing, a scan has no text layer and comes out empty.
 public static class FileText
 {
     public static IReadOnlyList<string> PagesOf(Stream content, FileFormat format, CancellationToken cancellationToken) =>
         format switch
         {
             FileFormat.Pdf => PdfPages(content, cancellationToken),
-            FileFormat.Text or FileFormat.Markdown => [PlainText(content)],
-            FileFormat.Docx => throw new FileRefusedException(Document.WordNotYet),
+            FileFormat.Text => [PlainText(content)],
+            FileFormat.Markdown => [MarkdownText.Of(PlainText(content))],
+            FileFormat.Docx => [WordText.Of(content, cancellationToken)],
             _ => throw new NotSupportedException($"Reading {format} files is unknown."),
         };
 
@@ -93,10 +95,4 @@ public static class FileText
         var read = reader.ReadBlock(buffer, 0, buffer.Length);
         return read > Document.TextMaxLength ? throw new FileRefusedException(Document.FileTextTooLong) : new string(buffer, 0, read);
     }
-}
-
-// A file the document can't take, with the reason the user sees.
-public sealed class FileRefusedException(string reason) : Exception(reason)
-{
-    public string Reason { get; } = reason;
 }
