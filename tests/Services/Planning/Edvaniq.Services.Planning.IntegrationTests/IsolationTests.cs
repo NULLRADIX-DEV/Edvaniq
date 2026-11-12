@@ -26,6 +26,7 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
     private static IsolationCheck Goals(IsolationCheck check) => check
         .List("GET", "/learning-goals")
         .Item("GET", "/learning-goals/{id:guid}")
+        .Item("PUT", "/learning-goals/{id:guid}", new { name = "Ziel von B" })
         .Item("GET", "/learning-goals/{id:guid}/profile")
         .Exempt("POST", "/learning-goals", "Adds a goal of the caller.")
         .Exempt("POST", "/learning-goals/default", "The caller's own default goal.");
@@ -102,9 +103,15 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         return new OwnedResource(goal, $"/learning-goals/{goal}", name);
     }
 
-    // A session of A in a block of today, as starting it would leave it.
+    // A session of A in a block of today, as starting it would leave it. It hangs on A's default goal.
     private async Task<OwnedResource> SeedSessionAsync(string owner)
     {
+        using (var client = ClientFor(owner))
+        using (var goal = await client.PostAsync("/learning-goals/default", null, TestContext.Current.CancellationToken))
+        {
+            Assert.True(goal.IsSuccessStatusCode, $"{(int)goal.StatusCode}");
+        }
+
         var session = Session.Start(
             Guid.NewGuid(),
             owner,
