@@ -58,6 +58,14 @@ internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) :
         ];
     }
 
+    public async Task<WeakAndSecureTopics> WeakAndSecureAsync(Guid? learningGoalId, CancellationToken cancellationToken)
+    {
+        var topics = await LoadAsync(learningGoalId, cancellationToken);
+        var now = time.GetUtcNow().UtcDateTime;
+        return WeakAndSecure.Of(topics.Ids.Select(id => (id, TopicStates.Assess(
+            topics.Records[id], topics.Introductions.GetValueOrDefault(id), now, carry: topics.Carries.GetValueOrDefault(id)))));
+    }
+
     // Four queries however many topics: the topics, then all their records, introductions and carries at once.
     private async Task<LoadedTopics> LoadAsync(Guid? learningGoalId, CancellationToken cancellationToken)
     {

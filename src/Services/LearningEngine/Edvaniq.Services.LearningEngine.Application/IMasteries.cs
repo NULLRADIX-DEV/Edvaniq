@@ -15,6 +15,10 @@ public interface IMasteries
     // The topics of one learning goal that were secure at their last answer and have decayed since
     // (TopicStates.Decayed), the lowest mastery first.
     Task<IReadOnlyList<DecayedTopicMastery>> DecayedAsync(Guid learningGoalId, CancellationToken cancellationToken);
+
+    // The weaknesses, the worst first, and the secure topics of every topic the user knows or those of one learning
+    // goal (WeakAndSecure, #453). Hidden topics are still in, #455 leaves them out.
+    Task<WeakAndSecureTopics> WeakAndSecureAsync(Guid? learningGoalId, CancellationToken cancellationToken);
 }
 
 // LastAnswerId: the answer of the newest learning record of the topic, counted or not, null without any.
