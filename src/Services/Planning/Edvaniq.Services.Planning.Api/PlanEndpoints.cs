@@ -26,7 +26,13 @@ internal static class PlanEndpoints
                 today.MasteryAvailable,
                 today.Plan.Shortened,
                 today.QuestionPoolsAvailable,
-                today.Plan.NotReady);
+                today.Plan.NotReady,
+                today.DailyGoal switch
+                {
+                    DailyGoalState.Reached => "reached",
+                    DailyGoalState.Open => "open",
+                    _ => "none",
+                });
         });
 
         return app;
@@ -43,7 +49,8 @@ internal static class PlanEndpoints
 // put weaker topics first, and the client can say so. ShortenedTopicIds: topics left without learn time this week
 // because the time is too short (#370), empty when nothing was shortened. QuestionPoolsAvailable false: Assessment
 // didn't answer, so topics whose questions aren't ready yet may have blocks too. NotReadyTopicIds: topics left out
-// because their question pool isn't ready (#374); "questionsPending" when that is all of them.
+// because their question pool isn't ready (#374); "questionsPending" when that is all of them. DailyGoal (#381):
+// "reached" when every block is done, "open" while one isn't, "none" on a day without blocks.
 internal sealed record TodayPlanResponse(
     DateOnly StudyDay,
     Guid LearningGoalId,
@@ -52,7 +59,8 @@ internal sealed record TodayPlanResponse(
     bool MasteryAvailable,
     IReadOnlyList<Guid> ShortenedTopicIds,
     bool QuestionPoolsAvailable,
-    IReadOnlyList<Guid> NotReadyTopicIds);
+    IReadOnlyList<Guid> NotReadyTopicIds,
+    string DailyGoal);
 
 // Kind is "learn" or "review". Id stays the same for the same block on every call, Done says whether its session was
 // finished (#375).

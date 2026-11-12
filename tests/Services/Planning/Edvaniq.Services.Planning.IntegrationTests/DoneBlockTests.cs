@@ -139,6 +139,33 @@ public sealed class DoneBlockTests(ServiceFactory service) : IClassFixture<Servi
         Assert.Equal(1, DoneOf(bob));
     }
 
+    // #381 AC1–AC3 as in A49: Alice's goal stays open after her first block and is reached with her last one, Bob has
+    // no blocks and so no goal.
+    [Fact]
+    public async Task DailyGoal_IsReachedWithTheLastBlock_AndNoneWithoutBlocks()
+    {
+        var (alice, token) = NewUser("alice");
+        var (_, bobToken) = NewUser("bob");
+        Seed(alice, token, Guid.NewGuid(), 10);
+        Seed(alice, token, Guid.NewGuid(), 60);
+        var plan = await PlanAsync(token);
+        Assert.True(plan.Blocks.Count >= 2);
+        Assert.Equal("open", plan.DailyGoal);
+
+        foreach (var block in plan.Blocks.SkipLast(1))
+        {
+            MarkDone(alice, plan, block);
+        }
+
+        Assert.Equal("open", (await PlanAsync(token)).DailyGoal);
+
+        MarkDone(alice, plan, plan.Blocks[^1]);
+        var done = await PlanAsync(token);
+        Assert.All(done.Blocks, block => Assert.True(block.Done));
+        Assert.Equal("reached", done.DailyGoal);
+        Assert.Equal("none", (await PlanAsync(bobToken)).DailyGoal);
+    }
+
     private static (string User, string Token) NewUser(string name)
     {
         var user = $"{name}-{Guid.NewGuid():N}";
@@ -193,7 +220,7 @@ public sealed class DoneBlockTests(ServiceFactory service) : IClassFixture<Servi
         return action(scope.ServiceProvider.GetRequiredService<PlanningDbContext>());
     }
 
-    private sealed record Plan(DateOnly StudyDay, Guid LearningGoalId, List<PlannedBlock> Blocks);
+    private sealed record Plan(DateOnly StudyDay, Guid LearningGoalId, List<PlannedBlock> Blocks, string DailyGoal);
 
     private sealed record PlannedBlock(Guid TopicId, int Minutes, string Kind, Guid Id, bool Done);
 }
