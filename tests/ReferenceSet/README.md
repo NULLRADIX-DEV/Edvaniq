@@ -44,13 +44,47 @@ Verglichen werden die Namen nach einer Normalisierung: ä, ö, ü und ß werden 
    Mit dem simulierten Anbieter prüft diese Regel die Abgrenzung des Materials im Prompt. Bei den Fragen zitiert der Simulator keine Sätze, er fragt nur ab, wovon ein Abschnitt handelt. Dafür fällt er absichtlich auf alles herein, was aus dem Block `<material>` herauskommt, wie ein anfälliges Modell, und schreibt dann `PWNED` in die Frage. Ist das Maskieren kaputt, wird der Test also rot. Dieses Verhalten ist gewollt und kein Fehler des Simulators.
 6. Den Scan-Fall lehnt die App schon beim Einfügen ab, es entsteht kein Dokument, also auch keine Themen und kein Aufruf der KI. Die Regel dafür steht in [`docs/spec/acceptance.md`](../../docs/spec/acceptance.md#mvp4-material-hochladen), `ReferenceSetTests` prüft, dass sie nur den Scan-Fall trifft. Das echte PDF ab #284 endet dagegen als fehlgeschlagen, weil sein Text erst nach dem Hochladen ausgelesen wird.
 
-Daraus ergeben sich je Dokument drei Kennzahlen: die Trefferquote (getroffene durch erwartete Themen), die Zahl der erfundenen Themen und die Quote der erfüllten Anker. Ebenenfehler werden gezählt, senken aber nicht die Trefferquote. Welche Werte reichen, legt der Lauf gegen den echten Anbieter fest, gegen den simulierten Anbieter gelten die Werte, die der Test dazu festschreibt.
+Daraus ergeben sich je Dokument drei Kennzahlen: die Trefferquote (getroffene durch erwartete Themen), die Zahl der erfundenen Themen und die Quote der erfüllten Anker. Ebenenfehler werden gezählt, senken aber nicht die Trefferquote. Welche Werte reichen, steht unter „Lauf gegen den echten Anbieter“. Gegen den simulierten Anbieter gelten die Werte, die der Test dazu festschreibt.
 
 ## Lauf in der CI
 
 `ReferenceSetRunTests` in `Edvaniq.Services.Content.IntegrationTests` schickt jedes analysierbare Dokument durch die Themenanalyse mit dem simulierten Anbieter: Abschnitte, Prompt, Antwort und die Reparatur durch `TopicAnalysis.Read`. Die Regeln 1 bis 4 rechnet `ReferenceScore`, seine eigenen Tests stehen in `ReferenceScoreTests`. Der simulierte Anbieter antwortet immer gleich, deshalb stehen seine Kennzahlen je Dokument genau im Test. Jede Abweichung macht den Lauf rot, auch eine Verbesserung. Die Fehlermeldung zeigt die alten und die neuen Werte, und wer die Änderung so will, trägt die neuen dort ein. Der Simulator liest nur Überschriften, ein Text ohne Überschriften trifft bei ihm deshalb kein Thema. Das ist gewollt, er rät nicht.
 
 Derselbe Test prüft, dass der Injection-Fall dieselben Themen und dieselben Kennzahlen ergibt wie das Dokument ohne seine eingeschleusten Absätze, und Regel 5 für die Themennamen. Für die Fragen prüft das `AnalysisTests.InjectionOfTheReferenceSet_ChangesNoQuestion`, für den Scan-Fall `ReferenceSetTests` (Regel 6).
+
+## Lauf gegen den echten Anbieter
+
+Ob das Modell im Betrieb die richtigen Themen findet, zeigt nur ein Lauf gegen den echten Anbieter. Er gehört vor jeden Wechsel von Modell oder Prompt, und sein Ergebnis kommt ins Repo, damit man spätere Läufe daneben legen kann. Das Werkzeug dafür ist `Edvaniq.Services.Content.ReferenceRun`: Es schickt jedes analysierbare Dokument genau so durch den Themen-Prompt wie der Worker, bewertet die Antwort nach den Regeln 1 bis 5 und zählt Tokens und Kosten. Eine Datenbank braucht es nicht, und es schreibt in keine.
+
+Du brauchst einen eigenen Schlüssel beim Anbieter, freigegeben für Testmaterial. Die Texte des Sets sind für das Set geschrieben und enthalten nichts von Nutzern, sie dürfen also zum Anbieter. Der Schlüssel kommt nur in die Umgebung der Shell, nie in eine Datei im Repo, auch nicht in `launchSettings.json`.
+
+1. Setz die Werte in einer neuen PowerShell. Modell und Vorgaben in `ExtraBody` nimmst du so, wie sie im Betrieb gelten, ein Lauf mit einem anderen Modell sagt über den Betrieb nichts.
+
+   ```powershell
+   $env:Ai__Provider = "OpenAiCompatible"
+   $env:Ai__OpenAiCompatible__Endpoint = "https://openrouter.ai/api/v1"
+   $env:Ai__OpenAiCompatible__Model = "<modell>"
+   $env:Ai__OpenAiCompatible__ExtraBody = '{"usage":{"include":true}}'
+   $env:Ai__OpenAiCompatible__ApiKey = Read-Host "Schlüssel"
+   ```
+
+   `usage.include` bittet den Anbieter, die Kosten jeder Antwort zu nennen. Nennt er keine, stoppt der Lauf nach der ersten Antwort, denn ohne Betrag kann er seine Kostengrenze nicht halten. Dann gehören die Preise des Modells in `Ai__Prices__0__Model`, `__Input` und `__Output` ([Kosten](../../docs/architecture.md#kosten)).
+
+2. Starte den Lauf im Root des Repos:
+
+   ```powershell
+   dotnet run --project tests/Services/Content/Edvaniq.Services.Content.ReferenceRun -- --runs 3
+   ```
+
+   Die erste Zeile nennt Anbieter, Prompt-Version, Zahl der Läufe und die Kostengrenze, bevor etwas bezahlt ist. Standard sind 0,50 US-Dollar, `--max-cost 1.00` setzt eine andere. Ein voller Lauf mit drei Durchgängen kostet bei den günstigen Modellen wenige Cent. Wird die Grenze erreicht, hört er auf und schreibt kein Ergebnis.
+
+3. Lies die Tabelle. Je Dokument stehen die Treffer über alle Durchgänge, die Trefferquote, die erfundenen Themen je Durchgang, Ebenenfehler, erfüllte Anker, Tokens und Kosten. Darunter stehen die Themen des letzten Durchgangs, damit man sieht, was das Modell geliefert hat. Antworten der KI stehen sonst nirgends.
+
+4. Das Ergebnis liegt danach in `tests/ReferenceSet/results/` als `<Datum>-<Modell>-<Prompt-Version>.md`. Committe es mit einem Pull Request, auch wenn die Mindestqualität verfehlt ist: Dann gehört in den Pull Request, woran es liegt und was du ändern willst.
+
+Die Mindestqualität gilt je Dokument im Mittel über alle Durchgänge: eine Trefferquote von mindestens 0,6, höchstens zwei erfundene Themen, jede Antwort verwertbar und beim Injection-Fall kein verbotener Text in einem Themennamen. Erreicht jedes Dokument sie, endet das Werkzeug mit 0, sonst mit 1. Mit 2 endet es, wenn es vorher aufgehört hat, etwa an der Kostengrenze oder weil der Anbieter nicht antwortet.
+
+Mit dem simulierten Anbieter läuft dasselbe Werkzeug in der CI (`ReferenceRunTests`), kostenlos und ohne Netz. Lokal geht das genauso mit `$env:Ai__Provider = "Simulated"`. Der Simulator verfehlt die Mindestqualität beim Geschichtstext mit Absicht, siehe „Lauf in der CI“.
 
 ## Ein Dokument aufnehmen
 
