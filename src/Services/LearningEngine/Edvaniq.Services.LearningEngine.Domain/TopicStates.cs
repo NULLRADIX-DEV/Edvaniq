@@ -26,9 +26,10 @@ public static class TopicStates
         TopicIntroduction? introduction,
         DateTime now,
         double start = Mastery.Start,
-        MasteryCarry? carry = null)
+        MasteryCarry? carry = null,
+        IReadOnlySet<Guid>? excludedItemIds = null)
     {
-        var (introduced, counted) = Counted(records.ToList(), introduction, carry);
+        var (introduced, counted) = Counted(Kept(records, excludedItemIds), introduction, carry);
         var from = carry?.FoldFor(introduction);
         var mastery = Mastery.Percent(Mastery.Of(counted, now, start, from));
         return new TopicStanding(mastery, Of(introduced, mastery, counted, from));
@@ -42,9 +43,10 @@ public static class TopicStates
         TopicIntroduction? introduction,
         DateTime now,
         double start = Mastery.Start,
-        MasteryCarry? carry = null)
+        MasteryCarry? carry = null,
+        IReadOnlySet<Guid>? excludedItemIds = null)
     {
-        var all = records.ToList();
+        var all = Kept(records, excludedItemIds);
         var (introduced, counted) = Counted(all, introduction, carry);
         DateTime? last = counted.Count > 0 ? counted.Max(record => record.AnsweredAt) : carry?.FoldFor(introduction)?.At;
         if (!introduced || last is not { } lastAnsweredAt)
@@ -58,6 +60,14 @@ public static class TopicStates
             ? new DecayedTopic(current.Mastery, then.Mastery, lastAnsweredAt)
             : null;
     }
+
+    // Answers on excluded items, the ones the user reported (A84), count for nothing: not for the mastery, the error
+    // rate or the introduction. Nothing passes any yet, the reports come with #476. A record already in the carry
+    // (older than the retention, #365) can't be taken out any more.
+    private static List<LearningRecord> Kept(IEnumerable<LearningRecord> records, IReadOnlySet<Guid>? excludedItemIds) =>
+        excludedItemIds is null or { Count: 0 }
+            ? records.ToList()
+            : records.Where(record => !excludedItemIds.Contains(record.ItemId)).ToList();
 
     // Before the introduction no answer counts. A carry means there were records, as the first record does.
     private static (bool Introduced, List<LearningRecord> Counted) Counted(

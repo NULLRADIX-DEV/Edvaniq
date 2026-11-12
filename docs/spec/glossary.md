@@ -230,7 +230,7 @@ Nicht: Wissensstand, Wissenswert, Skill-Level
 
 ### Themenzustand
 
-Der Zustand eines Themas für einen Nutzer, immer genau einer von vier: neu, Schwäche, im Aufbau oder sicher. Neu ist ein Thema bis zur Einführung, danach gilt es bei Mastery unter 50 % oder hoher Fehlerquote zuletzt als Schwäche, ab 80 % als sicher und sonst als im Aufbau.
+Der Zustand eines Themas für einen Nutzer, immer genau einer von vier: neu, Schwäche, im Aufbau oder sicher. Neu ist ein Thema bis zur Einführung, danach gilt es bei Mastery unter 50 % oder hoher Fehlerquote zuletzt als Schwäche, ab 80 % als sicher und sonst als im Aufbau. Wie schwer eine Schwäche ist, misst ihre Mastery: je niedriger, desto schwerer. Eine Schwäche nur wegen der Fehlerquote ist deshalb leichter als eine mit Mastery unter 50 %.
 
 Im Code: `TopicState`
 

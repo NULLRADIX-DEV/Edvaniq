@@ -78,6 +78,30 @@ app.MapGet("/mastery/decayed", async (string? learningGoalId, IMasteries masteri
             topic.TopicId, topic.Standing.Mastery, topic.Standing.MasteryAtLastAnswer, topic.Standing.LastAnsweredAt))]));
 });
 
+// The user's weaknesses, the worst first, and secure topics (#453), of all topics or those of one learning goal. A goal
+// that isn't the user's gives two empty lists, like /mastery.
+app.MapGet("/mastery/weak-and-secure", async (string? learningGoalId, IMasteries masteries, CancellationToken cancellationToken) =>
+{
+    Guid? goal = null;
+    if (learningGoalId is not null)
+    {
+        if (!Guid.TryParse(learningGoalId, out var parsed))
+        {
+            return Results.ValidationProblem(
+                new Dictionary<string, string[]> { ["learningGoalId"] = ["Must be a GUID."] });
+        }
+
+        goal = parsed;
+    }
+
+    var topics = await masteries.WeakAndSecureAsync(goal, cancellationToken);
+    return Results.Ok(new WeakAndSecureResponse(
+        Mastery.RuleVersion,
+        [.. topics.Weaknesses.Select(topic => new WeaknessEntry(
+            topic.TopicId, topic.Mastery, topic.Reason == WeaknessReason.RecentErrors ? "recentErrors" : "mastery"))],
+        [.. topics.Secure.Select(topic => new SecureEntry(topic.TopicId, topic.Mastery))]));
+});
+
 app.Run();
 
 return 0;
@@ -95,6 +119,14 @@ internal sealed record MasteryListEntry(Guid TopicId, int Mastery, string State,
 internal sealed record DecayedListResponse(int RuleVersion, int Threshold, IReadOnlyList<DecayedListEntry> Topics);
 
 internal sealed record DecayedListEntry(Guid TopicId, int Mastery, int MasteryAtLastAnswer, DateTime LastAnsweredAt);
+
+// Weaknesses the worst first, secure topics the highest first. Reason: "mastery" when the mastery is below 50, else
+// "recentErrors", the last answers were mostly wrong.
+internal sealed record WeakAndSecureResponse(int RuleVersion, IReadOnlyList<WeaknessEntry> Weaknesses, IReadOnlyList<SecureEntry> Secure);
+
+internal sealed record WeaknessEntry(Guid TopicId, int Mastery, string Reason);
+
+internal sealed record SecureEntry(Guid TopicId, int Mastery);
 
 // The names on the wire, fixed here so renaming the enum can't change the contract.
 internal static class StateNames
