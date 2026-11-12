@@ -10,13 +10,14 @@ using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.Services.Content.Infrastructure.Files;
 
-// Runs in the worker, never in a request: reads the text of every uploaded file page by page (FileText), and
-// hands it to its document. One file after the other, so the worker never holds two at once. Text and pages go in one
-// save, then the splitter takes the document like a pasted one. A file that can't be read fails its document with a
-// reason. A Word file fails with the hint to save it as PDF, until Word files can be read.
+// Runs in the worker, never in a request: has the text of every uploaded file read page by page, in a process of its
+// own (FileReader), and hands it to its document. One file after the other, so there is never more than one reading
+// process. Text and pages go in one save, then the splitter takes the document like a pasted one. A file that can't
+// be read fails its document with a reason.
 public sealed class FileTextExtractor(
     IServiceScopeFactory scopes,
     FileStore files,
+    FileReader reader,
     TimeProvider time,
     ILogger<FileTextExtractor> logger) : BackgroundService
 {
@@ -97,35 +98,32 @@ public sealed class FileTextExtractor(
 
         var watch = Stopwatch.StartNew();
         IReadOnlyList<string>? pages = null;
-        await using (var content = files.OpenRead(fileId))
+        if (!File.Exists(files.PathOf(fileId)))
         {
-            if (content is null)
+            ContentLog.FileMissing(logger, documentId);
+            document.Fail(Document.FileUnreadable);
+        }
+        else
+        {
+            try
             {
-                ContentLog.FileMissing(logger, documentId);
-                document.Fail(Document.FileUnreadable);
+                // In a process of its own (FileReader), so the file can't take the worker down.
+                var read = await reader.ReadAsync(fileId, format, cancellationToken);
+                if (read.Pages is { } readPages)
+                {
+                    pages = readPages;
+                }
+                else
+                {
+                    document.Fail(read.Reason ?? Document.FileUnreadable);
+                }
             }
-            else
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                try
-                {
-                    pages = FileText.PagesOf(content, format, cancellationToken);
-                }
-                catch (FileRefusedException refused)
-                {
-                    document.Fail(refused.Reason);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    // The worker stops, a deploy. That attempt doesn't count.
-                    document.StopReading();
-                    await db.SaveChangesAsync(CancellationToken.None);
-                    throw;
-                }
-                catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
-                {
-                    ContentLog.FileUnreadable(logger, documentId, exception.GetType().Name);
-                    document.Fail(Document.FileUnreadable);
-                }
+                // The worker stops, a deploy. That attempt doesn't count.
+                document.StopReading();
+                await db.SaveChangesAsync(CancellationToken.None);
+                throw;
             }
         }
 
