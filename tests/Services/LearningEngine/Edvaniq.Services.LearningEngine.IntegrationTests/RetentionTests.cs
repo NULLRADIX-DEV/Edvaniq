@@ -66,11 +66,14 @@ public sealed class RetentionTests(RetentionTests.ShortRetention service) : ICla
             carries.Select(carry => carry.Version),
             Query(db => Carries(db, alice).ToList()).OrderBy(carry => carry.TopicId).Select(carry => carry.Version));
         Assert.Equal(before, await AnswersAsync(alice, paths));
+
+        // Neither the run itself nor EF on its tables complains. The outbox's errors before the fixture migrates aren't its.
         Assert.DoesNotContain(
             service.Logs.Entries,
-            entry => entry.Level >= LogLevel.Error
-                && (entry.Category.Contains(nameof(LearningRecordRetention), StringComparison.Ordinal)
-                    || entry.Category.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal)));
+            entry => (entry.Category.Contains(nameof(LearningRecordRetention), StringComparison.Ordinal) && entry.Level >= LogLevel.Warning)
+                || (entry.Category.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal)
+                    && entry.Level >= LogLevel.Error
+                    && entry.Text.Contains("MasteryCarries", StringComparison.Ordinal)));
     }
 
     // Nothing older than the retention: the run keeps every record and writes no carry.
