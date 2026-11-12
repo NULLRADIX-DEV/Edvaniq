@@ -28,6 +28,14 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<BlockQuizOpener>();
         builder.Services.AddScoped<IQuestionPools, QuestionPools>();
 
+        // Attempts and block quizzes go after AttemptRetention:Days (#962).
+        builder.Services.AddOptions<AttemptRetentionOptions>()
+            .BindConfiguration(AttemptRetentionOptions.Section)
+            .Validate(options => options.Days >= 1 && options.BatchSize >= 1, "AttemptRetention needs Days and BatchSize of 1 or more.")
+            .ValidateOnStart();
+        builder.Services.AddSingleton<AttemptRetention>();
+        builder.Services.AddHostedService(provider => provider.GetRequiredService<AttemptRetention>());
+
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<AssessmentDbContext>(ServiceKey);
         builder.Services.AddIntegrationEventHandler<ItemsGenerated, ItemsGeneratedHandler>();

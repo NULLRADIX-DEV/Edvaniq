@@ -7,6 +7,10 @@ namespace Edvaniq.Services.Assessment.Domain;
 // right with the right option, multiple choice only with exactly the right set, and showing the solution is wrong.
 public sealed class Attempt : IOwnedByUser
 {
+    // How long an attempt and a block quiz stay after the question was put (#962): long enough for an open quiz, a
+    // client that sends its answer again and a look into a problem. The learning record in LearningEngine stays longer.
+    public const int RetentionDays = 30;
+
     private Attempt()
     {
     }

@@ -309,6 +309,10 @@ Gebucht wird im Worker, bevor der `DocumentSplitter` ein Dokument zerlegt. Erst 
 
 Die Content-Api lehnt früher ab, wo sie kann, mit 429, der Meldung in `title` und dem Zeitpunkt der Rücksetzung in `resetsAt` (UTC). Bei eingefügtem Text kennt sie die Seiten schon, beim Upload noch nicht, dort lehnt sie nur ab, wenn nichts mehr frei ist. `GET /quota` zeigt dem Nutzer seinen eigenen Stand: `pagesLeftToday`, `pagesPerDay` und `resetsAt`. `generationsLeftToday` und `generationsPerDay` bleiben `null`, bis Generierungen gezählt werden. Api, Worker und `GET /quota` zählen mit derselben Klasse (`IPageQuota`).
 
+## Aufbewahrung gestellter Fragen in Assessment
+
+Assessment hält jede gestellte Frage samt Antwort als `Attempt` und jedes Block-Quiz als `BlockQuiz`. Gebraucht werden sie nur, solange ein Quiz offen ist, solange ein Block-Quiz fortgesetzt wird und solange ein Client eine Antwort noch einmal schicken kann. Den Lern-Nachweis hält nach `AnswerRecorded` LearningEngine. Deshalb löscht `AttemptRetention` beides 30 Tage nach dem Stellen (`AttemptRetention:Days`), stündlich und in Portionen, Block-Quizze samt ihren Versuchen zuerst. Ein noch nicht gesendetes `AnswerRecorded` verliert dabei nichts, die Zeile in der Outbox enthält das ganze Ereignis. Wer Antworten in Assessment auswertet, etwa um kürzlich beantwortete Fragen auszulassen, sieht nur diese 30 Tage.
+
 ## Tests
 
 `ServiceFactory` ist der Prüfstand: Er startet den echten Service, so wie er läuft, mit einer frischen MySQL-Datenbank, auf die alle Migrationen angewendet sind, und vertraut den Tokens aus `Edvaniq.Testing/TestTokens`. Den Broker tauscht er gegen einen im Prozess aus. Eine Testklasse holt ihn sich per `IClassFixture<ServiceFactory>`.
