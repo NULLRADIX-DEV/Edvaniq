@@ -34,7 +34,7 @@ public sealed class DocumentSectionTests(ServiceFactory service) : IClassFixture
 
         var found = await client.GetFromJsonAsync<SectionDto[]>($"/documents/{document.Id}/sections", Cancel);
 
-        Assert.Equal([new SectionDto(sections[0].Id, 0, 1, 2), new SectionDto(sections[1].Id, 1, 3, 3)], found);
+        Assert.Equal([new SectionDto(sections[0].Id, 0, 1, 2), new SectionDto(sections[1].Id, 1, 3, 3)], found!);
         using var foreign = ClientFor(NewUser());
         Assert.Equal(HttpStatusCode.NotFound, (await foreign.GetAsync($"/documents/{document.Id}/sections", Cancel)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/documents/{Guid.NewGuid()}/sections", Cancel)).StatusCode);
@@ -55,7 +55,7 @@ public sealed class DocumentSectionTests(ServiceFactory service) : IClassFixture
 
         var found = await client.GetFromJsonAsync<SectionDto[]>($"/documents/{document.Id}/sections", Cancel);
 
-        Assert.Equal(sections.Select(section => new SectionDto(section.Id, section.Ordinal, null, null)), found);
+        Assert.Equal(sections.Select(section => new SectionDto(section.Id, section.Ordinal, null, null)), found!);
     }
 
     private async Task StoreAsync(Action<ContentDbContext> add)
