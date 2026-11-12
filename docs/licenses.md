@@ -36,7 +36,7 @@ Indirekte NuGet-Pakete, also Abhängigkeiten der gelisteten Pakete, stehen nicht
 | `Aspire.Hosting.Testing` | MIT | Ende-zu-Ende- und Architekturtests |
 | `bunit` | MIT | Komponententests der Clients |
 | `Deque.AxeCore.Playwright` | MIT | axe-core in den Barrierefreiheits-Tests der Web-Shell, nur Tests |
-| `Markdig` | BSD-2-Clause | Liest Markdown von Nutzern und KI in der UI-Bibliothek, ohne HTML |
+| `Markdig` | BSD-2-Clause | Liest Markdown von Nutzern und KI in der UI-Bibliothek, ohne HTML, und hochgeladene Markdown-Dateien im Content-Worker |
 | `Microsoft.AspNetCore.Authentication.JwtBearer` | MIT | Token-Prüfung der Services |
 | `Microsoft.AspNetCore.Components.Authorization` | MIT | Geschützte Seiten der UI-Bibliothek |
 | `Microsoft.AspNetCore.Components.Web` | MIT | UI-Bibliothek |

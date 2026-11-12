@@ -81,6 +81,8 @@ public sealed class FileTextExtractorTests(ServiceFactory service) : IClassFixtu
     {
         { "Lang.pdf", TestPdfs.Empty(Document.MaxPages + 1), Document.TooManyPages },
         { "Kaputt.pdf", "%PDF-1.4\nnichts weiter"u8.ToArray(), Document.FileUnreadable },
+        { "Kaputt.docx", TestDocx.Of("<w:p><w:r><w:t>offen"), Document.FileUnreadable },
+        { "Lang.docx", TestDocx.Of(string.Concat(Enumerable.Repeat(TestDocx.P(new string('a', 999)), Document.TextMaxLength / 1000 + 1))), Document.FileTextTooLong },
     };
 
     // A file that can't become a document fails it with a reason the user can act on, and leaves no pages.
@@ -121,15 +123,43 @@ public sealed class FileTextExtractorTests(ServiceFactory service) : IClassFixtu
         Assert.Equal((DocumentStatus.Failed, Document.NothingToLearn), Query(db => Stored(db, id) is var d ? (d.Status, d.FailureReason) : default));
     }
 
-    // Word files can't be read yet. Instead of waiting forever the document says what to do.
+    // #320: a Word file is one page, its headings start the sections and name them, and an embedded object adds nothing.
     [Fact]
-    public async Task WordFile_FailsWithTheHintToSaveItAsPdf()
+    public async Task WordFile_IsOnePage_SplitAtItsHeadings()
     {
-        var id = await UploadAsync(NewUser(), "Aufsatz.docx", WordFile());
+        var word = TestDocx.Of(
+            TestDocx.P("Zellbiologie", "berschrift1")
+            + TestDocx.P("Die Zelle ist die kleinste Einheit des Lebens und hat eine Membran.")
+            + """<w:p><w:r><w:object><o:OLEObject ProgID="Excel.Sheet.12"/></w:object></w:r></w:p>"""
+            + TestDocx.P("Genetik", "berschrift1")
+            + TestDocx.P("Die Erbinformation liegt im Zellkern auf den Chromosomen der Zelle."),
+            parts: new Dictionary<string, byte[]> { ["word/vbaProject.bin"] = [0xD0, 0xCF, 0x11, 0xE0] });
+        var id = await UploadAsync(NewUser(), "Aufsatz.docx", word);
+
+        await Extractor().ReadAsync(id, Cancel);
+        await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(id, Cancel);
+
+        var text = Query(db => Stored(db, id).Text);
+        Assert.Equal(
+            "# Zellbiologie\n\nDie Zelle ist die kleinste Einheit des Lebens und hat eine Membran.\n\n# Genetik\n\n"
+            + "Die Erbinformation liegt im Zellkern auf den Chromosomen der Zelle.",
+            text);
+        Assert.Equal((1, text.Length), Query(db => db.DocumentPages.IgnoreQueryFilters().Single(page => page.DocumentId == id) is var p ? (p.Number, p.Length) : default));
+        var sections = Query(db => db.Sections.IgnoreQueryFilters().Where(section => section.DocumentId == id).OrderBy(section => section.Ordinal).ToList());
+        Assert.Equal(["Zellbiologie", "Genetik"], sections.Select(section => SectionSplitter.HeadingOf(text, section.Start)));
+    }
+
+    // Markdown loses its markup: link targets, pictures and HTML don't reach the text, a heading underlined with "===" is
+    // a heading like "# ".
+    [Fact]
+    public async Task MarkdownFile_LosesItsMarkup()
+    {
+        const string markdown = "Säuren\n======\n\nEine **Säure** gibt ein [Proton](https://example.org/p) ab. ![Bild](x.png)\n\n<div>Kasten</div>\n";
+        var id = await UploadAsync(NewUser(), "Notizen.md", Encoding.UTF8.GetBytes(markdown));
 
         await Extractor().ReadAsync(id, Cancel);
 
-        Assert.Equal((DocumentStatus.Failed, Document.WordNotYet), Query(db => Stored(db, id) is var d ? (d.Status, d.FailureReason) : default));
+        Assert.Equal("# Säuren\n\nEine Säure gibt ein Proton ab.", Query(db => Stored(db, id).Text));
     }
 
     private static List<string> Paragraphs(string id) =>
@@ -138,18 +168,6 @@ public sealed class FileTextExtractorTests(ServiceFactory service) : IClassFixtu
     private static string NewUser() => $"alice-{Guid.NewGuid():N}";
 
     private static Document Stored(ContentDbContext db, Guid id) => db.Documents.IgnoreQueryFilters().Single(document => document.Id == id);
-
-    private static byte[] WordFile()
-    {
-        using var stream = new MemoryStream();
-        using (var zip = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
-        {
-            using var entry = new StreamWriter(zip.CreateEntry("word/document.xml").Open());
-            entry.Write("<w:document/>");
-        }
-
-        return stream.ToArray();
-    }
 
     private FileTextExtractor Extractor() => ActivatorUtilities.CreateInstance<FileTextExtractor>(service.Services);
 

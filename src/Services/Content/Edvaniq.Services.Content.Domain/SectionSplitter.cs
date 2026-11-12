@@ -144,6 +144,37 @@ public static class SectionSplitter
         return char.IsLowSurrogate(text[limit]) ? limit - 1 : limit;
     }
 
+    // The heading a section at start stands under, without its '#', or null if no heading comes before it. Where a
+    // source names a section of material without headings, it takes the section's number (Section.Ordinal) instead.
+    public static string? HeadingOf(string text, int start)
+    {
+        string? heading = null;
+        for (var lineStart = 0; lineStart <= start && lineStart < text.Length;)
+        {
+            var newline = text.IndexOf('\n', lineStart);
+            var lineEnd = newline < 0 ? text.Length : newline;
+            var first = lineStart;
+            while (first < lineEnd && char.IsWhiteSpace(text[first]))
+            {
+                first++;
+            }
+
+            if (first < lineEnd && IsHeading(text, first))
+            {
+                heading = text[first..lineEnd].TrimStart('#').Trim();
+            }
+
+            if (newline < 0)
+            {
+                break;
+            }
+
+            lineStart = newline + 1;
+        }
+
+        return heading;
+    }
+
     // One to six '#' and a space, as in Markdown.
     private static bool IsHeading(string text, int start)
     {

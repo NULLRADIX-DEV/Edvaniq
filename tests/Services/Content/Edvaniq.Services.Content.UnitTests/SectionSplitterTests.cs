@@ -107,6 +107,21 @@ public class SectionSplitterTests
         Assert.True(string.IsNullOrWhiteSpace(text[end..]), "Content lost at the end.");
     }
 
+    // #320: a section names the heading it stands under, the nearest one above it on any level.
+    [Fact]
+    public void HeadingOf_IsTheNearestHeadingAboveTheSection()
+    {
+        var text = $"Einleitung ohne Überschrift.\n\n# Zelle\n\n{Sentences(4_000)}\n\n## Zellkern\n\nDer Kern.\n\n# Genetik\n\nErbgut.";
+
+        var headings = SectionSplitter.Split(text).Select(span => SectionSplitter.HeadingOf(text, span.Start)).ToList();
+
+        Assert.Equal([null, "Zelle", "Zelle", "Zellkern", "Genetik"], headings);
+    }
+
+    [Fact]
+    public void HeadingOf_IsNull_WithoutHeadings() =>
+        Assert.All(SectionSplitter.Split(Sentences(5_000)), span => Assert.Null(SectionSplitter.HeadingOf(Sentences(5_000), span.Start)));
+
     private static List<string> Split(string text) =>
         [.. SectionSplitter.Split(text).Select(span => text.Substring(span.Start, span.Length))];
 

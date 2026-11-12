@@ -10,6 +10,7 @@
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="..\Edvaniq.Services.Content.UnitTests\ReferenceSet.cs" Link="ReferenceSet.cs" />
     <Compile Include="..\Edvaniq.Services.Content.UnitTests\ReferenceScore.cs" Link="ReferenceScore.cs" />
+    <Compile Include="..\Edvaniq.Services.Content.UnitTests\TestDocx.cs" Link="TestDocx.cs" />
   </ItemGroup>
 
   <ItemGroup>
