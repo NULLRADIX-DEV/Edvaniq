@@ -18,6 +18,7 @@ public sealed class PlanningStub : HttpMessageHandler, IGoalProfiles
     private readonly ConcurrentDictionary<string, bool> hanging = new();
     private readonly ConcurrentDictionary<Guid, bool> forgotten = new();
     private readonly ConcurrentDictionary<string, (string? Level, string? OutputLanguage)> profiles = new();
+    private readonly ConcurrentDictionary<string, string> names = new();
 
     // Every request that came in, as it arrived.
     public ConcurrentQueue<Received> Requests { get; } = new();
@@ -26,6 +27,9 @@ public sealed class PlanningStub : HttpMessageHandler, IGoalProfiles
 
     // The user's goal has this level and output language. Without it both are null, as on a default goal nobody took over.
     public void Profile(string userId, string? level, string? outputLanguage) => profiles[userId] = (level, outputLanguage);
+
+    // Planning names the goal in its answers too, which Content has no use for (#312).
+    public void Name(string userId, string name) => names[userId] = name;
 
     // Planning answers the user with this status.
     public void Down(string userId, HttpStatusCode status = HttpStatusCode.ServiceUnavailable) => down[userId] = status;
@@ -61,7 +65,7 @@ public sealed class PlanningStub : HttpMessageHandler, IGoalProfiles
         var (level, outputLanguage) = profiles.GetValueOrDefault(user);
         if (request.Method == HttpMethod.Post && request.RequestUri.AbsolutePath == "/learning-goals/default")
         {
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { id = GoalOf(user), level, outputLanguage }) };
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { id = GoalOf(user), name = names.GetValueOrDefault(user), level, outputLanguage }) };
         }
 
         // Only the user's own goal is found, someone else's looks like none.
@@ -70,7 +74,7 @@ public sealed class PlanningStub : HttpMessageHandler, IGoalProfiles
             && Guid.TryParse(id, out var goal)
             && goals.TryGetValue(user, out var own)
             && own == goal
-            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { id = goal, level, outputLanguage }) }
+            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { id = goal, name = names.GetValueOrDefault(user), level, outputLanguage }) }
             : new HttpResponseMessage(HttpStatusCode.NotFound);
     }
 
