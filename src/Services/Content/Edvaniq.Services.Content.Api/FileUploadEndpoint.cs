@@ -1,3 +1,4 @@
+using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Domain;
 
@@ -34,6 +35,9 @@ internal static class FileUploadEndpoint
         IFiles files,
         IDocuments documents,
         IAiBudget budget,
+        IPageQuota quota,
+        ICurrentUser user,
+        TimeProvider time,
         CancellationToken cancellationToken)
     {
         var request = context.Request;
@@ -57,6 +61,12 @@ internal static class FileUploadEndpoint
         if (await BudgetRefusal.OfAsync(budget, cancellationToken) is { } refused)
         {
             return refused;
+        }
+
+        // The pages of a file are only known once the worker has read it, so here only a quota that is used up.
+        if (await QuotaEndpoints.RefusalAsync(quota, user, pages: null, time, cancellationToken) is { } overQuota)
+        {
+            return overQuota;
         }
 
         // The goal before the body: a foreign goal or no Planning, and not a byte is stored.

@@ -1,3 +1,4 @@
+using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Domain;
 
@@ -12,7 +13,15 @@ internal static class DocumentEndpoints
         var documents = app.MapGroup("/documents");
         documents.MapFileUpload();
 
-        documents.MapPost("/", async (PastedText request, ILearningGoals goal, IDocuments documents, IAiBudget budget, CancellationToken cancellationToken) =>
+        documents.MapPost("/", async (
+            PastedText request,
+            ILearningGoals goal,
+            IDocuments documents,
+            IAiBudget budget,
+            IPageQuota quota,
+            ICurrentUser user,
+            TimeProvider time,
+            CancellationToken cancellationToken) =>
         {
             var errors = new Dictionary<string, string[]>();
             if (Document.CheckText(request.Text) is { } text)
@@ -33,6 +42,12 @@ internal static class DocumentEndpoints
             if (await BudgetRefusal.OfAsync(budget, cancellationToken) is { } refused)
             {
                 return refused;
+            }
+
+            // A pasted text knows its pages already, so it doesn't wait for the worker to be turned away.
+            if (await QuotaEndpoints.RefusalAsync(quota, user, PageQuota.PagesOfText(request.Text!), time, cancellationToken) is { } overQuota)
+            {
+                return overQuota;
             }
 
             // The goal before the save: without Planning nothing is stored, the user just sends the text again. Without

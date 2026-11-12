@@ -360,6 +360,42 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.ToTable("DocumentPages");
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.PageCharge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("ChargedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<int>("Pages")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("StudyDay")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("OwnerId", "StudyDay");
+
+                    b.ToTable("PageCharges");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.QuestionPool", b =>
                 {
                     b.Property<Guid>("TopicId")

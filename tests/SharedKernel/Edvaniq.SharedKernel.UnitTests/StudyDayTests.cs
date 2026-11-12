@@ -66,6 +66,23 @@ public class StudyDayTests
     [Fact]
     public void ZoneData_IsAvailable() => StudyDay.EnsureAvailable();
 
+    // #301: the next 04:00 in Berlin, 02:00 UTC in summer and 03:00 UTC in winter, also across a clock change.
+    [Theory]
+    [InlineData("2027-07-15T01:59:00Z", "2027-07-15T02:00:00Z")]
+    [InlineData("2027-07-15T02:00:00Z", "2027-07-16T02:00:00Z")]
+    [InlineData("2027-01-15T02:59:00Z", "2027-01-15T03:00:00Z")]
+    [InlineData("2027-01-15T03:00:00Z", "2027-01-16T03:00:00Z")]
+    [InlineData("2027-03-27T03:00:00Z", "2027-03-28T02:00:00Z")]
+    [InlineData("2027-10-30T02:00:00Z", "2027-10-31T03:00:00Z")]
+    [InlineData("2027-12-31T23:00:00Z", "2028-01-01T03:00:00Z")]
+    public void NextStart_IsTheNext0400InBerlin(string utc, string next)
+    {
+        var start = StudyDay.NextStartUtc(Utc(utc));
+
+        Assert.Equal((Utc(next), DateTimeKind.Utc), (start, start.Kind));
+        Assert.Equal(StudyDay.Of(Utc(utc)).AddDays(1), StudyDay.Of(start));
+    }
+
     private static DateTime Utc(string value) =>
         DateTime.Parse(value, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal);
 }

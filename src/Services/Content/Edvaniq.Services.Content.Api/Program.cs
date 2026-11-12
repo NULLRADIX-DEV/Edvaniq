@@ -76,6 +76,7 @@ app.UseAuthorization();
 // Who the token says the caller is. Smoke test for the token check, ignores any user id in the request.
 app.MapGet("/me", (ICurrentUser user) => new { user.Id });
 app.MapDocumentEndpoints();
+app.MapQuotaEndpoints();
 
 app.Run();
 
