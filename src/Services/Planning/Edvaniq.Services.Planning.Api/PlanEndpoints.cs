@@ -32,7 +32,8 @@ internal static class PlanEndpoints
                     DailyGoalState.Reached => "reached",
                     DailyGoalState.Open => "open",
                     _ => "none",
-                });
+                },
+                today.NextBlockId);
         });
 
         return app;
@@ -51,6 +52,8 @@ internal static class PlanEndpoints
 // didn't answer, so topics whose questions aren't ready yet may have blocks too. NotReadyTopicIds: topics left out
 // because their question pool isn't ready (#374); "questionsPending" when that is all of them. DailyGoal (#381):
 // "reached" when every block is done, "open" while one isn't, "none" on a day without blocks.
+// NextBlockId (#407): the block "Jetzt lernen" goes on with, a started one first. Null with "reached": all done; null
+// with "none": no blocks today.
 internal sealed record TodayPlanResponse(
     DateOnly StudyDay,
     Guid LearningGoalId,
@@ -60,7 +63,8 @@ internal sealed record TodayPlanResponse(
     IReadOnlyList<Guid> ShortenedTopicIds,
     bool QuestionPoolsAvailable,
     IReadOnlyList<Guid> NotReadyTopicIds,
-    string DailyGoal);
+    string DailyGoal,
+    Guid? NextBlockId);
 
 // Kind is "learn" or "review". Id stays the same for the same block on every call, Done says whether its session was
 // finished (#375).

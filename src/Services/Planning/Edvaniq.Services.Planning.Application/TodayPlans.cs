@@ -13,6 +13,7 @@ public sealed class TodayPlans(
     IQuestionPoolSource questionPools,
     IDailyBudgets budgets,
     IDoneBlocks doneBlocks,
+    IStartedBlocks startedBlocks,
     ICurrentUser currentUser,
     TimeProvider time)
 {
@@ -47,12 +48,16 @@ public sealed class TodayPlans(
         // What was done today stays, the rest comes from the fresh plan (#375).
         var done = await doneBlocks.OnAsync(goal, plan.StudyDay, cancellationToken);
         var blocks = DayBlocks.WithDone(owner, goal, plan.StudyDay, plan.Blocks, done, budget.MinutesOn(plan.StudyDay));
+
+        // A block started already goes on first (#407).
+        var started = await startedBlocks.OnAsync(goal, plan.StudyDay, cancellationToken);
         return new TodayPlanResult(
             goal,
             plan,
             blocks,
             MasteryAvailable: topics.Count == 0 || mastery is not null,
-            QuestionPoolsAvailable: topics.Count == 0 || ready is not null);
+            QuestionPoolsAvailable: topics.Count == 0 || ready is not null,
+            NextBlockId: NextBlock.Of(blocks, started)?.Id);
     }
 
     // The sources answer null when their service is down. Should one throw anyway, it counts the same, unless the
@@ -71,8 +76,14 @@ public sealed class TodayPlans(
 }
 
 // Blocks: today's blocks with their ids, the done ones first. Plan.Blocks is only the fresh part.
+// NextBlockId: the block "Jetzt lernen" goes on with, null when nothing is open (#407).
 public sealed record TodayPlanResult(
-    Guid LearningGoalId, TodayPlan Plan, IReadOnlyList<DayBlock> Blocks, bool MasteryAvailable, bool QuestionPoolsAvailable)
+    Guid LearningGoalId,
+    TodayPlan Plan,
+    IReadOnlyList<DayBlock> Blocks,
+    bool MasteryAvailable,
+    bool QuestionPoolsAvailable,
+    Guid? NextBlockId)
 {
     // #381: judged on Blocks, so on what the plan shows.
     public DailyGoalState DailyGoal => Domain.DailyGoal.Of(Blocks);
