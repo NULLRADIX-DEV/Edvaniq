@@ -136,6 +136,9 @@ namespace Edvaniq.Services.Assessment.Infrastructure.Migrations
                     b.Property<Guid>("QuestionId")
                         .HasColumnType("char(36)");
 
+                    b.Property<Guid?>("QuizId")
+                        .HasColumnType("char(36)");
+
                     b.Property<int?>("ResponseTimeMs")
                         .HasColumnType("int");
 
@@ -152,7 +155,39 @@ namespace Edvaniq.Services.Assessment.Infrastructure.Migrations
 
                     b.HasIndex("OwnerId");
 
+                    b.HasIndex("QuizId");
+
                     b.ToTable("Attempts");
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Assessment.Domain.BlockQuiz", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("BlockId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("OwnerId", "BlockId")
+                        .IsUnique();
+
+                    b.ToTable("BlockQuizzes");
                 });
 
             modelBuilder.Entity("Edvaniq.Services.Assessment.Domain.DeletedDocument", b =>
@@ -293,6 +328,14 @@ namespace Edvaniq.Services.Assessment.Infrastructure.Migrations
                     b.HasIndex("OwnerId");
 
                     b.ToTable("TopicsSnapshots");
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Assessment.Domain.Attempt", b =>
+                {
+                    b.HasOne("Edvaniq.Services.Assessment.Domain.BlockQuiz", null)
+                        .WithMany()
+                        .HasForeignKey("QuizId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 #pragma warning restore 612, 618
         }

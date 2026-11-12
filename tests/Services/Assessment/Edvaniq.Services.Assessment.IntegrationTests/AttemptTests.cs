@@ -123,8 +123,8 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
         Assert.True(Assert.Single(Records(answeredFirst)).Correct);
     }
 
-    // Before the answer no response carries the solution: asking leaves it out, and asking and answering are the only
-    // ways to a question at all.
+    // Before the answer no response carries the solution: asking leaves it out (a block's quiz too, BlockQuizTests), and
+    // asking and answering are the only ways to a question at all.
     [Fact]
     public async Task Solution_IsNowhere_BeforeTheAnswer()
     {
@@ -143,7 +143,7 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
             .Select(endpoint => endpoint.RoutePattern.RawText!.TrimEnd('/'))
             .Where(route => route is not ("/health" or "/alive" or "/me"))
             .Order();
-        Assert.Equal(["/attempts", "/attempts/{id:guid}/answer", "/check-questions", "/question-pools", "/question-pools/{topicId:guid}"], routes);
+        Assert.Equal(["/attempts", "/attempts/{id:guid}/answer", "/check-questions", "/question-pools", "/question-pools/{topicId:guid}", "/quizzes"], routes);
     }
 
     // A double click, a retry and a second answer to the same question all get the first answer back.
