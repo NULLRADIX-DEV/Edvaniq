@@ -72,7 +72,8 @@ public sealed class ScanTests(ServiceFactory service) : IClassFixture<ServiceFac
         Assert.Equal(status, Query(db => Stored(db, id).Status));
     }
 
-    private FileTextExtractor Extractor() => ActivatorUtilities.CreateInstance<FileTextExtractor>(service.Services);
+    private FileTextExtractor Extractor() =>
+        ActivatorUtilities.CreateInstance<FileTextExtractor>(service.Services, ReadingProcess.Reader(service.Services.GetRequiredService<FileStore>()));
 
     private async Task<Guid> UploadAsync(byte[] pdf, string? user = null)
     {
