@@ -91,6 +91,12 @@ internal static class FileUploadEndpoint
             return Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: Unavailable);
         }
 
+        // A full goal before the body too: not a byte of an eleventh document is stored.
+        if (await DocumentEndpoints.GoalFullAsync(documents, goal, cancellationToken) is { } full)
+        {
+            return full;
+        }
+
         StoredFile stored;
         FileFormat format;
         string fileName;

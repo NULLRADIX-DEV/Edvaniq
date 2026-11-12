@@ -4,6 +4,11 @@ using Edvaniq.Services.Content.Domain;
 using Edvaniq.Services.Content.Infrastructure.Files;
 using Edvaniq.Services.Content.UnitTests;
 
+using UglyToad.PdfPig.Content;
+using UglyToad.PdfPig.Core;
+using UglyToad.PdfPig.Fonts.Standard14Fonts;
+using UglyToad.PdfPig.Writer;
+
 namespace Edvaniq.Services.Content.IntegrationTests;
 
 // #282: the text of a PDF page by page, in reading order, from PDFs written out of the reference set. Text and Markdown
@@ -60,7 +65,8 @@ public sealed class FileTextTests
     [Fact]
     public void MoreTextThanAllowed_IsRefused()
     {
-        var refused = Assert.Throws<FileRefusedException>(() => Read(TestPdfs.Large(pages: 120, pictures: 1, linesPerPage: 40), FileFormat.Pdf));
+        // Dense pages in a small font: 60 pages of 3,600 characters pass the text limit well within the 100 pages a PDF may have.
+        var refused = Assert.Throws<FileRefusedException>(() => Read(DensePdf(pages: 60, lines: 60), FileFormat.Pdf));
 
         Assert.Equal(Document.FileTextTooLong, refused.Reason);
     }
@@ -90,6 +96,22 @@ public sealed class FileTextTests
 
     private static List<string> Paragraphs(string id) =>
         [.. ReferenceSet.Load().Documents.Single(document => document.Id == id).Text.ReplaceLineEndings("\n").Split("\n\n")];
+
+    private static byte[] DensePdf(int pages, int lines)
+    {
+        var builder = new PdfDocumentBuilder();
+        var font = builder.AddStandard14Font(Standard14Font.Helvetica);
+        for (var page = 0; page < pages; page++)
+        {
+            var current = builder.AddPage(PageSize.A4);
+            for (var line = 0; line < lines; line++)
+            {
+                current.AddText("Eine Saeure gibt ein Proton ab, eine Base nimmt es auf, dabei entsteht Wasser.", 6, new PdfPoint(20, 820 - (line * 13)), font);
+            }
+        }
+
+        return builder.Build();
+    }
 
     private static IReadOnlyList<string> Read(byte[] content, FileFormat format)
     {

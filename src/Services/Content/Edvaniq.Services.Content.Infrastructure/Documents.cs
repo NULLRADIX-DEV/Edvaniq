@@ -52,6 +52,9 @@ internal sealed class Documents(
         return document;
     }
 
+    public Task<int> CountInGoalAsync(Guid learningGoalId, CancellationToken cancellationToken) =>
+        db.Documents.CountAsync(document => document.LearningGoalId == learningGoalId, cancellationToken);
+
     // Leaves the text in the database, ten documents could be two megabytes of it.
     public async Task<IReadOnlyList<DocumentSummary>> ListAsync(CancellationToken cancellationToken) =>
         await db.Documents.OrderByDescending(document => document.CreatedAt)

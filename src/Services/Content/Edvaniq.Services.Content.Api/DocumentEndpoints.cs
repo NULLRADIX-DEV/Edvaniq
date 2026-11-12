@@ -75,6 +75,11 @@ internal static class DocumentEndpoints
                     title: "Der Text ließ sich gerade nicht speichern. Versuch es gleich noch einmal.");
             }
 
+            if (await GoalFullAsync(documents, learningGoal, cancellationToken) is { } full)
+            {
+                return full;
+            }
+
             var document = await documents.PasteAsync(learningGoal, request.Title, request.Text!, cancellationToken);
             return Results.Created($"/documents/{document.Id}", DocumentResponse.From(document));
         });
@@ -107,6 +112,12 @@ internal static class DocumentEndpoints
 
         return app;
     }
+
+    // 409 with the message in title when the goal holds MaxDocumentsPerGoal already (#277), null if there is room.
+    internal static async Task<IResult?> GoalFullAsync(IDocuments documents, LearningGoalInfo goal, CancellationToken cancellationToken) =>
+        await documents.CountInGoalAsync(goal.Id, cancellationToken) >= Document.MaxDocumentsPerGoal
+            ? Results.Problem(statusCode: StatusCodes.Status409Conflict, title: Document.GoalFull)
+            : null;
 }
 
 internal sealed record PastedText(string? Title, string? Text, Guid? LearningGoalId = null);

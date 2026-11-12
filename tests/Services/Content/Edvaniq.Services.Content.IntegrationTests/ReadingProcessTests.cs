@@ -69,7 +69,7 @@ public sealed class ReadingProcessTests : IDisposable
     {
         var reader = ReadingProcess.Reader(store, killAfter: TimeSpan.FromMilliseconds(50));
 
-        var read = await reader.ReadAsync(await StoreAsync(TestPdfs.Large(300, 3, 9)), FileFormat.Pdf, Cancel);
+        var read = await reader.ReadAsync(await StoreAsync(TestPdfs.Large(Document.MaxPages, 3, 9)), FileFormat.Pdf, Cancel);
 
         Assert.Equal(FileCheck.TakesTooLong, read.Reason);
         Assert.True(IsGone(reader.LastProcessId!.Value), "The reading process outlived its read.");
@@ -80,7 +80,7 @@ public sealed class ReadingProcessTests : IDisposable
     public async Task Shutdown_EndsTheReadingProcess()
     {
         var reader = ReadingProcess.Reader(store);
-        var id = await StoreAsync(TestPdfs.Large(300, 3, 9));
+        var id = await StoreAsync(TestPdfs.Large(Document.MaxPages, 3, 9));
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(Cancel);
         stopping.CancelAfter(TimeSpan.FromMilliseconds(200));
 
