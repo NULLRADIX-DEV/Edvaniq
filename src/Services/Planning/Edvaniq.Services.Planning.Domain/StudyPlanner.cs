@@ -19,7 +19,7 @@ namespace Edvaniq.Services.Planning.Domain;
 //   minutes don't count towards these shares.
 // - Day by day, each learn block goes to the topic with the largest share of its minutes still open, so topics take
 //   turns. A block is at most BlockMinutes long.
-// - Ties always go by weight, then by topic id.
+// - Ties always go by weight, then by the place in the material (Rank, #380), then by topic id.
 // - Short of time (#370): every topic that can get learn time needs at least MinLearnMinutesPerTopic of it in the plan.
 //   If the learn minutes of the plan don't cover that, every weakness keeps its place, then the heaviest foundations
 //   (#909) and then the heaviest other topics as long as there is room, at least one. The rest is shortened: no learn
@@ -57,9 +57,10 @@ public static class StudyPlanner
         Validate(topics);
 
         var weighted = topics
-            .Select(topic => new Weighted(topic.TopicId, (long)topic.Size * (100 - topic.Mastery), topic.IsNew, topic.IsWeakness, topic.IsFoundation))
+            .Select(topic => new Weighted(topic.TopicId, (long)topic.Size * (100 - topic.Mastery), topic.IsNew, topic.IsWeakness, topic.IsFoundation, topic.Rank))
             .Where(topic => topic.Weight > 0)
             .OrderByDescending(topic => topic.Weight)
+            .ThenBy(topic => topic.Rank)
             .ThenBy(topic => topic.TopicId)
             .ToList();
 
@@ -310,5 +311,5 @@ public static class StudyPlanner
         return best;
     }
 
-    private sealed record Weighted(Guid TopicId, long Weight, bool IsNew, bool IsWeakness, bool IsFoundation);
+    private sealed record Weighted(Guid TopicId, long Weight, bool IsNew, bool IsWeakness, bool IsFoundation, int Rank);
 }

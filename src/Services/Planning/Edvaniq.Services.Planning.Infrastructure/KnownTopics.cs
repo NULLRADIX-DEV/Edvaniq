@@ -22,9 +22,16 @@ internal sealed class KnownTopics(PlanningDbContext db) : IKnownTopics
     public async Task<IReadOnlyList<Guid>> ActiveAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
         await db.KnownTopics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId && !topic.Hidden)
-            .OrderBy(topic => topic.TopicId)
+            .OrderBy(topic => topic.Rank == null)
+            .ThenBy(topic => topic.Rank)
+            .ThenBy(topic => topic.TopicId)
             .Select(topic => topic.TopicId)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyDictionary<Guid, int>> SizesAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
+        await db.KnownTopics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId && !topic.Hidden)
+            .ToDictionaryAsync(topic => topic.TopicId, topic => topic.Size, cancellationToken);
 
     public async Task<IReadOnlySet<Guid>> FoundationsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
         (await db.KnownTopics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])

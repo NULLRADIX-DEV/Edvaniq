@@ -150,6 +150,38 @@ public class TopicsChangedHandlerTests
         Assert.False(IsFoundation(store, parent));
     }
 
+    // #380: rank and size come with every state, hidden topics too, and the next state replaces them.
+    [Fact]
+    public async Task RankAndSize_AreTakenOver_AndFollowTheNextState()
+    {
+        var store = new FakeKnownTopics();
+        var (a, b, c) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        await HandleAsync(store, Changed(First, [a, b], [c]) with { Topics = [new(b, 0, 4), new(a, 1, 2), new(c, 2, 3)] });
+
+        Assert.Equal([(a, 1, 2), (b, 0, 4), (c, 2, 3)], store.Topics.Select(topic => (topic.TopicId, topic.Rank, topic.Size)).OrderBy(topic => topic.TopicId == a ? 0 : topic.TopicId == b ? 1 : 2));
+        Assert.Equal([b, a], await store.ActiveAsync("alice", Goal, TestContext.Current.CancellationToken));
+
+        await HandleAsync(store, Changed(First.AddSeconds(1), [a, b, c]) with { Topics = [new(a, 0, 0), new(c, 1, 5), new(b, 2, 4)] });
+
+        Assert.Equal([a, c, b], await store.ActiveAsync("alice", Goal, TestContext.Current.CancellationToken));
+        Assert.Equal(
+            new Dictionary<Guid, int> { [a] = 1, [b] = 4, [c] = 5 },
+            await store.SizesAsync("alice", Goal, TestContext.Current.CancellationToken));
+    }
+
+    // A message from before #380 has no facts: no rank, size 1.
+    [Fact]
+    public async Task StateWithoutFacts_GivesNoRank_AndSizeOne()
+    {
+        var store = new FakeKnownTopics();
+        var topic = Guid.NewGuid();
+        await HandleAsync(store, Changed(First, [topic]) with { Topics = [new(topic, 3, 7)] });
+
+        await HandleAsync(store, Changed(First.AddSeconds(1), [topic]));
+
+        Assert.Equal((null, 1), (Assert.Single(store.Topics).Rank, store.Topics[0].Size));
+    }
+
     private static TopicsChanged Changed(
         DateTime changedAt, Guid[] topicIds, Guid[]? hidden = null, TopicParent[]? parents = null, Guid? goal = null) =>
         new("alice", goal ?? Goal, changedAt, topicIds, hidden ?? [], parents);
@@ -176,7 +208,13 @@ public class TopicsChangedHandlerTests
 
         public Task<IReadOnlyList<Guid>> ActiveAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<Guid>>(
-                [.. Topics.Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId && !topic.Hidden).Select(topic => topic.TopicId).Order()]);
+                [.. Active(ownerId, learningGoalId).OrderBy(topic => topic.Rank is null).ThenBy(topic => topic.Rank).ThenBy(topic => topic.TopicId).Select(topic => topic.TopicId)]);
+
+        public Task<IReadOnlyDictionary<Guid, int>> SizesAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, int>>(Active(ownerId, learningGoalId).ToDictionary(topic => topic.TopicId, topic => topic.Size));
+
+        private IEnumerable<KnownTopic> Active(string ownerId, Guid learningGoalId) =>
+            Topics.Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId && !topic.Hidden);
 
         public Task<IReadOnlySet<Guid>> FoundationsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlySet<Guid>>(

@@ -7,7 +7,8 @@ namespace Edvaniq.Services.Planning.Application;
 // Takes over the state of a learning goal's topics (docs/spec/events.md): adds the new ones, drops those in neither
 // list. The inbox drops a redelivered message, the snapshot the same state under a new message id and an older state
 // that arrives after a newer one. If two arrive at once, the key or the snapshot's token makes the later save fail and
-// the broker delivers it again. Of the parents it keeps only which active topic has an active subtopic (#909, rule 5).
+// the broker delivers it again. Of the parents it keeps only which active topic has an active subtopic (#909, rule 5), of
+// the facts only rank and size (#380).
 public sealed class TopicsChangedHandler(IKnownTopics topics) : IIntegrationEventHandler<TopicsChanged>
 {
     public async Task HandleAsync(TopicsChanged integrationEvent, CancellationToken cancellationToken)
@@ -30,12 +31,14 @@ public sealed class TopicsChangedHandler(IKnownTopics topics) : IIntegrationEven
         var hidden = integrationEvent.HiddenTopicIds.ToHashSet();
         var current = integrationEvent.TopicIds.Concat(hidden).ToHashSet();
         var foundations = Foundations(integrationEvent, hidden);
+        var facts = (integrationEvent.Topics ?? []).DistinctBy(item => item.TopicId).ToDictionary(item => item.TopicId);
         var known = await topics.ListAsync(owner, goal, current, cancellationToken);
         foreach (var topic in known)
         {
             if (current.Contains(topic.TopicId))
             {
-                topic.Update(goal, hidden.Contains(topic.TopicId), foundations.Contains(topic.TopicId));
+                var fact = facts.GetValueOrDefault(topic.TopicId);
+                topic.Update(goal, hidden.Contains(topic.TopicId), foundations.Contains(topic.TopicId), fact?.Rank, fact?.Sections ?? 0);
             }
             else if (topic.LearningGoalId == goal)
             {
@@ -45,7 +48,8 @@ public sealed class TopicsChangedHandler(IKnownTopics topics) : IIntegrationEven
 
         foreach (var id in current.Except(known.Select(topic => topic.TopicId)))
         {
-            topics.Add(KnownTopic.Create(owner, id, goal, hidden.Contains(id), foundations.Contains(id)));
+            var fact = facts.GetValueOrDefault(id);
+            topics.Add(KnownTopic.Create(owner, id, goal, hidden.Contains(id), foundations.Contains(id), fact?.Rank, fact?.Sections ?? 0));
         }
     }
 

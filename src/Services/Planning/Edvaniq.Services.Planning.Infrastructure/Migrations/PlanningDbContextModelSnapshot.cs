@@ -227,6 +227,12 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                         .HasColumnType("varchar(128)")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
+                    b.Property<int?>("Rank")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Size")
+                        .HasColumnType("int");
+
                     b.HasKey("TopicId");
 
                     b.HasIndex("OwnerId");
