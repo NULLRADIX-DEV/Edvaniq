@@ -20,11 +20,13 @@ public sealed class GoalWizardTests : BunitContext
 
     private readonly FakeLearningGoals goals = new();
     private readonly Drafts drafts = new();
+    private readonly FakeTopicEntries topics = new();
 
     public GoalWizardTests()
     {
         drafts.Claim("ben");
         Services.AddSingleton<ILearningGoals>(goals);
+        Services.AddSingleton<ITopicEntries>(topics);
         Services.AddSingleton(drafts);
         JSInterop.Mode = JSRuntimeMode.Loose;
         SetRendererInfo(new RendererInfo("WebAssembly", isInteractive: true));
@@ -66,6 +68,7 @@ public sealed class GoalWizardTests : BunitContext
         page.Find("#goal-level").Change("UpperSecondary");
         page.Find("#goal-language-en").Change("en");
         Next(page);
+        Next(page);
 
         Assert.Contains("Biologie-Klausur", page.Find(".goal-summary").TextContent);
         Assert.Contains("1. März 2027", page.Find(".goal-summary").TextContent);
@@ -91,6 +94,7 @@ public sealed class GoalWizardTests : BunitContext
         Next(page);
         Next(page);
         Next(page);
+        Next(page);
 
         Assert.Equal(new NewLearningGoal("FreeLearning", "C# lernen", null, null, null, "de", null), Assert.Single(goals.Created));
     }
@@ -107,7 +111,7 @@ public sealed class GoalWizardTests : BunitContext
         Assert.Equal(FeedbackTexts.Goal.KindMissing, ErrorAt(page, "#goal-kind-error"));
         Assert.Contains("goal-kind-error", page.Find("fieldset").GetAttribute("aria-describedby"));
         Assert.Equal("true", page.Find("#goal-kind-ExamPreparation").GetAttribute("aria-invalid"));
-        Assert.Contains("Schritt 1 von 4", page.Find("h2").TextContent);
+        Assert.Contains("Schritt 1 von 5", page.Find("h2").TextContent);
         AssertFocused(first);
     }
 
@@ -126,7 +130,7 @@ public sealed class GoalWizardTests : BunitContext
         Assert.Equal(FeedbackTexts.Goal.NameTooLong, ErrorAt(page, "#goal-name-error"));
         Assert.Equal(FeedbackTexts.Goal.ExamTypeMissing, ErrorAt(page, "#goal-exam-type-error"));
         Assert.Equal(FeedbackTexts.Goal.GoalTooLong, ErrorAt(page, "#goal-goal-error"));
-        Assert.Contains("Schritt 2 von 4", page.Find("h2").TextContent);
+        Assert.Contains("Schritt 2 von 5", page.Find("h2").TextContent);
         AssertFocused(nameField);
 
         page.Find("#goal-name").Change(" ");
@@ -147,8 +151,9 @@ public sealed class GoalWizardTests : BunitContext
         Next(page);
         Next(page);
         Next(page);
+        Next(page);
 
-        Assert.Contains("Schritt 2 von 4", page.Find("h2").TextContent);
+        Assert.Contains("Schritt 2 von 5", page.Find("h2").TextContent);
         Assert.Equal("Der Prüfungstermin darf nicht in der Vergangenheit liegen.", ErrorAt(page, "#goal-exam-date-error"));
         Assert.Equal("true", page.Find("#goal-exam-date").GetAttribute("aria-invalid"));
         Assert.Equal("Biologie-Klausur", page.Find("#goal-name").GetAttribute("value"));
@@ -187,7 +192,7 @@ public sealed class GoalWizardTests : BunitContext
         Next(page);
 
         Assert.Equal("-1", page.Find("h2").GetAttribute("tabindex"));
-        Assert.Contains($"Schritt 2 von 4: {FeedbackTexts.Goal.AboutStep}", Squeeze(page.Find("h2").TextContent));
+        Assert.Contains($"Schritt 2 von 5: {FeedbackTexts.Goal.AboutStep}", Squeeze(page.Find("h2").TextContent));
         AssertFocused(page, "h2");
         Assert.Equal("submit", page.Find(".goal-actions .button").GetAttribute("type"));
         Assert.Equal("button", page.Find(".goal-actions .goal-back").GetAttribute("type"));
@@ -244,18 +249,198 @@ public sealed class GoalWizardTests : BunitContext
         FillExam(page);
         Next(page);
         Next(page);
+        page.Find("#goal-topic-1").Change("Zellatmung");
+        Next(page);
         Next(page);
         Assert.Contains(FeedbackTexts.Goal.Kept, page.Find("[role=status]").TextContent);
+        Assert.Empty(topics.Added);
 
         await DisposeComponentsAsync();
         var back = Render<GoalWizard>();
 
         Assert.Contains(FeedbackTexts.Goal.DraftBack, back.Find("[role=status]").TextContent);
-        Assert.Contains("Schritt 4 von 4", back.Find("h2").TextContent);
+        Assert.Contains("Schritt 5 von 5", back.Find("h2").TextContent);
+        Back(back);
+        Assert.Equal("Zellatmung", back.Find("#goal-topic-1").GetAttribute("value"));
         Back(back);
         Back(back);
         Assert.Equal("Biologie-Klausur", back.Find("#goal-name").GetAttribute("value"));
     }
+
+    // #317 AC4: no topic entered, none is made.
+    [Fact]
+    public void Topics_LeftEmpty_AddNone()
+    {
+        var page = Render<GoalWizard>();
+        ToTopics(page);
+        page.Find("#goal-topic-1").Change("   ");
+        Next(page);
+
+        Assert.Contains(FeedbackTexts.Goal.NoAnswer, Squeeze(page.Find(".goal-summary").TextContent));
+        Next(page);
+
+        Assert.NotNull(page.Find("[role=status] .goal-saved"));
+        Assert.Empty(topics.Added);
+        Assert.DoesNotContain(FeedbackTexts.Goal.TopicsAdded, page.Find("[role=status]").TextContent);
+    }
+
+    // #317 AC1 and AC2: each name once, after the rule of Knowledge, into the goal just saved. Empty fields don't count.
+    [Fact]
+    public void Topics_GoToTheNewGoal_EachNameOnce()
+    {
+        var goalId = Guid.NewGuid();
+        goals.Create(CallOutcome<LearningGoalInfo>.Ok(Goal(goalId)));
+        var page = Render<GoalWizard>();
+        ToTopics(page);
+        page.Find("#goal-topic-1").Change(" pH-Wert ");
+        More(page);
+        page.Find("#goal-topic-2").Change("PH  wert");
+        More(page);
+        More(page);
+        page.Find("#goal-topic-4").Change("Zellatmung");
+        Next(page);
+
+        Assert.Equal(["pH-Wert", "Zellatmung"], page.FindAll(".goal-topics li").Select(item => item.TextContent));
+        Next(page);
+
+        Assert.Equal([(goalId, "pH-Wert"), (goalId, "Zellatmung")], topics.Added);
+        Assert.Single(goals.Created);
+        Assert.Contains(FeedbackTexts.Goal.TopicsAdded, page.Find("[role=status] .goal-saved").TextContent);
+    }
+
+    [Fact]
+    public void MoreTopic_AddsAField_AndPutsTheFocusInIt()
+    {
+        var page = Render<GoalWizard>();
+        ToTopics(page);
+        Assert.Equal(FeedbackTexts.Goal.TopicsHint, page.Find("#goal-topic-1-hint").TextContent);
+        Assert.Equal("button", page.Find(".goal-more").GetAttribute("type"));
+
+        More(page);
+
+        Assert.Equal("Thema 2", page.Find("label[for=goal-topic-2]").TextContent.Trim());
+        Assert.Empty(page.FindAll("#goal-topic-2-hint"));
+        AssertFocused(page, "#goal-topic-2");
+    }
+
+    [Fact]
+    public void TopicTooLong_IsSaidAtItsField()
+    {
+        var page = Render<GoalWizard>();
+        ToTopics(page);
+        More(page);
+        var second = ReferenceId(page.Find("#goal-topic-2"));
+        page.Find("#goal-topic-2").Change(new string('a', TopicValues.NameMaxLength + 1));
+
+        Next(page);
+
+        Assert.Contains("Schritt 4 von 5", page.Find("h2").TextContent);
+        Assert.Equal(FeedbackTexts.Goal.TopicTooLong, ErrorAt(page, "#goal-topic-2-error"));
+        Assert.Equal("true", page.Find("#goal-topic-2").GetAttribute("aria-invalid"));
+        AssertFocused(second);
+
+        page.Find("#goal-topic-2").Change(new string('a', TopicValues.NameMaxLength));
+        Next(page);
+        Assert.Contains("Schritt 5 von 5", page.Find("h2").TextContent);
+    }
+
+    // A topic of that name is already in the goal: that is what the user wanted.
+    [Fact]
+    public void TopicAlreadyThere_IsNoError()
+    {
+        topics.Answer(CallOutcome<TopicAdded>.Ok(new TopicAdded(AlreadyThere: true)));
+        var page = Render<GoalWizard>();
+        SaveWithTopics(page, "Zellatmung");
+
+        Assert.Contains(FeedbackTexts.Goal.TopicsAdded, page.Find("[role=status] .goal-saved").TextContent);
+        Assert.Empty(page.FindAll(".connection-problem, .goal-topics-rejected, .goal-topics-missing"));
+        Assert.Empty(page.FindAll(".state-actions button"));
+    }
+
+    [Fact]
+    public void TopicRefused_SaysWhy_AndOffersNoRetry()
+    {
+        topics.Answer(new CallOutcome<TopicAdded>(CallResult.Rejected, Messages: ["Der Name ist leer. Gib dem Thema einen Namen."]));
+        var page = Render<GoalWizard>();
+        SaveWithTopics(page, "Zellatmung");
+
+        Assert.NotNull(page.Find("[role=status] .goal-saved"));
+        Assert.Equal(
+            "Zellatmung: Der Name ist leer. Gib dem Thema einen Namen.",
+            page.Find("[role=status] .goal-topics-rejected li").TextContent);
+        Assert.Empty(page.FindAll(".state-actions button"));
+    }
+
+    // The goal is saved, a topic didn't get through. Trying again sends only what is missing, and no second goal.
+    [Fact]
+    public void TopicFailing_IsSaidHonestly_AndTryingAgainSendsOnlyTheMissing()
+    {
+        topics.Answer(CallOutcome<TopicAdded>.Ok(new TopicAdded(AlreadyThere: false)))
+            .Answer(CallOutcome<TopicAdded>.Failed(TraceId));
+        var page = Render<GoalWizard>();
+        SaveWithTopics(page, "Zellatmung", "Fotosynthese", "Enzyme");
+
+        var problem = page.Find("[role=status] .connection-problem");
+        Assert.Contains(FeedbackTexts.Goal.TopicsFailed, problem.TextContent);
+        Assert.Equal(["Fotosynthese", "Enzyme"], problem.QuerySelectorAll("li").Select(item => item.TextContent));
+        Assert.Contains(TraceId, problem.QuerySelector(".request-id")!.TextContent);
+        Assert.Equal(["Zellatmung", "Fotosynthese"], topics.Added.Select(added => added.Name));
+
+        page.Find(".state-actions button").Click();
+
+        Assert.Equal(["Zellatmung", "Fotosynthese", "Fotosynthese", "Enzyme"], topics.Added.Select(added => added.Name));
+        Assert.Single(goals.Created);
+        Assert.Empty(page.FindAll(".connection-problem"));
+        Assert.Empty(page.FindAll(".state-actions button"));
+        Assert.Contains(FeedbackTexts.Goal.TopicsAdded, page.Find("[role=status] .goal-saved").TextContent);
+    }
+
+    // Without a login trying again can't work. The shell leads to the login, the page says what is missing.
+    [Fact]
+    public void LoginEndingOnTheTopics_SaysWhatIsMissing()
+    {
+        topics.Answer(CallOutcome<TopicAdded>.SignedOut);
+        var page = Render<GoalWizard>();
+        SaveWithTopics(page, "Zellatmung", "Enzyme");
+
+        var missing = page.Find("[role=status] .goal-topics-missing");
+        Assert.Contains(FeedbackTexts.Goal.TopicsSignedOut, missing.TextContent);
+        Assert.Equal(["Zellatmung", "Enzyme"], missing.QuerySelectorAll("li").Select(item => item.TextContent));
+        Assert.Single(topics.Added);
+        Assert.Empty(page.FindAll(".state-actions button"));
+    }
+
+    private static LearningGoalInfo Goal(Guid id) =>
+        new(id, "FreeLearning", "C#", null, null, null, "de", null, DateTime.UnixEpoch, InPlan: true);
+
+    // A free goal, up to its step of topics.
+    private static void ToTopics(IRenderedComponent<GoalWizard> page)
+    {
+        Choose(page, LearningGoalValues.FreeLearning);
+        Next(page);
+        page.Find("#goal-name").Change("C#");
+        Next(page);
+        Next(page);
+    }
+
+    private static void SaveWithTopics(IRenderedComponent<GoalWizard> page, params string[] names)
+    {
+        ToTopics(page);
+        for (var i = 0; i < names.Length; i++)
+        {
+            if (i > 0)
+            {
+                More(page);
+            }
+
+            page.Find($"#goal-topic-{i + 1}").Change(names[i]);
+        }
+
+        Next(page);
+        Next(page);
+    }
+
+    private static void More(IRenderedComponent<GoalWizard> page) => page.Find(".goal-more").Click();
 
     private static void FillExam(IRenderedComponent<GoalWizard> page)
     {
@@ -272,6 +457,7 @@ public sealed class GoalWizardTests : BunitContext
         Choose(page, LearningGoalValues.FreeLearning);
         Next(page);
         page.Find("#goal-name").Change("C#");
+        Next(page);
         Next(page);
         Next(page);
         Next(page);

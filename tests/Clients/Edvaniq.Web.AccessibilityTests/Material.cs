@@ -185,6 +185,42 @@ internal static class Material
     public static Task AnswerGoalListAsync(IPage page, object[] goals) =>
         page.RouteAsync("**/api/planning/learning-goals", route => FulfillAsync(route, goals));
 
+    // Knowledge for topics entered by hand: a new one is created, the list shows what was created. What was sent lands
+    // in the list.
+    public static Task AnswerEnteredTopicsAsync(IPage page, List<string> added) =>
+        page.RouteAsync("**/api/knowledge/topics", route =>
+        {
+            if (route.Request.Method == "POST")
+            {
+                lock (added)
+                {
+                    added.Add(route.Request.PostData ?? "");
+                }
+
+                return FulfillAsync(route, new { id = Guid.NewGuid() }, 201);
+            }
+
+            string[] sent;
+            lock (added)
+            {
+                sent = [.. added];
+            }
+
+            return FulfillAsync(route, sent.Select((body, position) =>
+            {
+                using var topic = JsonDocument.Parse(body);
+                return new
+                {
+                    id = Guid.NewGuid(),
+                    learningGoalId = topic.RootElement.GetProperty("learningGoalId").GetGuid(),
+                    name = topic.RootElement.GetProperty("name").GetString(),
+                    documentId = (Guid?)null,
+                    position,
+                    subtopics = Array.Empty<object>(),
+                };
+            }).ToArray());
+        });
+
     private static Task FulfillAsync(IRoute route, object body, int status = 200) =>
         route.FulfillAsync(new RouteFulfillOptions
         {

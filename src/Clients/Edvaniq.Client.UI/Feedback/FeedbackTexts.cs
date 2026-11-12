@@ -219,6 +219,32 @@ public static class FeedbackTexts
 
         public const string SummaryStep = "Überblick";
 
+        public const string TopicsStep = "Themen";
+
+        public const string TopicsLabel = "Themen";
+
+        // {0} counts the fields from 1.
+        public const string TopicLabel = "Thema {0}";
+
+        public const string TopicsHint =
+            "Freiwillig. Trag Themen ein, die du schon kennst, zum Beispiel aus dem Lehrplan. Weitere erkennt Edvaniq aus deinen Texten.";
+
+        public const string MoreTopic = "Weiteres Thema";
+
+        // Same words as Topic.CheckName in Knowledge, TopicValuesTests checks it.
+        public const string TopicTooLong = "Der Name ist zu lang. Erlaubt sind höchstens 80 Zeichen.";
+
+        public const string TopicsAdded = "Deine Themen stehen jetzt in deiner Themenübersicht.";
+
+        public const string TopicsFailed = "Nicht alle Themen ließen sich anlegen. Dein Lernziel ist gespeichert, diese Themen fehlen noch:";
+
+        public const string TopicsRetry = "Fehlende Themen anlegen";
+
+        public const string TopicsRejected = "Diese Themen hat Edvaniq nicht angenommen:";
+
+        public const string TopicsSignedOut =
+            "Deine Anmeldung ist abgelaufen, bevor alle Themen angelegt waren. Dein Lernziel ist gespeichert, diese Themen fehlen noch:";
+
         public const string KindLabel = "Wie lernst du?";
 
         public const string KindHint = "Bei einer Prüfung fragt Edvaniq nach ihrer Art und, wenn du ihn kennst, nach dem Termin.";
