@@ -36,6 +36,7 @@ internal static class FileUploadEndpoint
         IDocuments documents,
         IAiBudget budget,
         IPageQuota quota,
+        IGenerationQuota generations,
         ICurrentUser user,
         TimeProvider time,
         CancellationToken cancellationToken)
@@ -64,7 +65,7 @@ internal static class FileUploadEndpoint
         }
 
         // The pages of a file are only known once the worker has read it, so here only a quota that is used up.
-        if (await QuotaEndpoints.RefusalAsync(quota, user, pages: null, time, cancellationToken) is { } overQuota)
+        if (await QuotaEndpoints.RefusalAsync(quota, generations, user, pages: null, time, cancellationToken) is { } overQuota)
         {
             return overQuota;
         }

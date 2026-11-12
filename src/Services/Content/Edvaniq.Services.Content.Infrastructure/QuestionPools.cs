@@ -152,8 +152,7 @@ public sealed class QuestionPools(
 
         // Every AI call comes before the one save, nothing holds the database meanwhile. A topic without questions fails
         // the document and nothing of the others goes out. An outage postpones it, then all its topics are asked again.
-        var made = new List<(KnowledgeTopic Topic, List<GeneratedItem> Items)>();
-        LearnerProfile? profile = null;
+        var needed = new List<(KnowledgeTopic Topic, List<Guid> Material)>();
         foreach (var topic in topics.Where(topic => !pooled.Contains(topic.Id)))
         {
             var material = SectionsOf(topics, topic, texts);
@@ -163,6 +162,23 @@ public sealed class QuestionPools(
                 continue;
             }
 
+            needed.Add((topic, material));
+        }
+
+        // The daily quota before the first AI call: every topic that gets a pool is one generation, all or none.
+        var quota = scope.ServiceProvider.GetRequiredService<IGenerationQuota>();
+        if (needed.Count > 0 && await quota.StateOfAsync(document.OwnerId, cancellationToken) is var state && !state.Allows(needed.Count))
+        {
+            ContentLog.GenerationQuotaExceeded(logger, documentId, needed.Count, state.Left);
+            document.Fail(GenerationQuota.TooMany(needed.Count, state.Left, time.GetUtcNow().UtcDateTime));
+            await WorkerSave.SaveAsync(db, documentId, "questions", logger, cancellationToken);
+            return true;
+        }
+
+        var made = new List<(KnowledgeTopic Topic, List<GeneratedItem> Items)>();
+        LearnerProfile? profile = null;
+        foreach (var (topic, material) in needed)
+        {
             // Asked once per round, only when a topic really needs the AI.
             profile ??= await GoalContext.ProfileOfAsync(document, scope.ServiceProvider.GetRequiredService<IGoalProfiles>(), logger, cancellationToken);
             if (profile is null)
@@ -195,6 +211,7 @@ public sealed class QuestionPools(
         foreach (var (topic, items) in made)
         {
             db.QuestionPools.Add(QuestionPool.For(document, topic.Id, now));
+            quota.Charge(document, topic.Id);
             outbox.Add(new ItemsGenerated(document.OwnerId, document.Id, topic.Position, items, topic.Id));
         }
 

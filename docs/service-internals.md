@@ -307,7 +307,17 @@ Jeder Nutzer darf je Lerntag nur eine bestimmte Zahl an Seiten verarbeiten lasse
 
 Gebucht wird im Worker, bevor der `DocumentSplitter` ein Dokument zerlegt. Erst dort kennt jedes Format seine Seiten, und vor der KI ist noch nichts ausgegeben. Passt das Dokument nicht in den Rest des Tages, scheitert es mit einer Meldung, die Seiten, freie Seiten und den Zeitpunkt der Rücksetzung nennt. Nach 04:00 Uhr geht ein Neustart durch. Jedes Dokument bucht genau einmal (`PageCharges`, eindeutig je Dokument): Ein Neustart bucht nichts nach. Löscht der Nutzer das Dokument, bleibt die Buchung, sonst würden Löschen und neu Hochladen das Kontingent zurücksetzen. Erst die Löschung des Nutzers entfernt sie.
 
-Die Content-Api lehnt früher ab, wo sie kann, mit 429, der Meldung in `title` und dem Zeitpunkt der Rücksetzung in `resetsAt` (UTC). Bei eingefügtem Text kennt sie die Seiten schon, beim Upload noch nicht, dort lehnt sie nur ab, wenn nichts mehr frei ist. `GET /quota` zeigt dem Nutzer seinen eigenen Stand: `pagesLeftToday`, `pagesPerDay` und `resetsAt`. `generationsLeftToday` und `generationsPerDay` bleiben `null`, bis Generierungen gezählt werden. Api, Worker und `GET /quota` zählen mit derselben Klasse (`IPageQuota`).
+Die Content-Api lehnt früher ab, wo sie kann, mit 429, der Meldung in `title` und dem Zeitpunkt der Rücksetzung in `resetsAt` (UTC). Bei eingefügtem Text kennt sie die Seiten schon, beim Upload noch nicht, dort lehnt sie nur ab, wenn nichts mehr frei ist. `GET /quota` zeigt dem Nutzer seinen eigenen Stand: `pagesLeftToday`, `pagesPerDay`, `generationsLeftToday`, `generationsPerDay` und `resetsAt`, gleich für beide Kontingente. Api, Worker und `GET /quota` zählen mit denselben Klassen (`IPageQuota`, `IGenerationQuota`).
+
+## Tageskontingent an Generierungen
+
+Eine Generierung ist ein KI-Auftrag, der Lerninhalt zu einem Thema erzeugt, heute der Fragenpool eines Themas. Später zählen Karten, Zusammenfassungen und das Nachfüllen eines Pools dazu. Die Themenanalyse eines Dokuments zählt nicht, sie gehört zu den verarbeiteten Seiten. Jeder Nutzer hat je Lerntag eine bestimmte Zahl, Standard 20 (`Content:GenerationsPerDay`).
+
+Bevor der Worker die erste Frage eines Dokuments stellt, zählt er die Themen, die noch einen Pool brauchen. Passen sie nicht in den Rest des Tages, fragt er die KI gar nicht, und das Dokument scheitert mit einer Meldung, die Themen, freie Generierungen und den Zeitpunkt der Rücksetzung nennt. Sonst bucht jedes Thema seine Generierung im selben Speichern wie sein Pool (`GenerationCharges`, eindeutig je Thema). Scheitert die KI, wird nichts gespeichert und nichts gebucht, ein Neustart bucht kein Thema doppelt.
+
+Ein Dokument kann bis zu 30 Themen haben, mehr als ein ganzer Tag erlaubt. Damit es nicht für immer scheitert, darf ein Dokument mit mehr Themen als dem Tageskontingent an einem Tag starten, an dem noch nichts verbraucht ist. Es bucht dann alle seine Themen, und der Tag ist aufgebraucht. `generationsLeftToday` zeigt dann 0, nie weniger.
+
+Einfügen, Upload und Neustart lehnt die Content-Api mit 429 ab, wenn heute keine Generierung mehr frei ist, in derselben Form wie beim Seitenkontingent.
 
 ## Tests
 

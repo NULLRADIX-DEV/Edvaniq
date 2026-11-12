@@ -28,6 +28,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
     public DbSet<PageCharge> PageCharges => Set<PageCharge>();
 
+    public DbSet<GenerationCharge> GenerationCharges => Set<GenerationCharge>();
+
     public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
 
     // Oracle's provider writes a DateOnly but reads a date column back as DateTime.
@@ -86,6 +88,11 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         charge.Property(item => item.StudyDay).HasConversion(StudyDayConverter).HasColumnType("date");
         charge.HasIndex(item => item.DocumentId).IsUnique();
         charge.HasIndex(item => new { item.OwnerId, item.StudyDay });
+
+        // One charge per topic, a retry takes nothing twice.
+        var generation = modelBuilder.Entity<GenerationCharge>();
+        generation.HasIndex(item => item.TopicId).IsUnique();
+        generation.HasIndex(item => new { item.OwnerId, item.StudyDay });
 
         var aiSwitch = modelBuilder.Entity<AiSwitch>();
         aiSwitch.Property(item => item.Id).ValueGeneratedNever();
