@@ -6,6 +6,7 @@ using System.Text.Json;
 using Edvaniq.BuildingBlocks.AI;
 using Edvaniq.Services.Assessment.Domain;
 using Edvaniq.Services.Content.Infrastructure;
+using Edvaniq.Services.Planning.Application;
 using Edvaniq.Services.Content.Infrastructure.Ai;
 using Edvaniq.Testing;
 
@@ -160,16 +161,25 @@ public sealed class PlanFlowTests(FlowServices services) : IDisposable
 
         // AC1: the rest of today is what the planner makes of the new mastery, with the done block kept (#375). Whether A
         // got less time or kept it, the planner's own rule decides: the same inputs with A at its old mastery show which.
+        // The topics with their order, sizes and foundations come from Planning's own queries, so the comparison follows
+        // whatever the planner takes in (#380 added sizes and ranks).
         var budget = await BudgetAsync(planning, cancellationToken);
-        var foundations = services.QueryPlanning(db => db.KnownTopics.IgnoreQueryFilters()
-            .Where(topic => topic.OwnerId == carol && topic.LearningGoalId == goal && !topic.Hidden && topic.IsFoundation).Select(topic => topic.TopicId).ToHashSet());
+        IReadOnlyList<Guid> known;
+        IReadOnlyDictionary<Guid, int> sizes;
+        IReadOnlySet<Guid> foundations;
+        using (var scope = services.Planning.Services.CreateScope())
+        {
+            var topics = scope.ServiceProvider.GetRequiredService<IKnownTopics>();
+            known = await topics.ActiveAsync(carol, goal, cancellationToken);
+            sizes = await topics.SizesAsync(carol, goal, cancellationToken);
+            foundations = await topics.FoundationsAsync(carol, goal, cancellationToken);
+        }
+
         var done = services.QueryPlanning(db => db.DoneBlocks.IgnoreQueryFilters().Where(entry => entry.OwnerId == carol).ToList());
         var withOld = new Dictionary<Guid, PlanningDomain.TopicStanding>(standingsAfter) { [block.TopicId] = standingsBefore[block.TopicId] };
-        var known = services.QueryPlanning(db => db.KnownTopics.IgnoreQueryFilters()
-            .Where(topic => topic.OwnerId == carol && topic.LearningGoalId == goal && !topic.Hidden).Select(topic => topic.TopicId).ToList());
         var ready = known.Except(after.NotReadyTopicIds ?? []).ToHashSet();
         IReadOnlyList<PlanningDomain.Block> Fresh(IReadOnlyDictionary<Guid, PlanningDomain.TopicStanding> standings) =>
-            PlanningDomain.TodayPlanner.Plan(known, standings, budget, DateTime.UtcNow, ready, foundations).Blocks;
+            PlanningDomain.TodayPlanner.Plan(known, standings, budget, DateTime.UtcNow, ready, foundations, sizes).Blocks;
         var fresh = Fresh(standingsAfter);
         var expected = PlanningDomain.DayBlocks.WithDone(carol, goal, before.StudyDay, fresh, done, budget.MinutesOn(before.StudyDay))
             .Select(entry => (entry.Id, entry.Block.TopicId, entry.Block.Minutes, Kind: entry.Block.Kind.ToString().ToLowerInvariant(), entry.Done));
