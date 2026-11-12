@@ -40,7 +40,8 @@ internal sealed class FakeLearningGoals : ILearningGoals
             goal.Level,
             goal.OutputLanguage,
             goal.Goal,
-            DateTime.UnixEpoch);
+            DateTime.UnixEpoch,
+            InPlan: Created.Count == 1);
         return Task.FromResult(Next(creates, CallOutcome<LearningGoalInfo>.Ok(made)));
     }
 

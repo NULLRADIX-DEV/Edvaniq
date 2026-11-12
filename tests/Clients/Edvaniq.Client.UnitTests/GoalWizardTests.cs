@@ -202,7 +202,7 @@ public sealed class GoalWizardTests : BunitContext
         var saved = page.Find("[role=status] .goal-saved");
         Assert.Contains(FeedbackTexts.Goal.Saved, saved.TextContent);
         Assert.DoesNotContain(FeedbackTexts.Goal.NotFirst, saved.TextContent);
-        Assert.Equal("themen", page.Find(".state-actions a").GetAttribute("href"));
+        Assert.Equal(["themen", "lernziele"], page.FindAll(".state-actions a").Select(link => link.GetAttribute("href")));
         Assert.Empty(page.FindAll("form"));
     }
 
@@ -210,7 +210,7 @@ public sealed class GoalWizardTests : BunitContext
     [Fact]
     public void LaterGoal_SaysThePlanFollowsTheFirst()
     {
-        goals.List(new LearningGoalInfo(Guid.NewGuid(), "FreeLearning", "C#", null, null, null, "de", null, DateTime.UnixEpoch));
+        goals.Create(CallOutcome<LearningGoalInfo>.Ok(new LearningGoalInfo(Guid.NewGuid(), "FreeLearning", "C#", null, null, null, "de", null, DateTime.UnixEpoch, InPlan: false)));
         var page = Render<GoalWizard>();
         SaveFreeGoal(page);
 
@@ -221,7 +221,7 @@ public sealed class GoalWizardTests : BunitContext
     public void SaveFailing_ShowsTheProblem_AndSavingAgainWorks()
     {
         goals.Create(CallOutcome<LearningGoalInfo>.Failed(TraceId))
-            .Create(CallOutcome<LearningGoalInfo>.Ok(new LearningGoalInfo(Guid.NewGuid(), "FreeLearning", "C#", null, null, null, "de", null, DateTime.UnixEpoch)));
+            .Create(CallOutcome<LearningGoalInfo>.Ok(new LearningGoalInfo(Guid.NewGuid(), "FreeLearning", "C#", null, null, null, "de", null, DateTime.UnixEpoch, InPlan: true)));
         var page = Render<GoalWizard>();
         SaveFreeGoal(page);
 

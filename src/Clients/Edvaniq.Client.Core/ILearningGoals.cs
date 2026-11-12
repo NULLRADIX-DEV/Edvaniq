@@ -30,7 +30,8 @@ public sealed record LearningGoalInfo(
     string? Level,
     string OutputLanguage,
     string? Goal,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    bool InPlan = false);
 
 // The values and limits of LearningGoalFields in Planning. The client can't reference Planning, so
 // LearningGoalValuesTests in the architecture tests holds both sides together.

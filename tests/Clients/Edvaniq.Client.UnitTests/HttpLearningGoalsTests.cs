@@ -80,7 +80,7 @@ public sealed class HttpLearningGoalsTests
         var requests = new List<(HttpRequestMessage Request, string Body)>();
         var goals = Goals(requests, Answer(HttpStatusCode.OK, $$"""
             [{"id":"{{Id}}","kind":"FreeLearning","name":"C#","examType":null,"examDate":null,"level":null,
-              "outputLanguage":"en","goal":null,"createdAt":"2026-11-12T10:00:00Z"}]
+              "outputLanguage":"en","goal":null,"createdAt":"2026-11-12T10:00:00Z","inPlan":true}]
             """));
 
         var outcome = await goals.ListAsync(TestContext.Current.CancellationToken);
@@ -88,7 +88,7 @@ public sealed class HttpLearningGoalsTests
         Assert.Equal(HttpMethod.Get, Assert.Single(requests).Request.Method);
         Assert.Equal(CallResult.Ok, outcome.Result);
         var goal = Assert.Single(outcome.Value!);
-        Assert.Equal(("FreeLearning", "C#", "en"), (goal.Kind, goal.Name, goal.OutputLanguage));
+        Assert.Equal(("FreeLearning", "C#", "en", true), (goal.Kind, goal.Name, goal.OutputLanguage, goal.InPlan));
     }
 
     [Fact]

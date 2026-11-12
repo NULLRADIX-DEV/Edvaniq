@@ -39,6 +39,7 @@ public sealed class WebShell : IAsyncLifetime
         gateway.Answer("GET", "/content/documents", new[] { Material.Document("Ready") });
         gateway.Answer("GET", "/knowledge/topics", Material.Topics);
         gateway.Answer("GET", "/planning/plan/today", Material.Plan());
+        gateway.Answer("GET", "/planning/learning-goals", Material.Goals);
 
         (healthyHost, Address) = Start(gateway.Address);
         (downHost, AddressWithoutGateway) = Start("http://127.0.0.1:9");

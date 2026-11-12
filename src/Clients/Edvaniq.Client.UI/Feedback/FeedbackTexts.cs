@@ -263,6 +263,8 @@ public static class FeedbackTexts
 
         public const string SavedLink = "Text einfügen";
 
+        public const string ToGoals = "Zu deinen Lernzielen";
+
         // Only goals after the first: plan, sessions and texts stay with the first one for now.
         public const string NotFirst = "Dein Plan richtet sich vorerst nach deinem ersten Lernziel.";
 
@@ -307,6 +309,30 @@ public static class FeedbackTexts
             ["de"] = "Deutsch",
             ["en"] = "Englisch",
         };
+    }
+
+    // The overview of the learning goals.
+    public static class GoalList
+    {
+        public const string Heading = "Deine Lernziele";
+
+        public const string LoadFailed = "Deine Lernziele ließen sich gerade nicht laden.";
+
+        public const string Empty = "Du hast noch kein Lernziel.";
+
+        public const string EmptyHint = "Leg eins an, dann planst du darauf hin: für eine Prüfung oder um frei zu lernen.";
+
+        public const string Create = "Lernziel anlegen";
+
+        public const string New = "Neues Lernziel";
+
+        public const string Material = "Material und Themen";
+
+        // {0} is the exam type, {1} the date.
+        public const string ExamOn = "{0} am {1}";
+
+        // {0} is the exam type.
+        public const string ExamWithoutDate = "{0}, noch ohne Termin";
     }
 
     // Starting a failed analysis again on the topics page.

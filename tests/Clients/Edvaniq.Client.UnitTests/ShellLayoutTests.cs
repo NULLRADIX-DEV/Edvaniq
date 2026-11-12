@@ -151,6 +151,17 @@ public sealed class ShellLayoutTests : BunitContext
         Assert.Equal("Systemstatus", shell.Find("nav#shell-nav a[href='systemstatus']").TextContent);
     }
 
+    // #281: the goals have their own place, right after the start.
+    [Fact]
+    public void Navigation_LeadsToTheGoals()
+    {
+        var shell = RenderShell();
+
+        var links = shell.FindAll("nav#shell-nav a").Select(link => link.GetAttribute("href")).ToList();
+        Assert.Equal("Lernziele", shell.Find("nav#shell-nav a[href='lernziele']").TextContent);
+        Assert.Equal(links.IndexOf("") + 1, links.IndexOf("lernziele"));
+    }
+
     // Imprint, privacy notice and open source notices are one click away from every page, before the runtime has
     // loaded too.
     [Fact]

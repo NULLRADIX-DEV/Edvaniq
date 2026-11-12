@@ -10,6 +10,7 @@
     {
         <a class="@(OnAction.HasDelegate ? null : "button")" href="@Href">@LinkText</a>
     }
+    @ChildContent
 </div>
 
 @code {
@@ -24,4 +25,8 @@
 
     [Parameter]
     public string? LinkText { get; set; }
+
+    // More plain links after the step, other places to go from here.
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
 }
