@@ -335,6 +335,15 @@ public static class FeedbackTexts
         public const string ExamWithoutDate = "{0}, noch ohne Termin";
     }
 
+    // A limit or the pause of the AI stops a text, a file or a new try. Content says why in its answer (#307), this is
+    // only for an answer without a sentence of its own.
+    public static class Limit
+    {
+        public const string Reached = "Gerade ist ein Kontingent erreicht. Versuch es später noch einmal.";
+
+        public static IReadOnlyList<string> Or(IReadOnlyList<string>? messages) => messages is { Count: > 0 } ? messages : [Reached];
+    }
+
     // Starting a failed analysis again on the topics page.
     public static class Retry
     {

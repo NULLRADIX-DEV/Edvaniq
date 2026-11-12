@@ -169,6 +169,75 @@ public sealed class HttpLearningMaterialTests
         Assert.Equal([HttpLearningMaterial.TextTooLong], outcome.Messages);
     }
 
+    // Content's 429 (#303/#305): its title is the sentence for the user, shown as it is, never with a trace.
+    [Fact]
+    public async Task Limit_GivesContentsSentence_WithoutTheTrace()
+    {
+        const string sentence = "Das KI-Kontingent für diesen Monat ist aufgebraucht. Versuch es im nächsten Monat noch einmal.";
+        var material = Material(Problem(HttpStatusCode.TooManyRequests, $$"""{"title":"{{sentence}}","status":429,"traceId":"{{TraceId}}"}"""));
+
+        var outcome = await material.PasteAsync(null, "Text", TestContext.Current.CancellationToken);
+
+        Assert.Equal(CallResult.Limited, outcome.Result);
+        Assert.Equal([sentence], outcome.Messages);
+        Assert.Null(outcome.TraceId);
+    }
+
+    [Fact]
+    public async Task Limit_OnUploadAndRetry_IsLimitedToo()
+    {
+        var material = Material(
+            Problem(HttpStatusCode.TooManyRequests, """{"title":"Satz.","status":429}"""),
+            Problem(HttpStatusCode.TooManyRequests, """{"title":"Satz.","status":429}"""));
+
+        using var file = new MemoryStream([1, 2, 3]);
+        var upload = await material.UploadAsync("a.pdf", file, TestContext.Current.CancellationToken);
+        var retry = await material.RetryAsync(Guid.Parse(DocumentId), TestContext.Current.CancellationToken);
+
+        Assert.Equal([CallResult.Limited, CallResult.Limited], [upload.Result, retry.Result]);
+        Assert.Equal(["Satz."], upload.Messages);
+        Assert.Equal(["Satz."], retry.Messages);
+    }
+
+    // A 429 without a sentence of its own, from a proxy or a framework, leaves the words to the page: still a limit, never
+    // "not reachable", never a trace.
+    [Theory]
+    [InlineData("application/problem+json", $$"""{"status":429,"traceId":"{{TraceId}}"}""")]
+    [InlineData("application/problem+json", """{"title":"","status":429}""")]
+    [InlineData("application/problem+json", """{"title":"   ","status":429}""")]
+    [InlineData("application/problem+json", """{"title":"Too Many Requests","status":429}""")]
+    [InlineData("application/problem+json", """{"title":"too many requests","status":429}""")]
+    [InlineData("application/problem+json", """{"title":"Zeile\neins","status":429}""")]
+    [InlineData("application/problem+json", """{"title":42,"status":429}""")]
+    [InlineData("application/problem+json", "kein JSON")]
+    [InlineData("application/json", """{"title":"Satz.","status":429}""")]
+    [InlineData("text/html", "<html>429 Too Many Requests</html>")]
+    public async Task LimitWithoutAUsableTitle_IsLimited_WithoutWords(string type, string body)
+    {
+        var material = Material(new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Content = new StringContent(body, Encoding.UTF8, type) });
+
+        var outcome = await material.PasteAsync(null, "Text", TestContext.Current.CancellationToken);
+
+        Assert.Equal(CallResult.Limited, outcome.Result);
+        Assert.Empty(outcome.Messages!);
+        Assert.Null(outcome.TraceId);
+    }
+
+    [Fact]
+    public async Task LimitTitle_UpToTheMost_IsShown_AndLongerIsNot()
+    {
+        var longest = new string('a', HttpLearningMaterial.LimitTitleMaxLength);
+        var material = Material(
+            Problem(HttpStatusCode.TooManyRequests, $$"""{"title":"{{longest}}"}"""),
+            Problem(HttpStatusCode.TooManyRequests, $$"""{"title":"{{longest}}a"}"""));
+
+        var fits = await material.PasteAsync(null, "Text", TestContext.Current.CancellationToken);
+        var tooLong = await material.PasteAsync(null, "Text", TestContext.Current.CancellationToken);
+
+        Assert.Equal([longest], fits.Messages);
+        Assert.Equal((CallResult.Limited, 0), (tooLong.Result, tooLong.Messages!.Count));
+    }
+
     [Fact]
     public async Task WithoutALogin_SaysSignedOut()
     {

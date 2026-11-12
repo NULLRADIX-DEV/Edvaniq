@@ -1,6 +1,7 @@
 using Bunit;
 
 using Edvaniq.Client.Core;
+using Edvaniq.Client.UI.Feedback;
 using Edvaniq.Client.UI.Pages;
 
 using Microsoft.AspNetCore.Components;
@@ -271,6 +272,62 @@ public sealed class TopicsTests : BunitContext
         Assert.Equal([Newest], material.Retried);
         Assert.Empty(material.Pasted);
         page.WaitForAssertion(() => Assert.Contains("sind da", Status(page)), Wait);
+    }
+
+    // #307: what Content names as the reason, the monthly limit or the paused AI, shows word for word with the retry.
+    [Theory]
+    [InlineData("Das KI-Kontingent für diesen Monat ist aufgebraucht. Versuch es im nächsten Monat noch einmal.")]
+    [InlineData("KI derzeit pausiert. Versuch es später noch einmal.")]
+    public void FailedForALimit_ShowsTheReasonAsItIs_WithTheRetry(string reason)
+    {
+        var material = new FakeLearningMaterial().Documents(Document(DocumentStatus.Failed) with { FailureReason = reason });
+
+        var page = RenderPage(material);
+
+        Assert.Equal(reason, page.Find("[role=status] .material-failed .notice-body > p:not(.notice-title)").TextContent);
+        Assert.Equal("Erneut analysieren", page.Find("button.button:not([type=submit])").TextContent.Trim());
+    }
+
+    // #307: a limit on the new try says why in the status region, without a trace, and the button stays for later.
+    [Theory]
+    [InlineData("KI derzeit pausiert. Versuch es später noch einmal.", "KI derzeit pausiert. Versuch es später noch einmal.")]
+    [InlineData(null, FeedbackTexts.Limit.Reached)]
+    public void RetryLimited_SaysWhy_AndKeepsTheButton(string? sentence, string shown)
+    {
+        var material = new FakeLearningMaterial()
+            .Documents(Document(DocumentStatus.Failed))
+            .Retry(new CallOutcome<DocumentInfo>(CallResult.Limited, Messages: sentence is null ? [] : [sentence]));
+        var page = RenderPage(material);
+
+        page.Find("button.button:not([type=submit])").Click();
+
+        Assert.Equal(shown, page.Find("[role=status] .material-retry-limit.notice-warning p").TextContent);
+        Assert.DoesNotContain(FeedbackTexts.Retry.NotThrough, Status(page));
+        Assert.DoesNotContain("nicht erreichbar", Status(page));
+        Assert.Empty(page.FindAll(".request-id"));
+        Assert.Equal(1, material.DocumentCalls);
+        Assert.Equal("Erneut analysieren", page.Find("button.button:not([type=submit])").TextContent.Trim());
+    }
+
+    // #307: a limit on a pasted text says why in the form's alert, as a warning without a trace, and the text stays.
+    [Theory]
+    [InlineData("Das KI-Kontingent für diesen Monat ist aufgebraucht. Versuch es im nächsten Monat noch einmal.", "Das KI-Kontingent für diesen Monat ist aufgebraucht. Versuch es im nächsten Monat noch einmal.")]
+    [InlineData(null, FeedbackTexts.Limit.Reached)]
+    public void PasteLimited_SaysWhy_AndKeepsTheText(string? sentence, string shown)
+    {
+        var material = new FakeLearningMaterial()
+            .Paste(new CallOutcome<DocumentInfo>(CallResult.Limited, Messages: sentence is null ? [] : [sentence]));
+        var page = RenderPage(material);
+
+        page.Find("#paste-title").Input("Skript");
+        page.Find("#paste-text").Change("Mein Text");
+        page.Find("form").Submit();
+
+        Assert.Equal(shown, page.Find("form [role=alert] .notice-warning p").TextContent);
+        Assert.DoesNotContain("nicht erreichbar", page.Find("form [role=alert]").TextContent);
+        Assert.Empty(page.FindAll(".request-id"));
+        Assert.Equal("Mein Text", page.Find("#paste-text").GetAttribute("value"));
+        Assert.Equal("Skript", page.Find("#paste-title").GetAttribute("value"));
     }
 
     // The analysis runs again already, from another tab say: the page shows the newest state instead of an error.

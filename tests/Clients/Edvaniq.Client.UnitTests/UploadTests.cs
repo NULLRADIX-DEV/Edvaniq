@@ -112,6 +112,30 @@ public sealed class UploadTests : BunitContext
         Assert.Contains(FeedbackTexts.Upload.TooLarge, Alert(page).TextContent);
     }
 
+    // #307: a limit says why in the urgent live region, as a warning without a trace, and the file stays chosen, so the
+    // same button sends it later.
+    [Theory]
+    [InlineData("Das KI-Kontingent für diesen Monat ist aufgebraucht. Versuch es im nächsten Monat noch einmal.", "Das KI-Kontingent für diesen Monat ist aufgebraucht. Versuch es im nächsten Monat noch einmal.")]
+    [InlineData(null, FeedbackTexts.Limit.Reached)]
+    public async Task Limited_SaysWhy_AndKeepsTheFile(string? sentence, string shown)
+    {
+        var material = new FakeLearningMaterial()
+            .Upload(new CallOutcome<DocumentInfo>(CallResult.Limited, Messages: sentence is null ? [] : [sentence]))
+            .Upload(new CallOutcome<DocumentInfo>(CallResult.Limited, Messages: sentence is null ? [] : [sentence]));
+        var page = RenderPage(material);
+
+        Choose(page, InputFileContent.CreateFromText("Ein kurzer Text.", "Notizen.txt"));
+        await page.Find("#upload-heading ~ button").ClickAsync(new());
+
+        Assert.Equal(shown, Alert(page).QuerySelector(".notice-warning .notice-title")!.TextContent);
+        Assert.DoesNotContain(FeedbackTexts.Upload.NotThrough, Alert(page).TextContent);
+        Assert.Empty(page.FindAll(".request-id"));
+
+        await page.Find("#upload-heading ~ button").ClickAsync(new());
+
+        Assert.Equal(["Notizen.txt", "Notizen.txt"], material.Uploaded.Select(upload => upload.FileName));
+    }
+
     [Fact]
     public async Task NothingChosen_SaysSo()
     {
