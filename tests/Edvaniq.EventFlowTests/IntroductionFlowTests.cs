@@ -23,7 +23,8 @@ namespace Edvaniq.EventFlowTests;
 
 // #386: a topic is new until its unit "Neues Thema", afterwards its mastery comes from the unit's check questions and
 // the plan stops treating it as new. Check questions in Assessment with the session of the unit, SessionCompleted sent
-// by hand like Planning will from #395, LearningEngine's mastery and Planning's plan for today.
+// by hand to send it again, LearningEngine's mastery and Planning's plan for today. The way through Planning (#395)
+// is the second test.
 [Collection(FlowCollection.Name)]
 public sealed class IntroductionFlowTests(FlowServices services) : IDisposable
 {
@@ -80,7 +81,52 @@ public sealed class IntroductionFlowTests(FlowServices services) : IDisposable
         Assert.Equal(("review", topic), (await BlocksAsync(token, cancellationToken)).Select(block => (block.Kind, block.TopicId)).First());
     }
 
+    // #395 and A25 the whole way: a session on the new topic's block, its check questions under the session's id, and
+    // finishing it in Planning. Planning's dispatcher sends SessionCompleted, LearningEngine introduces the topic with
+    // that session, and the block is done in today's plan. The flake point Manager 1 knows ("Assessment did not take the
+    // questions of every topic over") sits in TopicsWithQuestionsAsync, shared with the test above.
+    [Fact(Timeout = 180_000)]
+    public async Task FinishingTheSessionInPlanning_IntroducesTheTopic_AndTheBlockIsDone()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        var token = TestTokens.Create(alice);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await TopicsWithQuestionsAsync(token, alice);
+        var block = await BlockToLearnAsync(token, cancellationToken);
+        using var planning = Client(services.Planning.CreateClient(), token);
+
+        var session = await SessionAsync(planning, HttpMethod.Post, "/sessions", new { blockId = block.Id }, HttpStatusCode.Created, cancellationToken);
+        Assert.Equal("introductionUnit", session.GetProperty("steps")[1].GetProperty("kind").GetString());
+        var sessionId = session.GetProperty("id").GetGuid();
+        await SessionAsync(planning, HttpMethod.Post, $"/sessions/{sessionId}/advance", new { step = 1 }, HttpStatusCode.OK, cancellationToken);
+        var answers = await AnswerCheckQuestionsWrongAsync(token, block.TopicId, sessionId, cancellationToken);
+        await WaitForAsync(() => Task.FromResult(Records(alice, block.TopicId) == answers), "LearningEngine did not store the check answers.");
+        var completed = await SessionAsync(planning, HttpMethod.Post, $"/sessions/{sessionId}/complete", new { }, HttpStatusCode.OK, cancellationToken);
+        Assert.Equal("completed", completed.GetProperty("outcome").GetString());
+
+        await WaitForAsync(() => Task.FromResult(Introductions(alice).Count == 1), "LearningEngine did not introduce the topic.");
+        var introduction = Assert.Single(Introductions(alice));
+        Assert.Equal((block.TopicId, sessionId), (introduction.TopicId, introduction.SessionId));
+        Assert.Equal("weakness", (await MasteryAsync(token, block.TopicId, cancellationToken)).State);
+
+        var plan = await PlanAsync(token, cancellationToken);
+        Assert.True(plan.Blocks.Single(entry => entry.Id == block.Id).Done);
+    }
+
     public void Dispose() => ai.Dispose();
+
+    // The first learn block of today, on a new topic: every topic is new before its unit.
+    private async Task<PlannedBlock> BlockToLearnAsync(string token, CancellationToken cancellationToken) =>
+        (await BlocksAsync(token, cancellationToken)).First(block => block.Kind == "learn");
+
+    private static async Task<JsonElement> SessionAsync(
+        HttpClient planning, HttpMethod method, string path, object body, HttpStatusCode expected, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(method, path) { Content = JsonContent.Create(body) };
+        using var response = await planning.SendAsync(request, cancellationToken);
+        Assert.Equal(expected, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+    }
 
     private IChatClient Chat => ai.Services.GetRequiredService<IChatClient>();
 
@@ -161,14 +207,17 @@ public sealed class IntroductionFlowTests(FlowServices services) : IDisposable
         return (body.GetProperty("mastery").GetInt32(), body.GetProperty("state").GetString()!);
     }
 
-    private async Task<List<PlannedBlock>> BlocksAsync(string token, CancellationToken cancellationToken)
+    private async Task<List<PlannedBlock>> BlocksAsync(string token, CancellationToken cancellationToken) =>
+        (await PlanAsync(token, cancellationToken)).Blocks;
+
+    private async Task<Plan> PlanAsync(string token, CancellationToken cancellationToken)
     {
         using var planning = Client(services.Planning.CreateClient(), token);
         using var response = await planning.GetAsync("/plan/today", cancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var plan = (await response.Content.ReadFromJsonAsync<Plan>(JsonSerializerOptions.Web, cancellationToken))!;
         Assert.True(plan.MasteryAvailable);
-        return plan.Blocks;
+        return plan;
     }
 
     private int Records(string user, Guid topic) =>
@@ -209,5 +258,5 @@ public sealed class IntroductionFlowTests(FlowServices services) : IDisposable
 
     private sealed record Plan(DateOnly StudyDay, List<PlannedBlock> Blocks, bool MasteryAvailable);
 
-    private sealed record PlannedBlock(Guid TopicId, int Minutes, string Kind);
+    private sealed record PlannedBlock(Guid TopicId, int Minutes, string Kind, Guid Id = default, bool Done = false);
 }
