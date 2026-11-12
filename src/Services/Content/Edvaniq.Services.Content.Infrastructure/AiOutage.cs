@@ -1,5 +1,6 @@
 using Edvaniq.BuildingBlocks.AI;
 using Edvaniq.Services.Content.Domain;
+using Edvaniq.Services.Content.Infrastructure.Ai;
 
 using Microsoft.Extensions.Logging;
 
@@ -12,6 +13,14 @@ internal static class AiOutage
     public static void Handle(
         Document document, string task, Exception failure, DateTime now, IReadOnlyList<TimeSpan> delays, ILogger logger)
     {
+        // On purpose, so no waiting for it to pass: the document fails, and a retry works once the AI runs again.
+        if (failure is AiPausedException)
+        {
+            ContentLog.AiPaused(logger, task, document.Id);
+            document.Fail(Document.AiPaused);
+            return;
+        }
+
         if (!AiFailure.IsTransient(failure))
         {
             // Most likely the key or the settings, so every document fails like this one. The status only, no body.

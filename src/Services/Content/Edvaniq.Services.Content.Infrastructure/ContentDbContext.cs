@@ -23,6 +23,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
     public DbSet<AiUsageDay> AiUsageDays => Set<AiUsageDay>();
 
+    public DbSet<AiSwitch> AiSwitches => Set<AiSwitch>();
+
     public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
 
     protected override void ConfigureModel(ModelBuilder modelBuilder)
@@ -71,6 +73,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         attempt.HasIndex(item => item.CalledAt);
         attempt.HasIndex(item => item.DocumentId);
         attempt.HasIndex(item => new { item.CallId, item.Attempt }).IsUnique();
+
+        modelBuilder.Entity<AiSwitch>().Property(item => item.Id).ValueGeneratedNever();
 
         var day = modelBuilder.Entity<AiUsageDay>();
         day.HasKey(item => new { item.Day, item.Purpose, item.Model, item.PromptVersion });

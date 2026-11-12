@@ -16,6 +16,7 @@ public class UserDataTests
     {
         [typeof(PingRecord)] = "the ping of the walking skeleton, written without a user",
         [typeof(AiUsageDay)] = "AI cost as daily sums without the user, UserDeleted turns the user's rows into these",
+        [typeof(AiSwitch)] = "the operator's emergency stop for the AI, one row without a user",
         [typeof(Account)] = "Identity deletes the account itself and sends UserDeleted (AccountDeletion)",
     };
 

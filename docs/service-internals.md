@@ -249,6 +249,22 @@ dotnet Edvaniq.Services.Content.Api.dll document delete <id>
 
 Der Befehl startet keinen Webserver und hat keinen Weg über HTTP. Er sucht den Eigentümer des Dokuments und löscht dann in dessen Namen, genau wie der Endpunkt: Datei, Abschnitte und Fragenpools gehen mit, und `DocumentDeleted` landet im selben Speichern in der Outbox. Die laufende Content-Api schickt das Ereignis, Knowledge und Assessment entfernen, was aus dem Dokument entstanden ist. Er schreibt nur `deleted <id>` und endet mit 0. Gibt es das Dokument nicht, schreibt er `no document <id>`, schickt nichts und endet ebenfalls mit 0, ein zweiter Lauf ist also harmlos. Fehlt die ID oder ist sie keine GUID, endet er mit 2, bei einem anderen Fehler mit 1.
 
+## KI pausieren (Betreiber)
+
+Kostet die KI plötzlich zu viel oder antwortet sie Unsinn, hält das Team alle KI-Aufrufe sofort an, ohne Deploy, mit einem Befehl im Prozess der Content-Api:
+
+```bash
+dotnet Edvaniq.Services.Content.Api.dll ai pause
+dotnet Edvaniq.Services.Content.Api.dll ai resume
+dotnet Edvaniq.Services.Content.Api.dll ai status
+```
+
+Der Zustand steht in der Datenbank von Content, er gilt also sofort für jeden Prozess und übersteht Neustarts. Der Befehl schreibt `AI paused` oder `AI running` und endet mit 0, bei falschen Argumenten mit 2, bei einem anderen Fehler mit 1. Jede echte Änderung steht als Logzeile im Log der Content-Api.
+
+Pausiert erreicht kein KI-Aufruf von Content den Anbieter, auch `ai-check` nicht. Der Worker lässt jedes Dokument, das die KI bräuchte, mit „KI derzeit pausiert. Versuch es später noch einmal.“ scheitern, auch eines, das nach einem Ausfall gerade wartet. Ein Aufruf, der beim Pausieren schon läuft, darf zu Ende laufen. Nach `ai resume` startet der Nutzer das Dokument neu. Login, Lernziele, Listen und Upload rufen keine KI und laufen weiter.
+
+Der Schalter sitzt vor dem `IChatClient` des Content-Workers (`PausableChatClient`), den jeder KI-Aufruf passiert. Ruft später ein anderer Service eine KI, muss er denselben Schalter beachten.
+
 ## Tests
 
 `ServiceFactory` ist der Prüfstand: Er startet den echten Service, so wie er läuft, mit einer frischen MySQL-Datenbank, auf die alle Migrationen angewendet sind, und vertraut den Tokens aus `Edvaniq.Testing/TestTokens`. Den Broker tauscht er gegen einen im Prozess aus. Eine Testklasse holt ihn sich per `IClassFixture<ServiceFactory>`.

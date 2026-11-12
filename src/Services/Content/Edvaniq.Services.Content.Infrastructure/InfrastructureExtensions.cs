@@ -2,6 +2,7 @@ using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Content.Application;
+using Edvaniq.Services.Content.Infrastructure.Ai;
 using Edvaniq.Services.Content.Infrastructure.Files;
 using Edvaniq.Services.Identity.Contracts;
 
@@ -31,6 +32,7 @@ public static class InfrastructureExtensions
         builder.Services.AddHostedService<FileSweeper>();
         builder.Services.AddScoped<AiUsageReport>();
         builder.Services.AddSingleton<AiUsageLog>();
+        builder.Services.AddScoped<IAiSwitch, AiSwitches>();
 
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<ContentDbContext>(ServiceKey);
@@ -58,6 +60,7 @@ public static class InfrastructureExtensions
         builder.Services.AddFileStore();
         builder.Services.AddMessaging<ContentDbContext>(ServiceKey);
         builder.Services.AddSingleton<AiUsageLog>();
+        builder.Services.AddScoped<IAiSwitch, AiSwitches>();
         builder.Services.AddHostedService<FileTextExtractor>();
         builder.Services.AddHostedService<DocumentSplitter>();
         builder.Services.AddHostedService<DocumentAnalyzer>();

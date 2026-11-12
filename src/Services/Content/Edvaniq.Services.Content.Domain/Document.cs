@@ -30,6 +30,9 @@ public sealed class Document : IOwnedByUser
 
     public const string AiUnavailable = "KI derzeit nicht verfügbar. Versuch es später noch einmal.";
 
+    // The operator paused the AI (AiSwitch). A retry works once it runs again.
+    public const string AiPaused = "KI derzeit pausiert. Versuch es später noch einmal.";
+
     public const string FileUnreadable = "Die Datei ließ sich nicht lesen. Lade sie noch einmal hoch, zum Beispiel neu gespeichert.";
 
     public const string FileTextTooLong = "Die Datei enthält zu viel Text. Erlaubt sind höchstens 200.000 Zeichen, teile sie auf.";

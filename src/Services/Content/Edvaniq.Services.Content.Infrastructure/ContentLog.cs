@@ -19,6 +19,9 @@ internal static partial class ContentLog
     [LoggerMessage(Level = LogLevel.Error, Message = "The AI stayed unavailable for the {Task} of document {DocumentId} in {Attempts} attempts, it is marked as failed")]
     public static partial void AiStaysUnavailable(ILogger logger, string task, Guid documentId, int attempts);
 
+    [LoggerMessage(Level = LogLevel.Information, Message = "The AI is paused, the {Task} of document {DocumentId} is marked as failed")]
+    public static partial void AiPaused(ILogger logger, string task, Guid documentId);
+
     // A wrong key or settings fail every document alike, this is the line for whoever runs the app.
     [LoggerMessage(Level = LogLevel.Error, Message = "The AI provider refused the {Task} of document {DocumentId} with status {Status} ({Error}), it is marked as failed. Check the key and the AI settings")]
     public static partial void AiRefused(ILogger logger, string task, Guid documentId, int? status, string error);
