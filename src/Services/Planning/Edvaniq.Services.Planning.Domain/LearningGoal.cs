@@ -39,6 +39,10 @@ public sealed class LearningGoal : IOwnedByUser
 
     public string? Goal { get; private set; }
 
+    // UTC, the last change by the user (#516), null until there was one. The replanning with a notice (#380, #524) goes by
+    // it: a plan worked out before this time was made with other inputs.
+    public DateTime? UpdatedAt { get; private set; }
+
     public static LearningGoal CreateDefault(string ownerId, DateTime createdAt) =>
         new(DefaultIdFor(ownerId), ownerId, createdAt);
 
@@ -53,6 +57,32 @@ public sealed class LearningGoal : IOwnedByUser
         goal.OutputLanguage = fields.OutputLanguage;
         goal.Goal = fields.Goal;
         return goal;
+    }
+
+    // Everything the user entered except the kind, which stays what it was (#516). Fields of another kind are a bug of
+    // the caller: Parse them with this goal's kind.
+    public void Update(LearningGoalFields fields, DateTime updatedAt)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+        if (Kind is null)
+        {
+            throw new InvalidOperationException("A default goal nobody took over has nothing to change.");
+        }
+
+        if (fields.Kind != Kind)
+        {
+            throw new ArgumentException("The kind of a learning goal can't change.", nameof(fields));
+        }
+
+        Name = fields.Name;
+        ExamType = fields.ExamType;
+        ExamDate = fields.ExamDate;
+        Level = fields.Level;
+        OutputLanguage = fields.OutputLanguage;
+        Goal = fields.Goal;
+
+        // Whole microseconds, as the database keeps them, so the answer and a later read say the same.
+        UpdatedAt = updatedAt.AddTicks(-(updatedAt.Ticks % 10));
     }
 
     // A name-based UUID (RFC 9562, version 8) from the user id, so two requests at once insert the same key and only one

@@ -110,9 +110,10 @@ public sealed class LearningGoalCreationTests(ServiceFactory service) : IClassFi
         Assert.False((await GetAsync<PlannedGoal>(alice, $"/learning-goals/{second.Id}")).InPlan);
     }
 
-    // Content reads GET /learning-goals/{id}: inPlan only comes on top, every field it had stays as it was.
+    // Content reads GET /learning-goals/{id}: inPlan and updatedAt (#516) only come on top, every field it had stays as it
+    // was.
     [Fact]
-    public async Task GoalAnswer_KeepsItsFields_AndAddsInPlan()
+    public async Task GoalAnswer_KeepsItsFields_AndAddsInPlanAndUpdatedAt()
     {
         using var alice = ClientFor(NewUser("alice"));
         var created = await CreateAsync(alice, new NewGoal("ExamPreparation", "Bio", "Klausur", InAMonth, "UpperSecondary", "de", "eine 2"));
@@ -121,7 +122,7 @@ public sealed class LearningGoalCreationTests(ServiceFactory service) : IClassFi
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(
-            ["id", "kind", "name", "examType", "examDate", "level", "outputLanguage", "goal", "createdAt", "inPlan"],
+            ["id", "kind", "name", "examType", "examDate", "level", "outputLanguage", "goal", "createdAt", "inPlan", "updatedAt"],
             json.RootElement.EnumerateObject().Select(field => field.Name));
         Assert.Equal(created.Id, json.RootElement.GetProperty("id").GetGuid());
         Assert.Equal("ExamPreparation", json.RootElement.GetProperty("kind").GetString());

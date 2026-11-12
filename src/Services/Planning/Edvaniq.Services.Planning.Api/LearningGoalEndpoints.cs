@@ -48,6 +48,37 @@ internal static class LearningGoalEndpoints
                 ? Results.Ok(LearningGoalResponse.From(goal))
                 : Results.NotFound());
 
+        // Changes everything but the kind (#516), with the rules of POST. A kind in the body is ignored, the request has no
+        // such field. The topics are Knowledge's: hiding and showing them there changes the plan (#286). Someone else's
+        // goal and the default goal nobody took over are 404.
+        goals.MapPut("/{id:guid}", async (Guid id, EditedLearningGoal request, ILearningGoals goals, TimeProvider time, CancellationToken cancellationToken) =>
+        {
+            if (await goals.FindForChangeAsync(id, cancellationToken) is not { } goal)
+            {
+                return Results.NotFound();
+            }
+
+            var now = time.GetUtcNow().UtcDateTime;
+            var fields = LearningGoalFields.Parse(
+                goal.Kind!.Value.ToString(),
+                request.Name,
+                request.ExamType,
+                request.ExamDate,
+                request.Level,
+                request.OutputLanguage,
+                request.Goal,
+                now,
+                out var errors);
+            if (fields is null)
+            {
+                return Results.ValidationProblem(errors);
+            }
+
+            goal.Update(fields, now);
+            await goals.SaveAsync(cancellationToken);
+            return Results.Ok(LearningGoalResponse.From(goal));
+        });
+
         // Only what Content needs to take a document into the goal, also for the default goal: nothing to identify the
         // learner by, no name, no free text. Someone else's goal is 404 as well.
         goals.MapGet("/{id:guid}/profile", async (Guid id, ILearningGoals goals, CancellationToken cancellationToken) =>
@@ -96,8 +127,18 @@ internal sealed record NewLearningGoal(
     string? OutputLanguage,
     string? Goal);
 
-// InPlan marks the goal that plan, sessions and Content follow for now: the one that took over the default goal. Added
-// last, Content reads this answer and leaves unknown fields alone.
+// The fields of NewLearningGoal without the kind, which can't change.
+internal sealed record EditedLearningGoal(
+    string? Name,
+    string? ExamType,
+    string? ExamDate,
+    string? Level,
+    string? OutputLanguage,
+    string? Goal);
+
+// InPlan marks the goal that plan, sessions and Content follow for now: the one that took over the default goal.
+// UpdatedAt: the last change by the user, null until there was one (#516). Both added last, Content reads this answer
+// and leaves unknown fields alone.
 internal sealed record LearningGoalResponse(
     Guid Id,
     string Kind,
@@ -108,7 +149,8 @@ internal sealed record LearningGoalResponse(
     string OutputLanguage,
     string? Goal,
     DateTime CreatedAt,
-    bool InPlan)
+    bool InPlan,
+    DateTime? UpdatedAt)
 {
     public static LearningGoalResponse From(LearningGoal goal) =>
         new(
@@ -121,5 +163,6 @@ internal sealed record LearningGoalResponse(
             goal.OutputLanguage!,
             goal.Goal,
             goal.CreatedAt,
-            goal.Id == LearningGoal.DefaultIdFor(goal.OwnerId));
+            goal.Id == LearningGoal.DefaultIdFor(goal.OwnerId),
+            goal.UpdatedAt);
 }
