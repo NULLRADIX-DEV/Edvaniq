@@ -902,8 +902,9 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         await AnalyzeAsync(id, withQuestions: true);
         await RetryAsync(alice, id, HttpStatusCode.Conflict);
 
+        // Other material, the same would be answered from the stored answers (#306) and never reach the outage.
         Simulated.Fault = SimulatedFault.Outage;
-        var failed = await PasteAsync(alice, Text);
+        var failed = await PasteAsync(alice, Text + "\n\nDie Dunkelreaktion bindet Kohlendioxid in Zucker, sie braucht kein Licht.");
         await AnalyzeAsync(failed);
         await RetryAsync(bob, failed, HttpStatusCode.NotFound);
         await RetryAsync(alice, Guid.NewGuid(), HttpStatusCode.NotFound);
