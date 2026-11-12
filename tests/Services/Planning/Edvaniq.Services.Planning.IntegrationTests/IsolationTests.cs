@@ -3,10 +3,12 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 
+using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.Services.Planning.Domain;
 using Edvaniq.Services.Planning.Infrastructure;
 using Edvaniq.Testing;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Edvaniq.Services.Planning.IntegrationTests;
@@ -83,7 +85,7 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
     {
         var alice = NewUser("alice");
         await SeedSessionAsync(alice);
-        var block = Query(db => db.Sessions.Single(session => session.OwnerId == alice).BlockId);
+        var block = Query(db => db.Sessions.IgnoreQueryFilters([ServiceDbContext.OwnerFilter]).Single(session => session.OwnerId == alice).BlockId);
         using var bob = ClientFor(NewUser("bob"));
 
         var foreign = await StartAsync(bob, block);
