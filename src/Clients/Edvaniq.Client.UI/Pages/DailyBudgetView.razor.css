@@ -1,0 +1,13 @@
+.budget-status,
+.budget-note {
+    overflow-wrap: anywhere;
+}
+
+.budget-note {
+    color: var(--color-ink-muted);
+}
+
+.budget-form .button {
+    min-height: 2.75rem;
+    margin-top: var(--space-4);
+}

@@ -387,6 +387,36 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
         Assert.Empty(service.Logs.Containing(token, answer));
     }
 
+    // #512 AC3: the plan is computed on every call, so a new budget counts on the very next one.
+    [Fact]
+    public async Task BudgetChange_ChangesTodaysPlan()
+    {
+        var (alice, token) = NewUser("alice");
+        foreach (var mastery in new[] { 10, 30 })
+        {
+            var topic = Guid.NewGuid();
+            Seed(KnownTopic.Create(alice, topic, LearningGoal.DefaultIdFor(alice), hidden: false));
+            service.LearningEngine.Set(token, topic, mastery);
+        }
+
+        await SetBudgetAsync(token, 120);
+        var before = (await PlanAsync(token)).Blocks.Sum(block => block.Minutes);
+        await SetBudgetAsync(token, 20);
+        var after = (await PlanAsync(token)).Blocks.Sum(block => block.Minutes);
+
+        Assert.InRange(before, 21, 120);
+        Assert.InRange(after, 1, 20);
+    }
+
+    private async Task SetBudgetAsync(string token, int minutes)
+    {
+        using var client = service.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var week = Enum.GetNames<DayOfWeek>().ToDictionary(day => day.ToLowerInvariant(), _ => minutes);
+        using var response = await client.PutAsJsonAsync("/daily-budget", week, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
     // The token of each user, so a seeded topic gets a ready question pool in Assessment unless a test says otherwise.
     private readonly Dictionary<string, string> tokens = [];
 

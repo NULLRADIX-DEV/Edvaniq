@@ -1,0 +1,198 @@
+@using System.Globalization
+@implements IDisposable
+@inject IDailyBudget Budget
+
+<section class="budget-section" aria-labelledby="budget-heading">
+    <h2 id="budget-heading">@FeedbackTexts.Budget.Heading</h2>
+
+    <div class="budget-status" role="status">
+        @switch (state)
+        {
+            case ViewState.Loading:
+                <Loading />
+                break;
+            case ViewState.LoadFailed:
+                <ConnectionProblem Title="@FeedbackTexts.Budget.LoadFailed" TraceId="@trace" />
+                break;
+            case ViewState.Shown when saved is { } minutes:
+                <Notice Kind="NoticeKind.Success" class="budget-saved"><p>@FeedbackTexts.Budget.SavedWith(minutes)</p></Notice>
+                break;
+        }
+    </div>
+
+    @switch (state)
+    {
+        case ViewState.LoadFailed:
+            <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="LoadAsync" />
+            break;
+        case ViewState.Shown:
+            @if (saved is not null)
+            {
+                @* "./" is the start page: an empty href would leave StateActions without a link. *@
+                <StateActions Href="./" LinkText="@FeedbackTexts.Budget.ToPlan" />
+            }
+
+            @if (budget is { IsDefault: true })
+            {
+                <p class="budget-note">@FeedbackTexts.Budget.IsDefault</p>
+            }
+            else if (budget is { IsUniform: false })
+            {
+                <p class="budget-note">@FeedbackTexts.Budget.Mixed</p>
+            }
+
+            <form class="budget-form" @onsubmit="SaveAsync" novalidate>
+                <TextField @ref="field" Id="budget-minutes" Label="@FeedbackTexts.Budget.Label" Hint="@FeedbackTexts.Budget.Hint"
+                           Value="@input" ValueChanged="Typed" Error="@error" Immediate="true" Required="true"
+                           type="number" inputmode="numeric" min="@DailyBudgetValues.MinMinutes" max="@DailyBudgetValues.MaxMinutes" step="1" />
+
+                @* Always there, so a screen reader announces it. *@
+                <div role="alert">
+                    @if (failed)
+                    {
+                        <Notice Kind="NoticeKind.Error" class="budget-failed">
+                            <p>@FeedbackTexts.Budget.NotThrough</p>
+                            <RequestId Value="@trace" />
+                        </Notice>
+                    }
+                </div>
+
+                @* Stays enabled while it saves: a disabled button would lose the keyboard focus. *@
+                <button type="submit" class="button">@(saving ? FeedbackTexts.Budget.Saving : FeedbackTexts.Budget.Save)</button>
+            </form>
+            break;
+    }
+</section>
+
+@code {
+    private readonly CancellationTokenSource life = new();
+    private ViewState state = ViewState.Loading;
+    private DailyBudgetInfo? budget;
+    private TextField? field;
+    private string input = "";
+    private string? error;
+    private bool saving;
+    private bool failed;
+    private int? saved;
+    private string? trace;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        state = ViewState.Loading;
+        CallOutcome<DailyBudgetInfo> outcome;
+        try
+        {
+            outcome = await Budget.GetAsync(life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        switch (outcome.Result)
+        {
+            case CallResult.Ok:
+                Show(outcome.Value!);
+                break;
+            case CallResult.SignedOut:
+                // The shell says the login ran out (SessionEndedNotice).
+                state = ViewState.SignedOut;
+                break;
+            default:
+                trace = outcome.TraceId;
+                state = ViewState.LoadFailed;
+                break;
+        }
+    }
+
+    private void Show(DailyBudgetInfo shown)
+    {
+        budget = shown;
+        input = shown.Usual.ToString(CultureInfo.InvariantCulture);
+        state = ViewState.Shown;
+    }
+
+    private void Typed(string value)
+    {
+        input = value;
+        saved = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (saving)
+        {
+            return;
+        }
+
+        failed = false;
+        saved = null;
+        if (!int.TryParse(input.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var minutes)
+            || minutes is < DailyBudgetValues.MinMinutes or > DailyBudgetValues.MaxMinutes)
+        {
+            await RejectAsync(DailyBudgetValues.OutOfRange);
+            return;
+        }
+
+        error = null;
+        saving = true;
+        CallOutcome<DailyBudgetInfo> outcome;
+        try
+        {
+            outcome = await Budget.SetAsync(minutes, life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            saving = false;
+        }
+
+        switch (outcome.Result)
+        {
+            case CallResult.Ok:
+                Show(outcome.Value!);
+                saved = minutes;
+                break;
+            case CallResult.SignedOut:
+                // The shell leads to the login, the value stays in the field.
+                break;
+            case CallResult.Rejected:
+                await RejectAsync(outcome.Messages is [var first, ..] ? first : DailyBudgetValues.OutOfRange);
+                break;
+            default:
+                trace = outcome.TraceId;
+                failed = true;
+                break;
+        }
+    }
+
+    // The message at the field, and the focus on it, so the user hears what to fix.
+    private async Task RejectAsync(string message)
+    {
+        error = message;
+        StateHasChanged();
+        if (field is not null)
+        {
+            await field.FocusAsync();
+        }
+    }
+
+    private enum ViewState
+    {
+        Loading,
+        SignedOut,
+        LoadFailed,
+        Shown,
+    }
+
+    public void Dispose()
+    {
+        life.Cancel();
+        life.Dispose();
+    }
+}

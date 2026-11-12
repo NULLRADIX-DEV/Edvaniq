@@ -1,0 +1,16 @@
+@page "/einstellungen"
+@attribute [Authorize]
+
+<PageTitle>Einstellungen – Edvaniq</PageTitle>
+
+<h1>@FeedbackTexts.Budget.PageHeading</h1>
+
+@* Only the browser talks to Planning. While the page is prerendered on the server there is nobody to ask. *@
+@if (RendererInfo.IsInteractive)
+{
+    <DailyBudgetView />
+}
+else
+{
+    <PageLoading />
+}
