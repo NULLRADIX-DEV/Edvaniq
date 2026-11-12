@@ -6,34 +6,21 @@ using Edvaniq.Testing;
 namespace Edvaniq.Services.ServiceName.IntegrationTests;
 
 // User A's data stays invisible to user B, because the owner filter of ServiceDbContext limits every query to the user
-// from the token. Shown with the example items, against a real database.
+// from the token. Every endpoint with a user's token is listed here (IsolationCheck), against a real database: a new
+// endpoint fails EveryEndpoint_IsInTheCheck until it is listed.
 public sealed class IsolationTests(ServiceFactory service) : IClassFixture<ServiceFactory>
 {
-    [Fact]
-    public async Task OtherUser_DoesNotSeeTheItemsInTheList()
-    {
-        using var alice = ClientFor(NewUser("alice"));
-        using var bob = ClientFor(NewUser("bob"));
-
-        var item = await CreateAsync(alice, "Notiz von Alice");
-
-        Assert.Contains(await ListAsync(alice), listed => listed.Id == item.Id);
-        Assert.Empty(await ListAsync(bob));
-    }
+    private static IsolationCheck Check() => new IsolationCheck()
+        .Exempt("GET", "/me", "Only the caller's own id from the token.")
+        .Exempt("POST", "/examples", "Creates an item of the caller, names no existing one.")
+        .List("GET", "/examples")
+        .Item("GET", "/examples/{id:guid}");
 
     [Fact]
-    public async Task OtherUser_GetsNotFoundForAForeignItem()
-    {
-        using var alice = ClientFor(NewUser("alice"));
-        using var bob = ClientFor(NewUser("bob"));
+    public void EveryEndpoint_IsInTheCheck() => Check().AssertCovers(service.Services);
 
-        var item = await CreateAsync(alice, "Notiz von Alice");
-
-        Assert.Equal(HttpStatusCode.OK, await GetStatusAsync(alice, $"/examples/{item.Id}"));
-        // A foreign item looks exactly like one that does not exist.
-        Assert.Equal(HttpStatusCode.NotFound, await GetStatusAsync(bob, $"/examples/{item.Id}"));
-        Assert.Equal(HttpStatusCode.NotFound, await GetStatusAsync(bob, $"/examples/{Guid.NewGuid()}"));
-    }
+    [Fact]
+    public Task OtherUser_CanNeitherSeeNorChangeTheItems() => Check().RunAsync(service, SeedAsync);
 
     // "Alice" and "alice" are two users, the id is compared byte for byte.
     [Fact]
@@ -45,13 +32,16 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
 
         var item = await CreateAsync(lower, "Notiz von alice");
 
-        Assert.Empty(await ListAsync(upper));
-        Assert.Equal(HttpStatusCode.OK, await GetStatusAsync(lower, $"/examples/{item.Id}"));
-        Assert.Equal(HttpStatusCode.NotFound, await GetStatusAsync(upper, $"/examples/{item.Id}"));
+        using var response = await upper.GetAsync($"/examples/{item.Id}", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    // Every test has its own users, so the tests of this class can share one database.
-    private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
+    private async Task<OwnedResource> SeedAsync(string owner)
+    {
+        using var client = ClientFor(owner);
+        var item = await CreateAsync(client, $"Notiz {Guid.NewGuid():N}");
+        return new OwnedResource(item.Id, $"/examples/{item.Id}", item.Text);
+    }
 
     private HttpClient ClientFor(string userId)
     {
@@ -67,15 +57,6 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         return (await response.Content.ReadFromJsonAsync<Item>(cancellationToken))!;
-    }
-
-    private static async Task<Item[]> ListAsync(HttpClient client) =>
-        (await client.GetFromJsonAsync<Item[]>("/examples", TestContext.Current.CancellationToken))!;
-
-    private static async Task<HttpStatusCode> GetStatusAsync(HttpClient client, string path)
-    {
-        using var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
-        return response.StatusCode;
     }
 
     private sealed record Item(Guid Id, string Text);

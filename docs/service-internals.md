@@ -239,7 +239,7 @@ Die Tests einer Klasse teilen sich eine Datenbank. Jeder Test erfindet seine Nut
 
 - `TokenTests`: Abweisungen und der Nutzer nur aus dem Token
 - `MigrationTests`: Die Migrationen passen zum Modell, laufen auf einer frischen DB und ein zweites Mal ohne Änderung. Jede `OwnerId` wird Byte für Byte verglichen.
-- `IsolationTests`: Nutzer B sieht die Einträge von A weder in der Liste noch einzeln, auch dann nicht, wenn sich beide nur in der Groß-/Kleinschreibung der ID unterscheiden.
+- `IsolationTests`: Nutzer B kann die Einträge von A über keinen Endpunkt lesen, ändern oder löschen, auch dann nicht, wenn sich beide nur in der Groß-/Kleinschreibung der ID unterscheiden ([Isolationsprüfung](#isolationsprüfung)).
 - `HealthTests`: mit und ohne Datenbank, auch außerhalb von Development
 - `ProblemTests`: Fehler kommen als Problem mit der Trace-ID
 - `DatabaseUserTests`: Der Benutzer einer Datenbank kann eine fremde weder lesen noch ändern noch auflisten und legt keine Datenbank an. Das `GRANT` stammt aus `ServiceDatabaseSql` im AppHost, die Tests kompilieren dieselbe Datei.
@@ -247,6 +247,26 @@ Die Tests einer Klasse teilen sich eine Datenbank. Jeder Test erfindet seine Nut
 - `UserDeletionTests`: Nach `UserDeleted` sind die Einträge des Nutzers weg und die anderer noch da, auch bei doppelter Zustellung und bei einer ID, die sich nur in der Groß-/Kleinschreibung unterscheidet. Inbox und Log belegen die Löschung.
 
 Ob die Isolationstests wirklich etwas prüfen, zeigt die Gegenprobe. Ohne den Filter in `ServiceDbContext` werden alle rot, ohne die Collation nur die Tests mit den zwei Schreibweisen.
+
+### Isolationsprüfung
+
+`IsolationCheck` aus `Edvaniq.Testing` prüft für alle Endpunkte eines Service, dass Nutzer B nichts von Nutzer A sieht. Jeder Service führt dafür in seinen `IsolationTests` eine Liste seiner Endpunkte:
+
+```csharp
+new IsolationCheck()
+    .Exempt("GET", "/me", "Only the caller's own id from the token.")
+    .List("GET", "/topics")
+    .Item("GET", "/topics/{id:guid}")
+    .Item("PATCH", "/topics/{id:guid}", new { name = "Von Bob" });
+```
+
+`Item` steht für eine Route mit der Id einer Ressource, `List` für eine, die mehrere liefert, und `Exempt` mit Begründung für eine ohne Daten anderer Nutzer, etwa eine, die nur eigene Daten anlegt. Die Begründungen stehen in der Testausgabe, damit ein Review sie sieht.
+
+`RunAsync` legt über die Seed-Funktion des Service eine Ressource für A an. Danach fragt B jede `Item`-Route einmal mit der Id von A und einmal mit einer Id, die es nicht gibt, beide Male mit demselben Body. Beide Antworten müssen gleich sein, im Status und im Problem bis auf die Trace-ID, und keine darf Erfolg melden. Der Body muss gültig sein, sonst verdeckt ein 400 der Validierung, ob der Besitzer überhaupt geprüft wurde. Die Antwort einer `List`-Route an B darf weder die Id noch den Erkennungswert der Ressource von A enthalten. Zum Schluss liest A die Ressource und bekommt dasselbe wie vorher.
+
+`AssertCovers` vergleicht die Liste mit den Endpunkten, die der laufende Service wirklich hat. Ein neuer Endpunkt lässt den Test also rot werden, bis er in der Liste steht. Ausgenommen sind nur Endpunkte, die jeder ohne Token erreicht, und solche, die nur das interne Token eines anderen Service annehmen. Die Endpunkte selbst ausprobieren kann die Prüfung nicht, weil sie weder gültige Bodies noch passende Daten kennt. Deshalb die Liste.
+
+Dass die Prüfung ein Leck findet, zeigt `IsolationLeakTests` in Knowledge: Dort liest und ändert der Service Themen am Owner-Filter vorbei, und die Prüfung schlägt fehl.
 
 ## Container-Image
 
