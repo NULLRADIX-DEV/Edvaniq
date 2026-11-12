@@ -1,0 +1,95 @@
+@* One of a few answers, all in view: radio buttons in a fieldset whose legend is the question. Hint and error hang on
+   the group like on a TextField. The arrow keys move between the answers, Tab leaves the group. *@
+<fieldset class="field choice-field" aria-describedby="@DescribedBy">
+    <legend>@Label@if (Required)
+        {
+            <span class="field-required"> (Pflichtfeld)</span>
+        }</legend>
+    @if (!string.IsNullOrEmpty(Hint))
+    {
+        <p id="@HintId" class="field-hint">@Hint</p>
+    }
+    @for (var i = 0; i < Options.Count; i++)
+    {
+        var option = Options[i];
+        var first = i == 0;
+        <div class="choice" @key="option.Value">
+            @if (first)
+            {
+                <input type="radio" id="@OptionId(option)" name="@Id" value="@option.Value" checked="@(Value == option.Value)"
+                       aria-invalid="@Invalid" @onchange="() => ChooseAsync(option.Value)" @ref="element" />
+            }
+            else
+            {
+                <input type="radio" id="@OptionId(option)" name="@Id" value="@option.Value" checked="@(Value == option.Value)"
+                       aria-invalid="@Invalid" @onchange="() => ChooseAsync(option.Value)" />
+            }
+            <label for="@OptionId(option)">@option.Text</label>
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <p id="@ErrorId" class="field-error"><StatusSymbol Kind="NoticeKind.Error" />@Error</p>
+    }
+</fieldset>
+
+@code {
+    private ElementReference element;
+
+    // Fixed by the page, each answer gets "<Id>-<value>".
+    [Parameter, EditorRequired]
+    public string Id { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ChoiceOption> Options { get; set; } = [];
+
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<string> ValueChanged { get; set; }
+
+    [Parameter]
+    public bool Required { get; set; }
+
+    [Parameter]
+    public string? Hint { get; set; }
+
+    [Parameter]
+    public string? Error { get; set; }
+
+    public string HintId => $"{Id}-hint";
+
+    public string ErrorId => $"{Id}-error";
+
+    public string OptionId(ChoiceOption option) => $"{Id}-{option.Value}";
+
+    private string? Invalid => string.IsNullOrEmpty(Error) ? null : "true";
+
+    private string? DescribedBy
+    {
+        get
+        {
+            var ids = new List<string>(2);
+            if (!string.IsNullOrEmpty(Hint))
+            {
+                ids.Add(HintId);
+            }
+
+            if (!string.IsNullOrEmpty(Error))
+            {
+                ids.Add(ErrorId);
+            }
+
+            return ids.Count == 0 ? null : string.Join(' ', ids);
+        }
+    }
+
+    // The first answer, the way into the group.
+    public ValueTask FocusAsync() => element.FocusAsync();
+
+    private Task ChooseAsync(string value) => ValueChanged.InvokeAsync(value);
+}

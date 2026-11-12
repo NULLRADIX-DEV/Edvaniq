@@ -140,6 +140,32 @@ internal static class Material
         });
     }
 
+    // Planning's learning goals: none yet, and a new one comes back as it was sent. What was sent lands in the list.
+    public static Task AnswerGoalsAsync(IPage page, List<string> created) =>
+        page.RouteAsync("**/api/planning/learning-goals", route =>
+        {
+            if (route.Request.Method != "POST")
+            {
+                return FulfillAsync(route, Array.Empty<object>());
+            }
+
+            created.Add(route.Request.PostData ?? "");
+            using var sent = JsonDocument.Parse(route.Request.PostData ?? "{}");
+            var goal = sent.RootElement;
+            return FulfillAsync(route, new
+            {
+                id = Guid.NewGuid(),
+                kind = goal.GetProperty("kind").GetString(),
+                name = goal.GetProperty("name").GetString(),
+                examType = goal.GetProperty("examType").GetString(),
+                examDate = goal.GetProperty("examDate").GetString(),
+                level = goal.GetProperty("level").GetString(),
+                outputLanguage = goal.GetProperty("outputLanguage").GetString(),
+                goal = goal.GetProperty("goal").GetString(),
+                createdAt = DateTime.UnixEpoch,
+            }, 201);
+        });
+
     private static Task FulfillAsync(IRoute route, object body, int status = 200) =>
         route.FulfillAsync(new RouteFulfillOptions
         {

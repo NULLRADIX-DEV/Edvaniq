@@ -1,0 +1,446 @@
+@using Fields = Edvaniq.Client.Core.LearningGoalValues.Fields
+@using Microsoft.Extensions.DependencyInjection
+@using Microsoft.JSInterop
+@implements IDisposable
+@inject ILearningGoals Goals
+@inject IServiceProvider Services
+
+@* Leaving the page would throw away what was entered, so the browser asks first. *@
+<NavigationLock ConfirmExternalNavigation="Unsaved" />
+
+@* What saving said lives in one live region. Buttons and fields stay outside, they keep the focus. *@
+<div class="goal-status" role="status">
+    @if (saved is not null)
+    {
+        <Notice Kind="NoticeKind.Success" Title="@FeedbackTexts.Goal.Saved" class="goal-saved">
+            <p>@FeedbackTexts.Goal.SavedHint</p>
+            @if (notFirst)
+            {
+                <p>@FeedbackTexts.Goal.NotFirst</p>
+            }
+        </Notice>
+    }
+    else if (signedOut)
+    {
+        @* The shell says that the login ran out and leads to it (SessionEndedNotice). *@
+        <Notice Kind="NoticeKind.Info" class="goal-kept"><p>@FeedbackTexts.Goal.Kept</p></Notice>
+    }
+    else if (saveFailed)
+    {
+        <ConnectionProblem Title="@FeedbackTexts.Goal.SaveFailed" TraceId="@saveTrace" />
+    }
+    else if (draftBack)
+    {
+        <Notice Kind="NoticeKind.Info" class="goal-draft"><p>@FeedbackTexts.Goal.DraftBack</p></Notice>
+    }
+</div>
+
+@if (saved is not null)
+{
+    <StateActions Href="themen" LinkText="@FeedbackTexts.Goal.SavedLink" />
+}
+else
+{
+    <section class="goal-step" aria-labelledby="goal-step-heading">
+        @* A new element per step, so each step change reads as one. *@
+        <h2 @key="step" id="goal-step-heading" tabindex="-1" @ref="stepHeading">
+            <span class="goal-step-count">@string.Format(System.Globalization.CultureInfo.InvariantCulture, FeedbackTexts.Goal.StepOf, step, Steps):</span>
+            @StepName
+        </h2>
+
+        @* Enter goes on, like the button. Every step is checked before the next one, saving checks them all again. *@
+        <form class="goal-form" @onsubmit="NextAsync" novalidate>
+            @switch (step)
+            {
+                case 1:
+                    <ChoiceField @ref="kindField" Id="goal-kind" Label="@FeedbackTexts.Goal.KindLabel" Hint="@FeedbackTexts.Goal.KindHint"
+                                 Required="true" Options="Kinds" Value="@kind" ValueChanged="ChooseKind" Error="@ErrorOf(Fields.Kind)" />
+                    break;
+                case 2:
+                    <TextField @ref="nameField" Id="goal-name" Label="@FeedbackTexts.Goal.NameLabel" Hint="@FeedbackTexts.Goal.NameHint"
+                               Required="true" Value="@name" ValueChanged="value => Set(Fields.Name, () => name = value)"
+                               Error="@ErrorOf(Fields.Name)" autocomplete="off" />
+                    @if (IsExam)
+                    {
+                        <SelectField @ref="examTypeField" Id="goal-exam-type" Label="@FeedbackTexts.Goal.ExamTypeLabel" Required="true"
+                                     Options="ExamTypes" Value="@examType" ValueChanged="value => Set(Fields.ExamType, () => examType = value)"
+                                     Error="@ErrorOf(Fields.ExamType)" />
+                        <TextField @ref="examDateField" Id="goal-exam-date" Label="@FeedbackTexts.Goal.ExamDateLabel"
+                                   Hint="@FeedbackTexts.Goal.ExamDateHint" Value="@examDate"
+                                   ValueChanged="value => Set(Fields.ExamDate, () => examDate = value)" Error="@ErrorOf(Fields.ExamDate)"
+                                   type="date" />
+                    }
+                    <TextField @ref="goalField" Id="goal-goal" Label="@FeedbackTexts.Goal.GoalLabel" Hint="@FeedbackTexts.Goal.GoalHint"
+                               Value="@goal" ValueChanged="value => Set(Fields.Goal, () => goal = value)" Error="@ErrorOf(Fields.Goal)"
+                               autocomplete="off" />
+                    break;
+                case 3:
+                    <SelectField @ref="levelField" Id="goal-level" Label="@FeedbackTexts.Goal.LevelLabel" Hint="@FeedbackTexts.Goal.LevelHint"
+                                 Options="Levels" Value="@level" ValueChanged="value => Set(Fields.Level, () => level = value)"
+                                 Error="@ErrorOf(Fields.Level)" />
+                    <ChoiceField @ref="languageField" Id="goal-language" Label="@FeedbackTexts.Goal.OutputLanguageLabel"
+                                 Options="Languages" Value="@language"
+                                 ValueChanged="value => Set(Fields.OutputLanguage, () => language = value)"
+                                 Error="@ErrorOf(Fields.OutputLanguage)" />
+                    break;
+                default:
+                    <dl class="goal-summary">
+                        <dt>@FeedbackTexts.Goal.KindLabel</dt>
+                        <dd>@(IsExam ? FeedbackTexts.Goal.ExamPreparation : FeedbackTexts.Goal.FreeLearning)</dd>
+                        <dt>@FeedbackTexts.Goal.NameLabel</dt>
+                        <dd>@name.Trim()</dd>
+                        @if (IsExam)
+                        {
+                            <dt>@FeedbackTexts.Goal.ExamTypeLabel</dt>
+                            <dd>@TextOf(FeedbackTexts.Goal.ExamTypes, examType)</dd>
+                            <dt>@FeedbackTexts.Goal.ExamDateLabel</dt>
+                            <dd>@DateText</dd>
+                        }
+                        <dt>@FeedbackTexts.Goal.GoalLabel</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(goal) ? FeedbackTexts.Goal.NoAnswer : goal.Trim())</dd>
+                        <dt>@FeedbackTexts.Goal.LevelLabel</dt>
+                        <dd>@TextOf(FeedbackTexts.Goal.Levels, level)</dd>
+                        <dt>@FeedbackTexts.Goal.OutputLanguageLabel</dt>
+                        <dd>@TextOf(FeedbackTexts.Goal.OutputLanguages, language)</dd>
+                    </dl>
+                    break;
+            }
+
+            @* Both stay enabled while it saves: a disabled button would lose the keyboard focus. *@
+            <div class="goal-actions">
+                @if (step > 1)
+                {
+                    <button type="button" class="goal-back" @onclick="Back">@FeedbackTexts.Goal.Back</button>
+                }
+                <button type="submit" class="button">
+                    @(step < Steps ? FeedbackTexts.Goal.Next : saving ? FeedbackTexts.Goal.Saving : FeedbackTexts.Goal.Save)
+                </button>
+            </div>
+        </form>
+    </section>
+}
+
+@code {
+    private const int Steps = 4;
+
+    private const string DraftKey = nameof(GoalDraft);
+
+    private static readonly IReadOnlyList<ChoiceOption> Kinds =
+    [
+        new(LearningGoalValues.ExamPreparation, FeedbackTexts.Goal.ExamPreparation),
+        new(LearningGoalValues.FreeLearning, FeedbackTexts.Goal.FreeLearning),
+    ];
+
+    private static readonly IReadOnlyList<ChoiceOption> ExamTypes = OptionsOf(LearningGoalValues.ExamTypes, FeedbackTexts.Goal.ExamTypes);
+
+    private static readonly IReadOnlyList<ChoiceOption> Levels = OptionsOf(LearningGoalValues.Levels, FeedbackTexts.Goal.Levels);
+
+    private static readonly IReadOnlyList<ChoiceOption> Languages =
+        OptionsOf(LearningGoalValues.OutputLanguages, FeedbackTexts.Goal.OutputLanguages);
+
+    // Which step shows each field, so an error from Planning leads to its step.
+    private static readonly IReadOnlyDictionary<string, int> StepOf = new Dictionary<string, int>
+    {
+        [Fields.Kind] = 1,
+        [Fields.Name] = 2,
+        [Fields.ExamType] = 2,
+        [Fields.ExamDate] = 2,
+        [Fields.Goal] = 2,
+        [Fields.Level] = 3,
+        [Fields.OutputLanguage] = 3,
+    };
+
+    private readonly CancellationTokenSource life = new();
+
+    private int step = 1;
+    private string? kind;
+    private string name = "";
+    private string? examType;
+    private string? examDate;
+    private string? goal;
+    private string? level;
+    private string language = LearningGoalValues.DefaultOutputLanguage;
+    private Dictionary<string, string> errors = [];
+
+    private bool saving;
+    private bool saveFailed;
+    private string? saveTrace;
+    private bool signedOut;
+    private bool draftBack;
+    private LearningGoalInfo? saved;
+
+    // Goals there before this one, if the list came. Unknown means no hint.
+    private Task<int?> existing = Task.FromResult<int?>(null);
+    private bool notFirst;
+
+    private ElementReference stepHeading;
+    private ChoiceField? kindField;
+    private TextField? nameField;
+    private SelectField? examTypeField;
+    private TextField? examDateField;
+    private TextField? goalField;
+    private SelectField? levelField;
+    private ChoiceField? languageField;
+    private string? focusNext;
+
+    private bool IsExam => kind == LearningGoalValues.ExamPreparation;
+
+    private bool Unsaved => saved is null && (kind is not null || !string.IsNullOrWhiteSpace(name) || !string.IsNullOrWhiteSpace(goal));
+
+    private string StepName => step switch
+    {
+        1 => FeedbackTexts.Goal.KindStep,
+        2 => FeedbackTexts.Goal.AboutStep,
+        3 => FeedbackTexts.Goal.LevelStep,
+        _ => FeedbackTexts.Goal.SummaryStep,
+    };
+
+    private string DateText =>
+        DateOnly.TryParseExact(examDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var date)
+            ? date.ToString("d. MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("de-DE"))
+            : FeedbackTexts.Goal.NoAnswer;
+
+    protected override void OnInitialized()
+    {
+        // Back from the login: what was entered, on the step where saving stopped.
+        if (Services.GetService<Drafts>()?.Take<GoalDraft>(DraftKey) is { } draft)
+        {
+            (step, kind, name, examType, examDate, goal, level, language) =
+                (draft.Step, draft.Kind, draft.Name, draft.ExamType, draft.ExamDate, draft.Goal, draft.Level, draft.Language);
+            draftBack = true;
+        }
+
+        existing = CountAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var target = focusNext;
+        focusNext = null;
+        try
+        {
+            switch (target)
+            {
+                case null:
+                    break;
+                case Fields.Kind when kindField is not null:
+                    await kindField.FocusAsync();
+                    break;
+                case Fields.Name when nameField is not null:
+                    await nameField.FocusAsync();
+                    break;
+                case Fields.ExamType when examTypeField is not null:
+                    await examTypeField.FocusAsync();
+                    break;
+                case Fields.ExamDate when examDateField is not null:
+                    await examDateField.FocusAsync();
+                    break;
+                case Fields.Goal when goalField is not null:
+                    await goalField.FocusAsync();
+                    break;
+                case Fields.Level when levelField is not null:
+                    await levelField.FocusAsync();
+                    break;
+                case Fields.OutputLanguage when languageField is not null:
+                    await languageField.FocusAsync();
+                    break;
+                default:
+                    await stepHeading.FocusAsync();
+                    break;
+            }
+        }
+        catch (JSException)
+        {
+            // The element went away between render and focus, nothing to do.
+        }
+    }
+
+    private async Task<int?> CountAsync()
+    {
+        try
+        {
+            var goals = await Goals.ListAsync(life.Token);
+            return goals is { Result: CallResult.Ok, Value: { } list } ? list.Count : null;
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
+    private void ChooseKind(string value) => Set(Fields.Kind, () => kind = value);
+
+    // A new value takes the field's error away, the next check says whether it still holds.
+    private void Set(string field, Action change)
+    {
+        change();
+        errors.Remove(field);
+    }
+
+    private string? ErrorOf(string field) => errors.GetValueOrDefault(field);
+
+    private async Task NextAsync()
+    {
+        if (saving)
+        {
+            return;
+        }
+
+        if (step < Steps)
+        {
+            foreach (var field in StepOf.Where(entry => entry.Value == step).Select(entry => entry.Key))
+            {
+                errors.Remove(field);
+            }
+
+            foreach (var (field, message) in Check(step))
+            {
+                errors[field] = message;
+            }
+
+            if (FirstError(step) is { } invalid)
+            {
+                focusNext = invalid;
+                return;
+            }
+
+            step++;
+            focusNext = "heading";
+            return;
+        }
+
+        await SaveAsync();
+    }
+
+    private void Back()
+    {
+        if (saving || step == 1)
+        {
+            return;
+        }
+
+        step--;
+        focusNext = "heading";
+    }
+
+    // Only what is sure without Planning: what is needed and how long it may be. Planning checks everything again.
+    private IEnumerable<(string Field, string Message)> Check(int of)
+    {
+        if (of == 1 && kind is null)
+        {
+            yield return (Fields.Kind, FeedbackTexts.Goal.KindMissing);
+        }
+
+        if (of == 2)
+        {
+            var trimmed = name.Trim();
+            if (trimmed.Length == 0)
+            {
+                yield return (Fields.Name, FeedbackTexts.Goal.NameMissing);
+            }
+            else if (trimmed.Length > LearningGoalValues.NameMaxLength)
+            {
+                yield return (Fields.Name, FeedbackTexts.Goal.NameTooLong);
+            }
+
+            if (IsExam && examType is null)
+            {
+                yield return (Fields.ExamType, FeedbackTexts.Goal.ExamTypeMissing);
+            }
+
+            if (goal?.Trim().Length > LearningGoalValues.GoalMaxLength)
+            {
+                yield return (Fields.Goal, FeedbackTexts.Goal.GoalTooLong);
+            }
+        }
+    }
+
+    private string? FirstError(int of) =>
+        Fields.All.FirstOrDefault(field => errors.ContainsKey(field) && StepOf[field] == of);
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        saveFailed = false;
+        draftBack = false;
+        CallOutcome<LearningGoalInfo> outcome;
+        try
+        {
+            outcome = await Goals.CreateAsync(ToNew(), life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            saving = false;
+        }
+
+        switch (outcome.Result)
+        {
+            case CallResult.Ok:
+                saved = outcome.Value;
+                signedOut = false;
+                notFirst = await existing is > 0;
+                break;
+            case CallResult.SignedOut:
+                signedOut = true;
+                break;
+            case CallResult.Rejected when outcome.FieldErrors is { Count: > 0 } fields:
+                errors = fields.Where(entry => StepOf.ContainsKey(entry.Key)).ToDictionary();
+                if (errors.Count == 0)
+                {
+                    saveFailed = true;
+                    break;
+                }
+
+                step = errors.Keys.Min(field => StepOf[field]);
+                focusNext = FirstError(step);
+                break;
+            default:
+                saveFailed = true;
+                saveTrace = outcome.TraceId;
+                break;
+        }
+    }
+
+    // Prüfungsart and termin only go with an exam, Planning refuses them for free learning. Kept here all the same, in
+    // case the user switches back.
+    private NewLearningGoal ToNew() => new(
+        kind!,
+        name.Trim(),
+        IsExam ? examType : null,
+        IsExam && !string.IsNullOrWhiteSpace(examDate) ? examDate : null,
+        level,
+        language,
+        string.IsNullOrWhiteSpace(goal) ? null : goal.Trim());
+
+    private static string TextOf(IReadOnlyDictionary<string, string> texts, string? value) =>
+        value is null ? FeedbackTexts.Goal.NoAnswer : texts.GetValueOrDefault(value, value);
+
+    private static IReadOnlyList<ChoiceOption> OptionsOf(IReadOnlyList<string> values, IReadOnlyDictionary<string, string> texts) =>
+        [.. values.Select(value => new ChoiceOption(value, texts.GetValueOrDefault(value, value)))];
+
+    private sealed record GoalDraft(
+        int Step,
+        string? Kind,
+        string Name,
+        string? ExamType,
+        string? ExamDate,
+        string? Goal,
+        string? Level,
+        string Language);
+
+    // Leaving for the login keeps what was entered, for the same account only (Drafts).
+    public void Dispose()
+    {
+        if (signedOut && saved is null)
+        {
+            Services.GetService<Drafts>()?.Keep(DraftKey, new GoalDraft(step, kind, name, examType, examDate, goal, level, language));
+        }
+
+        life.Cancel();
+        life.Dispose();
+    }
+}

@@ -131,6 +131,50 @@ public sealed class NoticeTests : BunitContext
         Assert.Contains("notice-info", notice.Find(".notice").ClassList);
     }
 
+    // #273: a few answers as radio buttons. The legend asks, hint and error hang on the group, the error marks the answers.
+    [Fact]
+    public void ChoiceField_IsAGroupWithHintAndError()
+    {
+        string? chosen = null;
+        var field = Render<ChoiceField>(parameters => parameters
+            .Add(p => p.Id, "kind").Add(p => p.Label, "Wie lernst du?").Add(p => p.Required, true)
+            .Add(p => p.Options, [new ChoiceOption("a", "Erstens"), new ChoiceOption("b", "Zweitens")])
+            .Add(p => p.Value, "b").Add(p => p.Hint, "Such dir eins aus.").Add(p => p.Error, "Wähl eins.")
+            .Add(p => p.ValueChanged, value => chosen = value));
+
+        Assert.Equal("Wie lernst du? (Pflichtfeld)", field.Find("fieldset > legend").TextContent);
+        Assert.Equal("kind-hint kind-error", field.Find("fieldset").GetAttribute("aria-describedby"));
+        Assert.Equal(["kind-a", "kind-b"], field.FindAll("input[type=radio][name=kind]").Select(input => input.Id));
+        Assert.Equal("Erstens", field.Find("label[for=kind-a]").TextContent);
+        Assert.True(field.Find("#kind-b").HasAttribute("checked"));
+        Assert.All(field.FindAll("input"), input => Assert.Equal("true", input.GetAttribute("aria-invalid")));
+
+        field.Find("#kind-a").Change("a");
+
+        Assert.Equal("a", chosen);
+    }
+
+    [Fact]
+    public void SelectField_SaysWhatTheEmptyChoiceMeans()
+    {
+        string? chosen = "x";
+        var required = Render<SelectField>(parameters => parameters
+            .Add(p => p.Id, "type").Add(p => p.Label, "Art").Add(p => p.Required, true)
+            .Add(p => p.Options, [new ChoiceOption("ex", "Ex")]).Add(p => p.Error, "Wähl eine Art.")
+            .Add(p => p.ValueChanged, value => chosen = value));
+        var optional = Render<SelectField>(parameters => parameters
+            .Add(p => p.Id, "level").Add(p => p.Label, "Stufe").Add(p => p.Options, [new ChoiceOption("u", "Unterstufe")]));
+
+        Assert.Equal(["Bitte wählen", "Ex"], required.FindAll("option").Select(option => option.TextContent));
+        Assert.Equal("true", required.Find("select").GetAttribute("aria-invalid"));
+        Assert.Equal("type-error", required.Find("select").GetAttribute("aria-describedby"));
+        Assert.Equal("Keine Angabe", optional.FindAll("option")[0].TextContent);
+
+        required.Find("select").Change("");
+
+        Assert.Null(chosen);
+    }
+
     // A class from the caller marks the place, the notice keeps its own look.
     [Fact]
     public void ExtraClass_AddsToTheNoticesOwn()

@@ -1,0 +1,16 @@
+@page "/lernziele/neu"
+@attribute [Authorize]
+
+<PageTitle>Neues Lernziel – Edvaniq</PageTitle>
+
+<h1>@FeedbackTexts.Goal.Heading</h1>
+
+@* Only the browser talks to Planning. While the page is prerendered on the server there is nobody to ask. *@
+@if (RendererInfo.IsInteractive)
+{
+    <GoalWizardView />
+}
+else
+{
+    <PageLoading />
+}

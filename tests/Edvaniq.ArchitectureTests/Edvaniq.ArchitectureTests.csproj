@@ -27,6 +27,12 @@
     <ProjectReference Include="..\..\src\Aspire\Edvaniq.AppHost\Edvaniq.AppHost.csproj" />
   </ItemGroup>
 
+  <!-- The client's copy of Planning's learning goal values, held together by LearningGoalValuesTests. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Clients\Edvaniq.Client.Core\Edvaniq.Client.Core.csproj" />
+    <ProjectReference Include="..\..\src\Clients\Edvaniq.Client.UI\Edvaniq.Client.UI.csproj" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Analytics\Edvaniq.Services.Analytics.Api\Edvaniq.Services.Analytics.Api.csproj" />
     <ProjectReference Include="..\..\src\Services\Analytics\Edvaniq.Services.Analytics.Application\Edvaniq.Services.Analytics.Application.csproj" />
