@@ -146,6 +146,42 @@ Gateway, Web-Host und MySQL zählen mit ihrem Messwert. Die sieben Services und 
 
 Bis zur Obergrenze von 6 GB bleiben 1792 MB. Davon braucht Docker selbst etwa 160 MB und ein laufender Migrationsschritt 256 MB, als Reserve bleiben also knapp 1,4 GB. Im Ruhebetrieb belegen die Prozesse gut ein Viertel ihrer Grenzen. Ein Service darf gut das Dreifache von Planning brauchen, bevor er die 80 % aus Q15 erreicht. Erneut gemessen wird unter Last (#243), nach dem siebten Service (#502) und vor dem Pilot (#576).
 
+### Verbrauch unter Durchstich-Last
+
+Gemessen am 12.11.2026 mit Commit `2f1d626`. Erst einmal im Leerlauf, dann alle 2 Sekunden über 90 Sekunden, während ein Testkonto drei Texte einfügte, sie analysieren ließ, drei Fragen beantwortete und Tagesplan und Mastery abrief. Die Tabelle nennt den Leerlauf und den höchsten Wert unter Last.
+
+| Container | Grenze | Leerlauf | Unter Last | Anteil |
+|---|---:|---:|---:|---:|
+| `db` | 1536 MB | 689 MB | 690 MB | 45 % |
+| `assessment-api` | 256 MB | 119 MB | 123 MB | 48 % |
+| `planning-api` | 256 MB | 111 MB | 115 MB | 45 % |
+| `content-api` | 256 MB | 111 MB | 112 MB | 44 % |
+| `learningengine-api` | 256 MB | 108 MB | 111 MB | 43 % |
+| `knowledge-api` | 256 MB | 105 MB | 110 MB | 43 % |
+| `content-worker` | 256 MB | 95 MB | 103 MB | 40 % |
+| `identity-api` | 256 MB | 89 MB | 95 MB | 37 % |
+| `web` | 256 MB | 64 MB | 65 MB | 25 % |
+| `gateway` | 256 MB | 45 MB | 46 MB | 18 % |
+| `flashcards-api` | 256 MB | 30 MB | 30 MB | 12 % |
+| `nats` | 256 MB | 9 MB | 10 MB | 4 % |
+| `gamification-api`, `analytics-api`, `notifications-api`, `tutor-api` | je 128 MB | je 29 MB | je 29 MB | 23 % |
+| `notifications-worker` | 128 MB | 16 MB | 16 MB | 12 % |
+| Summe | 4992 MB | 1705 MB | 1741 MB | 35 % |
+
+Jeder Container hat eine eigene Grenze, keiner kommt über 48 % davon, Q15 erlaubt 80 %. Die Last ändert wenig, weil die Analyse mit dem Test-Double läuft und kaum Speicher braucht. Die echte KI ändert daran nichts Wesentliches, der Worker wartet dann nur länger auf Antworten. Das Lesen einer Datei läuft seit #318 in einem eigenen Prozess im Container des Workers, der seinen eigenen, kleineren Heap hat.
+
+Was sich seit dem 26.10. geändert hat: Ein Service mit Fachcode, Datenbank und Broker braucht im Leerlauf 90 bis 120 MB statt der 64 MB von Planning damals. Die Gerüste ohne Fachcode bleiben bei knapp 30 MB. Für die Hochrechnung gilt deshalb 120 MB je Service:
+
+| | Unter Last | Grenze |
+|---|---:|---:|
+| 7 Services und Content-Worker | 8 × 120 = 960 MB | 8 × 256 = 2048 MB |
+| Gateway und Web-Host | 111 MB | 512 MB |
+| MySQL | 690 MB | 1536 MB |
+| Broker | 10 MB | 256 MB |
+| Summe | 1771 MB | 4352 MB |
+
+Auf einem Server mit 4 GB blieben neben den 10 MVP-Prozessen etwa 2,3 GB für Betriebssystem, Docker und Dateicache, ohne dass Swap gebraucht wird. Die Grenzen zusammen liegen mit 4352 MB über 4 GB. Sie sind Deckel, keine Reservierung, und kein Prozess kommt im Betrieb auch nur in die Nähe. Die vier Gerüste ohne MVP-Aufgabe würden dort nicht mitlaufen. Ein neuer Service bekommt die Grenze von 256 MB, bis eine Messung mehr verlangt.
+
 ## Health
 
 Jeder Prozess mit HTTP meldet `/alive` (der Prozess lebt) und `/health` (er ist bereit). Services aus der Vorlage sind erst bereit, wenn sie ihre eigene Datenbank erreichen ([Aufbau eines Service](service-internals.md#health)). Außerhalb von Development antworten beide nur auf dem internen Port 8081, den nur der Container selbst und das Netz der App erreichen. Auf dem App-Port 8080 gibt es für beide Pfade 404, bei Services mit Token-Prüfung ohne Token 401. Das gilt auch mit einem gefälschten Header `Host: …:8081`, denn es zählt der Port, auf dem die Verbindung ankommt. Die Antwort ist nur `Healthy`, `Degraded` oder `Unhealthy`, ohne Namen der Checks und ohne Fehlermeldungen.
