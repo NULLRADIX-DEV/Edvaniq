@@ -7,6 +7,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
+using MySql.Data.MySqlClient;
+
 namespace Edvaniq.Services.LearningEngine.Infrastructure;
 
 public sealed class LearningRecordRetentionOptions
@@ -29,6 +31,8 @@ public sealed class LearningRecordRetention(
     TimeProvider time,
     ILogger<LearningRecordRetention> logger) : BackgroundService
 {
+    private const int DuplicateKey = 1062;
+
     private static readonly TimeSpan FirstRunDelay = TimeSpan.FromMinutes(1);
 
     private static readonly TimeSpan Interval = TimeSpan.FromHours(1);
@@ -102,7 +106,7 @@ public sealed class LearningRecordRetention(
             {
                 db.SaveChanges();
             }
-            catch (DbUpdateException exception)
+            catch (DbUpdateException exception) when (IsClash(exception))
             {
                 // Another process folded the same records first. What's left waits for the next run.
                 RetentionLog.Clashed(logger, exception);
@@ -114,6 +118,13 @@ public sealed class LearningRecordRetention(
 
         return total;
     }
+
+    // Only another run on the same topic: the carry's token or a record already gone (concurrency), or a carry inserted
+    // first (its primary key). Anything else goes up and is logged as a failure.
+    public static bool IsClash(DbUpdateException exception) =>
+        exception is DbUpdateConcurrencyException
+        || (exception.InnerException is MySqlException { Number: DuplicateKey } duplicate
+            && duplicate.Message.Contains($"'{nameof(LearningEngineDbContext.MasteryCarries)}.PRIMARY'", StringComparison.Ordinal));
 }
 
 internal static partial class RetentionLog

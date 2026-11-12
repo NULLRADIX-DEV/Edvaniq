@@ -92,6 +92,74 @@ public sealed class RetentionTests(RetentionTests.ShortRetention service) : ICla
         Assert.Equal(0, Query(db => Carries(db, carol).Count()));
     }
 
+    // Recent records, so no run of another test folds them meanwhile.
+    // Two runs inserting the first carry of a topic at once: the second hits the carry's key, a clash.
+    [Fact]
+    public async Task SecondCarryOfATopic_IsAClash()
+    {
+        var dave = NewUser("dave");
+        var record = Record(dave, Guid.NewGuid(), Now.AddDays(-1), true, 2);
+        await SeedAsync([], [record]);
+        Query(db =>
+        {
+            db.MasteryCarries.Add(MasteryCarry.Fold(null, dave, record.TopicId, [record], null));
+            return db.SaveChanges();
+        });
+
+        var exception = Assert.Throws<DbUpdateException>(() => Query(db =>
+        {
+            db.MasteryCarries.Add(MasteryCarry.Fold(null, dave, record.TopicId, [record], null));
+            return db.SaveChanges();
+        }));
+
+        Assert.True(LearningRecordRetention.IsClash(exception));
+    }
+
+    // Two runs folding into the same carry: the second fails on its token, a clash.
+    [Fact]
+    public async Task CarryChangedMeanwhile_IsAClash()
+    {
+        var erin = NewUser("erin");
+        var topic = Guid.NewGuid();
+        var (first, second) = (Record(erin, topic, Now.AddDays(-2), true, 2), Record(erin, topic, Now.AddDays(-1), false, 2));
+        await SeedAsync([], [first, second]);
+        Query(db =>
+        {
+            db.MasteryCarries.Add(MasteryCarry.Fold(null, erin, topic, [first], null));
+            return db.SaveChanges();
+        });
+
+        using var scope = service.Services.CreateScope();
+        var stale = scope.ServiceProvider.GetRequiredService<LearningEngineDbContext>();
+        var carry = Carries(stale, erin).Single();
+        Query(db =>
+        {
+            MasteryCarry.Fold(Carries(db, erin).Single(), erin, topic, [second], null);
+            return db.SaveChanges();
+        });
+        MasteryCarry.Fold(carry, erin, topic, [second], null);
+
+        Assert.True(LearningRecordRetention.IsClash(Assert.Throws<DbUpdateConcurrencyException>(() => stale.SaveChanges())));
+    }
+
+    // Any other failure on save, here a duplicate learning record, is no clash and goes up as a failure.
+    [Fact]
+    public async Task OtherSaveFailure_IsNoClash()
+    {
+        var frank = NewUser("frank");
+        var record = Record(frank, Guid.NewGuid(), Now.AddDays(-1), true, 2);
+        await SeedAsync([], [record]);
+
+        var exception = Assert.Throws<DbUpdateException>(() => Query(db =>
+        {
+            db.LearningRecords.Add(LearningRecord.Create(
+                record.AnswerId, frank, record.TopicId, Guid.NewGuid(), null, true, 2, 4200, null, Mode.Practice, Now));
+            return db.SaveChanges();
+        }));
+
+        Assert.False(LearningRecordRetention.IsClash(exception));
+    }
+
     // The fixture's run is a singleton, the hosted service is the same one.
     [Fact]
     public void TheRun_IsTheHostedService()
