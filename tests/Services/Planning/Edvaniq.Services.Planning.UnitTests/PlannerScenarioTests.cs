@@ -182,9 +182,9 @@ public sealed class PlannerScenarioTests
         var (a, b, c) = (Id(1), Id(2), Id(3));
         List<TopicToPlan> Topics(int masteryOfA, bool weakness) =>
         [
-            new(a, TodayPlanner.Size, masteryOfA, IsNew: false, IsWeakness: weakness),
-            new(b, TodayPlanner.Size, 50, IsNew: false),
-            new(c, TodayPlanner.Size, 50, IsNew: false),
+            new(a, TodayPlanner.DefaultSize, masteryOfA, IsNew: false, IsWeakness: weakness),
+            new(b, TodayPlanner.DefaultSize, 50, IsNew: false),
+            new(c, TodayPlanner.DefaultSize, 50, IsNew: false),
         ];
 
         var before = StudyPlanner.Plan(Topics(20, weakness: true), budget, Today, examDay: null);

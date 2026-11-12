@@ -27,6 +27,10 @@ public sealed class DocumentAnalyzedHandler(
 
         var goal = integrationEvent.LearningGoalId ?? NoLearningGoal;
 
+        // The TopicSet before the topics: an analysis or rename that commits after this read makes this save lose and come
+        // again on the new state, instead of the known topics being stale (#322).
+        await state.TouchAsync(owner, goal, cancellationToken);
+
         // The user's topics without a goal join the first one there is. They keep their ids, so questions and records
         // stay with them. Once moved there are none left, a later analysis moves nothing.
         IReadOnlyList<Topic> moved = goal == NoLearningGoal ? [] : await topics.OfGoalAsync(owner, NoLearningGoal, cancellationToken);
@@ -42,11 +46,6 @@ public sealed class DocumentAnalyzedHandler(
         if (import.Topics.Count > 0 || moved.Count > 0)
         {
             await changes.AnnounceAsync(owner, goal, cancellationToken);
-        }
-        else
-        {
-            // Sections only: nothing to announce, but a deletion or another analysis on the goal must not meet them halfway.
-            await state.TouchAsync(owner, goal, cancellationToken);
         }
 
         if (moved.Count > 0)
