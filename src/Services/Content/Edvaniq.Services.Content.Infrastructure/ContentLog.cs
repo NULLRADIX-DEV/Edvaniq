@@ -36,7 +36,7 @@ internal static partial class ContentLog
     [LoggerMessage(EventId = 3033, EventName = "AiBudgetMissing", Level = LogLevel.Warning, Message = "AI budget: no monthly budget is set, the AI has no limit")]
     public static partial void AiBudgetMissing(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "AI budget: could not be read at the start ({Error})")]
+    [LoggerMessage(EventId = 3034, EventName = "AiBudgetUnknown", Level = LogLevel.Warning, Message = "AI budget: could not be read at the start ({Error})")]
     public static partial void AiBudgetUnknown(ILogger logger, string error);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "The AI budget is used up, the {Task} of document {DocumentId} is marked as failed")]

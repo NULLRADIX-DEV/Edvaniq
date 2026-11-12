@@ -276,7 +276,14 @@ Ohne Budget gibt es kein Limit, der Worker schreibt dann beim Start eine Warnung
 
 Ist das Budget aufgebraucht, lehnt die Content-Api Einfügen, Upload und Neustart mit 429 und „Das KI-Kontingent für diesen Monat ist aufgebraucht. Versuch es im nächsten Monat noch einmal.“ ab, ohne etwas zu speichern. Der Worker lässt Dokumente, die die KI noch bräuchten, mit derselben Meldung scheitern. Ein Aufruf, der gerade läuft, kann das Budget um seine eigenen Kosten überschreiten.
 
-Der erste KI-Aufruf eines Monats, der 80 % des Budgets verbraucht findet, schreibt einmal eine Warnung ins Log, der erste, der es aufgebraucht findet, einmal einen Fehler. Beide nennen nur den Prozentsatz. Der Betrieb erkennt sie an den Event-Namen `AiBudgetWarning` und `AiBudgetExhausted` und am Anfang „AI budget:“. Beides bleibt so, auch wenn sich der Text ändert. Fehlt das Budget, heißt die Zeile `AiBudgetMissing`.
+Der erste KI-Aufruf eines Monats, der 80 % des Budgets verbraucht findet, schreibt einmal eine Warnung ins Log, der erste, der es aufgebraucht findet, einmal einen Fehler. Beide nennen nur den Prozentsatz. Für den Betrieb bestimmt sind alle Zeilen, deren Text mit „AI budget:“ beginnt. Dieser Anfang, die Stufe und die Event-IDs bleiben, auch wenn sich der übrige Text ändert:
+
+| Event-ID | Name | Stufe | Wann |
+|---|---|---|---|
+| 3031 | `AiBudgetWarning` | Warning | 80 % verbraucht, einmal je Monat |
+| 3032 | `AiBudgetExhausted` | Error | Budget aufgebraucht, einmal je Monat |
+| 3033 | `AiBudgetMissing` | Warning | kein Budget gesetzt, beim Start des Workers |
+| 3034 | `AiBudgetUnknown` | Warning | Budget beim Start nicht lesbar |
 
 Schalter und Budget sitzen vor dem `IChatClient` des Content-Workers (`AiGate`), den jeder KI-Aufruf passiert. Die Content-Api fragt mit derselben Summe (`IAiBudget`). Ruft später ein anderer Service eine KI, muss er beides beachten.
 
