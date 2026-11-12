@@ -3,6 +3,7 @@
 @using Microsoft.JSInterop
 @implements IDisposable
 @inject ILearningGoals Goals
+@inject ITopicEntries TopicEntries
 @inject IServiceProvider Services
 
 @* Leaving the page would throw away what was entered, so the browser asks first. *@
@@ -18,7 +19,40 @@
             {
                 <p>@FeedbackTexts.Goal.NotFirst</p>
             }
+            @if (topicsDone && pendingTopics.Count == 0 && rejectedTopics.Count == 0 && addedTopics > 0)
+            {
+                <p>@FeedbackTexts.Goal.TopicsAdded</p>
+            }
         </Notice>
+        @if (pendingTopics.Count > 0 && topicsSignedOut)
+        {
+            <Notice Kind="NoticeKind.Info" class="goal-topics-missing">
+                <p>@FeedbackTexts.Goal.TopicsSignedOut</p>
+                <ul>@foreach (var topic in pendingTopics)
+                    {
+                        <li>@topic</li>
+                    }</ul>
+            </Notice>
+        }
+        else if (pendingTopics.Count > 0 && topicsDone)
+        {
+            <ConnectionProblem Title="@FeedbackTexts.Goal.TopicsFailed" TraceId="@topicsTrace">
+                <ul class="goal-topics-missing">@foreach (var topic in pendingTopics)
+                    {
+                        <li>@topic</li>
+                    }</ul>
+            </ConnectionProblem>
+        }
+        @if (rejectedTopics.Count > 0)
+        {
+            <Notice Kind="NoticeKind.Error" class="goal-topics-rejected">
+                <p>@FeedbackTexts.Goal.TopicsRejected</p>
+                <ul>@foreach (var (topic, message) in rejectedTopics)
+                    {
+                        <li>@topic: @message</li>
+                    }</ul>
+            </Notice>
+        }
     }
     else if (signedOut)
     {
@@ -37,7 +71,10 @@
 
 @if (saved is not null)
 {
-    <StateActions Href="themen" LinkText="@FeedbackTexts.Goal.SavedLink">
+    @* Only what failed on the way goes again, the goal is there. *@
+    <StateActions Href="themen" LinkText="@FeedbackTexts.Goal.SavedLink"
+                  ActionText="@(pendingTopics.Count > 0 && !topicsSignedOut ? (saving ? FeedbackTexts.Goal.Saving : FeedbackTexts.Goal.TopicsRetry) : null)"
+                  OnAction="AddTopicsAsync">
         <a href="lernziele">@FeedbackTexts.Goal.ToGoals</a>
     </StateActions>
 }
@@ -85,6 +122,18 @@ else
                                  ValueChanged="value => Set(Fields.OutputLanguage, () => language = value)"
                                  Error="@ErrorOf(Fields.OutputLanguage)" />
                     break;
+                case 4:
+                    @for (var i = 0; i < topics.Count; i++)
+                    {
+                        var index = i;
+                        <TextField @key="index" @ref="topicFields[index]" Id="@TopicId(index)"
+                                   Label="@string.Format(System.Globalization.CultureInfo.InvariantCulture, FeedbackTexts.Goal.TopicLabel, index + 1)"
+                                   Hint="@(index == 0 ? FeedbackTexts.Goal.TopicsHint : null)"
+                                   Value="@topics[index]" ValueChanged="value => SetTopic(index, value)"
+                                   Error="@topicErrors.GetValueOrDefault(index)" autocomplete="off" />
+                    }
+                    <button type="button" class="goal-more" @onclick="AddTopicField">@FeedbackTexts.Goal.MoreTopic</button>
+                    break;
                 default:
                     <dl class="goal-summary">
                         <dt>@FeedbackTexts.Goal.KindLabel</dt>
@@ -104,6 +153,20 @@ else
                         <dd>@TextOf(FeedbackTexts.Goal.Levels, level)</dd>
                         <dt>@FeedbackTexts.Goal.OutputLanguageLabel</dt>
                         <dd>@TextOf(FeedbackTexts.Goal.OutputLanguages, language)</dd>
+                        <dt>@FeedbackTexts.Goal.TopicsLabel</dt>
+                        <dd>
+                            @if (TopicsToAdd is { Count: > 0 } named)
+                            {
+                                <ul class="goal-topics">@foreach (var topic in named)
+                                    {
+                                        <li>@topic</li>
+                                    }</ul>
+                            }
+                            else
+                            {
+                                @FeedbackTexts.Goal.NoAnswer
+                            }
+                        </dd>
                     </dl>
                     break;
             }
@@ -123,7 +186,9 @@ else
 }
 
 @code {
-    private const int Steps = 4;
+    private const int Steps = 5;
+
+    private const int TopicsStep = 4;
 
     private const string DraftKey = nameof(GoalDraft);
 
@@ -163,6 +228,8 @@ else
     private string? level;
     private string language = LearningGoalValues.DefaultOutputLanguage;
     private Dictionary<string, string> errors = [];
+    private List<string> topics = [""];
+    private readonly Dictionary<int, string> topicErrors = [];
 
     private bool saving;
     private bool saveFailed;
@@ -174,7 +241,17 @@ else
     // Planning says whether the plan follows the new goal (InPlan). Only the first one does for now.
     private bool notFirst;
 
+    // The topics go to Knowledge once the goal is saved. What didn't get there waits for another go (pendingTopics),
+    // what Knowledge refused stays with its reason.
+    private List<string> pendingTopics = [];
+    private readonly List<(string Topic, string Message)> rejectedTopics = [];
+    private int addedTopics;
+    private bool topicsDone;
+    private bool topicsSignedOut;
+    private string? topicsTrace;
+
     private ElementReference stepHeading;
+    private readonly Dictionary<int, TextField> topicFields = [];
     private ChoiceField? kindField;
     private TextField? nameField;
     private SelectField? examTypeField;
@@ -186,15 +263,22 @@ else
 
     private bool IsExam => kind == LearningGoalValues.ExamPreparation;
 
-    private bool Unsaved => saved is null && (kind is not null || !string.IsNullOrWhiteSpace(name) || !string.IsNullOrWhiteSpace(goal));
+    private bool Unsaved => saved is null
+        && (kind is not null || !string.IsNullOrWhiteSpace(name) || !string.IsNullOrWhiteSpace(goal) || TopicsToAdd.Count > 0);
+
+    // Each name once, as Knowledge would take it: the same name twice makes no second topic.
+    private IReadOnlyList<string> TopicsToAdd => TopicValues.Distinct(topics);
 
     private string StepName => step switch
     {
         1 => FeedbackTexts.Goal.KindStep,
         2 => FeedbackTexts.Goal.AboutStep,
         3 => FeedbackTexts.Goal.LevelStep,
+        TopicsStep => FeedbackTexts.Goal.TopicsStep,
         _ => FeedbackTexts.Goal.SummaryStep,
     };
+
+    private static string TopicId(int index) => $"goal-topic-{index + 1}";
 
     private string DateText =>
         DateOnly.TryParseExact(examDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var date)
@@ -208,6 +292,7 @@ else
         {
             (step, kind, name, examType, examDate, goal, level, language) =
                 (draft.Step, draft.Kind, draft.Name, draft.ExamType, draft.ExamDate, draft.Goal, draft.Level, draft.Language);
+            topics = draft.Topics is { Count: > 0 } kept ? [.. kept] : [""];
             draftBack = true;
         }
     }
@@ -221,6 +306,9 @@ else
             switch (target)
             {
                 case null:
+                    break;
+                case { } topic when TopicIndexOf(topic) is { } index && topicFields.TryGetValue(index, out var topicField):
+                    await topicField.FocusAsync();
                     break;
                 case Fields.Kind when kindField is not null:
                     await kindField.FocusAsync();
@@ -265,6 +353,27 @@ else
 
     private string? ErrorOf(string field) => errors.GetValueOrDefault(field);
 
+    private void SetTopic(int index, string value)
+    {
+        topics[index] = value;
+        topicErrors.Remove(index);
+    }
+
+    // A new empty field at the end, with the focus in it.
+    private void AddTopicField()
+    {
+        topics.Add("");
+        focusNext = TopicFocus(topics.Count - 1);
+    }
+
+    private static string TopicFocus(int index) => $"topic:{index}";
+
+    private static int? TopicIndexOf(string target) =>
+        target.StartsWith("topic:", StringComparison.Ordinal)
+        && int.TryParse(target["topic:".Length..], System.Globalization.CultureInfo.InvariantCulture, out var index)
+            ? index
+            : null;
+
     private async Task NextAsync()
     {
         if (saving)
@@ -287,6 +396,11 @@ else
             if (FirstError(step) is { } invalid)
             {
                 focusNext = invalid;
+                return;
+            }
+
+            if (step == TopicsStep && !CheckTopics())
+            {
                 return;
             }
 
@@ -344,7 +458,88 @@ else
     private string? FirstError(int of) =>
         Fields.All.FirstOrDefault(field => errors.ContainsKey(field) && StepOf[field] == of);
 
+    // Empty fields are fine, they make no topic. Only a name too long is said at its field, the first gets the focus.
+    private bool CheckTopics()
+    {
+        topicErrors.Clear();
+        for (var i = 0; i < topics.Count; i++)
+        {
+            if (topics[i].Trim().Length > TopicValues.NameMaxLength)
+            {
+                topicErrors[i] = FeedbackTexts.Goal.TopicTooLong;
+            }
+        }
+
+        if (topicErrors.Count == 0)
+        {
+            return true;
+        }
+
+        focusNext = TopicFocus(topicErrors.Keys.Min());
+        return false;
+    }
+
     private async Task SaveAsync()
+    {
+        if (saved is null)
+        {
+            await SaveGoalAsync();
+        }
+
+        if (saved is not null && !topicsDone)
+        {
+            pendingTopics = [.. TopicsToAdd];
+            await AddTopicsAsync();
+        }
+    }
+
+    // One after the other into the goal just saved. Already there counts as added. Without a login or a connection
+    // the rest would fail the same way, so it stops there and keeps them for another go.
+    private async Task AddTopicsAsync()
+    {
+        if (saving || saved is null)
+        {
+            return;
+        }
+
+        saving = true;
+        topicsTrace = null;
+        try
+        {
+            foreach (var topic in pendingTopics.ToList())
+            {
+                var outcome = await TopicEntries.AddAsync(saved.Id, topic, life.Token);
+                if (outcome.Result == CallResult.Ok)
+                {
+                    pendingTopics.Remove(topic);
+                    addedTopics++;
+                    continue;
+                }
+
+                if (outcome.Result == CallResult.Rejected)
+                {
+                    pendingTopics.Remove(topic);
+                    rejectedTopics.Add((topic, outcome.Messages?.FirstOrDefault() ?? FeedbackTexts.Goal.TopicTooLong));
+                    continue;
+                }
+
+                topicsSignedOut = outcome.Result == CallResult.SignedOut;
+                topicsTrace = outcome.TraceId;
+                break;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            saving = false;
+            topicsDone = true;
+        }
+    }
+
+    private async Task SaveGoalAsync()
     {
         saving = true;
         saveFailed = false;
@@ -416,14 +611,15 @@ else
         string? ExamDate,
         string? Goal,
         string? Level,
-        string Language);
+        string Language,
+        IReadOnlyList<string>? Topics = null);
 
     // Leaving for the login keeps what was entered, for the same account only (Drafts).
     public void Dispose()
     {
         if (signedOut && saved is null)
         {
-            Services.GetService<Drafts>()?.Keep(DraftKey, new GoalDraft(step, kind, name, examType, examDate, goal, level, language));
+            Services.GetService<Drafts>()?.Keep(DraftKey, new GoalDraft(step, kind, name, examType, examDate, goal, level, language, [.. topics]));
         }
 
         life.Cancel();

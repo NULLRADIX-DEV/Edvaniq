@@ -14,11 +14,15 @@ public sealed class GoalWizardPageTests(WebShell shell)
     public async Task KeyboardAlone_LeadsThroughEveryStep_OnAPhone()
     {
         var created = new List<string>();
-        await using var page = await shell.OpenSignedInAsync(Path, WebShell.PhoneWidth, prepare: browser =>
-            Material.AnswerGoalsAsync(browser, created));
+        var added = new List<string>();
+        await using var page = await shell.OpenSignedInAsync(Path, WebShell.PhoneWidth, prepare: async browser =>
+        {
+            await Material.AnswerGoalsAsync(browser, created);
+            await Material.AnswerEnteredTopicsAsync(browser, added);
+        });
         var keys = page.Page.Keyboard;
         var heading = page.Page.Locator("#goal-step-heading");
-        await Assertions.Expect(heading).ToContainTextAsync("Schritt 1 von 4");
+        await Assertions.Expect(heading).ToContainTextAsync("Schritt 1 von 5");
         await CheckAsync(page.Page, "step 1");
 
         // Into the group of kinds, the first one is chosen with the space bar, then on to "Weiter".
@@ -27,7 +31,7 @@ public sealed class GoalWizardPageTests(WebShell shell)
         await keys.PressAsync("Tab");
         await keys.PressAsync("Enter");
 
-        await Assertions.Expect(heading).ToContainTextAsync("Schritt 2 von 4");
+        await Assertions.Expect(heading).ToContainTextAsync("Schritt 2 von 5");
         await Assertions.Expect(heading).ToBeFocusedAsync();
         await CheckAsync(page.Page, "step 2");
         await keys.PressAsync("Tab");
@@ -37,7 +41,7 @@ public sealed class GoalWizardPageTests(WebShell shell)
         await keys.PressAsync("Shift+Tab");
         await keys.PressAsync("Enter");
 
-        await Assertions.Expect(heading).ToContainTextAsync("Schritt 3 von 4");
+        await Assertions.Expect(heading).ToContainTextAsync("Schritt 3 von 5");
         await Assertions.Expect(heading).ToBeFocusedAsync();
         await CheckAsync(page.Page, "step 3");
         await keys.PressAsync("Tab");
@@ -48,9 +52,23 @@ public sealed class GoalWizardPageTests(WebShell shell)
         await keys.PressAsync("Tab");
         await keys.PressAsync("Enter");
 
-        await Assertions.Expect(heading).ToContainTextAsync("Schritt 4 von 4");
-        await Assertions.Expect(page.Page.Locator(".goal-summary")).ToContainTextAsync("Biologie-Klausur");
+        // #317: two topics, the second one the same name as the first, the field for it from the button.
+        await Assertions.Expect(heading).ToContainTextAsync("Schritt 4 von 5");
+        await Assertions.Expect(heading).ToBeFocusedAsync();
         await CheckAsync(page.Page, "step 4");
+        await keys.PressAsync("Tab");
+        await keys.TypeAsync("Zellatmung");
+        await keys.PressAsync("Tab");
+        await keys.PressAsync("Enter");
+        await Assertions.Expect(page.Page.Locator("#goal-topic-2")).ToBeFocusedAsync();
+        await keys.TypeAsync("  zellatmung");
+        await CheckAsync(page.Page, "step 4 with two topics");
+        await keys.PressAsync("Enter");
+
+        await Assertions.Expect(heading).ToContainTextAsync("Schritt 5 von 5");
+        await Assertions.Expect(page.Page.Locator(".goal-summary")).ToContainTextAsync("Biologie-Klausur");
+        await Assertions.Expect(page.Page.Locator(".goal-topics li")).ToHaveTextAsync(["Zellatmung"]);
+        await CheckAsync(page.Page, "step 5");
         await keys.PressAsync("Tab");
         await keys.PressAsync("Tab");
         await keys.PressAsync("Enter");
@@ -64,6 +82,18 @@ public sealed class GoalWizardPageTests(WebShell shell)
         Assert.Equal("Klausur", goal.GetProperty("examType").GetString());
         Assert.Equal("UpperSecondary", goal.GetProperty("level").GetString());
         Assert.Equal("en", goal.GetProperty("outputLanguage").GetString());
+
+        // #317 AC1: the topic is in the list of topics, once.
+        await Assertions.Expect(page.Page.Locator("[role=status] .goal-saved")).ToContainTextAsync("Deine Themen stehen jetzt in deiner Themenübersicht.");
+        using var topic = JsonDocument.Parse(Assert.Single(added));
+        Assert.Equal("Zellatmung", topic.RootElement.GetProperty("name").GetString());
+        Assert.NotEqual(Guid.Empty, topic.RootElement.GetProperty("learningGoalId").GetGuid());
+        await page.Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Text einfügen" }).FocusAsync();
+        await keys.PressAsync("Enter");
+        await Assertions.Expect(page.Page).ToHaveURLAsync(shell.Address + "/themen");
+        var listed = page.Page.Locator(".topic-list > li");
+        await Assertions.Expect(listed).ToHaveCountAsync(1);
+        await Assertions.Expect(listed).ToContainTextAsync("Zellatmung");
     }
 
     // An error at its field is as readable as the rest, and the focus goes to the field.
@@ -72,7 +102,7 @@ public sealed class GoalWizardPageTests(WebShell shell)
     {
         await using var page = await shell.OpenSignedInAsync(Path, WebShell.PhoneWidth, prepare: browser =>
             Material.AnswerGoalsAsync(browser, []));
-        await Assertions.Expect(page.Page.Locator("#goal-step-heading")).ToContainTextAsync("Schritt 1 von 4");
+        await Assertions.Expect(page.Page.Locator("#goal-step-heading")).ToContainTextAsync("Schritt 1 von 5");
 
         await page.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Weiter" }).PressAsync("Enter");
 

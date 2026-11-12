@@ -83,12 +83,12 @@ public sealed class LearningMaterialRouteTests
         Assert.Equal(0, gateway.Requests);
     }
 
-    // Only what the page needs goes on: no single document, no change of a topic, no other path of the services.
+    // Only what the page needs goes on: no single document, no change of a topic, no other path of the services. Adding a
+    // topic has its own route (TopicRouteTests).
     [Theory]
     [InlineData("DELETE", "/api/content/documents")]
     [InlineData("PUT", "/api/content/documents")]
     [InlineData("GET", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01")]
-    [InlineData("POST", "/api/knowledge/topics")]
     [InlineData("PATCH", "/api/knowledge/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01")]
     [InlineData("GET", "/api/knowledge/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01")]
     [InlineData("GET", "/api/content/sections")]

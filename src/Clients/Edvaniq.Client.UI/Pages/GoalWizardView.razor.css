@@ -36,11 +36,13 @@
 }
 
 .button,
-.goal-back {
+.goal-back,
+.goal-more {
     min-height: 2.75rem;
 }
 
-.goal-back {
+.goal-back,
+.goal-more {
     padding: var(--space-2) var(--space-4);
     background: var(--color-surface);
     color: var(--color-ink);
@@ -48,6 +50,12 @@
     font-weight: 600;
 }
 
-.goal-back:hover {
+.goal-back:hover,
+.goal-more:hover {
     border-color: var(--color-ink);
+}
+
+.goal-topics {
+    margin: 0;
+    padding-left: var(--space-4);
 }
