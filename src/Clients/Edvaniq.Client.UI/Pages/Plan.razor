@@ -1,0 +1,16 @@
+@page "/plan"
+@attribute [Authorize]
+
+<PageTitle>Dein Plan – Edvaniq</PageTitle>
+
+<h1>@FeedbackTexts.Week.Heading</h1>
+
+@* Only the browser talks to Planning. While the page is prerendered on the server there is nobody to ask. *@
+@if (RendererInfo.IsInteractive)
+{
+    <WeekPlanView />
+}
+else
+{
+    <PageLoading />
+}

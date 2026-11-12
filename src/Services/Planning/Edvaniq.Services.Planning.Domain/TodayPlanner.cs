@@ -29,6 +29,18 @@ public static class TodayPlanner
         DateTime utcNow,
         IReadOnlySet<Guid>? readyTopics = null,
         IReadOnlySet<Guid>? foundations = null,
+        IReadOnlyDictionary<Guid, int>? sizes = null) =>
+        Week(topicIds, standings, budget, utcNow, readyTopics, foundations, sizes).Today;
+
+    // The whole rolling week (#379): StudyPlanner.RollingDays days from today, one without blocks with an empty list.
+    // Today's plan is its first day, so the two can never tell different stories.
+    public static WeekPlan Week(
+        IReadOnlyCollection<Guid> topicIds,
+        IReadOnlyDictionary<Guid, TopicStanding> standings,
+        DailyBudget budget,
+        DateTime utcNow,
+        IReadOnlySet<Guid>? readyTopics = null,
+        IReadOnlySet<Guid>? foundations = null,
         IReadOnlyDictionary<Guid, int>? sizes = null)
     {
         ArgumentNullException.ThrowIfNull(topicIds);
@@ -39,14 +51,14 @@ public static class TodayPlanner
 
         if (topicIds.Count == 0)
         {
-            return new TodayPlan(today, [], TodayPlanEmpty.NoTopics);
+            return WeekPlan.Of(today, StudyPlan.Empty, TodayPlanEmpty.NoTopics);
         }
 
         var distinct = topicIds.Distinct().ToList();
         List<Guid> notReady = readyTopics is null ? [] : [.. distinct.Where(id => !readyTopics.Contains(id)).Order()];
         if (notReady.Count == distinct.Count)
         {
-            return new TodayPlan(today, [], TodayPlanEmpty.QuestionsPending) { NotReady = notReady };
+            return WeekPlan.Of(today, StudyPlan.Empty, TodayPlanEmpty.QuestionsPending) with { NotReady = notReady };
         }
 
         var topics = distinct
@@ -60,13 +72,18 @@ public static class TodayPlanner
             })
             .ToList();
         var week = StudyPlanner.Plan(topics, budget, today, examDay: null);
-        var blocks = week.Days.FirstOrDefault(day => day.StudyDay == today)?.Blocks ?? [];
-        return new TodayPlan(today, blocks, blocks.Count == 0 ? TodayPlanEmpty.AllMastered : null)
+        return WeekPlan.Of(today, week, TodayPlanEmpty.AllMastered) with
         {
             Shortened = week.Shortened,
             NotReady = notReady,
         };
     }
+
+    // How many days of the week the list shows (#379): without an exam all of them, with one only the study days before
+    // the exam day, as StudyPlanner counts them, and never less than today. The planner itself doesn't weigh the exam
+    // yet (#513, #524), so this only cuts the list and today stays as it is.
+    public static int DaysShown(DateOnly today, DateOnly? examDay) =>
+        examDay is { } exam ? Math.Clamp(exam.DayNumber - today.DayNumber, 1, StudyPlanner.RollingDays) : StudyPlanner.RollingDays;
 
     // Mastery kept in 0 to 100, so a wrong value from outside can't break the plan. A state Planning doesn't know is
     // one LearningEngine worked out for a topic it knows, so it isn't new.
@@ -96,6 +113,32 @@ public sealed record TodayPlan(DateOnly StudyDay, IReadOnlyList<Block> Blocks, T
     public IReadOnlyList<Guid> Shortened { get; init; } = [];
 
     public IReadOnlyList<Guid> NotReady { get; init; } = [];
+}
+
+// The days of the rolling week from today on, each with its blocks, Days[0] is today. Empty and the lists as in
+// TodayPlan, Empty for the whole week: null as soon as one day has blocks. EmptyDay: why a day has no blocks.
+public sealed record WeekPlan(IReadOnlyList<DayPlan> Days, TodayPlanEmpty? Empty, TodayPlanEmpty EmptyDay)
+{
+    public IReadOnlyList<Guid> Shortened { get; init; } = [];
+
+    public IReadOnlyList<Guid> NotReady { get; init; } = [];
+
+    public DateOnly StudyDay => Days[0].StudyDay;
+
+    public TodayPlan Today => new(StudyDay, Days[0].Blocks, Days[0].Blocks.Count == 0 ? EmptyDay : null)
+    {
+        Shortened = Shortened,
+        NotReady = NotReady,
+    };
+
+    internal static WeekPlan Of(DateOnly today, StudyPlan plan, TodayPlanEmpty emptyDay)
+    {
+        var days = Enumerable.Range(0, StudyPlanner.RollingDays)
+            .Select(offset => today.AddDays(offset))
+            .Select(day => new DayPlan(day, plan.Days.FirstOrDefault(planned => planned.StudyDay == day)?.Blocks ?? []))
+            .ToList();
+        return new WeekPlan(days, days.Any(day => day.Blocks.Count > 0) ? null : emptyDay, emptyDay);
+    }
 }
 
 public enum TodayPlanEmpty

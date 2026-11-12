@@ -33,6 +33,7 @@ builder.Services.AddScoped<ILearningMaterial>(services => new HttpLearningMateri
 builder.Services.AddScoped<ITopicDirectory>(services => new HttpTopicDirectory(Watched(services)));
 builder.Services.AddScoped<IQuiz>(services => new HttpQuiz(Watched(services)));
 builder.Services.AddScoped<ITodayPlan>(services => new HttpTodayPlan(Watched(services)));
+builder.Services.AddScoped<IWeekPlan>(services => new HttpWeekPlan(Watched(services)));
 builder.Services.AddScoped<ILearningGoals>(services => new HttpLearningGoals(Watched(services)));
 builder.Services.AddScoped<ITopicEntries>(services => new HttpTopicEntries(Watched(services)));
 builder.Services.AddScoped<IDailyBudget>(services => new HttpDailyBudget(Watched(services)));
