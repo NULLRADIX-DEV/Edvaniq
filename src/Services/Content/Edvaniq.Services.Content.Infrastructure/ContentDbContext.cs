@@ -1,5 +1,6 @@
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Infrastructure;
+using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Domain;
 
 using Microsoft.EntityFrameworkCore;
@@ -32,6 +33,10 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
     public DbSet<GenerationCharge> GenerationCharges => Set<GenerationCharge>();
 
     public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
+
+    public DbSet<TopicSummary> TopicSummaries => Set<TopicSummary>();
+
+    public DbSet<TopicSummarySection> TopicSummarySections => Set<TopicSummarySection>();
 
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
@@ -116,5 +121,23 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
         // The id names the bytes in the file store, so the code that wrote them sets it.
         modelBuilder.Entity<StoredFile>().Property(item => item.Id).ValueGeneratedNever();
+
+        // #344: one summary per topic and length. Its sections go with it, and with every document they come from.
+        var summary = modelBuilder.Entity<TopicSummary>();
+        summary.Property(item => item.Id).ValueGeneratedNever();
+        summary.Property(item => item.Length).HasConversion<string>().HasMaxLength(16);
+        summary.Property(item => item.Status).HasConversion<string>().HasMaxLength(16);
+        summary.Property(item => item.FailureCode).HasConversion<string>().HasMaxLength(32);
+        summary.Property(item => item.Text).HasMaxLength(TopicSummaryGeneration.TextMaxLength);
+        summary.Property(item => item.Model).HasMaxLength(AiAttempt.ModelMaxLength);
+        summary.Property(item => item.PromptVersion).HasMaxLength(AiAttempt.PromptVersionMaxLength);
+        summary.HasIndex(item => new { item.OwnerId, item.TopicId, item.Length }).IsUnique();
+        summary.HasIndex(item => new { item.Status, item.NextAttemptAt });
+        summary.HasMany(item => item.Sections).WithOne().HasForeignKey(item => item.SummaryId).OnDelete(DeleteBehavior.Cascade);
+        summary.Navigation(item => item.Sections).UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        var summarySection = modelBuilder.Entity<TopicSummarySection>();
+        summarySection.Property(item => item.Id).ValueGeneratedNever();
+        summarySection.HasIndex(item => item.DocumentId);
     }
 }

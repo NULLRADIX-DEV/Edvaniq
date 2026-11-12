@@ -68,7 +68,7 @@ public sealed class PromptPrivacyTests : IClassFixture<ServiceFactory>, IDisposa
         using var client = ClientFor(user);
         var id = await PasteAsync(client);
 
-        await AnalyzeWithQuestionsAsync(id);
+        await AnalyzeWithQuestionsAsync(client, user, id);
 
         var requests = provider.Requests.ToList();
         Assert.NotEmpty(requests);
@@ -85,7 +85,7 @@ public sealed class PromptPrivacyTests : IClassFixture<ServiceFactory>, IDisposa
         using var client = ClientFor(user);
         var id = await PasteAsync(client);
 
-        await AnalyzeWithQuestionsAsync(id);
+        await AnalyzeWithQuestionsAsync(client, user, id);
 
         var systems = provider.Requests.SelectMany(request => request.SystemPrompts).ToList();
         var templates = Templates();
@@ -102,15 +102,24 @@ public sealed class PromptPrivacyTests : IClassFixture<ServiceFactory>, IDisposa
             .Select(type => (type, type.GetField("Task", BindingFlags.Public | BindingFlags.Static)?.GetRawConstantValue() as string
                 ?? throw new InvalidOperationException($"{type.Name} has a PromptVersion but no Task its system prompt starts with.")))];
 
-    // Splits the document as the worker does, analyzes it, lets Knowledge take the topics over and fills the pools.
-    private async Task AnalyzeWithQuestionsAsync(Guid id)
+    // Splits the document as the worker does, analyzes it, lets Knowledge take the topics over and fills the pools. Then
+    // asks for the summary of the first topic (#344) and lets the worker write it.
+    private async Task AnalyzeWithQuestionsAsync(HttpClient client, string user, Guid id)
     {
         var chat = ai.Services.GetRequiredService<IChatClient>();
         await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(id, TestContext.Current.CancellationToken);
         await ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, chat).AnalyzeAsync(id, TestContext.Current.CancellationToken);
-        service.Knowledge.TakeOver(Assert.Single(await OutboxAsync<DocumentAnalyzed>(id)));
+        var topics = service.Knowledge.TakeOver(Assert.Single(await OutboxAsync<DocumentAnalyzed>(id)));
         await ActivatorUtilities.CreateInstance<QuestionPools>(service.Services, chat).FinishAsync(id, TestContext.Current.CancellationToken);
         Assert.NotEmpty(await OutboxAsync<ItemsGenerated>(id));
+
+        var topic = topics.First(item => item.SectionIds.Count > 0);
+        service.Material.Give(user, topic.Id, [.. topic.SectionIds.Select(section => (id, section))]);
+        using var requested = await client.PostAsync($"/topics/{topic.Id}/summaries/short", null, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Accepted, requested.StatusCode);
+        await ActivatorUtilities.CreateInstance<SummaryWriter>(service.Services, chat).WriteWaitingAsync(TestContext.Current.CancellationToken);
+        var summary = await client.GetFromJsonAsync<JsonElement>($"/topics/{topic.Id}/summaries/short", TestContext.Current.CancellationToken);
+        Assert.Equal("ready", summary.GetProperty("status").GetString());
     }
 
     private async Task<List<T>> OutboxAsync<T>(Guid documentId)

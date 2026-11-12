@@ -32,6 +32,21 @@ builder.Services.AddHttpClient<ILearningGoals, PlanningLearningGoals>(client => 
         options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(10);
     });
 
+// Knowledge names the sections of a topic for its summary (#344), asked with the caller's own token like Planning.
+#pragma warning disable EXTEXP0001
+builder.Services.AddHttpClient<ITopicMaterial, KnowledgeTopicMaterial>(client => client.BaseAddress = KnowledgeTopics.Address)
+    .AddHttpMessageHandler<ForwardUserToken>()
+    .RemoveAllResilienceHandlers()
+#pragma warning restore EXTEXP0001
+    .AddStandardResilienceHandler(options =>
+    {
+        options.TotalRequestTimeout.Timeout = PlanningLearningGoals.TotalTimeout;
+        options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(2);
+        options.Retry.MaxRetryAttempts = 2;
+        options.Retry.Delay = TimeSpan.FromMilliseconds(250);
+        options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(10);
+    });
+
 if (DocumentCommand.Matches(args))
 {
     DocumentCommand.Register(builder.Services);
@@ -77,6 +92,7 @@ app.UseAuthorization();
 app.MapGet("/me", (ICurrentUser user) => new { user.Id });
 app.MapDocumentEndpoints();
 app.MapQuotaEndpoints();
+app.MapSummaryEndpoints();
 
 app.Run();
 
