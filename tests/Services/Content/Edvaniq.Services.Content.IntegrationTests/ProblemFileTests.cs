@@ -10,9 +10,9 @@ namespace Edvaniq.Services.Content.IntegrationTests;
 // No database needed.
 public sealed class ProblemFileTests
 {
-    private const long StreamLimit = 32L * 1024 * 1024;
+    private const long StreamLimit = 16L * 1024 * 1024;
 
-    private const long Budget = 256L * 1024 * 1024;
+    private const long Budget = 64L * 1024 * 1024;
 
     // Packed to about a hundredth, unpacked far beyond what a stream may take. Memory stays low: the stream is counted,
     // not kept.
