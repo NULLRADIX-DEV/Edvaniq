@@ -21,7 +21,7 @@ internal static class TopicEndpoints
                 ? Results.Ok(await TopicResponse.FromAsync(topic, topics, cancellationToken))
                 : Results.NotFound());
 
-        topics.MapPost("/", async (NewTopic request, ITopics topics, CancellationToken cancellationToken) =>
+        topics.MapPost("/", async (NewTopic request, ITopics topics, IServiceScopeFactory scopes, CancellationToken cancellationToken) =>
         {
             var errors = new Dictionary<string, string[]>();
             if (Topic.CheckName(request.Name) is { } nameError)
@@ -40,37 +40,38 @@ internal static class TopicEndpoints
                 return Results.ValidationProblem(errors);
             }
 
-            var added = await topics.AddAsync(request.LearningGoalId ?? Guid.Empty, request.ParentId, request.Name!, cancellationToken);
+            var added = await TopicChange.RunAsync(
+                scopes, (fresh, token) => fresh.AddAsync(request.LearningGoalId ?? Guid.Empty, request.ParentId, request.Name!, token), cancellationToken);
             return added.Topic is { } topic
                 ? Results.Created($"/topics/{topic.Id}", await TopicResponse.FromAsync(topic, topics, cancellationToken))
                 : Failure(added.Error);
         });
 
-        topics.MapPatch("/{id:guid}", async (Guid id, RenamedTopic request, ITopics topics, CancellationToken cancellationToken) =>
+        topics.MapPatch("/{id:guid}", async (Guid id, RenamedTopic request, ITopics topics, IServiceScopeFactory scopes, CancellationToken cancellationToken) =>
         {
             if (Topic.CheckName(request.Name) is { } error)
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]> { [nameof(request.Name)] = [error] });
             }
 
-            var renamed = await topics.RenameAsync(id, request.Name!, cancellationToken);
+            var renamed = await TopicChange.RunAsync(scopes, (fresh, token) => fresh.RenameAsync(id, request.Name!, token), cancellationToken);
             return renamed.Topic is { } topic
                 ? Results.Ok(await TopicResponse.FromAsync(topic, topics, cancellationToken))
                 : Failure(renamed.Error);
         });
 
         // Hiding takes the subtopics along, showing brings them back in their own state. Both may be repeated.
-        topics.MapPut("/{id:guid}/hidden", (Guid id, ITopics topics, CancellationToken cancellationToken) =>
-            SetHiddenAsync(id, true, topics, cancellationToken));
-        topics.MapDelete("/{id:guid}/hidden", (Guid id, ITopics topics, CancellationToken cancellationToken) =>
-            SetHiddenAsync(id, false, topics, cancellationToken));
+        topics.MapPut("/{id:guid}/hidden", (Guid id, ITopics topics, IServiceScopeFactory scopes, CancellationToken cancellationToken) =>
+            SetHiddenAsync(id, true, topics, scopes, cancellationToken));
+        topics.MapDelete("/{id:guid}/hidden", (Guid id, ITopics topics, IServiceScopeFactory scopes, CancellationToken cancellationToken) =>
+            SetHiddenAsync(id, false, topics, scopes, cancellationToken));
 
         return app;
     }
 
-    private static async Task<IResult> SetHiddenAsync(Guid id, bool hidden, ITopics topics, CancellationToken cancellationToken)
+    private static async Task<IResult> SetHiddenAsync(Guid id, bool hidden, ITopics topics, IServiceScopeFactory scopes, CancellationToken cancellationToken)
     {
-        var changed = await topics.SetHiddenAsync(id, hidden, cancellationToken);
+        var changed = await TopicChange.RunAsync(scopes, (fresh, token) => fresh.SetHiddenAsync(id, hidden, token), cancellationToken);
         return changed.Topic is { } topic
             ? Results.Ok(await TopicResponse.FromAsync(topic, topics, cancellationToken))
             : Failure(changed.Error);
@@ -83,6 +84,8 @@ internal static class TopicEndpoints
             statusCode: StatusCodes.Status409Conflict, detail: "Ein Thema mit diesem Namen gibt es hier schon, auch wenn es ausgeblendet ist."),
         TopicError.ParentHidden => Results.Problem(
             statusCode: StatusCodes.Status409Conflict, detail: "Das übergeordnete Thema ist ausgeblendet. Blende zuerst das übergeordnete Thema ein."),
+        TopicError.Busy => Results.Problem(
+            statusCode: StatusCodes.Status409Conflict, detail: "Die Themen wurden gerade geändert. Versuch es noch einmal."),
         TopicError.ParentIsSubtopic => Results.ValidationProblem(new Dictionary<string, string[]>
         {
             [nameof(NewTopic.ParentId)] = ["Ein Unterthema hat keine Unterthemen. Themen haben zwei Ebenen."],

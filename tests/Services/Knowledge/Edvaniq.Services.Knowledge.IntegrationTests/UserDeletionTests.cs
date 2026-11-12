@@ -65,6 +65,7 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         var topic = Topic.Create(user, Guid.NewGuid(), "Zelle", Seed.Now, Guid.NewGuid());
         var subtopic = topic.AddSubtopic("Zellkern", Seed.Now, topic.DocumentId);
         db.Topics.AddRange(topic, subtopic);
+        db.TopicSets.Add(TopicSet.Of(user, topic.LearningGoalId, Seed.Now));
         db.TopicSections.Add(subtopic.AssignSection(topic.DocumentId!.Value, Guid.NewGuid()));
         db.DeletedDocuments.Add(DeletedDocument.Of(user, Guid.NewGuid(), Seed.Now));
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -129,7 +130,8 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
             () => service.Logs.Entries.Any(entry => entry.Message == $"Consumer {Consumer} has handled message {messageId}" && entry.TraceId == traceId),
             "No log line says with the TraceId of the request that the deletion was handled.");
         Assert.Equal(1, InboxEntries(messageId));
-        Assert.Contains(service.Logs.Entries, entry => entry.Message == "Rows of a deleted user to remove: 1" && entry.TraceId == traceId);
+        // The topic and the TopicSet of its learning goal.
+        Assert.Contains(service.Logs.Entries, entry => entry.Message == "Rows of a deleted user to remove: 2" && entry.TraceId == traceId);
     }
 
     // #953: once the deletion is through, a token issued before it is turned away like an invalid one. Others still work.

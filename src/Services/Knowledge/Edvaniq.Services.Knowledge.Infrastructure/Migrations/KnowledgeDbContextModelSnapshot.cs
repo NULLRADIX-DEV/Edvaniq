@@ -203,6 +203,30 @@ namespace Edvaniq.Services.Knowledge.Infrastructure.Migrations
                     b.ToTable("TopicSections");
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Knowledge.Domain.TopicSet", b =>
+                {
+                    b.Property<string>("OwnerId")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<Guid>("LearningGoalId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("OwnerId", "LearningGoalId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("TopicSets");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Knowledge.Domain.Topic", b =>
                 {
                     b.HasOne("Edvaniq.Services.Knowledge.Domain.Topic", null)

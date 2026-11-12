@@ -15,6 +15,8 @@ internal static class Seed
         using var scope = service.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<KnowledgeDbContext>();
         db.Topics.AddRange(topics);
+        db.TopicSets.AddRange(topics.Select(topic => (topic.OwnerId, topic.LearningGoalId)).Distinct()
+            .Select(goal => TopicSet.Of(goal.OwnerId, goal.LearningGoalId, Now)));
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 

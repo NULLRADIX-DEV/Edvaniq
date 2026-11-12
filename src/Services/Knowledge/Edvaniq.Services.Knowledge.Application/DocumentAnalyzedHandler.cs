@@ -9,7 +9,7 @@ namespace Edvaniq.Services.Knowledge.Application;
 // sections (TopicImport), so analysing a document again, or another one on the same topics, adds no topic twice. The
 // inbox drops a redelivered message. Only new or moved topics change the state, sections alone announce nothing.
 public sealed class DocumentAnalyzedHandler(
-    IAnalyzedTopics topics, IDeletedDocuments deleted, TopicsChangedEvents changes, TimeProvider time)
+    IAnalyzedTopics topics, IDeletedDocuments deleted, TopicsChangedEvents changes, ITopicState state, TimeProvider time)
     : IIntegrationEventHandler<DocumentAnalyzed>
 {
     // Topics from before the default goal (#215) belong to none. A message without a goal still lands there.
@@ -42,6 +42,11 @@ public sealed class DocumentAnalyzedHandler(
         if (import.Topics.Count > 0 || moved.Count > 0)
         {
             await changes.AnnounceAsync(owner, goal, cancellationToken);
+        }
+        else
+        {
+            // Sections only: nothing to announce, but a deletion or another analysis on the goal must not meet them halfway.
+            await state.TouchAsync(owner, goal, cancellationToken);
         }
 
         if (moved.Count > 0)

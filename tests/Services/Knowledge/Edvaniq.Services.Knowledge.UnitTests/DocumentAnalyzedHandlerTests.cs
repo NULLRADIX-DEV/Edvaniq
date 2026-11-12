@@ -237,7 +237,7 @@ public class DocumentAnalyzedHandlerTests
     }
 
     private static DocumentAnalyzedHandler Handler(FakeTopics topics, FakeOutbox outbox, FakeDeleted? deleted = null) =>
-        new(topics, deleted ?? new FakeDeleted(), new TopicsChangedEvents(topics, outbox, new FixedTime(Now)), new FixedTime(Now));
+        new(topics, deleted ?? new FakeDeleted(), new TopicsChangedEvents(topics, outbox, new FixedTime(Now)), topics, new FixedTime(Now));
 
     private sealed class FakeDeleted : IDeletedDocuments
     {
@@ -279,6 +279,14 @@ public class DocumentAnalyzedHandlerTests
         public Task<IReadOnlyList<TopicInState>> TopicsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<TopicInState>>(
                 [.. All.Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId).Select(topic => new TopicInState(topic.Id, topic.ParentId))]);
+
+        public List<(string Owner, Guid Goal)> Touched { get; } = [];
+
+        public Task TouchAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken)
+        {
+            Touched.Add((ownerId, learningGoalId));
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeOutbox : IEventOutbox

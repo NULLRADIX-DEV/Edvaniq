@@ -25,6 +25,10 @@ internal static partial class MessagingLog
     [LoggerMessage(Level = LogLevel.Warning, Message = "Consumer {Consumer} failed on message {MessageId}, the broker delivers it again")]
     public static partial void HandlerFailed(ILogger logger, Exception exception, string consumer, Guid messageId);
 
+    // Expected and not counted as a failure: the handler waits for something still on its way (MessageNotReadyException).
+    [LoggerMessage(Level = LogLevel.Information, Message = "Consumer {Consumer} is not ready for message {MessageId} yet, the broker delivers it again: {Reason}")]
+    public static partial void HandlerNotReady(ILogger logger, string consumer, Guid messageId, string reason);
+
     [LoggerMessage(Level = LogLevel.Warning, Message = "Consumer {Consumer} dropped message {MessageId}, it still couldn't be handled after {Delivery} deliveries")]
     public static partial void NotReadyDropped(ILogger logger, string consumer, Guid messageId, int delivery);
 

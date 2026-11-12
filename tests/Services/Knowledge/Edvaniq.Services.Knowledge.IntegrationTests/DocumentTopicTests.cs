@@ -152,6 +152,8 @@ public sealed class DocumentTopicTests(ServiceFactory service) : IClassFixture<S
         using var scope = service.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<KnowledgeDbContext>();
         db.Topics.AddRange(topics);
+        db.TopicSets.AddRange(topics.Select(topic => (topic.OwnerId, topic.LearningGoalId)).Distinct()
+            .Select(goal => TopicSet.Of(goal.OwnerId, goal.LearningGoalId, Seed.Now)));
         db.TopicSections.AddRange(sections);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }

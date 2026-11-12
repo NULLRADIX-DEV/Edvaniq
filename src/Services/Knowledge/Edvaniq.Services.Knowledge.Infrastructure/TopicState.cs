@@ -7,8 +7,31 @@ using Microsoft.EntityFrameworkCore;
 namespace Edvaniq.Services.Knowledge.Infrastructure;
 
 // Also runs in a consumer without a current user, so the query drops the owner filter and names the owner itself.
-internal sealed class TopicState(KnowledgeDbContext db) : ITopicState
+internal sealed class TopicState(KnowledgeDbContext db, TimeProvider time) : ITopicState
 {
+    // Once per save and goal: a set the tracker already has as changed counts.
+    public async Task TouchAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken)
+    {
+        if (db.ChangeTracker.Entries<TopicSet>().Any(entry => entry.Entity.OwnerId == ownerId
+                && entry.Entity.LearningGoalId == learningGoalId
+                && entry.State is EntityState.Added or EntityState.Modified))
+        {
+            return;
+        }
+
+        var now = time.GetUtcNow().UtcDateTime;
+        var set = await db.TopicSets.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .FirstOrDefaultAsync(item => item.OwnerId == ownerId && item.LearningGoalId == learningGoalId, cancellationToken);
+        if (set is null)
+        {
+            db.TopicSets.Add(TopicSet.Of(ownerId, learningGoalId, now));
+        }
+        else
+        {
+            set.Touch(now);
+        }
+    }
+
     public async Task<IReadOnlyList<TopicInState>> TopicsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken)
     {
         var stored = await db.Topics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])

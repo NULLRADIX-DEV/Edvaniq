@@ -5,6 +5,10 @@ public interface ITopicState
 {
     // Also counts topics added but not saved yet, and leaves out those about to be deleted.
     Task<IReadOnlyList<TopicInState>> TopicsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken);
+
+    // Marks the learning goal's topics as changed by the open unit of work (TopicSet), once per save. Every save that
+    // changes topics has to, KnowledgeDbContext refuses one that doesn't.
+    Task TouchAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken);
 }
 
 // ParentId is the topic of the upper level, null for a topic of the upper level itself. Hidden is the topic's own state
