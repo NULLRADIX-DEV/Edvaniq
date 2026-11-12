@@ -32,27 +32,25 @@ public static class Mastery
 
     // Start is where a topic stands before its first answer. A start of the user's own (placement, M5) replaces the
     // default and leaves every step of the rule as it is.
-    public static double Of(IEnumerable<LearningRecord> records, DateTime now, double start = Start)
+    // From: where earlier records that are gone left the fold (MasteryCarry, #365). It goes on from there exactly as if
+    // those records were still there, and replaces the start.
+    public static double Of(IEnumerable<LearningRecord> records, DateTime now, double start = Start, MasteryFold? from = null) =>
+        Fold(records, start, from) is { } fold
+            ? Math.Clamp(Decay(fold.Value, now - fold.At), 0, 100)
+            : Math.Clamp(start, 0, 100);
+
+    // The value right after the last record, before any decay until now. Null without records and without from.
+    public static MasteryFold? Fold(IEnumerable<LearningRecord> records, double start = Start, MasteryFold? from = null)
     {
-        var value = Math.Clamp(start, 0, 100);
-        DateTime? last = null;
+        var fold = from;
         foreach (var record in records.OrderBy(record => record.AnsweredAt).ThenBy(record => record.AnswerId))
         {
-            if (last is { } previous)
-            {
-                value = Decay(value, record.AnsweredAt - previous);
-            }
-
+            var value = fold is { } previous ? Decay(previous.Value, record.AnsweredAt - previous.At) : Math.Clamp(start, 0, 100);
             value += StepFor(record.Difficulty) * ((record.Correct ? 100 : 0) - value);
-            last = record.AnsweredAt;
+            fold = new MasteryFold(value, record.AnsweredAt, record.Correct, fold?.LastCorrect);
         }
 
-        if (last is { } latest)
-        {
-            value = Decay(value, now - latest);
-        }
-
-        return Math.Clamp(value, 0, 100);
+        return fold;
     }
 
     // Cards (M4) bring their own, smaller step. A question without a difficulty counts as a middle one.

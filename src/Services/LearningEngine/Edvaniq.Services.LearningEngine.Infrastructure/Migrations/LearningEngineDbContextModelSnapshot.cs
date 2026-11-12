@@ -149,11 +149,52 @@ namespace Edvaniq.Services.LearningEngine.Infrastructure.Migrations
 
                     b.HasKey("AnswerId");
 
+                    b.HasIndex("AnsweredAt");
+
                     b.HasIndex("OwnerId");
 
                     b.HasIndex("OwnerId", "TopicId");
 
                     b.ToTable("LearningRecords");
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.LearningEngine.Domain.MasteryCarry", b =>
+                {
+                    b.Property<string>("OwnerId")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("At")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("LastAnswerId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<bool?>("LastCorrect")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool?>("PreviousCorrect")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<int>("RuleVersion")
+                        .HasColumnType("int");
+
+                    b.Property<double?>("Value")
+                        .HasColumnType("double");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("OwnerId", "TopicId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("MasteryCarries");
                 });
 
             modelBuilder.Entity("Edvaniq.Services.LearningEngine.Domain.TopicIntroduction", b =>

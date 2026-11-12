@@ -63,6 +63,7 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         db.KnownTopics.Add(KnownTopic.Create(user, record.TopicId, Guid.Empty, hidden: false));
         db.TopicsSnapshots.Add(TopicsSnapshot.Create(user, Guid.Empty, Seed.Now));
         db.TopicIntroductions.Add(TopicIntroduction.Create(user, record.TopicId, Guid.NewGuid(), Seed.Now));
+        db.MasteryCarries.Add(MasteryCarry.Fold(null, user, record.TopicId, [record], null));
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 

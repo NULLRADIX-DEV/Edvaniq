@@ -4,7 +4,8 @@ namespace Edvaniq.Services.LearningEngine.Domain;
 
 // What one answer leaves behind (docs/spec/glossary.md#lern-nachweis). Never changed after it's stored. The AnswerId
 // is the key, so an answer counts once however often its event arrives. ResponseTimeMs and Confidence are kept for
-// later, nothing weighs them. Kept for RetentionMonths after AnsweredAt (Q27), deleting them after that is #365.
+// later, nothing weighs them. Kept for RetentionMonths after AnsweredAt (Q27), then folded into the MasteryCarry of
+// the topic and deleted (#365).
 public sealed class LearningRecord : IOwnedByUser
 {
     public const int RetentionMonths = 12;
@@ -36,11 +37,12 @@ public sealed class LearningRecord : IOwnedByUser
     public DateTime AnsweredAt { get; private set; }
 
     // The answer of the newest record, so a client can tell its answer has arrived. Two at the same time go by the
-    // larger id, the same records always give the same one. Null without records.
-    public static Guid? Latest(IEnumerable<LearningRecord> records) =>
+    // larger id, the same records always give the same one. Without records the carry's, the records that went were all
+    // older. Null without either.
+    public static Guid? Latest(IEnumerable<LearningRecord> records, MasteryCarry? carry = null) =>
         records.OrderByDescending(record => record.AnsweredAt).ThenByDescending(record => record.AnswerId)
             .Select(record => (Guid?)record.AnswerId)
-            .FirstOrDefault();
+            .FirstOrDefault() ?? carry?.LastAnswerId;
 
     public static LearningRecord Create(
         Guid answerId,

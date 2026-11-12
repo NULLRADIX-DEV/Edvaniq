@@ -5,7 +5,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Edvaniq.Services.LearningEngine.Infrastructure;
 
-// No query here mentions the owner: the filter of ServiceDbContext adds it to every one of them.
+// No query here mentions the owner: the filter of ServiceDbContext adds it to every one of them. The carry of a topic
+// stands in for its expired records (#365).
 internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) : IMasteries
 {
     public async Task<TopicMastery?> FindAsync(Guid topicId, CancellationToken cancellationToken)
@@ -20,8 +21,10 @@ internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) :
             .ToListAsync(cancellationToken);
         var introduction = await db.TopicIntroductions.AsNoTracking()
             .SingleOrDefaultAsync(item => item.TopicId == topicId, cancellationToken);
-        var standing = TopicStates.Assess(records, introduction, time.GetUtcNow().UtcDateTime);
-        return new TopicMastery(topicId, standing.Mastery, standing.State, LearningRecord.Latest(records));
+        var carry = await db.MasteryCarries.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.TopicId == topicId, cancellationToken);
+        var standing = TopicStates.Assess(records, introduction, time.GetUtcNow().UtcDateTime, carry: carry);
+        return new TopicMastery(topicId, standing.Mastery, standing.State, LearningRecord.Latest(records, carry));
     }
 
     public async Task<IReadOnlyList<TopicMastery>> ListAsync(Guid? learningGoalId, CancellationToken cancellationToken)
@@ -32,8 +35,9 @@ internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) :
         [
             .. topics.Ids.Order().Select(id =>
             {
-                var standing = TopicStates.Assess(topics.Records[id], topics.Introductions.GetValueOrDefault(id), now);
-                return new TopicMastery(id, standing.Mastery, standing.State, LearningRecord.Latest(topics.Records[id]));
+                var carry = topics.Carries.GetValueOrDefault(id);
+                var standing = TopicStates.Assess(topics.Records[id], topics.Introductions.GetValueOrDefault(id), now, carry: carry);
+                return new TopicMastery(id, standing.Mastery, standing.State, LearningRecord.Latest(topics.Records[id], carry));
             }),
         ];
     }
@@ -45,7 +49,8 @@ internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) :
         return
         [
             .. topics.Ids
-                .Select(id => (Id: id, Decayed: TopicStates.Decayed(topics.Records[id], topics.Introductions.GetValueOrDefault(id), now)))
+                .Select(id => (Id: id, Decayed: TopicStates.Decayed(
+                    topics.Records[id], topics.Introductions.GetValueOrDefault(id), now, carry: topics.Carries.GetValueOrDefault(id))))
                 .Where(topic => topic.Decayed is not null)
                 .Select(topic => new DecayedTopicMastery(topic.Id, topic.Decayed!))
                 .OrderBy(topic => topic.Standing.Mastery)
@@ -53,7 +58,7 @@ internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) :
         ];
     }
 
-    // Three queries however many topics: the topics, then all their records and introductions at once.
+    // Four queries however many topics: the topics, then all their records, introductions and carries at once.
     private async Task<LoadedTopics> LoadAsync(Guid? learningGoalId, CancellationToken cancellationToken)
     {
         var topics = db.KnownTopics.AsNoTracking();
@@ -65,7 +70,7 @@ internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) :
         var topicIds = await topics.Select(topic => topic.TopicId).ToListAsync(cancellationToken);
         if (topicIds.Count == 0)
         {
-            return new LoadedTopics([], Enumerable.Empty<LearningRecord>().ToLookup(record => record.TopicId), []);
+            return new LoadedTopics([], Enumerable.Empty<LearningRecord>().ToLookup(record => record.TopicId), [], []);
         }
 
         var records = (await db.LearningRecords.AsNoTracking()
@@ -75,9 +80,15 @@ internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) :
         var introductions = await db.TopicIntroductions.AsNoTracking()
             .Where(item => topicIds.Contains(item.TopicId))
             .ToDictionaryAsync(item => item.TopicId, cancellationToken);
-        return new LoadedTopics(topicIds, records, introductions);
+        var carries = await db.MasteryCarries.AsNoTracking()
+            .Where(item => topicIds.Contains(item.TopicId))
+            .ToDictionaryAsync(item => item.TopicId, cancellationToken);
+        return new LoadedTopics(topicIds, records, introductions, carries);
     }
 
     private sealed record LoadedTopics(
-        List<Guid> Ids, ILookup<Guid, LearningRecord> Records, Dictionary<Guid, TopicIntroduction> Introductions);
+        List<Guid> Ids,
+        ILookup<Guid, LearningRecord> Records,
+        Dictionary<Guid, TopicIntroduction> Introductions,
+        Dictionary<Guid, MasteryCarry> Carries);
 }
