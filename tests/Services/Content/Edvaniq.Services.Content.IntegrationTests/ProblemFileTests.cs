@@ -78,12 +78,18 @@ public sealed class ProblemFileTests
         Assert.Equal(Document.FileTextTooLong, Refusal(builder.Build()));
     }
 
-    [Fact]
-    public void FileThatTakesTooLong_IsRefused() =>
+    // No time left at all, so the result never depends on how fast the machine reads.
+    [Theory]
+    [InlineData(FileFormat.Pdf)]
+    [InlineData(FileFormat.Text)]
+    public void FileThatTakesTooLong_IsRefused(FileFormat format) =>
         Assert.Equal(
             FileCheck.TakesTooLong,
             Assert.Throws<FileRefusedException>(() => FileText.PagesOf(
-                new MemoryStream(TestPdfs.Empty(3)), FileFormat.Pdf, TimeSpan.Zero, TestContext.Current.CancellationToken)).Reason);
+                new MemoryStream(format == FileFormat.Pdf ? TestPdfs.Empty(3) : "Ein Text."u8.ToArray()),
+                format,
+                TimeSpan.Zero,
+                TestContext.Current.CancellationToken)).Reason);
 
     // A shutdown is no file that takes too long, it stays a cancellation.
     [Fact]

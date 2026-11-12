@@ -34,9 +34,20 @@ public static class FileText
     public static IReadOnlyList<string> PagesOf(Stream content, FileFormat format, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        limit.CancelAfter(timeLimit);
+
+        // CancelAfter only starts a timer, even for zero. Without time left the reading must not even begin.
+        if (timeLimit <= TimeSpan.Zero)
+        {
+            limit.Cancel();
+        }
+        else
+        {
+            limit.CancelAfter(timeLimit);
+        }
+
         try
         {
+            limit.Token.ThrowIfCancellationRequested();
             return format switch
             {
                 FileFormat.Pdf => PdfPages(content, limit.Token),
