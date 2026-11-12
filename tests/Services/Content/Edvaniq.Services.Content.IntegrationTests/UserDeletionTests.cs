@@ -72,7 +72,10 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
         var document = Document.Paste(user, Guid.NewGuid(), null, "Licht spaltet Wasser in der Lichtreaktion der Photosynthese.", DateTime.UtcNow);
         db.Documents.Add(document);
-        db.Sections.AddRange(document.Split());
+        var sections = document.Split();
+        db.Sections.AddRange(sections);
+        db.TopicSummaries.Add(TopicSummary.Request(
+            user, Guid.NewGuid(), null, SummaryLength.Short, [(document.Id, sections[0].Id)], DateTime.UtcNow));
         db.QuestionPools.Add(QuestionPool.For(document, Guid.NewGuid(), DateTime.UtcNow));
         db.PageCharges.Add(PageCharge.For(document, 1, DateTime.UtcNow));
         db.GenerationCharges.Add(GenerationCharge.For(document, Guid.NewGuid(), DateTime.UtcNow));

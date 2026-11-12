@@ -1,3 +1,4 @@
+using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Infrastructure;
@@ -24,11 +25,14 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
     // What the service logs, for the tests that look for a log line.
     public TestLogs Logs { get; } = new();
 
-    // Answers the worker's question pools in place of Knowledge. The Api itself never asks Knowledge.
+    // Answers the worker's question pools in place of Knowledge.
     public KnowledgeStub Knowledge { get; } = new();
 
     // Answers the Api's question for the default goal in place of Planning, behind the real client.
     public PlanningStub Planning { get; } = new();
+
+    // Answers the Api's question for the sections of a topic in place of Knowledge (#344).
+    public TopicMaterialStub Material { get; } = new();
 
     // The file store of this factory, empty at the start and gone at the end.
     public string FilesDirectory { get; } = Path.Combine(Path.GetTempPath(), "edvaniq-content-files", Guid.NewGuid().ToString("N"));
@@ -63,6 +67,7 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
                 services.AddSingleton<ILoggerProvider>(Logs);
                 services.AddSingleton<IKnowledgeTopics>(Knowledge);
                 services.AddSingleton<IGoalProfiles>(Planning);
+                services.AddScoped(provider => Material.For(provider.GetRequiredService<ICurrentUser>()));
                 services.AddHttpClient<ILearningGoals, PlanningLearningGoals>().ConfigurePrimaryHttpMessageHandler(() => Planning);
             });
 

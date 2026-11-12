@@ -18,6 +18,8 @@ public sealed class AiAttempt : IOwnedByUser
 
     public const string Questions = "questions";
 
+    public const string Summary = "summary";
+
     private AiAttempt(
         Guid callId, int attempt, string ownerId, Guid documentId, string purpose, string model, string promptVersion,
         DateTime calledAt, long durationMs, long inputTokens, long outputTokens, decimal? cost, AiAttemptOutcome outcome)

@@ -62,6 +62,9 @@ var contentApi = AddService<Projects.Edvaniq_Services_Content_Api>("content-api"
 var knowledgeApi = AddService<Projects.Edvaniq_Services_Knowledge_Api>("knowledge-api", knowledgeDb)
     .WaitForCompletion(knowledgeMigrate)
     .WithMessaging(nats);
+
+// Content asks Knowledge for the sections of a topic when a summary is requested (#344).
+contentApi.WithReference(knowledgeApi);
 var assessmentApi = AddService<Projects.Edvaniq_Services_Assessment_Api>("assessment-api", assessmentDb)
     .WaitForCompletion(assessmentMigrate)
     .WithMessaging(nats);

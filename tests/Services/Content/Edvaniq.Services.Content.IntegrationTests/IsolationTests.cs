@@ -23,7 +23,9 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         .Item("DELETE", "/documents/{id:guid}")
         .Exempt("POST", "/documents", "Adds a document of the caller, a foreign goal is Planning's: LearningGoalTests.")
         .Exempt("POST", "/documents/files", "Adds a document of the caller, a foreign goal is Planning's: LearningGoalTests.")
-        .Exempt("GET", "/quota", "Only the caller's own count: OtherUser_HasTheirOwnQuota.");
+        .Exempt("GET", "/quota", "Only the caller's own count: OtherUser_HasTheirOwnQuota.")
+        .Exempt("GET", "/topics/{topicId:guid}/summaries/{length}", "Two parameters, checked by SummaryTests.OtherUser_NeitherReadsNorRequestsASummary.")
+        .Exempt("POST", "/topics/{topicId:guid}/summaries/{length}", "Two parameters, checked by SummaryTests.OtherUser_NeitherReadsNorRequestsASummary.");
 
     [Fact]
     public void EveryEndpoint_IsInTheCheck() => Check().AssertCovers(service.Services);

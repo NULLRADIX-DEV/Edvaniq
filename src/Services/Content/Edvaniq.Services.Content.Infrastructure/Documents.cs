@@ -165,6 +165,11 @@ internal sealed class Documents(
             }
 
             db.Documents.Remove(document);
+
+            // A summary that rests on the document goes with it (#344), the next request makes a new one from what's left.
+            db.TopicSummaries.RemoveRange(await db.TopicSummaries
+                .Where(summary => summary.Sections.Any(section => section.DocumentId == id))
+                .ToListAsync(cancellationToken));
             outbox.Add(new DocumentDeleted(document.OwnerId, document.Id, document.LearningGoalId));
             try
             {

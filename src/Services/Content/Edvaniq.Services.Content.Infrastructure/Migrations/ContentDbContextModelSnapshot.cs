@@ -582,6 +582,110 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.ToTable("StoredFiles");
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.TopicSummary", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("AiOutages")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<Guid?>("LearningGoalId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Length")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("PromptVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<DateTime?>("ReadyAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)");
+
+                    b.Property<string>("Text")
+                        .HasMaxLength(8000)
+                        .HasColumnType("varchar(8000)");
+
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.HasIndex("OwnerId", "TopicId", "Length")
+                        .IsUnique();
+
+                    b.ToTable("TopicSummaries");
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.TopicSummarySection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("SummaryId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<bool>("Used")
+                        .HasColumnType("tinyint(1)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("SummaryId");
+
+                    b.ToTable("TopicSummarySections");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.AiAnswer", b =>
                 {
                     b.HasOne("Edvaniq.Services.Content.Domain.Document", null)
@@ -616,6 +720,20 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .HasForeignKey("DocumentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.TopicSummarySection", b =>
+                {
+                    b.HasOne("Edvaniq.Services.Content.Domain.TopicSummary", null)
+                        .WithMany("Sections")
+                        .HasForeignKey("SummaryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.TopicSummary", b =>
+                {
+                    b.Navigation("Sections");
                 });
 #pragma warning restore 612, 618
         }

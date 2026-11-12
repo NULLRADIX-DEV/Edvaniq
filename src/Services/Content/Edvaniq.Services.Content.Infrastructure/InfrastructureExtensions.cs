@@ -25,6 +25,7 @@ public static class InfrastructureExtensions
         builder.Services.AddMySqlDbContext<ContentDbContext>(DatabaseName);
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddScoped<IDocuments, Documents>();
+        builder.Services.AddScoped<ITopicSummaries, TopicSummaries>();
         builder.Services.AddFileStore();
         builder.Services.AddScoped<StoredFiles>();
         builder.Services.AddScoped<IFiles>(services => services.GetRequiredService<StoredFiles>());
@@ -73,6 +74,7 @@ public static class InfrastructureExtensions
         builder.Services.AddHostedService<DocumentSplitter>();
         builder.Services.AddHostedService<DocumentAnalyzer>();
         builder.Services.AddHostedService<QuestionPools>();
+        builder.Services.AddHostedService<SummaryWriter>();
         AnalysisOptions.AddTo(builder.Services);
         builder.Services.AddHostedService<StuckAnalysisSweep>();
 

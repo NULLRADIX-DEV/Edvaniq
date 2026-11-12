@@ -20,12 +20,16 @@ public static class ContentAi
 
     public const string QuestionsTask = QuestionGeneration.Task;
 
+    public const string SummaryTask = TopicSummaryGeneration.Task;
+
     // What the simulated provider writes into a question once text gets out of the material block (SimulatedQuestions).
     public const string SimulatedHijack = "PWNED";
 
     public static readonly ChatResponseFormat TopicsFormat = FormatOf(TopicAnalysis.Schema, "topics");
 
     public static readonly ChatResponseFormat QuestionsFormat = FormatOf(QuestionGeneration.Schema, "questions");
+
+    public static readonly ChatResponseFormat SummaryFormat = FormatOf(TopicSummaryGeneration.Schema, "summary");
 
     public static TBuilder AddContentAi<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
@@ -38,6 +42,7 @@ public static class ContentAi
     {
         services.AddSingleton<ISimulatedAnswer, SimulatedTopics>();
         services.AddSingleton<ISimulatedAnswer, SimulatedQuestions>();
+        services.AddSingleton<ISimulatedAnswer, SimulatedSummary>();
         services.AddSingleton<TestDoubleAi>();
         return services;
     }
