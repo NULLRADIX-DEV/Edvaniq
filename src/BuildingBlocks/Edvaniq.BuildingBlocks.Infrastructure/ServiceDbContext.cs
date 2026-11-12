@@ -66,11 +66,14 @@ public abstract class ServiceDbContext : DbContext
         }
     }
 
-    // Sealed too, so every DateTime column of every service holds UTC without a line per column.
+    // Sealed too, so every DateTime column of every service holds UTC and every DateOnly reads back, without a line
+    // per column.
     protected sealed override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
         configurationBuilder.Properties<DateTime?>().HaveConversion<UtcDateTimeConverter>();
+        configurationBuilder.Properties<DateOnly>().HaveConversion<DateOnlyConverter>().HaveColumnType("date");
+        configurationBuilder.Properties<DateOnly?>().HaveConversion<DateOnlyConverter>().HaveColumnType("date");
     }
 
     protected virtual void ConfigureModel(ModelBuilder modelBuilder)

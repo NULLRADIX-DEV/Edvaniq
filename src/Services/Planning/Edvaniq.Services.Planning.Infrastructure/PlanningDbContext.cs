@@ -3,7 +3,6 @@ using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.Services.Planning.Domain;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Edvaniq.Services.Planning.Infrastructure;
 
@@ -40,13 +39,6 @@ public sealed class PlanningDbContext(DbContextOptions<PlanningDbContext> option
         goal.Property(item => item.Kind).HasConversion<string>().HasMaxLength(32);
         goal.Property(item => item.Name).HasMaxLength(LearningGoalFields.NameMaxLength);
         goal.Property(item => item.ExamType).HasConversion<string>().HasMaxLength(32);
-
-        // Oracle's provider writes a DateOnly but reads a date column back as DateTime.
-        goal.Property(item => item.ExamDate)
-            .HasConversion(new ValueConverter<DateOnly, DateTime>(
-                date => date.ToDateTime(TimeOnly.MinValue),
-                stored => DateOnly.FromDateTime(stored)))
-            .HasColumnType("date");
         goal.Property(item => item.Level).HasConversion<string>().HasMaxLength(32);
         goal.Property(item => item.OutputLanguage).HasMaxLength(8);
         goal.Property(item => item.Goal).HasMaxLength(LearningGoalFields.GoalMaxLength);
@@ -68,11 +60,6 @@ public sealed class PlanningDbContext(DbContextOptions<PlanningDbContext> option
         var done = modelBuilder.Entity<DoneBlock>();
         done.Property(item => item.Id).ValueGeneratedNever();
         done.Property(item => item.Kind).HasConversion<string>().HasMaxLength(16);
-        done.Property(item => item.StudyDay)
-            .HasConversion(new ValueConverter<DateOnly, DateTime>(
-                date => date.ToDateTime(TimeOnly.MinValue),
-                stored => DateOnly.FromDateTime(stored)))
-            .HasColumnType("date");
         done.HasIndex(item => new { item.OwnerId, item.LearningGoalId, item.StudyDay });
         done.HasOne<LearningGoal>().WithMany().HasForeignKey(item => item.LearningGoalId).OnDelete(DeleteBehavior.Cascade);
 
@@ -89,11 +76,6 @@ public sealed class PlanningDbContext(DbContextOptions<PlanningDbContext> option
         // Of two signals at once only one counts the gap (#394), the other one goes again on the stored session.
         session.Property(item => item.LastActivityAt).IsConcurrencyToken();
         session.Property(item => item.Outcome).HasConversion<string>().HasMaxLength(16);
-        session.Property(item => item.StudyDay)
-            .HasConversion(new ValueConverter<DateOnly, DateTime>(
-                date => date.ToDateTime(TimeOnly.MinValue),
-                stored => DateOnly.FromDateTime(stored)))
-            .HasColumnType("date");
         session.HasOne<LearningGoal>().WithMany().HasForeignKey(item => item.LearningGoalId).OnDelete(DeleteBehavior.Cascade);
     }
 }

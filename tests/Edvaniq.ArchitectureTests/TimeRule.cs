@@ -8,7 +8,8 @@ using Microsoft.EntityFrameworkCore.Metadata;
 namespace Edvaniq.ArchitectureTests;
 
 // The time rule in docs/architecture.md ("Weitere Regeln"). Every DateTime column holds UTC through the convention of
-// ServiceDbContext, and no model keeps a DateTimeOffset or TimeOnly. The code of the services, the BuildingBlocks and
+// ServiceDbContext, every DateOnly reads back through its DateOnlyConverter, and no model keeps a DateTimeOffset or
+// TimeOnly. The code of the services, the BuildingBlocks and
 // the service template never reads the clock or the zone of the machine and never works with a time zone itself:
 // the clock is TimeProvider, the study day comes only from Edvaniq.SharedKernel.StudyDay.
 internal static partial class TimeRule
@@ -90,6 +91,10 @@ internal static partial class TimeRule
         else if (type == typeof(DateTime) && property.GetValueConverter() is not UtcDateTimeConverter)
         {
             yield return $"{where} has no UtcDateTimeConverter, so it may not hold UTC";
+        }
+        else if (type == typeof(DateOnly) && property.GetValueConverter() is not DateOnlyConverter)
+        {
+            yield return $"{where} has no DateOnlyConverter, so MySQL cannot read it back";
         }
     }
 
