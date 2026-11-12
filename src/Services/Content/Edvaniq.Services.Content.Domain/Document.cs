@@ -129,6 +129,9 @@ public sealed class Document : IOwnedByUser
     // Why the document failed, for the user. Null unless the status is Failed.
     public string? FailureReason { get; private set; }
 
+    // The reason's place on the fixed list (DocumentFailures), null unless the status is Failed.
+    public FailureCode? FailureCode { get; private set; }
+
     // UTC.
     public DateTime CreatedAt { get; private set; }
 
@@ -273,7 +276,7 @@ public sealed class Document : IOwnedByUser
         // Without TextExtractedAt a new attempt reads the file again.
         if (text.Length > TextMaxLength)
         {
-            Fail(FileTextTooLong);
+            Fail(DocumentFailures.FileTextTooLong);
             return [];
         }
 
@@ -281,7 +284,7 @@ public sealed class Document : IOwnedByUser
         // numbers and stray marks at most. Nothing of it is kept, and nothing goes to the AI.
         if (!HasEnoughWords(text.ToString()))
         {
-            Fail(NoTextInFile);
+            Fail(DocumentFailures.NoTextInFile);
             return [];
         }
 
@@ -304,7 +307,7 @@ public sealed class Document : IOwnedByUser
 
         if (UnfinishedReads >= MaxUnfinishedReads)
         {
-            Fail(FileNotProcessable);
+            Fail(DocumentFailures.FileNotProcessable);
             return false;
         }
 
@@ -333,7 +336,7 @@ public sealed class Document : IOwnedByUser
         var sections = SectionSplitter.Split(Text).Select((span, ordinal) => Section.Of(this, ordinal, span)).ToList();
         if (sections.Count == 0)
         {
-            Fail(NothingToLearn);
+            Fail(DocumentFailures.NothingToLearn);
         }
         else
         {
@@ -367,7 +370,7 @@ public sealed class Document : IOwnedByUser
 
         if (AiOutages >= delays.Count)
         {
-            Fail(AiUnavailable);
+            Fail(DocumentFailures.AiUnavailable);
             return false;
         }
 
@@ -395,10 +398,11 @@ public sealed class Document : IOwnedByUser
     }
 
     // The reason goes to the user as it is, so it says what happened and what they can do.
-    public void Fail(string reason)
+    public void Fail(DocumentFailure failure)
     {
         Status = DocumentStatus.Failed;
-        FailureReason = reason[..Math.Min(reason.Length, FailureReasonMaxLength)];
+        FailureReason = failure.Text[..Math.Min(failure.Text.Length, FailureReasonMaxLength)];
+        FailureCode = failure.Code;
         UnfinishedReads = 0;
     }
 
@@ -414,6 +418,7 @@ public sealed class Document : IOwnedByUser
 
         Status = AnalyzedAt is null ? DocumentStatus.Uploaded : DocumentStatus.Analyzing;
         FailureReason = null;
+        FailureCode = null;
         RetriedAt = retriedAt;
         ClearOutages();
         UnfinishedReads = 0;

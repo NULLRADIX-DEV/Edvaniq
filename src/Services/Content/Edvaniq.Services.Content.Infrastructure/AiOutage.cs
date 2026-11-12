@@ -17,14 +17,14 @@ internal static class AiOutage
         if (failure is AiPausedException)
         {
             ContentLog.AiPaused(logger, task, document.Id);
-            document.Fail(Document.AiPaused);
+            document.Fail(DocumentFailures.AiPaused);
             return;
         }
 
         if (failure is AiBudgetExhaustedException)
         {
             ContentLog.AiBudgetRefused(logger, task, document.Id);
-            document.Fail(Document.AiBudgetReached);
+            document.Fail(DocumentFailures.AiBudgetReached);
             return;
         }
 
@@ -32,7 +32,7 @@ internal static class AiOutage
         {
             // Most likely the key or the settings, so every document fails like this one. The status only, no body.
             ContentLog.AiRefused(logger, task, document.Id, failure is HttpRequestException { StatusCode: { } status } ? (int)status : null, failure.GetType().Name);
-            document.Fail(Document.AiUnavailable);
+            document.Fail(DocumentFailures.AiUnavailable);
             return;
         }
 

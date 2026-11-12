@@ -1,7 +1,10 @@
 namespace Edvaniq.Services.Content.Domain;
 
-// A file the document can't take, with the reason the user sees.
-public sealed class FileRefusedException(string reason) : Exception(reason)
+// A file the document can't take, with the reason from the fixed list (DocumentFailures).
+public sealed class FileRefusedException(DocumentFailure failure) : Exception(failure.Text)
 {
-    public string Reason { get; } = reason;
+    public DocumentFailure Failure { get; } = failure;
+
+    // What the user reads.
+    public string Reason => Failure.Text;
 }

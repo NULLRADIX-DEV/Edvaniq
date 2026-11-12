@@ -51,6 +51,7 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         // Of two workers reading the same file only the first one stores its text.
         document.Property(item => item.TextExtractedAt).IsConcurrencyToken();
         document.Property(item => item.FailureReason).HasMaxLength(Document.FailureReasonMaxLength);
+        document.Property(item => item.FailureCode).HasConversion<string>().HasMaxLength(24);
         document.Property(item => item.Level).HasMaxLength(Document.LevelMaxLength);
         document.Property(item => item.OutputLanguage).HasMaxLength(Document.OutputLanguageMaxLength);
         document.Property(item => item.FileFormat).HasConversion<string>().HasMaxLength(16);

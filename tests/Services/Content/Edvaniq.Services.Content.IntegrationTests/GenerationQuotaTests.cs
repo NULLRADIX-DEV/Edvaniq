@@ -48,7 +48,9 @@ public sealed class GenerationQuotaTests(GenerationQuotaFactory service) : IClas
 
         var now = service.Time.GetUtcNow().UtcDateTime;
         var failed = Stored(second);
-        Assert.Equal((DocumentStatus.Failed, GenerationQuota.TooMany(2, 1, now)), (failed.Status, failed.FailureReason));
+        Assert.Equal(
+            (DocumentStatus.Failed, GenerationQuota.TooMany(2, 1, now), (FailureCode?)FailureCode.LimitReached),
+            (failed.Status, failed.FailureReason, failed.FailureCode));
         Assert.DoesNotContain(asked, prompt => prompt.StartsWith(ContentAi.QuestionsTask, StringComparison.Ordinal));
         Assert.Equal(0, Query(db => db.GenerationCharges.IgnoreQueryFilters().Count(charge => charge.DocumentId == second)));
         Assert.Equal(0, Query(db => db.QuestionPools.IgnoreQueryFilters().Count(pool => pool.DocumentId == second)));

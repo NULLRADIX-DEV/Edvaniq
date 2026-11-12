@@ -107,7 +107,9 @@ public sealed class FileTextExtractorTests(ServiceFactory service) : IClassFixtu
 
         await Extractor().ReadAsync(id, Cancel);
 
-        Assert.Equal((DocumentStatus.Failed, Document.FileNotProcessable), Query(db => Stored(db, id) is var d ? (d.Status, d.FailureReason) : default));
+        Assert.Equal(
+            (DocumentStatus.Failed, Document.FileNotProcessable, (FailureCode?)FailureCode.Unreadable),
+            Query(db => Stored(db, id) is var d ? (d.Status, d.FailureReason, d.FailureCode) : default));
         Assert.Equal(0, Query(db => db.DocumentPages.IgnoreQueryFilters().Count(page => page.DocumentId == id)));
     }
 
@@ -131,7 +133,9 @@ public sealed class FileTextExtractorTests(ServiceFactory service) : IClassFixtu
 
         await Extractor().ReadAsync(id, Cancel);
 
-        Assert.Equal((DocumentStatus.Failed, reason), Query(db => Stored(db, id) is var d ? (d.Status, d.FailureReason) : default));
+        Assert.Equal(
+            (DocumentStatus.Failed, reason, (FailureCode?)DocumentFailures.CodeOf(reason)),
+            Query(db => Stored(db, id) is var d ? (d.Status, d.FailureReason, d.FailureCode) : default));
         Assert.Equal(0, Query(db => db.DocumentPages.IgnoreQueryFilters().Count(page => page.DocumentId == id)));
     }
 

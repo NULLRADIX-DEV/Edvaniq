@@ -101,7 +101,7 @@ public sealed class FileTextExtractor(
         if (!File.Exists(files.PathOf(fileId)))
         {
             ContentLog.FileMissing(logger, documentId);
-            document.Fail(Document.FileUnreadable);
+            document.Fail(DocumentFailures.FileUnreadable);
         }
         else
         {
@@ -115,7 +115,7 @@ public sealed class FileTextExtractor(
                 }
                 else
                 {
-                    document.Fail(read.Reason ?? Document.FileUnreadable);
+                    document.Fail(read.Failure ?? DocumentFailures.FileUnreadable);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

@@ -260,6 +260,10 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(24)
+                        .HasColumnType("varchar(24)");
+
                     b.Property<string>("FailureReason")
                         .HasMaxLength(200)
                         .HasColumnType("varchar(200)");

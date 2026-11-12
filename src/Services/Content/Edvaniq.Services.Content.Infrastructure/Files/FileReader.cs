@@ -61,7 +61,7 @@ public sealed class FileReader(FileStore files, IOptions<FileReadingOptions> opt
             {
                 Kill(process);
                 ContentLog.FileReaderKilled(logger, watch.ElapsedMilliseconds);
-                return FileReadResult.Refused(FileCheck.TakesTooLong);
+                return FileReadResult.Refused(DocumentFailures.TakesTooLong);
             }
 
             var frame = await output;
@@ -71,7 +71,7 @@ public sealed class FileReader(FileStore files, IOptions<FileReadingOptions> opt
             // A process that ends without an answer ran out of memory where nothing could catch it.
             return process.ExitCode == 0 && FileReadProtocol.Read(frame) is { } result
                 ? result
-                : FileReadResult.Refused(process.ExitCode == 0 ? Document.FileUnreadable : Document.FileNotProcessable);
+                : FileReadResult.Refused(process.ExitCode == 0 ? DocumentFailures.FileUnreadable : DocumentFailures.FileNotProcessable);
         }
         finally
         {
