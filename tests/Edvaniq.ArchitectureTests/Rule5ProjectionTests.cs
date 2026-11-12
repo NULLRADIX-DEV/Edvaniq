@@ -37,6 +37,7 @@ public class Rule5ProjectionTests
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.LearningLevel from Planning at LearningGoal.Level",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.PingRecord from Planning at PingRecord",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.Session from Planning at Session",
+                "PlanningDbContext maps Edvaniq.Services.Planning.Domain.SessionOutcome from Planning at Session.Outcome",
                 "PlanningDbContext maps Edvaniq.Services.Planning.Domain.TopicsSnapshot from Planning at TopicsSnapshot",
             ],
             violations);
