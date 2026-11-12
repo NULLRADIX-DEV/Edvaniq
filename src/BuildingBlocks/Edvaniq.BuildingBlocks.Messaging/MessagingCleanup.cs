@@ -7,8 +7,7 @@ using Microsoft.Extensions.Options;
 namespace Edvaniq.BuildingBlocks.Messaging;
 
 // Deletes sent outbox rows and inbox rows once they are older than the retention, deleted users after theirs. Unsent
-// events stay. Every process may
-// run it, deleting an old row twice does no harm.
+// events stay. Every process may run it, deleting an old row twice does no harm.
 internal sealed class MessagingCleanup(
     IServiceScopeFactory scopes,
     MessagingStore store,
