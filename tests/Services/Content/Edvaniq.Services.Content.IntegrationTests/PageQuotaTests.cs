@@ -53,7 +53,7 @@ public sealed class PageQuotaTests(PageQuotaFactory service) : IClassFixture<Pag
         await SplitAsync(await PasteAsync(client, Text(pages: 2)));
         var file = await UploadAsync(client, Text(pages: 3));
 
-        await ActivatorUtilities.CreateInstance<FileTextExtractor>(service.Services).ReadAsync(file, Cancel);
+        await ActivatorUtilities.CreateInstance<FileTextExtractor>(service.Services, ReadingProcess.Reader(service.Services.GetRequiredService<FileStore>())).ReadAsync(file, Cancel);
         await SplitAsync(file);
 
         var now = service.Time.GetUtcNow().UtcDateTime;
