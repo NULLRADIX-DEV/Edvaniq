@@ -1,6 +1,9 @@
 using Edvaniq.BuildingBlocks.Application;
 
+using Edvaniq.BuildingBlocks.Contracts;
+
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -115,21 +118,34 @@ internal sealed class ConsumerHost(
         var db = store.Resolve(scope.ServiceProvider);
 
         // The database calls are synchronous on purpose, MySql.Data's OpenAsync can hang forever (see MySqlHealthCheck).
+        // One transaction from the first lookup to the save: the inbox entry, the check for a deleted user and the
+        // handler's changes see the same state.
+        using var transaction = db.Database.BeginTransaction();
         if (IsKnown(db, consumer, message.MessageId))
         {
             MessagingLog.AlreadyHandled(logger, consumer, message.MessageId);
             return;
         }
 
+        var integrationEvent = subscription.Read(message.Payload);
         db.Set<InboxMessage>().Add(new InboxMessage
         {
             MessageId = message.MessageId,
             Consumer = consumer,
             ReceivedAt = time.GetUtcNow().UtcDateTime,
         });
+
+        // A late event of a deleted user is confirmed without effect (#944), whatever handler it was meant for.
+        if (integrationEvent is IUserEvent userEvent && IsDeleted(db, userEvent.UserId))
+        {
+            SaveAndCommit(db, transaction, consumer, message.MessageId);
+            MessagingLog.DeletedUserSkipped(logger, consumer, subscription.EventName);
+            return;
+        }
+
         try
         {
-            await subscription.HandleAsync(scope.ServiceProvider, message.Payload, cancellationToken);
+            await subscription.HandleAsync(scope.ServiceProvider, integrationEvent, cancellationToken);
         }
         catch (MessageNotReadyException) when (message.Delivery >= options.Value.NotReadyDeliveries)
         {
@@ -138,20 +154,37 @@ internal sealed class ConsumerHost(
             return;
         }
 
+        if (SaveAndCommit(db, transaction, consumer, message.MessageId))
+        {
+            MessagingLog.Handled(logger, consumer, message.MessageId);
+        }
+    }
+
+    // False if another process stored the entry first.
+    private bool SaveAndCommit(DbContext db, IDbContextTransaction transaction, string consumer, Guid messageId)
+    {
         try
         {
             db.SaveChanges();
-            MessagingLog.Handled(logger, consumer, message.MessageId);
+            transaction.Commit();
+            return true;
         }
-        catch (DbUpdateException) when (WasStoredMeanwhile(consumer, message.MessageId))
+        catch (DbUpdateException) when (WasStoredMeanwhile(consumer, messageId))
         {
             // A second process got there first: it stored the effect together with the entry, ours is dropped with it.
-            MessagingLog.AlreadyHandled(logger, consumer, message.MessageId);
+            MessagingLog.AlreadyHandled(logger, consumer, messageId);
+            return false;
         }
     }
 
     private static bool IsKnown(DbContext db, string consumer, Guid messageId) =>
         db.Set<InboxMessage>().Any(entry => entry.MessageId == messageId && entry.Consumer == consumer);
+
+    private static bool IsDeleted(DbContext db, string userId)
+    {
+        var hash = DeletedUser.HashOf(userId);
+        return db.Set<DeletedUser>().Any(user => user.Hash == hash);
+    }
 
     private bool WasStoredMeanwhile(string consumer, Guid messageId)
     {

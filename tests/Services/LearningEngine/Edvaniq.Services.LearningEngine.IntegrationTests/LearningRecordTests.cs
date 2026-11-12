@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Assessment.Contracts;
+using Edvaniq.Services.Identity.Contracts;
 using Edvaniq.Services.LearningEngine.Domain;
 using Edvaniq.Services.LearningEngine.Infrastructure;
 
@@ -113,6 +114,28 @@ public sealed class LearningRecordTests(ServiceFactory service) : IClassFixture<
 
         Assert.Equal(alice.AnswerId, Assert.Single(RecordsOf(alice.UserId)).AnswerId);
         Assert.Equal(bob.AnswerId, Assert.Single(RecordsOf(bob.UserId)).AnswerId);
+    }
+
+    // #944: an answer that comes after the user's deletion is confirmed and leaves no record.
+    [Fact]
+    public async Task LateAnswer_OfADeletedUser_IsConfirmedWithoutEffect()
+    {
+        var answer = Answer(NewUser("alice"));
+        var deletion = Guid.NewGuid();
+        await Broker.PublishAsync(
+            new OutgoingMessage(
+                EventRoute.For(typeof(UserDeleted)).Subject,
+                deletion,
+                JsonSerializer.Serialize(new UserDeleted(answer.UserId), JsonSerializerOptions.Web),
+                null),
+            TestContext.Current.CancellationToken);
+        await WaitForAsync(
+            () => Query(db => db.Set<InboxMessage>().Count(entry => entry.MessageId == deletion)) == 1,
+            "The deletion was not handled.");
+
+        await DeliverAsync(Payload(answer));
+
+        Assert.Empty(RecordsOf(answer.UserId));
     }
 
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";

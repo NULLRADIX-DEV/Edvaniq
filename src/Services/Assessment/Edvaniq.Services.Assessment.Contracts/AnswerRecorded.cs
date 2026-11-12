@@ -18,7 +18,7 @@ public sealed record AnswerRecorded(
     int ResponseTimeMs,
     int? Confidence,
     Mode Source,
-    DateTime AnsweredAt) : IIntegrationEvent
+    DateTime AnsweredAt) : IUserEvent
 {
     public const int CurrentVersion = 1;
 }

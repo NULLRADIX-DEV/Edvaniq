@@ -27,7 +27,7 @@ public static class InfrastructureExtensions
         builder.Services.AddIntegrationEventHandler<ExampleItemCreated, ExampleItemCreatedHandler>();
 
         // Stays when the example goes.
-        builder.Services.AddUserDataRemover<ServiceNameDbContext>();
+        builder.Services.AddUserDeletion<ServiceNameDbContext, UserDeletedHandler>();
         builder.Services.AddIntegrationEventHandler<UserDeleted, UserDeletedHandler>();
 
         // Ready only with a reachable database, alive without it.

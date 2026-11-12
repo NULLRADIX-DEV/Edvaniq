@@ -6,8 +6,8 @@ using Microsoft.Extensions.Options;
 
 namespace Edvaniq.BuildingBlocks.Messaging;
 
-// Deletes sent outbox rows and inbox rows once they are older than the retention. Unsent events stay. Every process may
-// run it, deleting an old row twice does no harm.
+// Deletes sent outbox rows and inbox rows once they are older than the retention, deleted users after theirs. Unsent
+// events stay. Every process may run it, deleting an old row twice does no harm.
 internal sealed class MessagingCleanup(
     IServiceScopeFactory scopes,
     MessagingStore store,
@@ -37,8 +37,8 @@ internal sealed class MessagingCleanup(
             {
                 try
                 {
-                    var (outbox, inbox) = RunOnce();
-                    MessagingLog.CleanedUp(logger, outbox, inbox);
+                    var (outbox, inbox, deletedUsers) = RunOnce();
+                    MessagingLog.CleanedUp(logger, outbox, inbox, deletedUsers);
                 }
                 catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
                 {
@@ -53,16 +53,19 @@ internal sealed class MessagingCleanup(
         }
     }
 
-    // Returns how many outbox and inbox rows it deleted.
-    internal (int Outbox, int Inbox) RunOnce()
+    // Returns how many outbox, inbox and deleted-user rows it deleted.
+    internal (int Outbox, int Inbox, int DeletedUsers) RunOnce()
     {
-        var cutoff = time.GetUtcNow().UtcDateTime - options.Value.Retention;
+        var now = time.GetUtcNow().UtcDateTime;
+        var cutoff = now - options.Value.Retention;
+        var deletedUsersCutoff = now - options.Value.DeletedUserRetention;
         using var scope = scopes.CreateScope();
         var database = store.Resolve(scope.ServiceProvider).Database;
 
         var outbox = DeleteInChunks(() => database.ExecuteSql($"DELETE FROM outbox_messages WHERE SentAt < {cutoff} LIMIT {Chunk}"));
         var inbox = DeleteInChunks(() => database.ExecuteSql($"DELETE FROM inbox_messages WHERE ReceivedAt < {cutoff} LIMIT {Chunk}"));
-        return (outbox, inbox);
+        var deletedUsers = DeleteInChunks(() => database.ExecuteSql($"DELETE FROM deleted_users WHERE DeletedAt < {deletedUsersCutoff} LIMIT {Chunk}"));
+        return (outbox, inbox, deletedUsers);
     }
 
     private static int DeleteInChunks(Func<int> delete)

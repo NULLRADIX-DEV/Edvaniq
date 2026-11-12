@@ -49,7 +49,7 @@ public static class InfrastructureExtensions
         builder.Services.AddIntegrationEventHandler<TopicsChanged, TopicsChangedHandler>();
 
         // Stays when the example goes.
-        builder.Services.AddUserDataRemover<PlanningDbContext>();
+        builder.Services.AddUserDeletion<PlanningDbContext, UserDeletedHandler>();
         builder.Services.AddIntegrationEventHandler<UserDeleted, UserDeletedHandler>();
 
         // Ready only with a reachable database, alive without it.

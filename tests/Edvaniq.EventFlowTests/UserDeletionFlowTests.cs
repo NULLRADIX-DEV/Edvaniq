@@ -4,11 +4,14 @@ using System.Net.Http.Json;
 using System.Text.Json;
 
 using Edvaniq.BuildingBlocks.AI;
+using Edvaniq.BuildingBlocks.Contracts;
 using Edvaniq.BuildingBlocks.Domain;
 using Edvaniq.BuildingBlocks.Messaging;
+using Edvaniq.Services.Content.Contracts;
 using Edvaniq.Services.Content.Infrastructure;
 using Edvaniq.Services.Content.Infrastructure.Ai;
 using Edvaniq.Services.Identity.Contracts;
+using Edvaniq.Services.Knowledge.Contracts;
 using Edvaniq.Testing;
 
 using Microsoft.EntityFrameworkCore;
@@ -59,6 +62,59 @@ public sealed class UserDeletionFlowTests(FlowServices services) : IDisposable
         await Task.Delay(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
         Assert.All(Rows(alice).Values, count => Assert.Equal(0, count));
         Assert.Equal(ofBob, Rows(bob));
+    }
+
+    // #944: events of the user that come after the deletion, over the real broker, create nothing in any service. Bob's
+    // events behind them in the same streams show that they went through.
+    [Fact(Timeout = 240_000)]
+    public async Task LateEvents_OfADeletedUser_CreateNothing()
+    {
+        var cancellation = TestContext.Current.CancellationToken;
+        var alice = $"alice-{Guid.NewGuid():N}";
+        var bob = $"bob-{Guid.NewGuid():N}";
+        await PublishAsync(new UserDeleted(alice), Guid.NewGuid());
+        var hash = DeletedUser.HashOf(alice);
+        await WaitForAsync(
+            () => Task.FromResult(DeletedEverywhere(hash)),
+            "Not every service remembers the deletion.");
+
+        await PublishAsync("knowledge", new TopicsChanged(alice, Guid.NewGuid(), DateTime.UtcNow, [Guid.NewGuid()], []), cancellation);
+        await PublishAsync("content", Analysis(alice), cancellation);
+        await PublishAsync("knowledge", new TopicsChanged(bob, Guid.NewGuid(), DateTime.UtcNow, [Guid.NewGuid()], []), cancellation);
+        await PublishAsync("content", Analysis(bob), cancellation);
+
+        await WaitForAsync(
+            () => Task.FromResult(KnowsTopicsOf(bob)),
+            "Bob's events did not arrive.");
+        Assert.All(Rows(alice), service => Assert.Equal(0, service.Value));
+    }
+
+    private bool DeletedEverywhere(string hash) =>
+        services.QueryPlanning(db => db.Set<DeletedUser>().Any(user => user.Hash == hash))
+        && services.QueryContent(db => db.Set<DeletedUser>().Any(user => user.Hash == hash))
+        && services.QueryKnowledge(db => db.Set<DeletedUser>().Any(user => user.Hash == hash))
+        && services.QueryAssessment(db => db.Set<DeletedUser>().Any(user => user.Hash == hash))
+        && services.QueryLearningEngine(db => db.Set<DeletedUser>().Any(user => user.Hash == hash));
+
+    // Planning, Assessment and LearningEngine took Bob's state, Knowledge his analysis.
+    private bool KnowsTopicsOf(string user) =>
+        services.QueryPlanning(db => db.KnownTopics.IgnoreQueryFilters().Any(topic => topic.OwnerId == user))
+        && services.QueryAssessment(db => db.KnownTopics.IgnoreQueryFilters().Any(topic => topic.OwnerId == user))
+        && services.QueryLearningEngine(db => db.KnownTopics.IgnoreQueryFilters().Any(topic => topic.OwnerId == user))
+        && services.QueryKnowledge(db => db.Topics.IgnoreQueryFilters().Any(topic => topic.OwnerId == user));
+
+    private static DocumentAnalyzed Analysis(string user) =>
+        new(user, Guid.NewGuid(), [new("Photosynthese", null, [Guid.NewGuid()])]);
+
+    // Into the sender's stream, like its dispatcher would.
+    private async Task PublishAsync<TEvent>(string sender, TEvent integrationEvent, CancellationToken cancellationToken)
+        where TEvent : IIntegrationEvent
+    {
+        await services.Broker.EnsureStreamAsync(
+            new StreamSpec(EventRoute.StreamOf(sender), EventRoute.SubjectsOf(sender)), cancellationToken);
+        await services.Broker.PublishAsync(
+            new OutgoingMessage(EventRoute.For(typeof(TEvent)).Subject, Guid.NewGuid(), JsonSerializer.Serialize(integrationEvent, JsonSerializerOptions.Web)),
+            cancellationToken);
     }
 
     public void Dispose() => ai.Dispose();

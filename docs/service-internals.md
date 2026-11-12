@@ -14,7 +14,7 @@ src/Services/<Name>/
   Edvaniq.Services.<Name>.Contracts        ExampleItemCreated.cs: Beispiel für ein Integration Event
   Edvaniq.Services.<Name>.Domain           ExampleItem.cs: Beispiel für Daten eines Nutzers
   Edvaniq.Services.<Name>.Infrastructure   InfrastructureExtensions.cs: DbContext, Beispiel, Nachrichten, Nutzer löschen und DB-Prüfung für Health
-                                           <Name>DbContext.cs, ExampleItems.cs, Migrations/ (Initial, ExampleItems, Messaging, OutboxTraceParent, OwnerIdCollation)
+                                           <Name>DbContext.cs, ExampleItems.cs, Migrations/ (Initial, ExampleItems, Messaging, OutboxTraceParent, OwnerIdCollation, DeletedUsers)
 tests/Services/<Name>/
   Edvaniq.Services.<Name>.UnitTests
   Edvaniq.Services.<Name>.IntegrationTests ServiceFactory.cs (Prüfstand), TestDatabase.cs
@@ -148,7 +148,7 @@ Ein Handler im Application-Projekt implementiert `IIntegrationEventHandler<TEven
 builder.Services.AddIntegrationEventHandler<ExampleItemCreated, ExampleItemCreatedHandler>();
 ```
 
-Für jeden Handler läuft ein dauerhafter Consumer `<name>-<Handler>` im Stream des Absenders. Er behandelt eine Nachricht so: Er legt einen Eintrag für `inbox_messages` in den DbContext, ruft den Handler und speichert beides mit einem `SaveChanges`. Erst danach bestätigt er die Nachricht. Kennt die Inbox die `MessageId` für diesen Consumer schon, bestätigt er nur.
+Für jeden Handler läuft ein dauerhafter Consumer `<name>-<Handler>` im Stream des Absenders. Er behandelt eine Nachricht so: Er legt einen Eintrag für `inbox_messages` in den DbContext, ruft den Handler und speichert beides mit einem `SaveChanges`. Erst danach bestätigt er die Nachricht. Vom ersten Nachsehen in der Inbox bis zum Speichern läuft das in einer Transaktion. Ein Handler arbeitet deshalb nur mit der eigenen Datenbank und ruft keinen anderen Service und nichts im Internet auf, sonst bleibt die Transaktion so lange offen. Kennt die Inbox die `MessageId` für diesen Consumer schon, bestätigt er nur.
 
 Ein Handler ändert deshalb nur den DbContext und ruft kein `SaveChanges`. Wirft er, wird nichts gespeichert, und der Broker stellt die Nachricht nach 5 Sekunden wieder zu. Fehlt dem Handler noch etwas, das auf dem Weg ist, etwa ein Thema aus einem anderen Ereignis, wirft er `MessageNotReadyException`. Dann kommt die Nachricht genauso wieder, aber höchstens `Messaging:NotReadyDeliveries` Mal, voreingestellt 360, also etwa eine halbe Stunde. Danach bestätigt der Consumer sie ohne Wirkung und schreibt eine Warnung mit Consumer, `MessageId` und Zahl der Zustellungen ins Log. Jede andere Ausnahme kommt ohne Grenze wieder, damit etwa eine kurz fehlende Datenbank keine Nachricht kostet. Hat der Absender noch nichts gesendet und deshalb noch keinen Stream, sagt der Consumer das einmal im Log und versucht es alle 5 Sekunden neu.
 
@@ -218,16 +218,26 @@ Die Adresse von NATS kommt nur von außen, als `ConnectionStrings:nats`. Lokal s
 
 Wird ein Konto gelöscht, müssen die Daten des Nutzers aus jedem Service verschwinden, nicht nur aus Identity. Identity sendet dafür `UserDeleted` aus `Identity.Contracts` mit der `UserId`, also dem `sub` seiner Tokens und damit der `OwnerId` seiner Zeilen. Heute löscht der Betreiber ein Teamkonto mit `account delete` ([Teamkonto löschen](tokens.md#teamkonto-löschen)), Identity schickt das Ereignis im selben Speichern über seine Outbox.
 
-Jeder Service aus der Vorlage hört mit dem `UserDeletedHandler` darauf, der `IUserDataRemover` aufruft. `AddInfrastructure` registriert beide:
+Jeder Service aus der Vorlage hört mit dem `UserDeletedHandler` darauf, der `IUserDataRemover` aufruft. Der Handler ist zugleich die `IUserDeletion` des Service, also alles, was beim Löschen eines Nutzers passiert. Braucht ein Service mehr als den Remover, etwa Content für die Dateien, gehört das in dessen `DeleteAsync`. `AddInfrastructure` registriert beides:
 
 ```csharp
-builder.Services.AddUserDataRemover<ServiceNameDbContext>();
+builder.Services.AddUserDeletion<ServiceNameDbContext, UserDeletedHandler>();
 builder.Services.AddIntegrationEventHandler<UserDeleted, UserDeletedHandler>();
 ```
 
 Der Remover geht jede Entity mit `IOwnedByUser` im Modell durch und markiert alle Zeilen des Nutzers zum Löschen, auch solche, die ein eigener Query-Filter versteckt. Eine neue Entity mit `IOwnedByUser` ist damit ohne weiteren Code dabei. Eine Entity ohne `IOwnedByUser` lässt `UserDataTests` in `Edvaniq.ArchitectureTests` nur mit einem Grund auf seiner Ausnahmeliste zu, etwa Summen ohne Nutzer. Den Weg durch alle Services prüft `UserDeletionFlowTests` in `Edvaniq.EventFlowTests`. Zeilen ohne `OwnerId` gehen per Cascade Delete mit, deshalb muss ihre Beziehung Pflicht sein (`IsRequired`). Bei einer optionalen Beziehung scheitert das Löschen am Fremdschlüssel, und die Nachricht kommt immer wieder.
 
 Gespeichert wird wie bei jedem Handler vom Consumer, zusammen mit dem Inbox-Eintrag. Ob ein Service die Daten entfernt hat, zeigen dieser Eintrag für `<name>-UserDeletedHandler` und die Logzeile „Consumer <name>-UserDeletedHandler has handled message <MessageId>“. Die Zeile trägt die `TraceId` der Anfrage, die den Nutzer gelöscht hat, aber nicht seine `UserId`. Mit dieser Kennung findet man die Bestätigung jedes Service ([Ereignis empfangen](#ereignis-empfangen)).
+
+### Späte Ereignisse
+
+Zwischen den Streams der Services gibt es keine Reihenfolge. Ein `TopicsChanged` oder `AnswerRecorded` des Nutzers kann also nach `UserDeleted` ankommen und würde seine Daten wieder anlegen. Deshalb merkt sich jeder Service im selben Speichern wie die Löschung, dass der Nutzer gelöscht ist, in der Tabelle `deleted_users`. Der Consumer schaut dort vor jedem Handler nach: Gehört das Ereignis einem gelöschten Nutzer, bestätigt er es ohne Wirkung, mit Inbox-Eintrag und der Logzeile „Consumer <name> skipped <Ereignis> of a deleted user“.
+
+Das gilt für jedes Ereignis, das `IUserEvent` aus `BuildingBlocks.Contracts` implementiert. `UserEventTests` in `Edvaniq.ArchitectureTests` verlangt das von jedem Ereignis mit einem Feld `UserId` oder `OwnerId`, ein neues fällt also von selbst darunter. Nur `UserDeleted` selbst ist keins. Heißt das Feld im Vertrag anders, implementiert das Ereignis die Eigenschaft explizit, so wie `ExampleItemCreated`.
+
+Ein Handler, der kurz vor der Löschung nachgesehen hat, kann danach noch speichern. Dafür sucht `DeletedUserSweep` wenige Minuten nach jeder Löschung noch einmal nach Zeilen des Nutzers und führt, wenn er welche findet, die ganze `IUserDeletion` erneut aus, Dateien eingeschlossen.
+
+Gespeichert wird nur ein SHA-256-Hash der `UserId` mit festem Präfix, nie die `UserId` selbst. Weil die `UserId` eine zufällige GUID ist, lässt sich der Hash nicht zurückrechnen, nur mit derselben Id aus einer anderen Quelle vergleichen. Nach 30 Tagen (`Messaging:DeletedUserRetention`) löscht die Aufräumrunde des Messaging den Eintrag. Das ist länger, als ein Ereignis unterwegs sein kann.
 
 ## Dokument löschen (Betreiber)
 

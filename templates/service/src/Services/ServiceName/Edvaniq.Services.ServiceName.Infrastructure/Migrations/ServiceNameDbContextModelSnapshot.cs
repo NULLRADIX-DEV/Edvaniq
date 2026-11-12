@@ -19,6 +19,26 @@ namespace Edvaniq.Services.ServiceName.Infrastructure.Migrations
                 .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
+            modelBuilder.Entity("Edvaniq.BuildingBlocks.Messaging.DeletedUser", b =>
+                {
+                    b.Property<string>("Hash")
+                        .HasMaxLength(64)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("DeletedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("Swept")
+                        .HasColumnType("tinyint(1)");
+
+                    b.HasKey("Hash");
+
+                    b.HasIndex("DeletedAt");
+
+                    b.ToTable("deleted_users", (string)null);
+                });
+
             modelBuilder.Entity("Edvaniq.BuildingBlocks.Messaging.InboxMessage", b =>
                 {
                     b.Property<Guid>("MessageId")

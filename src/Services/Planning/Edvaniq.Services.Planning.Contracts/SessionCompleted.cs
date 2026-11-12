@@ -10,4 +10,4 @@ public sealed record SessionCompleted(
     Guid SessionId,
     DateTime EndedAt,
     bool Completed,
-    IReadOnlyList<Guid> IntroducedTopicIds) : IIntegrationEvent;
+    IReadOnlyList<Guid> IntroducedTopicIds) : IUserEvent;

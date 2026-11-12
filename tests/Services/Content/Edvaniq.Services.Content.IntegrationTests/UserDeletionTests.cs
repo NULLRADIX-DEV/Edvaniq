@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
 
+using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Domain;
@@ -15,6 +16,7 @@ using Edvaniq.Testing;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Edvaniq.Services.Content.IntegrationTests;
 
@@ -96,6 +98,32 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         Assert.Equal(0, Query(db => db.StoredFiles.IgnoreQueryFilters().Count(file => file.OwnerId == alice)));
         Assert.True(File.Exists(FilePath(bobs)));
         Assert.Equal(1, Query(db => db.StoredFiles.IgnoreQueryFilters().Count(file => file.OwnerId == bob)));
+    }
+
+    // #944: a request that checked before the deletion and saved after it leaves a document with a file. The sweep runs
+    // the whole deletion again, so the bytes go too.
+    [Fact]
+    public async Task Sweep_RemovesADocumentAndFileStoredAfterTheDeletion()
+    {
+        var alice = NewUser("alice");
+        var bob = NewUser("bob");
+        var bobs = await SaveFileAsync(bob);
+        var messageId = await DeleteAsync(alice);
+        await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
+        await CreateItemAsync(alice, "Notiz danach");
+        var late = await SaveFileAsync(alice);
+        var hash = DeletedUser.HashOf(alice);
+        Query(db => db.Set<DeletedUser>().Where(user => user.Hash == hash)
+            .ExecuteUpdate(set => set.SetProperty(user => user.DeletedAt, DateTime.UtcNow.AddMinutes(-10))));
+
+        await service.Services.GetServices<IHostedService>().OfType<DeletedUserSweep<ContentDbContext>>().Single()
+            .RunOnceAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, ItemsOf(alice));
+        Assert.False(File.Exists(FilePath(late)));
+        Assert.Equal(0, Query(db => db.StoredFiles.IgnoreQueryFilters().Count(file => file.OwnerId == alice)));
+        Assert.True(File.Exists(FilePath(bobs)));
+        Assert.True(Query(db => db.Set<DeletedUser>().Single(user => user.Hash == hash).Swept));
     }
 
     // "Alice" and "alice" are two users, deleting one keeps the data of the other.

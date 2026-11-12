@@ -128,6 +128,30 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal((5, 6), Rows(bob));
     }
 
+    // #944: an analysis that comes after the user's deletion is confirmed and stores nothing, no TopicsChanged either.
+    [Fact]
+    public async Task LateAnalysis_OfADeletedUser_IsConfirmedWithoutEffect()
+    {
+        var alice = NewUser("alice");
+        var deletion = Guid.NewGuid();
+        await Broker.PublishAsync(
+            new OutgoingMessage(
+                EventRoute.For(typeof(UserDeleted)).Subject,
+                deletion,
+                JsonSerializer.Serialize(new UserDeleted(alice), JsonSerializerOptions.Web),
+                null),
+            TestContext.Current.CancellationToken);
+        await WaitForAsync(
+            () => Query(db => db.Set<InboxMessage>().Count(entry => entry.MessageId == deletion)) == 1,
+            "The deletion was not handled.");
+
+        var late = await PublishAsync(Analysis(alice));
+
+        await WaitForAsync(() => InboxEntries(late) == 1, "The late analysis was not confirmed.");
+        Assert.Equal((0, 0), Rows(alice));
+        Assert.Equal(0, Query(db => db.Set<OutboxMessage>().Count(message => message.Payload.Contains(alice))));
+    }
+
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
 
     // Names out of alphabetical order, so the list shows the order of the analysis.
