@@ -193,6 +193,22 @@ services:
     restart: "no"
     healthcheck:
       disable: true
+  smoke-prepare:
+    <<: *identity
+    image: ghcr.io/nullradix-dev/edvaniq/identity-api:sha-${APP_COMMIT:?}
+    entrypoint: ["bash", "-c", "exec dotnet /app/Edvaniq.Services.Identity.Api.dll account set \"$$SMOKE_ACCOUNT\" --test-double"]
+    profiles: [smoke]
+    restart: "no"
+    healthcheck:
+      disable: true
+  smoke-cleanup:
+    <<: *identity
+    image: ghcr.io/nullradix-dev/edvaniq/identity-api:sha-${APP_COMMIT:?}
+    entrypoint: ["bash", "-c", "exec dotnet /app/Edvaniq.Services.Identity.Api.dll account delete \"$$SMOKE_ACCOUNT\""]
+    profiles: [smoke]
+    restart: "no"
+    healthcheck:
+      disable: true
   planning-api:
     <<: *planning
     image: ghcr.io/nullradix-dev/edvaniq/planning-api:sha-${APP_COMMIT:?}

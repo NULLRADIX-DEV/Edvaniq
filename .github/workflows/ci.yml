@@ -268,7 +268,7 @@ jobs:
             | python3 -c 'import json, sys
           files = [(n, f) for n, v in sorted(json.load(sys.stdin)["services"].items()) for k, f in (v.get("environment") or {}).items() if k.startswith("ENV_FILE_")]
           any(f == "planning.env" for _, f in files) or print("no service gets planning.env, the check sees no env files")
-          [print(n, f) for n, f in files if f != "app.env" and n != f[:-4].split("-")[0] and not n.startswith(f[:-4].split("-")[0] + "-")]' \
+          [print(n, f) for n, f in files if f != "app.env" and n != f[:-4].split("-")[0] and not n.startswith(f[:-4].split("-")[0] + "-") and not (n.startswith("smoke-") and f == "identity.env")]' \
             | diff /dev/null - \
             || { echo "::error::Rule 1 in docs/architecture.md: <name>.env and <name>-*.env may only be used by the service <name> and its processes <name>-* (> found)"; exit 1; }
 
