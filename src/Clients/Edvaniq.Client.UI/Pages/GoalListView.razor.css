@@ -41,3 +41,7 @@
     align-items: center;
     min-height: 2.75rem;
 }
+
+.goal-material + .goal-material {
+    margin-left: var(--space-4);
+}

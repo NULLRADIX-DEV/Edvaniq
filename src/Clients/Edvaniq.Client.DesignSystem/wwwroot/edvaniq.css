@@ -187,6 +187,41 @@ a.button:hover {
     text-align: right;
 }
 
+/* A button that opens and closes a part below it (aria-expanded), the whole row as large as a thumb. The mark points
+   right when closed and down when open. */
+.disclosure {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    min-height: 2.75rem;
+    padding: var(--space-2) 0;
+    border: 0;
+    background: none;
+    color: var(--color-accent);
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.disclosure:hover {
+    color: var(--color-accent-hover);
+}
+
+.disclosure-mark {
+    flex: none;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg);
+}
+
+.disclosure[aria-expanded="true"] .disclosure-mark {
+    transform: rotate(45deg);
+}
+
 @media (min-width: 48rem) {
     h1 {
         font-size: 2.25rem;

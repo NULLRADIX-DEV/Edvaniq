@@ -42,9 +42,10 @@ public enum DocumentSource
 
 // A topic of the upper level with its subtopics. DocumentId names the document whose analysis brought it first, null for
 // a topic that came another way. Later documents only add sections to it.
-public sealed record TopicInfo(Guid Id, string Name, IReadOnlyList<SubtopicInfo> Subtopics, Guid? DocumentId = null);
+// Hidden comes only when hidden ones are asked for (#286), a subtopic counts as hidden under a hidden topic.
+public sealed record TopicInfo(Guid Id, string Name, IReadOnlyList<SubtopicInfo> Subtopics, Guid? DocumentId = null, bool Hidden = false);
 
-public sealed record SubtopicInfo(Guid Id, string Name, Guid? DocumentId = null);
+public sealed record SubtopicInfo(Guid Id, string Name, Guid? DocumentId = null, bool Hidden = false);
 
 public enum CallResult
 {

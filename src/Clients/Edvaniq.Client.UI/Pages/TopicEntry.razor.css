@@ -1,0 +1,44 @@
+.topic-entry {
+    overflow-wrap: anywhere;
+}
+
+.topic-heading {
+    margin: 0;
+    font-size: 1.125rem;
+}
+
+.topic-note {
+    margin: 0 0 var(--space-2);
+    color: var(--color-ink-muted);
+}
+
+.topic-panel {
+    padding: 0 0 var(--space-4) var(--space-4);
+    border-left: 2px solid var(--color-line);
+}
+
+.topic-part {
+    margin: var(--space-3) 0 var(--space-2);
+    font-size: 1rem;
+}
+
+.topic-none {
+    color: var(--color-ink-muted);
+}
+
+.topic-terms dt {
+    font-weight: 600;
+}
+
+.topic-terms dd {
+    margin: 0 0 var(--space-2);
+}
+
+.topic-sources {
+    margin: 0;
+    padding-left: var(--space-4);
+}
+
+.topic-source-title {
+    font-weight: 600;
+}

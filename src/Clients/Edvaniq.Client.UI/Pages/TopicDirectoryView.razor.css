@@ -1,0 +1,34 @@
+.directory-status {
+    overflow-wrap: anywhere;
+}
+
+.directory-ai-hint {
+    margin-bottom: var(--space-4);
+}
+
+.directory-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.directory-list > li {
+    border-bottom: 1px solid var(--color-line);
+}
+
+.directory-sublist > li:last-child {
+    border-bottom: 0;
+}
+
+.directory-hidden {
+    margin-top: var(--space-8);
+}
+
+.directory-hidden h2 {
+    margin: 0;
+    font-size: 1.125rem;
+}
+
+.directory-hidden-panel {
+    padding-bottom: var(--space-4);
+}

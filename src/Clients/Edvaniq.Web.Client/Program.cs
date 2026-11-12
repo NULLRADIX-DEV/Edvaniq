@@ -30,6 +30,7 @@ HttpClient Watched(IServiceProvider services) =>
 
 builder.Services.AddScoped<IPing>(services => new HttpPing(Watched(services)));
 builder.Services.AddScoped<ILearningMaterial>(services => new HttpLearningMaterial(Watched(services)));
+builder.Services.AddScoped<ITopicDirectory>(services => new HttpTopicDirectory(Watched(services)));
 builder.Services.AddScoped<IQuiz>(services => new HttpQuiz(Watched(services)));
 builder.Services.AddScoped<ITodayPlan>(services => new HttpTodayPlan(Watched(services)));
 builder.Services.AddScoped<ILearningGoals>(services => new HttpLearningGoals(Watched(services)));
