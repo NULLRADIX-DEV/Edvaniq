@@ -25,6 +25,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
     public DbSet<AiSwitch> AiSwitches => Set<AiSwitch>();
 
+    public DbSet<PageCharge> PageCharges => Set<PageCharge>();
+
     public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
 
     protected override void ConfigureModel(ModelBuilder modelBuilder)
@@ -73,6 +75,11 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         attempt.HasIndex(item => item.CalledAt);
         attempt.HasIndex(item => item.DocumentId);
         attempt.HasIndex(item => new { item.CallId, item.Attempt }).IsUnique();
+
+        // One charge per document, a retry takes nothing twice. The sum of a day reads by owner and day.
+        var charge = modelBuilder.Entity<PageCharge>();
+        charge.HasIndex(item => item.DocumentId).IsUnique();
+        charge.HasIndex(item => new { item.OwnerId, item.StudyDay });
 
         var aiSwitch = modelBuilder.Entity<AiSwitch>();
         aiSwitch.Property(item => item.Id).ValueGeneratedNever();

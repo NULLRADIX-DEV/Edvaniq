@@ -300,6 +300,14 @@ Kein Dokument bleibt für immer „in Analyse“. Die Grenzen des Content-Worker
 
 Ist ein Dokument nach `Timeout` noch „hochgeladen“ oder „in Analyse“, scheitert es mit „Die Analyse hat zu lange gedauert. Starte sie neu.“, etwa weil sein Worker immer wieder abstürzt. Der Nutzer startet es neu wie jedes gescheiterte Dokument. Ein Dokument, das nach einem Ausfall der KI absichtlich wartet, zählt erst wieder, wenn es an der Reihe ist. Beendet ein Worker das Dokument im selben Moment, gewinnt nur einer, es geht nichts doppelt hinaus. Jedes so beendete Dokument steht als Warnung im Log, dazu je Runde die Zahl. Häufen sich diese Zeilen, ist die Grenze zu knapp oder der Worker überlastet. War der Worker länger als `Timeout` aus, lässt seine erste Suche danach alle Dokumente scheitern, die schon vorher warteten; ein Neustart durch den Nutzer bringt jedes davon zurück.
 
+## Tageskontingent an Seiten
+
+Jeder Nutzer darf je Lerntag nur eine bestimmte Zahl an Seiten verarbeiten lassen, Standard 200 (`Content:PagesPerDay`, gilt für Api und Worker). Der Lerntag wechselt um 04:00 Uhr Europe/Berlin (`StudyDay`). Eine PDF zählt ihre Seiten. Eingefügter Text, TXT, Markdown und Word haben keine echten Seiten und zählen je angefangene 3.000 Zeichen eine Seite, mindestens eine. So umgeht eine riesige Textdatei das Kontingent nicht.
+
+Gebucht wird im Worker, bevor der `DocumentSplitter` ein Dokument zerlegt. Erst dort kennt jedes Format seine Seiten, und vor der KI ist noch nichts ausgegeben. Passt das Dokument nicht in den Rest des Tages, scheitert es mit einer Meldung, die Seiten, freie Seiten und den Zeitpunkt der Rücksetzung nennt. Nach 04:00 Uhr geht ein Neustart durch. Jedes Dokument bucht genau einmal (`PageCharges`, eindeutig je Dokument): Ein Neustart bucht nichts nach. Löscht der Nutzer das Dokument, bleibt die Buchung, sonst würden Löschen und neu Hochladen das Kontingent zurücksetzen. Erst die Löschung des Nutzers entfernt sie.
+
+Die Content-Api lehnt früher ab, wo sie kann, mit 429, der Meldung in `title` und dem Zeitpunkt der Rücksetzung in `resetsAt` (UTC). Bei eingefügtem Text kennt sie die Seiten schon, beim Upload noch nicht, dort lehnt sie nur ab, wenn nichts mehr frei ist. `GET /quota` zeigt dem Nutzer seinen eigenen Stand: `pagesLeftToday`, `pagesPerDay` und `resetsAt`. `generationsLeftToday` und `generationsPerDay` bleiben `null`, bis Generierungen gezählt werden. Api, Worker und `GET /quota` zählen mit derselben Klasse (`IPageQuota`).
+
 ## Tests
 
 `ServiceFactory` ist der Prüfstand: Er startet den echten Service, so wie er läuft, mit einer frischen MySQL-Datenbank, auf die alle Migrationen angewendet sind, und vertraut den Tokens aus `Edvaniq.Testing/TestTokens`. Den Broker tauscht er gegen einen im Prozess aus. Eine Testklasse holt ihn sich per `IClassFixture<ServiceFactory>`.

@@ -1,4 +1,5 @@
 using Edvaniq.BuildingBlocks.Infrastructure;
+using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Domain;
 
 using Microsoft.EntityFrameworkCore;
@@ -83,6 +84,25 @@ public sealed class DocumentSplitter(
             return;
         }
 
+        // The daily quota before any work for the AI: here every format knows its pages. A document charged before, on
+        // a retry, goes on without asking again.
+        var quota = scope.ServiceProvider.GetRequiredService<IPageQuota>();
+        int? pages = null;
+        if (!await quota.IsChargedAsync(documentId, cancellationToken))
+        {
+            var filePages = await db.DocumentPages.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+                .CountAsync(page => page.DocumentId == documentId, cancellationToken);
+            pages = PageQuota.PagesOf(document, filePages);
+            var state = await quota.StateOfAsync(document.OwnerId, cancellationToken);
+            if (pages > state.Left)
+            {
+                ContentLog.PageQuotaExceeded(logger, documentId, pages.Value, state.Left);
+                document.Fail(PageQuota.TooManyPages(pages.Value, state.Left, time.GetUtcNow().UtcDateTime));
+                await WorkerSave.SaveAsync(db, documentId, "splitting", logger, cancellationToken);
+                return;
+            }
+        }
+
         // A document that comes back to Uploaded, say for a new attempt, still has its sections from before. They go
         // in the same save as the new ones, so no place in the text has two sections.
         db.Sections.RemoveRange(await db.Sections.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
@@ -98,6 +118,12 @@ public sealed class DocumentSplitter(
             // A bug in splitting fails this one document instead of stopping every round at it.
             ContentLog.SplitFailed(logger, exception, documentId);
             document.Fail(Document.SplitFailed);
+        }
+
+        // Only a document that goes on to the AI takes its pages, in the same save as its sections.
+        if (pages is { } charged && document.Status != DocumentStatus.Failed)
+        {
+            quota.Charge(document, charged);
         }
 
         await WorkerSave.SaveAsync(db, documentId, "splitting", logger, cancellationToken);

@@ -34,6 +34,7 @@ public static class InfrastructureExtensions
         builder.Services.AddSingleton<AiUsageLog>();
         builder.Services.AddScoped<IAiSwitch, AiSwitches>();
         builder.Services.AddScoped<IAiBudget, AiBudgets>();
+        builder.Services.AddPageQuota();
 
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<ContentDbContext>(ServiceKey);
@@ -65,6 +66,7 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<IAiBudget, AiBudgets>();
         builder.Services.AddOptions<FileReadingOptions>().BindConfiguration(FileReadingOptions.Section);
         builder.Services.AddSingleton<FileReader>();
+        builder.Services.AddPageQuota();
         builder.Services.AddHostedService<FileTextExtractor>();
         builder.Services.AddHostedService<DocumentSplitter>();
         builder.Services.AddHostedService<DocumentAnalyzer>();
@@ -73,6 +75,16 @@ public static class InfrastructureExtensions
         builder.Services.AddHostedService<StuckAnalysisSweep>();
 
         return builder;
+    }
+
+    // The daily page quota, the same for the Api and the worker. A limit of 0 or less stops the start.
+    private static void AddPageQuota(this IServiceCollection services)
+    {
+        services.AddOptions<PageQuotaOptions>()
+            .BindConfiguration(PageQuotaOptions.Section)
+            .Validate(options => options.PagesPerDay > 0, "Content:PagesPerDay must be above 0.")
+            .ValidateOnStart();
+        services.AddScoped<IPageQuota, PageQuotas>();
     }
 
     // Only for the operator's document delete command, never in the running API.

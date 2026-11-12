@@ -35,6 +35,22 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         Assert.Equal(HttpStatusCode.NotFound, await GetStatusAsync(bob, $"/documents/{Guid.NewGuid()}"));
     }
 
+    // #301: the quota counts the caller's own pages only, Alice's document leaves Bob's count alone.
+    [Fact]
+    public async Task OtherUser_HasTheirOwnQuota()
+    {
+        using var alice = ClientFor(NewUser("alice"));
+        using var bob = ClientFor(NewUser("bob"));
+        var before = await bob.GetStringAsync("/quota", TestContext.Current.CancellationToken);
+
+        var item = await CreateAsync(alice, "Notiz von Alice");
+        await Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<Infrastructure.DocumentSplitter>(service.Services)
+            .SplitAsync(item.Id, TestContext.Current.CancellationToken);
+
+        Assert.NotEqual(before, await alice.GetStringAsync("/quota", TestContext.Current.CancellationToken));
+        Assert.Equal(before, await bob.GetStringAsync("/quota", TestContext.Current.CancellationToken));
+    }
+
     // "Alice" and "alice" are two users, the id is compared byte for byte.
     [Fact]
     public async Task OtherUser_WithTheSameNameInOtherCase_DoesNotSeeTheItems()

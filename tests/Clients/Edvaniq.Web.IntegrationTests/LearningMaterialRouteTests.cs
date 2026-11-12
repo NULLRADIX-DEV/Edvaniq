@@ -17,6 +17,7 @@ public sealed class LearningMaterialRouteTests
     [InlineData("POST", "/api/content/documents", "/content/documents")]
     [InlineData("POST", "/api/content/documents/files", "/content/documents/files")]
     [InlineData("GET", "/api/knowledge/topics", "/knowledge/topics")]
+    [InlineData("GET", "/api/content/quota", "/content/quota")]
     [InlineData("POST", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/retry", "/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/retry")]
     public async Task AfterLogin_TheCallReachesTheService_WithTheUsersToken(string method, string path, string arrives)
     {
@@ -42,6 +43,7 @@ public sealed class LearningMaterialRouteTests
     [InlineData("POST", "/api/content/documents")]
     [InlineData("POST", "/api/content/documents/files")]
     [InlineData("GET", "/api/knowledge/topics")]
+    [InlineData("GET", "/api/content/quota")]
     [InlineData("POST", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/retry")]
     public async Task WithoutLogin_IsRefused_AndNothingIsForwarded(string method, string path)
     {
