@@ -18,6 +18,7 @@ public class UserDataTests
         [typeof(AiUsageDay)] = "AI cost as daily sums without the user, UserDeleted turns the user's rows into these",
         [typeof(AiSwitch)] = "the operator's emergency stop for the AI, one row without a user",
         [typeof(Account)] = "Identity deletes the account itself and sends UserDeleted (AccountDeletion)",
+        [typeof(InviteCode)] = "the operator's invitation codes, only a hash and times, nothing says who redeemed one",
     };
 
     [Fact]

@@ -26,6 +26,15 @@ if (AccountCommand.Matches(args))
     }
 }
 
+// Makes, lists and revokes invitation codes for the operator (#245). Never starts the web server.
+if (InviteCommand.Matches(args))
+{
+    await using (app)
+    {
+        return await InviteCommand.RunAsync(app.Services, args, Console.Out, Console.Error);
+    }
+}
+
 app.MapDefaultEndpoints();
 app.MapTokenEndpoints();
 

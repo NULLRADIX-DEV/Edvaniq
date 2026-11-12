@@ -165,6 +165,42 @@ namespace Edvaniq.Services.Identity.Infrastructure.Migrations
 
                     b.ToTable("Accounts");
                 });
+
+            modelBuilder.Entity("Edvaniq.Services.Identity.Domain.InviteCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(6)
+                        .HasColumnType("varchar(6)");
+
+                    b.Property<DateTime?>("RedeemedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CodeHash")
+                        .IsUnique();
+
+                    b.HasIndex("Label")
+                        .IsUnique();
+
+                    b.ToTable("InviteCodes");
+                });
 #pragma warning restore 612, 618
         }
     }

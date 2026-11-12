@@ -90,3 +90,16 @@ dotnet Edvaniq.Services.Identity.Api.dll account delete <name>
 ```
 
 Der Befehl entfernt das Konto und schickt im selben Speichern `UserDeleted` mit der ID des Kontos, also dem `sub` seiner Tokens. Daraufhin entfernt jeder Service alle Daten des Nutzers ([Nutzer löschen](service-internals.md#nutzer-löschen)). Gesendet wird über die Outbox: Der Befehl selbst braucht keinen Broker, die laufende Identity-Api schickt das Ereignis. Er schreibt nur `deleted <name>` und endet mit 0. Gibt es den Namen nicht, schreibt er `no account <name>`, schickt nichts und endet ebenfalls mit 0, ein zweiter Lauf ist also harmlos. Bei einem anderen Fehler endet er mit 1.
+## Einladungscodes
+
+Registrieren kann sich nur, wer einen Einladungscode hat (#249). Die Codes verwaltet der Betreiber mit einem Befehl der Api, es gibt dafür keinen Weg über HTTP:
+
+```bash
+dotnet Edvaniq.Services.Identity.Api.dll invite create [anzahl]
+dotnet Edvaniq.Services.Identity.Api.dll invite list
+dotnet Edvaniq.Services.Identity.Api.dll invite revoke <kennung>
+```
+
+`invite create` legt einen Code an oder bis zu 100 auf einmal und schreibt je Code eine Zeile mit Kennung und Code, etwa `4QH7RA K7QX-4M2P-9ZTB`. Nur hier ist der Code zu sehen: Identity speichert allein seinen SHA-256-Hash, verlorene Codes lassen sich also nicht wieder anzeigen, nur widerrufen und neu anlegen. Ein Code hat 12 Zeichen aus Ziffern und Großbuchstaben ohne I, L, O und U. Beim Eintippen zählen Groß- und Kleinschreibung, Bindestriche und Leerzeichen nicht, ein O gilt als 0, ein I oder L als 1.
+
+`invite list` zeigt je Code Kennung, Status (`open`, `redeemed` oder `revoked`) und den Zeitpunkt der letzten Änderung in UTC, nie den Code. Wer einen Code eingelöst hat, speichert Identity nicht. `invite revoke` widerruft einen offenen Code über seine Kennung, danach ist er nicht mehr einlösbar. Ein eingelöster oder schon widerrufener Code bleibt, wie er ist (`already redeemed <kennung>` bzw. `already revoked <kennung>`), eine unbekannte Kennung ergibt `no invite <kennung>`, alle drei enden mit 3. Ein Code wird höchstens einmal eingelöst, auch wenn zwei Registrierungen ihn gleichzeitig nutzen. Bei falschen Argumenten endet der Befehl mit 2, bei einem anderen Fehler mit 1.
