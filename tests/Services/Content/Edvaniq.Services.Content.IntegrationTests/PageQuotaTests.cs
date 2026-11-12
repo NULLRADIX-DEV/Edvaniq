@@ -116,7 +116,26 @@ public sealed class PageQuotaTests(PageQuotaFactory service) : IClassFixture<Pag
         Assert.False(Query(db => db.StoredFiles.IgnoreQueryFilters().Any(stored => stored.OwnerId == alice)));
     }
 
-    // GET /quota shows the caller's own count only, the generations follow with #302.
+    // A document with more pages than a whole day allows goes on a day nothing was used yet and takes the whole day, the
+    // next one is turned away.
+    [Fact]
+    public async Task BigDocument_OnAFreshDay_TakesTheWholeDay()
+    {
+        var alice = NewUser();
+        using var client = ClientFor(alice);
+        var big = await PasteAsync(client, Text(pages: 4));
+
+        await SplitAsync(big);
+
+        Assert.Equal(DocumentStatus.Analyzing, Stored(big).Status);
+        Assert.Equal(4, Query(db => db.PageCharges.IgnoreQueryFilters().Single(charge => charge.DocumentId == big).Pages));
+        Assert.Equal((0, 3), await QuotaAsync(client));
+
+        using var next = await client.PostAsJsonAsync("/documents", new { text = Text(pages: 4) }, Cancel);
+        Assert.Equal(HttpStatusCode.TooManyRequests, next.StatusCode);
+    }
+
+    // GET /quota shows the caller's own counts only, pages and generations (#302).
     [Fact]
     public async Task Quota_ShowsTheCallersOwnCount()
     {
@@ -129,7 +148,7 @@ public sealed class PageQuotaTests(PageQuotaFactory service) : IClassFixture<Pag
         Assert.Equal(
             ["pagesLeftToday", "pagesPerDay", "generationsLeftToday", "generationsPerDay", "resetsAt"],
             quota.EnumerateObject().Select(field => field.Name));
-        Assert.Equal(JsonValueKind.Null, quota.GetProperty("generationsLeftToday").ValueKind);
+        Assert.Equal((GenerationQuota.DefaultGenerationsPerDay, GenerationQuota.DefaultGenerationsPerDay), (quota.GetProperty("generationsLeftToday").GetInt32(), quota.GetProperty("generationsPerDay").GetInt32()));
         Assert.Equal(
             StudyDay.NextStartUtc(service.Time.GetUtcNow().UtcDateTime),
             quota.GetProperty("resetsAt").GetDateTime().ToUniversalTime());

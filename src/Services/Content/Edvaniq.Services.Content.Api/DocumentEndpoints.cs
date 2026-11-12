@@ -19,6 +19,7 @@ internal static class DocumentEndpoints
             IDocuments documents,
             IAiBudget budget,
             IPageQuota quota,
+            IGenerationQuota generations,
             ICurrentUser user,
             TimeProvider time,
             CancellationToken cancellationToken) =>
@@ -45,7 +46,7 @@ internal static class DocumentEndpoints
             }
 
             // A pasted text knows its pages already, so it doesn't wait for the worker to be turned away.
-            if (await QuotaEndpoints.RefusalAsync(quota, user, PageQuota.PagesOfText(request.Text!), time, cancellationToken) is { } overQuota)
+            if (await QuotaEndpoints.RefusalAsync(quota, generations, user, PageQuota.PagesOfText(request.Text!), time, cancellationToken) is { } overQuota)
             {
                 return overQuota;
             }
@@ -94,9 +95,20 @@ internal static class DocumentEndpoints
                 : Results.NotFound());
 
         // Starts the analysis of a failed document again, the worker picks it up like a new one. 202 with the document as
-        // it is now, 409 if it isn't failed (any more). With the budget of the month used up, 429 for any id.
-        documents.MapPost("/{id:guid}/retry", async (Guid id, IDocuments documents, IAiBudget budget, CancellationToken cancellationToken) =>
-            await BudgetRefusal.OfAsync(budget, cancellationToken) ?? await documents.RetryAsync(id, cancellationToken) switch
+        // it is now, 409 if it isn't failed (any more). With the budget of the month or today's generations used up, 429
+        // for any id. Pages are the worker's to check, a document charged before takes none again.
+        documents.MapPost("/{id:guid}/retry", async (
+            Guid id,
+            IDocuments documents,
+            IAiBudget budget,
+            IPageQuota pages,
+            IGenerationQuota generations,
+            ICurrentUser user,
+            TimeProvider time,
+            CancellationToken cancellationToken) =>
+            await BudgetRefusal.OfAsync(budget, cancellationToken)
+            ?? await QuotaEndpoints.RefusalAsync(pages, generations, user, null, time, cancellationToken, askPages: false)
+            ?? await documents.RetryAsync(id, cancellationToken) switch
             {
                 (RetryResult.Started, { } document) => Results.Accepted($"/documents/{document.Id}", DocumentResponse.From(document)),
                 (RetryResult.NotFound, _) => Results.NotFound(),

@@ -85,6 +85,11 @@ public static class InfrastructureExtensions
             .Validate(options => options.PagesPerDay > 0, "Content:PagesPerDay must be above 0.")
             .ValidateOnStart();
         services.AddScoped<IPageQuota, PageQuotas>();
+        services.AddOptions<GenerationQuotaOptions>()
+            .BindConfiguration(PageQuotaOptions.Section)
+            .Validate(options => options.GenerationsPerDay > 0, "Content:GenerationsPerDay must be above 0.")
+            .ValidateOnStart();
+        services.AddScoped<IGenerationQuota, GenerationQuotas>();
     }
 
     // Only for the operator's document delete command, never in the running API.

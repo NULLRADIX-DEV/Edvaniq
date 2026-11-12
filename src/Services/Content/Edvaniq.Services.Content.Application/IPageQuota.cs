@@ -20,6 +20,10 @@ public interface IPageQuota
 public sealed record PageQuotaState(int PagesPerDay, int Used, DateTime ResetsAt)
 {
     public int Left => Math.Max(0, PagesPerDay - Used);
+
+    // A document with more pages than a whole day allows, like a long PDF, would never fit. It may go on a day nothing
+    // was used yet and takes the whole day then.
+    public bool Allows(int pages) => pages <= Left || (pages > PagesPerDay && Used == 0);
 }
 
 // Content:PagesPerDay, how many pages one user may have processed per study day.

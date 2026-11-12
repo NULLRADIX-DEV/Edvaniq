@@ -41,6 +41,9 @@ internal static partial class ContentLog
     [LoggerMessage(EventId = 3034, EventName = "AiBudgetUnknown", Level = LogLevel.Warning, Message = "AI budget: could not be read at the start ({Error})")]
     public static partial void AiBudgetUnknown(ILogger logger, string error);
 
+    [LoggerMessage(Level = LogLevel.Information, Message = "Document {DocumentId} needs {Generations} generations, its owner has {Left} left today, it is marked as failed")]
+    public static partial void GenerationQuotaExceeded(ILogger logger, Guid documentId, int generations, int left);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Document {DocumentId} needs {Pages} pages, its owner has {Left} left today, it is marked as failed")]
     public static partial void PageQuotaExceeded(ILogger logger, Guid documentId, int pages, int left);
 
