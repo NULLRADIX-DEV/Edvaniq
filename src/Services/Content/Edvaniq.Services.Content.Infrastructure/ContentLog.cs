@@ -74,6 +74,9 @@ internal static partial class ContentLog
     [LoggerMessage(Level = LogLevel.Error, Message = "The file of document {DocumentId} is missing from the file store, it is marked as failed")]
     public static partial void FileMissing(ILogger logger, Guid documentId);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Reading the file of document {DocumentId} broke off too often, it is marked as failed")]
+    public static partial void FileGaveUp(ILogger logger, Guid documentId);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Read {Pages} pages and {Characters} characters from the file of document {DocumentId} in {DurationMs} ms")]
     public static partial void FileRead(ILogger logger, Guid documentId, int pages, int characters, long durationMs);
 
