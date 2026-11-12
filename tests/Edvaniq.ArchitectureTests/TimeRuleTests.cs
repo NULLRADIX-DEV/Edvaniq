@@ -33,8 +33,10 @@ public class TimeRuleTests
         Assert.Equal(
             [
                 "PlainDbContext Entry.At has no UtcDateTimeConverter, so it may not hold UTC",
+                "PlainDbContext Entry.Date has no DateOnlyConverter, so MySQL cannot read it back",
                 "PlainDbContext Entry.Day is a TimeOnly, a point in time is a DateTime in UTC",
                 "PlainDbContext Entry.Offset is a DateTimeOffset, a point in time is a DateTime in UTC",
+                "PlainDbContext Entry.Since has no DateOnlyConverter, so MySQL cannot read it back",
                 "PlainDbContext Entry.Until has no UtcDateTimeConverter, so it may not hold UTC",
             ],
             violations);
@@ -48,6 +50,12 @@ public class TimeRuleTests
 
         Assert.IsType<UtcDateTimeConverter>(entry.FindProperty(nameof(Entry.At))!.GetValueConverter());
         Assert.IsType<UtcDateTimeConverter>(entry.FindProperty(nameof(Entry.Until))!.GetValueConverter());
+        foreach (var date in new[] { nameof(Entry.Date), nameof(Entry.Since) })
+        {
+            Assert.IsType<DateOnlyConverter>(entry.FindProperty(date)!.GetValueConverter());
+            Assert.Equal("date", entry.FindProperty(date)!.GetColumnType());
+        }
+
         Assert.Equal(["TimedDbContext Entry.Day is a TimeOnly, a point in time is a DateTime in UTC",
             "TimedDbContext Entry.Offset is a DateTimeOffset, a point in time is a DateTime in UTC"],
             TimeRule.CheckColumns([typeof(TimedDbContext), typeof(TimedDbContextFactory)]));
@@ -77,6 +85,18 @@ public class TimeRuleTests
 
         Assert.Equal(DateTimeKind.Utc, read.Kind);
         Assert.Equal(new DateTime(2027, 3, 28, 1, 30, 0, DateTimeKind.Utc), read);
+    }
+
+    [Fact]
+    public void DateOnlyConverter_ReadsBackTheSameDay()
+    {
+        var converter = new DateOnlyConverter();
+        var day = new DateOnly(2027, 3, 28);
+
+        var stored = (DateTime)converter.ConvertToProvider(day)!;
+
+        Assert.Equal(new DateTime(2027, 3, 28), stored);
+        Assert.Equal(day, converter.ConvertFromProvider(stored));
     }
 
     [Fact]
@@ -159,6 +179,8 @@ public class TimeRuleTests
         public TimeOnly Day { get; set; }
 
         public DateOnly Date { get; set; }
+
+        public DateOnly? Since { get; set; }
     }
 
     private sealed class PlainDbContext(DbContextOptions<PlainDbContext> options) : DbContext(options)
