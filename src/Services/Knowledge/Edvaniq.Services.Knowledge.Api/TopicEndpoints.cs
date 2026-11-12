@@ -21,6 +21,13 @@ internal static class TopicEndpoints
                 ? Results.Ok(await TopicResponse.FromAsync(topic, topics, cancellationToken))
                 : Results.NotFound());
 
+        // The key terms of the topic (#292), each with its definition quoted from the material and where it stands. A
+        // hidden topic gives its terms too, like the topic itself; someone else's or none at all: 404.
+        topics.MapGet("/{id:guid}/terms", async (Guid id, ITopics topics, CancellationToken cancellationToken) =>
+            await topics.TermsAsync(id, cancellationToken) is { } terms
+                ? Results.Ok(terms.Select(term => new KeyTermResponse(term.Term, term.Definition, term.DocumentId, term.SectionId)))
+                : Results.NotFound());
+
         topics.MapPost("/", async (NewTopic request, ITopics topics, IServiceScopeFactory scopes, CancellationToken cancellationToken) =>
         {
             var errors = new Dictionary<string, string[]>();
@@ -95,6 +102,9 @@ internal static class TopicEndpoints
 }
 
 internal sealed record RenamedTopic(string? Name);
+
+// SectionId is Content's section of the document DocumentId that the definition quotes.
+internal sealed record KeyTermResponse(string Term, string Definition, Guid DocumentId, Guid SectionId);
 
 internal sealed record NewTopic(string? Name, Guid? LearningGoalId, Guid? ParentId);
 

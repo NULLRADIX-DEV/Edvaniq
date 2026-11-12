@@ -80,14 +80,19 @@ public sealed class ReferenceSetRunTests
     {
         var sections = SectionSplitter.Split(text);
         Guid[] ids = [.. sections.Select(_ => Guid.NewGuid())];
+        string[] texts = [.. sections.Select(span => text.Substring(span.Start, span.Length))];
         var answer = await host.Services.GetRequiredService<IChatClient>().GetResponseAsync(
             [
                 new ChatMessage(ChatRole.System, TopicAnalysis.System(LearnerProfile.Default)),
-                new ChatMessage(ChatRole.User, TopicAnalysis.User(sections.Select(span => text.Substring(span.Start, span.Length)))),
+                new ChatMessage(ChatRole.User, TopicAnalysis.User(texts)),
             ],
             cancellationToken: TestContext.Current.CancellationToken);
-        var suggestions = TopicAnalysis.Read(answer.Text, ids);
+        var suggestions = TopicAnalysis.Read(answer.Text, ids, texts);
         Assert.NotNull(suggestions);
+
+        // #292: every key term quotes the section it names, as Read only keeps those.
+        Assert.All(suggestions.SelectMany(suggestion => suggestion.Terms ?? []), term => Assert.Contains(
+            term.Definition, string.Join(' ', texts[Array.IndexOf(ids, term.SectionId)].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)), StringComparison.Ordinal));
         return (ReferenceScore.Of(document, text, sections, ids, suggestions), suggestions);
     }
 

@@ -19,6 +19,8 @@ public sealed class KnowledgeDbContext(DbContextOptions<KnowledgeDbContext> opti
 
     public DbSet<TopicSet> TopicSets => Set<TopicSet>();
 
+    public DbSet<KeyTerm> KeyTerms => Set<KeyTerm>();
+
     // A save that adds or changes topics must change their TopicSet too (ITopicState.TouchAsync), else two saves on one
     // learning goal could pass each other. Deleting brings no name twice and is left out, so a user with topics from before
     // TopicSets still goes as a whole. A save that loses on a TopicSet found the topics changed meanwhile: no failure, it
@@ -99,6 +101,13 @@ public sealed class KnowledgeDbContext(DbContextOptions<KnowledgeDbContext> opti
         section.Property(item => item.DocumentId).HasDefaultValue(Guid.Empty);
         section.HasIndex(item => item.DocumentId);
         section.HasOne<Topic>().WithMany().HasForeignKey(item => item.TopicId).OnDelete(DeleteBehavior.Cascade);
+
+        // A term goes with its topic. Content asks nothing of it, the user reads them per topic.
+        var term = modelBuilder.Entity<KeyTerm>();
+        term.Property(item => item.Term).HasMaxLength(KeyTerm.TermMaxLength);
+        term.Property(item => item.Definition).HasMaxLength(KeyTerm.DefinitionMaxLength);
+        term.HasOne<Topic>().WithMany().HasForeignKey(item => item.TopicId).OnDelete(DeleteBehavior.Cascade);
+        term.HasIndex(item => new { item.OwnerId, item.DocumentId });
 
         var set = modelBuilder.Entity<TopicSet>();
         set.HasKey(item => new { item.OwnerId, item.LearningGoalId });

@@ -251,5 +251,23 @@ public class TopicImportTests
         Assert.Equal([(added.Id, sections[0]), (subtopic.Id, sections[1])], import.Sections.Select(section => (section.TopicId, section.SectionId)));
     }
 
+    // #292: a term goes to the topic its suggestion turned out to be, a known one here, and once whatever its case.
+    [Fact]
+    public void Terms_GoToTheTopicTheirSuggestionResolvedTo_EachOnce()
+    {
+        const string definition = "Der Zellkern ist das Steuerzentrum der Zelle.";
+        var known = TopicImport.From(Analysis(new TopicSuggestion("Zelle", null, [])), Goal, Now, []).Topics;
+        var section = Guid.NewGuid();
+
+        var import = TopicImport.From(
+            Analysis(new TopicSuggestion("zelle", null, [section], [new("Zellkern", section, definition), new("ZELLKERN", section, definition)])),
+            Goal,
+            Now,
+            known);
+
+        var term = Assert.Single(import.Terms!);
+        Assert.Equal((known[0].Id, section, "Zellkern", definition), (term.TopicId, term.SectionId, term.Term, term.Definition));
+    }
+
     private static DocumentAnalyzed Analysis(params TopicSuggestion[] topics) => new("alice", Guid.NewGuid(), topics);
 }

@@ -24,6 +24,7 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         .Exempt("GET", "/me", "Only the caller's own id from the token.")
         .List("GET", "/topics")
         .Item("GET", "/topics/{id:guid}")
+        .Item("GET", "/topics/{id:guid}/terms")
         .Item("PATCH", "/topics/{id:guid}", new { name = "Von Bob" })
         .Item("PUT", "/topics/{id:guid}/hidden")
         .Item("DELETE", "/topics/{id:guid}/hidden")
@@ -127,6 +128,9 @@ public sealed class LeakyServiceFactory(MySqlTestServer mysql) : ServiceFactory(
     {
         public async Task<IReadOnlyList<Topic>> ListAsync(Guid? learningGoalId, CancellationToken cancellationToken) =>
             await db.Topics.AsNoTracking().ToListAsync(cancellationToken);
+
+        public Task<IReadOnlyList<KeyTerm>?> TermsAsync(Guid topicId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<KeyTerm>?>([]);
 
         public Task<Topic?> FindAsync(Guid id, CancellationToken cancellationToken) =>
             AllTopics().AsNoTracking().FirstOrDefaultAsync(topic => topic.Id == id, cancellationToken);
