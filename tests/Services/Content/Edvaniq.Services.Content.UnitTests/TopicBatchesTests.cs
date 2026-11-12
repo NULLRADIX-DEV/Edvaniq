@@ -74,6 +74,28 @@ public sealed class TopicBatchesTests
         Assert.Equal(s.Length, merged.Sum(topic => topic.SectionIds.Count));
     }
 
+    // #326: the key terms of a topic that goes on come from both parts, each once.
+    [Fact]
+    public void TopicGoingOn_TakesTheTermsOfBothParts()
+    {
+        var s = Enumerable.Range(0, 2).Select(_ => Guid.NewGuid()).ToArray();
+        IReadOnlyList<TopicSuggestion> first =
+            [new("Fotosynthese", null, [s[0]], [new("Chlorophyll", s[0], "Chlorophyll ist der grüne Farbstoff der Pflanzen.")])];
+        IReadOnlyList<TopicSuggestion> second =
+        [
+            new("Fotosynthese", null, [s[1]],
+            [
+                new("chlorophyll", s[1], "Chlorophyll fängt das Licht für die Pflanze ein."),
+                new("Glucose", s[1], "Glucose ist der Zucker, den die Pflanze bildet."),
+            ]),
+        ];
+
+        var merged = Assert.Single(TopicMerge.Merge([first, second], [30, 30], s));
+
+        Assert.Equal(["Chlorophyll", "Glucose"], merged.Terms!.Select(term => term.Term));
+        Assert.Equal(s, merged.SectionIds);
+    }
+
     // Beyond its quota a part loses topics, never sections: a subtopic's go to its topic, a topic's to the one before.
     [Fact]
     public void TopicsBeyondTheQuota_GiveTheirSectionsAway()

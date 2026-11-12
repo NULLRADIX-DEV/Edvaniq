@@ -28,6 +28,10 @@ internal static class PromptMaterial
     public static string Line(string text) =>
         string.Join(' ', WebUtility.HtmlDecode(text).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
+    // A topic name from an earlier answer, escaped and on one line, so it can't end its block either.
+    public static string Name(string name) =>
+        Escape(string.Join(' ', name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)));
+
     private static string Escape(string text) =>
         text.Replace("&", "&amp;", StringComparison.Ordinal)
             .Replace("<", "&lt;", StringComparison.Ordinal)

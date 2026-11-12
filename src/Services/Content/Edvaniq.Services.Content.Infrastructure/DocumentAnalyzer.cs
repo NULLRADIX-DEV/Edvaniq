@@ -157,11 +157,14 @@ public sealed class DocumentAnalyzer(
         IReadOnlyList<int> lengths = [.. sections.Select(section => section.Length)];
         var batches = TopicBatches.Of(lengths, BatchCharacters);
         var quotas = TopicBatches.Quotas([.. batches.Select(batch => lengths.Take(batch).Sum())], TopicAnalysis.MaxTopics);
+        IReadOnlyList<Guid> order = [.. sections.Select(section => section.Id)];
         var parts = new List<IReadOnlyList<TopicSuggestion>>();
         StructuredAnswer<IReadOnlyList<TopicSuggestion>>? answer = null;
         foreach (var batch in batches)
         {
-            answer = await PartAsync(document, profile, chat, sections.Take(batch).ToList(), cancellationToken);
+            // A later part sees the topics so far, as the merge of the parts before puts them.
+            IReadOnlyList<TopicSuggestion> topicsBefore = parts.Count == 0 ? [] : TopicMerge.Merge(parts, quotas, order);
+            answer = await PartAsync(document, profile, topicsBefore, chat, sections.Take(batch).ToList(), cancellationToken);
             if (answer.Value is not { } part)
             {
                 return answer;
@@ -175,17 +178,22 @@ public sealed class DocumentAnalyzer(
             return new StructuredAnswer<IReadOnlyList<TopicSuggestion>>(null, 0, new UsageDetails(), null, null, []);
         }
 
-        return parts.Count == 1 ? answer : answer with { Value = TopicMerge.Merge(parts, quotas, [.. sections.Select(section => section.Id)]) };
+        return parts.Count == 1 ? answer : answer with { Value = TopicMerge.Merge(parts, quotas, order) };
     }
 
     private async Task<StructuredAnswer<IReadOnlyList<TopicSuggestion>>> PartAsync(
-        Document document, LearnerProfile profile, IChatClient chat, IReadOnlyList<Section> sections, CancellationToken cancellationToken)
+        Document document,
+        LearnerProfile profile,
+        IReadOnlyList<TopicSuggestion> topicsBefore,
+        IChatClient chat,
+        IReadOnlyList<Section> sections,
+        CancellationToken cancellationToken)
     {
         IReadOnlyList<Guid> ids = [.. sections.Select(section => section.Id)];
         IReadOnlyList<string> texts = [.. sections.Select(section => document.Text.Substring(section.Start, section.Length))];
         var answer = await chat.AskAsync(
             [
-                new ChatMessage(ChatRole.System, TopicAnalysis.System(profile)),
+                new ChatMessage(ChatRole.System, TopicAnalysis.System(profile, topicsBefore)),
                 new ChatMessage(ChatRole.User, TopicAnalysis.User(texts)),
             ],
             text => TopicAnalysis.Read(text, ids, texts),

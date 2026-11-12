@@ -1015,6 +1015,15 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.InRange(chapters.Max(), 27, 30);
         Assert.InRange(chapters.Count, 1, TopicAnalysis.MaxTopics);
         Assert.InRange(AttemptsOf(id).Count, 4, 6);
+
+        // The first part is asked like a whole document, every later one gets the topics so far as its outline.
+        var systems = prompts
+            .Where(message => message.Role == ChatRole.System && message.Text.StartsWith(ContentAi.TopicsTask, StringComparison.Ordinal))
+            .Select(message => message.Text.ReplaceLineEndings("\n"))
+            .ToList();
+        Assert.Equal(TopicAnalysis.System(LearnerProfile.Default).ReplaceLineEndings("\n"), systems[0]);
+        Assert.All(systems.Skip(1), system => Assert.Contains("<outline>\n- Kapitel 1\n", system, StringComparison.Ordinal));
+        Assert.Equal(AttemptsOf(id).Count, systems.Count);
     }
 
     // The same document in one prompt passes the context: the provider refuses it, and the document fails as with any
