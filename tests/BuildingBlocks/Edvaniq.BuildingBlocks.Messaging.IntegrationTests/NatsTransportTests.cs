@@ -47,13 +47,16 @@ public sealed class NatsTransportTests(NatsTestServer nats) : IAsyncLifetime
     public async Task Publish_OfAMessageIdTheStreamKnows_CountsAsSent()
     {
         await transport.EnsureStreamAsync(Stream, TestContext.Current.CancellationToken);
-        var message = new OutgoingMessage("sender.greeted", Guid.NewGuid(), "{}");
+        // A subject of its own: other test classes publish to the same stream at the same time.
+        var subject = $"sender.dedupe-{Guid.NewGuid():N}";
+        var message = new OutgoingMessage(subject, Guid.NewGuid(), "{}");
 
         await transport.PublishAsync(message, TestContext.Current.CancellationToken);
         await transport.PublishAsync(message, TestContext.Current.CancellationToken);
 
-        var stream = await client.CreateJetStreamContext().GetStreamAsync(Stream.Name, cancellationToken: TestContext.Current.CancellationToken);
-        Assert.Equal(1L, stream.Info.State.Messages);
+        var stream = await client.CreateJetStreamContext().GetStreamAsync(
+            Stream.Name, new StreamInfoRequest { SubjectsFilter = subject }, TestContext.Current.CancellationToken);
+        Assert.Equal(1L, Convert.ToInt64(Assert.Single(stream.Info.State.Subjects!, entry => entry.Key == subject).Value));
     }
 
     [Fact]
