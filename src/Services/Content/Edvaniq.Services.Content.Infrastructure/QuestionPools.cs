@@ -27,7 +27,8 @@ public sealed class QuestionPools(
     TimeProvider time,
     ILogger<QuestionPools> logger) : BackgroundService
 {
-    private const int Batch = 10;
+    // Documents per round. A full round means more are waiting, the next one starts without a pause.
+    public int Batch { get; set; } = 10;
 
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(2);
 
@@ -83,20 +84,29 @@ public sealed class QuestionPools(
         return finished;
     }
 
-    // The documents of all users whose topics went out longest ago and that are still in analysis. One postponed after
-    // an outage only counts once it's due, and then from that time on.
+    // The documents still in analysis whose topics went out, the users taking turns (FairOrder), each by the time their
+    // topics went out. One postponed after an outage only counts once it's due, and then from that time on. The oldest of
+    // every user comes from its own query, so nobody waits behind the cap of another user's many documents.
     public async Task<IReadOnlyList<Guid>> WaitingAsync(CancellationToken cancellationToken)
     {
         var now = time.GetUtcNow().UtcDateTime;
         using var scope = scopes.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<ContentDbContext>().Documents
+        var due = scope.ServiceProvider.GetRequiredService<ContentDbContext>().Documents
             .IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .Where(document => document.Status == DocumentStatus.Analyzing && document.AnalyzedAt != null)
-            .Where(document => document.NextAttemptAt == null || document.NextAttemptAt <= now)
-            .OrderBy(document => document.NextAttemptAt ?? document.AnalyzedAt)
-            .Select(document => document.Id)
-            .Take(Batch)
+            .Where(document => document.NextAttemptAt == null || document.NextAttemptAt <= now);
+        var oldest = await due
+            .Where(document => (document.NextAttemptAt ?? document.AnalyzedAt) == due
+                .Where(other => other.OwnerId == document.OwnerId)
+                .Min(other => other.NextAttemptAt ?? other.AnalyzedAt))
+            .Select(document => new WaitingDocument(document.Id, document.OwnerId, (document.NextAttemptAt ?? document.AnalyzedAt)!.Value))
             .ToListAsync(cancellationToken);
+        var rest = await due
+            .OrderBy(document => document.NextAttemptAt ?? document.AnalyzedAt)
+            .Select(document => new WaitingDocument(document.Id, document.OwnerId, (document.NextAttemptAt ?? document.AnalyzedAt)!.Value))
+            .Take(FairOrder.MaxCandidates)
+            .ToListAsync(cancellationToken);
+        return FairOrder.Of([.. oldest, .. rest], Batch);
     }
 
     // True if the document became ready or failed, false if it still waits for Knowledge.

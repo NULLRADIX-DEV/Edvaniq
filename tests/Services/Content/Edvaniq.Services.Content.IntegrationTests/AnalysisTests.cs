@@ -423,6 +423,39 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             && entry.Message.StartsWith($"The AI provider refused the {AiAttempt.Topics} of document {id} with status {(int)status} ", StringComparison.Ordinal));
     }
 
+    // #289: Alice pastes three texts before Bob pastes one. Bob's comes second, at the analysis and at the questions alike,
+    // not after all of Alice's.
+    [Fact]
+    public async Task ManyDocumentsOfOneUser_HoldUpNoOtherUser()
+    {
+        using var alice = ClientFor($"alice-{Guid.NewGuid():N}");
+        using var bob = ClientFor($"bob-{Guid.NewGuid():N}");
+        var first = await PasteAsync(alice, Text);
+        var second = await PasteAsync(alice, Text);
+        var third = await PasteAsync(alice, Text);
+        var bobs = await PasteAsync(bob, Text);
+        var splitter = ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services);
+        foreach (var id in new[] { first, second, third, bobs })
+        {
+            await splitter.SplitAsync(id, TestContext.Current.CancellationToken);
+        }
+
+        var analyzer = Analyzer();
+        analyzer.Batch = 1000;
+        var analysis = (await analyzer.WaitingAsync(TestContext.Current.CancellationToken)).Where(new[] { first, second, third, bobs }.Contains).ToList();
+        foreach (var id in new[] { first, second, third, bobs })
+        {
+            await analyzer.AnalyzeAsync(id, TestContext.Current.CancellationToken);
+        }
+
+        var pools = Pools();
+        pools.Batch = 1000;
+        var questions = (await pools.WaitingAsync(TestContext.Current.CancellationToken)).Where(new[] { first, second, third, bobs }.Contains).ToList();
+
+        Assert.Equal([first, bobs, second, third], analysis);
+        Assert.Equal([first, bobs, second, third], questions);
+    }
+
     // Alice's document waits for the provider, Bob's goes on: a postponed document is out of the round until it's due
     // and then lines up by that time, behind Bob's older one, not by its own age.
     [Fact]

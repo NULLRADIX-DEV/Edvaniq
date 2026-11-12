@@ -75,20 +75,29 @@ public sealed class DocumentAnalyzer(
         return waiting.Count;
     }
 
-    // The documents in analysis of all users whose topics are still to come, oldest first. One postponed after an outage
-    // only counts once it's due, and then from that time on.
+    // The documents in analysis of all users whose topics are still to come, the users taking turns (FairOrder), each
+    // oldest first. One postponed after an outage only counts once it's due, and then from that time on. The oldest of
+    // every user comes from its own query, so nobody waits behind the cap of another user's many documents.
     public async Task<IReadOnlyList<Guid>> WaitingAsync(CancellationToken cancellationToken)
     {
         var now = time.GetUtcNow().UtcDateTime;
         using var scope = scopes.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<ContentDbContext>().Documents
+        var due = scope.ServiceProvider.GetRequiredService<ContentDbContext>().Documents
             .IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .Where(document => document.Status == DocumentStatus.Analyzing && document.AnalyzedAt == null)
-            .Where(document => document.NextAttemptAt == null || document.NextAttemptAt <= now)
-            .OrderBy(document => document.NextAttemptAt ?? document.CreatedAt)
-            .Select(document => document.Id)
-            .Take(Batch)
+            .Where(document => document.NextAttemptAt == null || document.NextAttemptAt <= now);
+        var oldest = await due
+            .Where(document => (document.NextAttemptAt ?? document.CreatedAt) == due
+                .Where(other => other.OwnerId == document.OwnerId)
+                .Min(other => other.NextAttemptAt ?? other.CreatedAt))
+            .Select(document => new WaitingDocument(document.Id, document.OwnerId, document.NextAttemptAt ?? document.CreatedAt))
             .ToListAsync(cancellationToken);
+        var rest = await due
+            .OrderBy(document => document.NextAttemptAt ?? document.CreatedAt)
+            .Select(document => new WaitingDocument(document.Id, document.OwnerId, document.NextAttemptAt ?? document.CreatedAt))
+            .Take(FairOrder.MaxCandidates)
+            .ToListAsync(cancellationToken);
+        return FairOrder.Of([.. oldest, .. rest], Batch);
     }
 
     public async Task AnalyzeAsync(Guid documentId, CancellationToken cancellationToken)
