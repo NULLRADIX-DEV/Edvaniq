@@ -150,7 +150,7 @@ public class TodayPlansTests
         public Task<IReadOnlyList<DoneBlock>> OnAsync(Guid learningGoalId, DateOnly studyDay, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<DoneBlock>>([]);
 
-        public Task AddAsync(DoneBlock block, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public void Add(DoneBlock block) => throw new NotSupportedException();
     }
 
     private sealed class NoStartedBlocks : IStartedBlocks

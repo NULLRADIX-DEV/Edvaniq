@@ -29,7 +29,8 @@ internal sealed class Sessions(PlanningDbContext db) : ISessions
             .FirstOrDefaultAsync(cancellationToken);
 
     // LastActivityAt is a concurrency token: the later of two changes updates no row, and the tracker forgets the
-    // session so the next read gets the stored one.
+    // session so the next read gets the stored one. Finishing also inserts the done block (#395): which of the two
+    // statements fails first for the later finish is up to EF, the block's key counts as the same lost race.
     public async Task<bool> TrySaveAsync(CancellationToken cancellationToken)
     {
         try
@@ -37,7 +38,8 @@ internal sealed class Sessions(PlanningDbContext db) : ISessions
             await db.SaveChangesAsync(cancellationToken);
             return true;
         }
-        catch (DbUpdateConcurrencyException)
+        catch (DbUpdateException exception)
+            when (exception is DbUpdateConcurrencyException || exception.InnerException is MySqlException { Number: DuplicateKey })
         {
             db.ChangeTracker.Clear();
             return false;

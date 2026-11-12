@@ -77,7 +77,7 @@ public sealed class TopicStateTests
         Assert.False(TopicStates.HasHighRecentErrorRate(answers.AsEnumerable().Reverse()));
     }
 
-    // The transition until #395: without an introduction the first learning record introduces the topic.
+    // The transition until #396: without an introduction the first learning record introduces the topic.
     [Fact]
     public void WithoutIntroduction_IsNew_UntilTheFirstRecordIntroducesIt()
     {

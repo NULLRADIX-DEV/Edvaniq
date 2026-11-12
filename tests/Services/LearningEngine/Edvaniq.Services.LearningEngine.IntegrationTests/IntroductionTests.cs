@@ -19,7 +19,7 @@ using Mode = Edvaniq.Services.Assessment.Contracts.Mode;
 namespace Edvaniq.Services.LearningEngine.IntegrationTests;
 
 // SessionCompleted from Planning introduces topics. From then on only the unit's check questions and later answers
-// count. Until Planning sends it (#395) a topic without an introduction counts from its first answer on.
+// count. Until the client runs sessions (#396) a topic without an introduction counts from its first answer on.
 public sealed class IntroductionTests(ServiceFactory service) : IClassFixture<ServiceFactory>
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);

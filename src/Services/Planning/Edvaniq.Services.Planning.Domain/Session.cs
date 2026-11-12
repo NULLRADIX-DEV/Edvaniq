@@ -5,7 +5,7 @@ namespace Edvaniq.Services.Planning.Domain;
 // The run through one block of the plan (docs/spec/glossary.md#session). Bound to the block and its topic from the
 // moment it starts. A user has at most one active session: ActiveOwnerId is the owner while it runs and null once it
 // ended, and the database keeps it unique, so even two starts at once leave one. Broken off it ends as Aborted (#393),
-// finishing it comes with #395.
+// finished as Completed (#395).
 public sealed class Session : IOwnedByUser
 {
     private Session(
@@ -115,11 +115,44 @@ public sealed class Session : IOwnedByUser
             return false;
         }
 
+        End(endedAt, SessionOutcome.Aborted);
+        return true;
+    }
+
+    // Ends the session as finished (#395), from whichever step: the client decides when the user is done, the steps
+    // count as gone through. False when it ended already, then nothing changes.
+    public bool Complete(DateTime endedAt)
+    {
+        if (!IsActive)
+        {
+            return false;
+        }
+
+        CurrentStep = Steps.Count - 1;
+        End(endedAt, SessionOutcome.Completed);
+        return true;
+    }
+
+    // The block as it was planned, done once the session is finished.
+    public DoneBlock ToDoneBlock() =>
+        DoneBlock.Create(BlockId, OwnerId, LearningGoalId, StudyDay, new Block(TopicId, Minutes, Kind), EndedAt
+            ?? throw new InvalidOperationException("A session that runs has no done block."));
+
+    // The topic whose unit "Neues Thema" was finished in this session (docs/spec/events.md#felder): when finished, or
+    // broken off past the unit. Empty for a topic that wasn't new.
+    public IReadOnlyList<Guid> IntroducedTopicIds()
+    {
+        var unit = Steps.ToList().FindIndex(step => step.Kind == SessionStepKind.IntroductionUnit);
+        var passed = Outcome == SessionOutcome.Completed || (Outcome == SessionOutcome.Aborted && CurrentStep > unit);
+        return unit >= 0 && passed ? [TopicId] : [];
+    }
+
+    private void End(DateTime endedAt, SessionOutcome outcome)
+    {
         Count(endedAt);
         EndedAt = Stored(endedAt);
         ActiveOwnerId = null;
-        Outcome = SessionOutcome.Aborted;
-        return true;
+        Outcome = outcome;
     }
 
     // Moves to the step, never back: a step at or before the current one changes nothing, so a repeated call is harmless.
@@ -178,6 +211,9 @@ public enum SessionOutcome
 
     // Broken off (#393): the answers count, the block stays open and goes on from here.
     Aborted,
+
+    // Finished (#395): the block is done.
+    Completed,
 }
 
 public enum SessionAdvance

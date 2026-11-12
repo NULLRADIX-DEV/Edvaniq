@@ -3,7 +3,7 @@ using Edvaniq.Services.LearningEngine.Domain;
 namespace Edvaniq.Services.LearningEngine.UnitTests;
 
 // Start value and introduction (#363): before it a topic is new at its start value, after it the answers count, the
-// check questions of the introducing session included. Without an introduction the transition until #395 applies.
+// check questions of the introducing session included. Without an introduction the transition until #396 applies.
 public sealed class TopicIntroductionTests
 {
     private const int Precision = 9;
@@ -53,7 +53,7 @@ public sealed class TopicIntroductionTests
         Assert.Equal(new TopicStanding(50, TopicState.Building), TopicStates.Assess([before], Introduction(Monday), Monday));
     }
 
-    // The transition until #395: no introduction, so the first record introduces the topic and every record counts.
+    // The transition until #396: no introduction, so the first record introduces the topic and every record counts.
     [Fact]
     public void WithoutIntroduction_UntilSessionsExist_EveryRecordCounts()
     {

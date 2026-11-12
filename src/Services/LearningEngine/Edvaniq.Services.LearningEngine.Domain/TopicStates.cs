@@ -76,8 +76,9 @@ public static class TopicStates
             ? (IntroducedByFirstRecord(records).Introduced || carry is not null, records)
             : (true, records.Where(introduction.Counts).ToList());
 
-    // Transition until Planning sends SessionCompleted (#395): until then no topic gets an introduction, so one without
-    // counts as introduced from its first learning record on, with all its records. Practising keeps moving the mastery.
+    // Transition until the client runs sessions (#396): practice outside a session brings no introduction, so a topic
+    // without one counts as introduced from its first learning record on, with all its records. Practising keeps moving
+    // the mastery.
     // Once a topic has an introduction, only that decides.
     public static (bool Introduced, List<LearningRecord> Counted) IntroducedByFirstRecord(List<LearningRecord> records) =>
         (records.Count > 0, records);

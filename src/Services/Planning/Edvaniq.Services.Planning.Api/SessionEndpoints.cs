@@ -48,6 +48,13 @@ internal static class SessionEndpoints
                 ? Results.Ok(SessionResponse.From(session, existing: true))
                 : Results.NotFound());
 
+        // Finishing ends the session and marks its block done (#395). Doing it again, or on a session broken off, gives the
+        // session as it is and sends nothing.
+        group.MapPost("/{id:guid}/complete", async (Guid id, SessionChanges changes, CancellationToken cancellationToken) =>
+            await changes.CompleteAsync(id, cancellationToken) is { } session
+                ? Results.Ok(SessionResponse.From(session, existing: true))
+                : Results.NotFound());
+
         // Only forward: a step at or before the current one changes nothing.
         group.MapPost("/{id:guid}/advance", async (Guid id, AdvanceRequest request, SessionChanges changes, CancellationToken cancellationToken) =>
         {
@@ -91,7 +98,7 @@ internal sealed record AdvanceRequest(int? Step);
 // Kind is "learn" or "review". Existing: the user had this session already, a start brought it back. EndedAt is null
 // while it runs. Steps: the fixed order of the session (#377), each "review", "introductionUnit" or "quiz", Empty when
 // there is nothing to do in it (the review until M4), Questions the size the client passes to POST /quizzes of
-// Assessment for the quiz. CurrentStep: the index in Steps the user is at. Outcome: "running" or "aborted" (#393).
+// Assessment for the quiz. CurrentStep: the index in Steps the user is at. Outcome: "running", "aborted" (#393) or "completed" (#395).
 // ActiveSeconds: the active learning time up to the last signal (#394).
 internal sealed record SessionResponse(
     Guid Id,
@@ -123,7 +130,12 @@ internal sealed record SessionResponse(
             existing,
             [.. session.Steps.Select(step => new StepResponse(NameOf(step.Kind), step.Empty, step.Questions))],
             session.CurrentStep,
-            session.Outcome == SessionOutcome.Aborted ? "aborted" : "running",
+            session.Outcome switch
+            {
+                SessionOutcome.Aborted => "aborted",
+                SessionOutcome.Completed => "completed",
+                _ => "running",
+            },
             session.ActiveSeconds);
 
     private static string NameOf(SessionStepKind kind) => kind switch
