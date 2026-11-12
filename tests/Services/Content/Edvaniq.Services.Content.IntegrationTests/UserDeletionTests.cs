@@ -110,8 +110,15 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         var bobs = await SaveFileAsync(bob);
         var messageId = await DeleteAsync(alice);
         await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
-        await CreateItemAsync(alice, "Notiz danach");
+        // Stored directly, as the late handler would: a request with Alice's token is turned away by now (#953).
         var late = await SaveFileAsync(alice);
+        using (var scope = service.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
+            db.Documents.Add(Document.Upload(alice, Guid.NewGuid(), "Notizen.txt", late, FileFormat.Text, DateTime.UtcNow));
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
         var hash = DeletedUser.HashOf(alice);
         Query(db => db.Set<DeletedUser>().Where(user => user.Hash == hash)
             .ExecuteUpdate(set => set.SetProperty(user => user.DeletedAt, DateTime.UtcNow.AddMinutes(-10))));
