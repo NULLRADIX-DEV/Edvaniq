@@ -263,6 +263,45 @@ public sealed class TopicsChangedTests(ServiceFactory service) : IClassFixture<S
         Assert.Equal(3, state.Count);
     }
 
+    // #380: every topic with its place in the material, subtopics right after their topic, and its sections.
+    [Fact]
+    public async Task Analysis_GivesEveryTopicItsRankAndSections()
+    {
+        var alice = NewUser();
+        await DeliverAsync(new(alice, Guid.NewGuid(), [
+            new("Zelle", null, [Guid.NewGuid(), Guid.NewGuid()]),
+            new("Gewebe", null, [Guid.NewGuid()]),
+            new("Kern", 0, [Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()])]));
+
+        var changed = Assert.Single(Events(alice));
+
+        Assert.Equal(
+            [("Zelle", 0, 2), ("Kern", 1, 3), ("Gewebe", 2, 1)],
+            changed.Topics!.Select(facts => (NameOf(facts.TopicId), facts.Rank, facts.Sections)));
+    }
+
+    // Hidden topics keep their rank and sections, with their subtopics.
+    [Fact]
+    public async Task HiddenTopic_KeepsItsRankAndSections()
+    {
+        var alice = NewUser();
+        await DeliverAsync(new(alice, Guid.NewGuid(), [new("Zelle", null, [Guid.NewGuid()]), new("Kern", 0, [Guid.NewGuid()]), new("Gewebe", null, [])]));
+        var zelle = Query(db => db.Topics.IgnoreQueryFilters().Single(topic => topic.OwnerId == alice && topic.Name == "Zelle").Id);
+        using var client = service.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.Create(alice));
+        using var response = await client.PutAsync($"/topics/{zelle}/hidden", null, TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode);
+
+        var changed = Events(alice)[^1];
+
+        Assert.Equal(2, changed.HiddenTopicIds.Count);
+        Assert.Equal(
+            [("Zelle", 0, 1), ("Kern", 1, 1), ("Gewebe", 2, 0)],
+            changed.Topics!.Select(facts => (NameOf(facts.TopicId), facts.Rank, facts.Sections)));
+    }
+
+    private string NameOf(Guid topic) => Query(db => db.Topics.IgnoreQueryFilters().Single(item => item.Id == topic).Name);
+
     private static string NewUser() => $"alice-{Guid.NewGuid():N}";
 
     private List<(Guid Topic, Guid Section)> Sections(string user, Guid documentId) =>

@@ -36,7 +36,7 @@ internal sealed class TopicState(KnowledgeDbContext db, TimeProvider time) : ITo
     {
         var stored = await db.Topics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId)
-            .Select(topic => new TopicInState(topic.Id, topic.ParentId, topic.Hidden))
+            .Select(topic => new TopicInState(topic.Id, topic.ParentId, topic.Hidden, topic.CreatedAt, topic.Position, topic.Name, 0))
             .ToListAsync(cancellationToken);
 
         // The tracker knows what the save will change: topics added, deleted, moved to another goal or hung under another
@@ -48,8 +48,35 @@ internal sealed class TopicState(KnowledgeDbContext db, TimeProvider time) : ITo
             .ToHashSet();
         var joining = pending
             .Where(entry => entry.State != EntityState.Deleted && entry.Entity.LearningGoalId == learningGoalId)
-            .Select(entry => new TopicInState(entry.Entity.Id, entry.Entity.ParentId, entry.Entity.Hidden));
+            .Select(entry => new TopicInState(
+                entry.Entity.Id, entry.Entity.ParentId, entry.Entity.Hidden, entry.Entity.CreatedAt, entry.Entity.Position, entry.Entity.Name, 0));
 
-        return [.. joining.Concat(stored).DistinctBy(topic => topic.Id).Where(topic => !leaving.Contains(topic.Id))];
+        var topics = joining.Concat(stored).DistinctBy(topic => topic.Id).Where(topic => !leaving.Contains(topic.Id)).ToList();
+        var sections = await SectionsAsync(ownerId, [.. topics.Select(topic => topic.Id)], cancellationToken);
+        return [.. topics.Select(topic => topic with { Sections = sections.GetValueOrDefault(topic.Id) })];
+    }
+
+    // Sections per topic once the save is done: the deletion of a document (#202) or a new analysis removes and adds them
+    // in the same unit of work.
+    private async Task<Dictionary<Guid, int>> SectionsAsync(string ownerId, List<Guid> topicIds, CancellationToken cancellationToken)
+    {
+        var counts = await db.TopicSections.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .Where(section => section.OwnerId == ownerId && topicIds.Contains(section.TopicId))
+            .GroupBy(section => section.TopicId)
+            .Select(group => new { TopicId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(entry => entry.TopicId, entry => entry.Count, cancellationToken);
+
+        foreach (var entry in db.ChangeTracker.Entries<TopicSection>().Where(entry => entry.Entity.OwnerId == ownerId))
+        {
+            var change = entry.State switch
+            {
+                EntityState.Added => 1,
+                EntityState.Deleted => -1,
+                _ => 0,
+            };
+            counts[entry.Entity.TopicId] = counts.GetValueOrDefault(entry.Entity.TopicId) + change;
+        }
+
+        return counts;
     }
 }

@@ -19,6 +19,7 @@ public class TopicsChangedContractTests
         var changed = JsonSerializer.Deserialize<TopicsChanged>(json, EventJson.Options)!;
 
         Assert.Null(changed.Parents);
+        Assert.Null(changed.Topics);
         Assert.Equal([new Guid("6f1c2a1e-0000-4000-8000-000000000002")], changed.TopicIds);
     }
 
@@ -33,5 +34,19 @@ public class TopicsChangedContractTests
 
         Assert.Contains("\"parents\":[{\"topicId\":", json, StringComparison.Ordinal);
         Assert.Equal([new TopicParent(child, parent)], read.Parents);
+    }
+
+    // #380: rank and sections of every topic.
+    [Fact]
+    public void Topics_AreWrittenAndReadBack()
+    {
+        var topic = Guid.NewGuid();
+        var changed = new TopicsChanged("alice", Guid.NewGuid(), DateTime.UnixEpoch, [topic], [], [], [new(topic, 0, 3)]);
+
+        var json = JsonSerializer.Serialize(changed, EventJson.Options);
+        var read = JsonSerializer.Deserialize<TopicsChanged>(json, EventJson.Options)!;
+
+        Assert.Contains("\"topics\":[{\"topicId\":", json, StringComparison.Ordinal);
+        Assert.Equal([new TopicFacts(topic, 0, 3)], read.Topics);
     }
 }
