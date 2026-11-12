@@ -8,6 +8,7 @@ using UglyToad.PdfPig.DocumentLayoutAnalysis;
 using UglyToad.PdfPig.DocumentLayoutAnalysis.PageSegmenter;
 using UglyToad.PdfPig.DocumentLayoutAnalysis.ReadingOrderDetector;
 using UglyToad.PdfPig.DocumentLayoutAnalysis.WordExtractor;
+using UglyToad.PdfPig.Exceptions;
 
 namespace Edvaniq.Services.Content.Infrastructure.Files;
 
@@ -18,19 +19,47 @@ namespace Edvaniq.Services.Content.Infrastructure.Files;
 // gets read in full. Pictures, tables and formulas count for nothing, a scan has no text layer and comes out empty.
 public static class FileText
 {
+    // What one PDF stream may unpack to, and all of a file's streams together (BoundedPdfFilters). Real material stays far
+    // below, the worker's memory far above.
+    public const long PdfStreamLimit = 16L * 1024 * 1024;
+
+    public const long PdfUnpackBudget = 64L * 1024 * 1024;
+
+    // How long one file may take. A file that needs longer is refused, the next one gets its turn.
+    public static readonly TimeSpan TimeLimit = TimeSpan.FromMinutes(2);
+
     public static IReadOnlyList<string> PagesOf(Stream content, FileFormat format, CancellationToken cancellationToken) =>
-        format switch
+        PagesOf(content, format, TimeLimit, cancellationToken);
+
+    public static IReadOnlyList<string> PagesOf(Stream content, FileFormat format, TimeSpan timeLimit, CancellationToken cancellationToken)
+    {
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        limit.CancelAfter(timeLimit);
+        try
         {
-            FileFormat.Pdf => PdfPages(content, cancellationToken),
-            FileFormat.Text => [PlainText(content)],
-            FileFormat.Markdown => [MarkdownText.Of(PlainText(content))],
-            FileFormat.Docx => [WordText.Of(content, cancellationToken)],
-            _ => throw new NotSupportedException($"Reading {format} files is unknown."),
-        };
+            return format switch
+            {
+                FileFormat.Pdf => PdfPages(content, limit.Token),
+                FileFormat.Text => [PlainText(content)],
+                FileFormat.Markdown => [MarkdownText.Of(PlainText(content))],
+                FileFormat.Docx => [WordText.Of(content, limit.Token)],
+                _ => throw new NotSupportedException($"Reading {format} files is unknown."),
+            };
+        }
+        catch (OperationCanceledException) when (limit.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new FileRefusedException(FileCheck.TakesTooLong);
+        }
+        catch (PdfDocumentEncryptedException)
+        {
+            // A password the user didn't remove is no broken file, it gets a reason of its own.
+            throw new FileRefusedException(FileCheck.PdfProtected);
+        }
+    }
 
     private static List<string> PdfPages(Stream content, CancellationToken cancellationToken)
     {
-        using var pdf = PdfDocument.Open(content, new ParsingOptions { UseLenientParsing = true, SkipMissingFonts = true });
+        using var pdf = Open(content, cancellationToken);
         if (pdf.NumberOfPages > Document.MaxPages)
         {
             throw new FileRefusedException(Document.TooManyPages);
@@ -41,7 +70,15 @@ public static class FileText
         for (var number = 1; number <= pdf.NumberOfPages; number++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var text = TextOf(pdf.GetPage(number));
+            var page = pdf.GetPage(number);
+
+            // Laying out costs far more than the letters, a page with more of them than a document may hold is refused first.
+            if (page.Letters.Count > Document.TextMaxLength - length)
+            {
+                throw new FileRefusedException(Document.FileTextTooLong);
+            }
+
+            var text = TextOf(page);
             length += text.Length + Document.PageBreak.Length;
             if (length > Document.TextMaxLength + Document.PageBreak.Length)
             {
@@ -53,6 +90,14 @@ public static class FileText
 
         return pages;
     }
+
+    private static PdfDocument Open(Stream content, CancellationToken cancellationToken) =>
+        PdfDocument.Open(content, new ParsingOptions
+        {
+            UseLenientParsing = true,
+            SkipMissingFonts = true,
+            FilterProvider = new BoundedPdfFilters(PdfStreamLimit, PdfUnpackBudget, cancellationToken),
+        });
 
     // The blocks in reading order with a blank line between them, so each stays a paragraph of its own.
     private static string TextOf(Page page)

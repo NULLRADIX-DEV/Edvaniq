@@ -169,12 +169,7 @@ public static class WordText
                         fields = type == "begin" ? fields + 1 : type == "end" ? Math.Max(0, fields - 1) : fields;
                         break;
                     case "t" when !hiddenRun && fields == 0:
-                        paragraph.Append(reader.ReadElementContentAsString());
-                        if (text.Length + paragraph.Length > Document.TextMaxLength)
-                        {
-                            throw new FileRefusedException(Document.FileTextTooLong);
-                        }
-
+                        AppendRun(reader, paragraph, Document.TextMaxLength - text.Length);
                         continue;
                     case "tab" when !hiddenRun && fields == 0 && !inParagraphProperties:
                         paragraph.Append(' ');
@@ -205,6 +200,40 @@ public static class WordText
         }
 
         return text.ToString();
+    }
+
+    // The text of a <w:t> in pieces, never as one string: a single crafted element can be tens of MB. Gives up as soon as
+    // the paragraph would leave less than room. Ends after the element, as ReadElementContentAsString would.
+    private static void AppendRun(XmlReader reader, StringBuilder paragraph, int room)
+    {
+        if (reader.IsEmptyElement)
+        {
+            reader.Read();
+            return;
+        }
+
+        var depth = reader.Depth;
+        var buffer = new char[4096];
+        reader.Read();
+        while (!(reader.NodeType == XmlNodeType.EndElement && reader.Depth == depth) && !reader.EOF)
+        {
+            if (reader.NodeType is XmlNodeType.Text or XmlNodeType.CDATA or XmlNodeType.Whitespace or XmlNodeType.SignificantWhitespace)
+            {
+                int read;
+                while ((read = reader.ReadValueChunk(buffer, 0, buffer.Length)) > 0)
+                {
+                    paragraph.Append(buffer, 0, read);
+                    if (paragraph.Length > room)
+                    {
+                        throw new FileRefusedException(Document.FileTextTooLong);
+                    }
+                }
+            }
+
+            reader.Read();
+        }
+
+        reader.Read();
     }
 
     private static void Append(StringBuilder text, StringBuilder paragraph, int? level)

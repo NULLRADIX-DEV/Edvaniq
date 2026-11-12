@@ -86,6 +86,15 @@ public sealed class FileTextExtractor(
             return;
         }
 
+        // The attempt is stored before the file is opened. Should the file take the worker down, the next start knows.
+        var reading = document.StartReading();
+        await db.SaveChangesAsync(cancellationToken);
+        if (!reading)
+        {
+            ContentLog.FileGaveUp(logger, documentId);
+            return;
+        }
+
         var watch = Stopwatch.StartNew();
         IReadOnlyList<string>? pages = null;
         await using (var content = files.OpenRead(fileId))
@@ -104,6 +113,13 @@ public sealed class FileTextExtractor(
                 catch (FileRefusedException refused)
                 {
                     document.Fail(refused.Reason);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // The worker stops, a deploy. That attempt doesn't count.
+                    document.StopReading();
+                    await db.SaveChangesAsync(CancellationToken.None);
+                    throw;
                 }
                 catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
                 {

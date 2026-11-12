@@ -57,6 +57,51 @@ public sealed class WordTextMemoryTests
         }
     }
 
+    // #318: one crafted text element of 60 million characters. Read whole it would be a string of 120 MB, read in pieces
+    // the file is refused as soon as the text limit is passed.
+    [Fact]
+    public async Task HugeSingleTextElement_IsRefused_WithoutReadingItWhole()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            await using (var file = File.Create(path))
+            {
+                TestDocx.Write(file, $"<w:p><w:r><w:t>{new string('a', 60_000_000)}</w:t></w:r></w:p>");
+            }
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            var baseline = GC.GetTotalMemory(forceFullCollection: true);
+            long peak = 0;
+            using var done = new CancellationTokenSource();
+            var sampler = Task.Run(async () =>
+            {
+                while (!done.IsCancellationRequested)
+                {
+                    peak = Math.Max(peak, GC.GetTotalMemory(forceFullCollection: false));
+                    await Task.Delay(5, CancellationToken.None);
+                }
+            }, TestContext.Current.CancellationToken);
+
+            FileRefusedException refused;
+            await using (var file = File.OpenRead(path))
+            {
+                refused = Assert.Throws<FileRefusedException>(() => WordText.Of(file, TestContext.Current.CancellationToken));
+            }
+
+            await done.CancelAsync();
+            await sampler;
+            Assert.Equal(Document.FileTextTooLong, refused.Reason);
+            Assert.InRange(peak - baseline, long.MinValue, Limit);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     // About 40 MB of XML for 150,000 characters of text, every character in a run of its own with full formatting.
     private static string FormattedRuns()
     {

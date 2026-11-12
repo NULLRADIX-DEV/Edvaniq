@@ -39,6 +39,14 @@ public sealed class Document : IOwnedByUser
 
     public const string TooManyPages = "Die Datei hat zu viele Seiten. Erlaubt sind höchstens 300, teile sie auf.";
 
+    // The worker broke off on the file more than once, it went down while reading it (#318).
+    public const string FileNotProcessable =
+        "Die Datei ließ sich nicht verarbeiten. Speichere sie neu oder teile sie in kleinere Dateien auf und lade sie noch einmal hoch.";
+
+    // How often reading a file may break off before the document fails. One more try covers a worker that was killed for
+    // another reason, a file that brings it down every time stops after the second.
+    public const int MaxUnfinishedReads = 2;
+
     // A PDF beyond this many pages is turned away before its pages are read. 300 is more than a school book chapter or a
     // script needs, and keeps reading one file within seconds and within the worker's memory.
     public const int MaxPages = 300;
@@ -86,6 +94,10 @@ public sealed class Document : IOwnedByUser
 
     // When the worker read the text out of the file, UTC. Null for a pasted text and while the file waits for it.
     public DateTime? TextExtractedAt { get; private set; }
+
+    // How often the worker started reading the file and neither finished nor stopped on purpose, because it went down
+    // meanwhile. Back to 0 once the reading ends one way or another.
+    public int UnfinishedReads { get; private set; }
 
     // A document from a file that the worker still has to read.
     public bool WaitsForText => Status == DocumentStatus.Uploaded && IsFromFile && TextExtractedAt is null;
@@ -253,10 +265,33 @@ public sealed class Document : IOwnedByUser
 
         Text = text.ToString();
         TextExtractedAt = extractedAt;
+        UnfinishedReads = 0;
         return spans;
     }
 
     public const string PageBreak = "\n\n";
+
+    // Notes that the worker starts reading the file, stored before it opens it. Returns false and fails the document if
+    // reading broke off too often already, a file like that would take the worker down again.
+    public bool StartReading()
+    {
+        if (!WaitsForText)
+        {
+            throw new InvalidOperationException($"Document {Id} waits for no text.");
+        }
+
+        if (UnfinishedReads >= MaxUnfinishedReads)
+        {
+            Fail(FileNotProcessable);
+            return false;
+        }
+
+        UnfinishedReads++;
+        return true;
+    }
+
+    // The worker stopped reading on purpose, a shutdown during a deploy. That attempt doesn't count.
+    public void StopReading() => UnfinishedReads = Math.Max(0, UnfinishedReads - 1);
 
     // Cuts the text into sections and moves the document on to the analysis. A text with nothing but white space fails
     // instead and has no sections. Only an uploaded document can be split, and one from a file only once its text is
@@ -342,6 +377,7 @@ public sealed class Document : IOwnedByUser
     {
         Status = DocumentStatus.Failed;
         FailureReason = reason[..Math.Min(reason.Length, FailureReasonMaxLength)];
+        UnfinishedReads = 0;
     }
 
     // Starts a failed analysis again where it failed. Before the topics went out it starts over from splitting: no topic
@@ -358,6 +394,7 @@ public sealed class Document : IOwnedByUser
         FailureReason = null;
         RetriedAt = retriedAt;
         ClearOutages();
+        UnfinishedReads = 0;
     }
 
     private void ClearOutages()

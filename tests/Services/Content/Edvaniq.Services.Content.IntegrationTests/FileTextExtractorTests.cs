@@ -83,7 +83,44 @@ public sealed class FileTextExtractorTests(ServiceFactory service) : IClassFixtu
         { "Kaputt.pdf", "%PDF-1.4\nnichts weiter"u8.ToArray(), Document.FileUnreadable },
         { "Kaputt.docx", TestDocx.Of("<w:p><w:r><w:t>offen"), Document.FileUnreadable },
         { "Lang.docx", TestDocx.Of(string.Concat(Enumerable.Repeat(TestDocx.P(new string('a', 999)), Document.TextMaxLength / 1000 + 1))), Document.FileTextTooLong },
+
+        // #318, the problem files.
+        { "Gepackt.pdf", ProblemFiles.PackedPdf(512L * 1024 * 1024), FileCheck.PackedTooTightly },
+        { "Geschuetzt.pdf", ProblemFiles.EncryptedPdf(), FileCheck.PdfProtected },
+        { "Abgebrochen.pdf", ProblemFiles.TruncatedPdf(), Document.FileUnreadable },
+        { "Rauschen.pdf", ProblemFiles.GarbagePdf(), Document.FileUnreadable },
     };
+
+    // #318: a file that took the worker down twice is not read a third time, the document fails with a reason instead.
+    [Fact]
+    public async Task FileThatBrokeOffTheReadingTwice_FailsWithoutBeingReadAgain()
+    {
+        var id = await UploadAsync(NewUser(), "Absturz.txt", "Ein Text, der den Worker zweimal mitgerissen hat."u8.ToArray());
+        using (var scope = service.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
+            var document = Stored(db, id);
+            document.StartReading();
+            document.StartReading();
+            await db.SaveChangesAsync(Cancel);
+        }
+
+        await Extractor().ReadAsync(id, Cancel);
+
+        Assert.Equal((DocumentStatus.Failed, Document.FileNotProcessable), Query(db => Stored(db, id) is var d ? (d.Status, d.FailureReason) : default));
+        Assert.Equal(0, Query(db => db.DocumentPages.IgnoreQueryFilters().Count(page => page.DocumentId == id)));
+    }
+
+    // A reading that ends normally leaves nothing on the count.
+    [Fact]
+    public async Task FinishedReading_LeavesNoUnfinishedAttempt()
+    {
+        var id = await UploadAsync(NewUser(), "Gut.txt", "Ein ganz normaler Text über die Photosynthese in grünen Pflanzen."u8.ToArray());
+
+        await Extractor().ReadAsync(id, Cancel);
+
+        Assert.Equal(0, Query(db => Stored(db, id).UnfinishedReads));
+    }
 
     // A file that can't become a document fails it with a reason the user can act on, and leaves no pages.
     [Theory]

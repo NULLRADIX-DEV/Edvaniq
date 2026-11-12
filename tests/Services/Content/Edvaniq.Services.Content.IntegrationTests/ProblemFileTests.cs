@@ -2,19 +2,18 @@ using Edvaniq.Services.Content.Domain;
 using Edvaniq.Services.Content.Infrastructure.Files;
 
 using UglyToad.PdfPig;
-using UglyToad.PdfPig.Exceptions;
+using UglyToad.PdfPig.Content;
+using UglyToad.PdfPig.Core;
+using UglyToad.PdfPig.Fonts.Standard14Fonts;
+using UglyToad.PdfPig.Writer;
 
 namespace Edvaniq.Services.Content.IntegrationTests;
 
 // #318: broken and hostile files end with a reason the user understands, never with a crash or a worker out of memory.
-// No database needed.
+// FileText the way the worker calls it, no database needed. The way through the worker is in FileTextExtractorTests.
 public sealed class ProblemFileTests
 {
-    private const long StreamLimit = 16L * 1024 * 1024;
-
-    private const long Budget = 64L * 1024 * 1024;
-
-    // Packed to about a hundredth, unpacked far beyond what a stream may take. Memory stays low: the stream is counted,
+    // Packed to about a thousandth, unpacked far beyond what a stream may take. Memory stays low: the stream is counted,
     // not kept.
     [Fact]
     public void PackedTooTightly_IsRefused_WithoutUnpackingIt()
@@ -22,69 +21,82 @@ public sealed class ProblemFileTests
         var bomb = ProblemFiles.PackedPdf(512L * 1024 * 1024);
         var before = GC.GetTotalAllocatedBytes(precise: true);
 
-        var refused = Assert.Throws<FileRefusedException>(() => Read(bomb));
-
-        Assert.Equal(FileCheck.PackedTooTightly, refused.Reason);
+        Assert.Equal(FileCheck.PackedTooTightly, Refusal(bomb));
         Assert.InRange(GC.GetTotalAllocatedBytes(precise: true) - before, 0, 64L * 1024 * 1024);
     }
 
     [Fact]
-    public void PackedWithinTheLimit_IsRead()
-    {
-        var pdf = ProblemFiles.PackedPdf(1024 * 1024);
-
-        Assert.Equal(1, Read(pdf));
-    }
+    public void PackedWithinTheLimit_IsRead() =>
+        Assert.Single(Pages(ProblemFiles.PackedPdf(1024 * 1024)));
 
     // Many streams that each fit add up, the budget stops them together.
     [Fact]
     public void Budget_CountsEveryStreamOfTheFile()
     {
         var pdf = ProblemFiles.PackedPdf(8L * 1024 * 1024);
+        var filters = new BoundedPdfFilters(FileText.PdfStreamLimit, 4L * 1024 * 1024, TestContext.Current.CancellationToken);
 
-        var refused = Assert.Throws<FileRefusedException>(() => Read(pdf, budget: 4L * 1024 * 1024));
+        var refused = Assert.Throws<FileRefusedException>(() =>
+        {
+            using var document = PdfDocument.Open(pdf, new ParsingOptions { FilterProvider = filters });
+            _ = document.GetPage(1).Letters.Count;
+        });
 
         Assert.Equal(FileCheck.PackedTooTightly, refused.Reason);
     }
 
     [Fact]
-    public void Encrypted_IsKnownAsSuch() =>
-        Assert.Throws<PdfDocumentEncryptedException>(() => Read(ProblemFiles.EncryptedPdf()));
+    public void Encrypted_IsRefusedAsProtected() =>
+        Assert.Equal(FileCheck.PdfProtected, Refusal(ProblemFiles.EncryptedPdf()));
 
+    // Broken files are no refusal with a reason of their own, the worker fails them as unreadable. They fail at once.
     [Fact]
     public void Truncated_AndGarbage_FailWithoutHanging()
     {
         foreach (var pdf in new[] { ProblemFiles.TruncatedPdf(), ProblemFiles.GarbagePdf() })
         {
-            var started = DateTime.UtcNow;
-            try
-            {
-                Read(pdf);
-            }
-            catch (Exception exception) when (exception is not FileRefusedException)
-            {
-            }
+            var started = TimeProvider.System.GetTimestamp();
 
-            Assert.InRange(DateTime.UtcNow - started, TimeSpan.Zero, TimeSpan.FromSeconds(10));
+            Assert.ThrowsAny<Exception>(() => Pages(pdf));
+
+            Assert.InRange(TimeProvider.System.GetElapsedTime(started), TimeSpan.Zero, TimeSpan.FromSeconds(10));
         }
     }
 
-    // Opens the PDF the way the worker does and reads every page, returns how many.
-    private static int Read(byte[] pdf, long budget = Budget)
+    // A page with more letters than a document may hold is refused before its layout, which costs far more.
+    [Fact]
+    public void PageWithTooManyLetters_IsRefused()
     {
-        using var document = PdfDocument.Open(pdf, new ParsingOptions
+        var builder = new PdfDocumentBuilder();
+        var font = builder.AddStandard14Font(Standard14Font.Helvetica);
+        var page = builder.AddPage(PageSize.A4);
+        for (var line = 0; line < (Document.TextMaxLength / 2000) + 1; line++)
         {
-            UseLenientParsing = true,
-            SkipMissingFonts = true,
-            FilterProvider = new BoundedPdfFilters(StreamLimit, budget, TestContext.Current.CancellationToken),
-        });
-        var pages = 0;
-        foreach (var page in document.GetPages())
-        {
-            _ = page.Letters.Count;
-            pages++;
+            page.AddText(new string('a', 2000), 1, new PdfPoint(10, 800 - (line * 0.5)), font);
         }
 
-        return pages;
+        Assert.Equal(Document.FileTextTooLong, Refusal(builder.Build()));
     }
+
+    [Fact]
+    public void FileThatTakesTooLong_IsRefused() =>
+        Assert.Equal(
+            FileCheck.TakesTooLong,
+            Assert.Throws<FileRefusedException>(() => FileText.PagesOf(
+                new MemoryStream(TestPdfs.Empty(3)), FileFormat.Pdf, TimeSpan.Zero, TestContext.Current.CancellationToken)).Reason);
+
+    // A shutdown is no file that takes too long, it stays a cancellation.
+    [Fact]
+    public void Shutdown_StaysACancellation()
+    {
+        using var stopping = new CancellationTokenSource();
+        stopping.Cancel();
+
+        Assert.ThrowsAny<OperationCanceledException>(() => FileText.PagesOf(new MemoryStream(TestPdfs.Empty(3)), FileFormat.Pdf, stopping.Token));
+    }
+
+    private static IReadOnlyList<string> Pages(byte[] pdf) =>
+        FileText.PagesOf(new MemoryStream(pdf), FileFormat.Pdf, TestContext.Current.CancellationToken);
+
+    private static string Refusal(byte[] pdf) => Assert.Throws<FileRefusedException>(() => Pages(pdf)).Reason;
 }
