@@ -319,6 +319,10 @@ Ein Dokument kann bis zu 30 Themen haben, mehr als ein ganzer Tag erlaubt. Damit
 
 Einfügen, Upload und Neustart lehnt die Content-Api mit 429 ab, wenn heute keine Generierung mehr frei ist, in derselben Form wie beim Seitenkontingent.
 
+## Aufbewahrung gestellter Fragen in Assessment
+
+Assessment hält jede gestellte Frage samt Antwort als `Attempt` und jedes Block-Quiz als `BlockQuiz`. Gebraucht werden sie nur, solange ein Quiz offen ist, solange ein Block-Quiz fortgesetzt wird und solange ein Client eine Antwort noch einmal schicken kann. Den Lern-Nachweis hält nach `AnswerRecorded` LearningEngine. Deshalb löscht `AttemptRetention` beides 30 Tage nach dem Stellen (`AttemptRetention:Days`), stündlich und in Portionen, Block-Quizze samt ihren Versuchen zuerst. Ein noch nicht gesendetes `AnswerRecorded` verliert dabei nichts, die Zeile in der Outbox enthält das ganze Ereignis. Wer Antworten in Assessment auswertet, etwa um kürzlich beantwortete Fragen auszulassen, sieht nur diese 30 Tage.
+
 ## Tests
 
 `ServiceFactory` ist der Prüfstand: Er startet den echten Service, so wie er läuft, mit einer frischen MySQL-Datenbank, auf die alle Migrationen angewendet sind, und vertraut den Tokens aus `Edvaniq.Testing/TestTokens`. Den Broker tauscht er gegen einen im Prozess aus. Eine Testklasse holt ihn sich per `IClassFixture<ServiceFactory>`.

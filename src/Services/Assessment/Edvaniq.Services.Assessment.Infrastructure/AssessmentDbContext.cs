@@ -70,10 +70,14 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
         attempt.Property(entry => entry.Answered).IsConcurrencyToken();
         attempt.HasIndex(entry => entry.OwnerId);
 
+        // The retention finds the old ones by these (#962).
+        attempt.HasIndex(entry => entry.AskedAt);
+
         // One quiz per user and block (#393), so two first calls at once leave one. Its attempts go with it.
         var quiz = modelBuilder.Entity<BlockQuiz>();
         quiz.Property(entry => entry.Id).ValueGeneratedNever();
         quiz.HasIndex(entry => new { entry.OwnerId, entry.BlockId }).IsUnique();
+        quiz.HasIndex(entry => entry.CreatedAt);
         attempt.HasOne<BlockQuiz>().WithMany().HasForeignKey(entry => entry.QuizId).OnDelete(DeleteBehavior.Cascade);
 
         // Topics of Knowledge, only ids (TopicsChanged).

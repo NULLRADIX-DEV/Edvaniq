@@ -153,6 +153,8 @@ namespace Edvaniq.Services.Assessment.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AskedAt");
+
                     b.HasIndex("OwnerId");
 
                     b.HasIndex("QuizId");
@@ -181,6 +183,8 @@ namespace Edvaniq.Services.Assessment.Infrastructure.Migrations
                         .HasColumnType("char(36)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
 
                     b.HasIndex("OwnerId");
 
