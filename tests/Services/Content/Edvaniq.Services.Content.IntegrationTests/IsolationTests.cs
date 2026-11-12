@@ -1,14 +1,35 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+
+using Edvaniq.Services.Content.Domain;
+using Edvaniq.Services.Content.Infrastructure;
 using Edvaniq.Testing;
+
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Edvaniq.Services.Content.IntegrationTests;
 
 // User A's data stays invisible to user B, because the owner filter of ServiceDbContext limits every query to the user
-// from the token. Shown with pasted documents, against a real database.
+// from the token. Every endpoint with a user's token is listed here (IsolationCheck, #271), against a real database.
 public sealed class IsolationTests(ServiceFactory service) : IClassFixture<ServiceFactory>
 {
+    internal static IsolationCheck Check() => new IsolationCheck()
+        .Exempt("GET", "/me", "Only the caller's own id from the token.")
+        .List("GET", "/documents")
+        .Item("GET", "/documents/{id:guid}")
+        .Item("POST", "/documents/{id:guid}/retry")
+        .Item("DELETE", "/documents/{id:guid}")
+        .Exempt("POST", "/documents", "Adds a document of the caller, a foreign goal is Planning's: LearningGoalTests.")
+        .Exempt("POST", "/documents/files", "Adds a document of the caller, a foreign goal is Planning's: LearningGoalTests.")
+        .Exempt("GET", "/quota", "Only the caller's own count: OtherUser_HasTheirOwnQuota.");
+
+    [Fact]
+    public void EveryEndpoint_IsInTheCheck() => Check().AssertCovers(service.Services);
+
+    [Fact]
+    public Task OtherUser_CanNeitherSeeNorChangeTheDocuments() => Check().RunAsync(service, SeedAsync);
+
     [Fact]
     public async Task OtherUser_DoesNotSeeTheItemsInTheList()
     {
@@ -44,7 +65,7 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         var before = await bob.GetStringAsync("/quota", TestContext.Current.CancellationToken);
 
         var item = await CreateAsync(alice, "Notiz von Alice");
-        await Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<Infrastructure.DocumentSplitter>(service.Services)
+        await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services)
             .SplitAsync(item.Id, TestContext.Current.CancellationToken);
 
         Assert.NotEqual(before, await alice.GetStringAsync("/quota", TestContext.Current.CancellationToken));
@@ -67,6 +88,19 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
     }
 
     // Every test has its own users, so the tests of this class can share one database.
+    // A document of A, failed so a retry would start it, with a title only A has.
+    private async Task<OwnedResource> SeedAsync(string owner)
+    {
+        var title = $"Skript {Guid.NewGuid():N}";
+        var document = Document.Paste(owner, Guid.NewGuid(), title, TestTexts.Lesson, DateTime.UtcNow);
+        document.Fail(Document.AnalysisFailed);
+        using var scope = service.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
+        db.Documents.Add(document);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return new OwnedResource(document.Id, $"/documents/{document.Id}", title);
+    }
+
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
 
     private HttpClient ClientFor(string userId)
