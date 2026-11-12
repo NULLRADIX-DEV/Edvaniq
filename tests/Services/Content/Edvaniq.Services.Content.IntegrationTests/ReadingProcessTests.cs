@@ -34,19 +34,6 @@ public sealed class ReadingProcessTests : IDisposable
         Assert.Equal(pages.Select(TestPdfs.Words), read.Pages!.Select(TestPdfs.Words));
     }
 
-    // One page with a million letters: a few KB of file, far more memory than the worker has to read it. The reading
-    // process runs out of its heap, the worker only hears the reason.
-    [Fact]
-    public async Task PageThatNeedsMoreMemoryThanAllowed_EndsTheReadingProcess_NotTheWorker()
-    {
-        var before = Process.GetCurrentProcess().PrivateMemorySize64;
-
-        var read = await ReadAsync(LetterPage(1_000_000), FileFormat.Pdf);
-
-        Assert.Equal(Document.FileNotProcessable, read.Reason);
-        Assert.InRange(Process.GetCurrentProcess().PrivateMemorySize64 - before, long.MinValue, 64L * 1024 * 1024);
-    }
-
     [Fact]
     public async Task ProtectedAndPackedFiles_ComeBackWithTheirReason()
     {
@@ -136,6 +123,46 @@ public sealed class ReadingProcessTests : IDisposable
         catch (ArgumentException)
         {
             return true;
+        }
+    }
+
+}
+
+// The memory of the worker while a file breaks its reading process. It reads the memory of the whole test process, so
+// it runs alone (MemoryCollection): tests next to it would count as the worker's.
+[Collection(MemoryCollection.Name)]
+public sealed class ReadingProcessMemoryTests : IDisposable
+{
+    private readonly string root = Path.Combine(Path.GetTempPath(), "edvaniq-reading", Guid.NewGuid().ToString("N"));
+
+    private readonly FileStore store;
+
+    public ReadingProcessMemoryTests() => store = new FileStore(Options.Create(new FileStorageOptions { Directory = root }));
+
+    private static CancellationToken Cancel => TestContext.Current.CancellationToken;
+
+    // One page with a million letters: a few KB of file, far more memory than the worker has to read it. The reading
+    // process runs out of its heap, the worker only hears the reason. The file is made and stored before measuring.
+    [Fact]
+    public async Task PageThatNeedsMoreMemoryThanAllowed_EndsTheReadingProcess_NotTheWorker()
+    {
+        var id = Guid.NewGuid();
+        await store.WriteAsync(id, new MemoryStream(LetterPage(1_000_000)), Cancel);
+        var reader = ReadingProcess.Reader(store);
+        GC.Collect();
+        var before = Process.GetCurrentProcess().PrivateMemorySize64;
+
+        var read = await reader.ReadAsync(id, FileFormat.Pdf, Cancel);
+
+        Assert.Equal(Document.FileNotProcessable, read.Reason);
+        Assert.InRange(Process.GetCurrentProcess().PrivateMemorySize64 - before, long.MinValue, 64L * 1024 * 1024);
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
         }
     }
 
