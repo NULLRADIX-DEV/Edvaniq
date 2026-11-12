@@ -1,7 +1,11 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+
+using Edvaniq.Services.Planning.Infrastructure;
 using Edvaniq.Testing;
+
+using Microsoft.AspNetCore.Hosting;
 
 namespace Edvaniq.Services.Planning.IntegrationTests;
 
@@ -59,6 +63,21 @@ public sealed class TokenTests(ServiceFactory factory) : IClassFixture<ServiceFa
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(Alice, await ReadUserIdAsync(response));
+    }
+
+    // #953: whether the user is deleted is asked of the database. Without it the request fails as an error, it never
+    // looks like the token was turned away.
+    [Fact]
+    public async Task Request_WithUnreachableDatabase_FailsAsAnError_NotAs401()
+    {
+        await using var noDatabase = factory.WithWebHostBuilder(builder => builder.UseSetting(
+            $"ConnectionStrings:{InfrastructureExtensions.DatabaseName}", "Server=127.0.0.1;Port=1;Database=planningdb;User ID=test"));
+        using var client = noDatabase.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.Create(Alice));
+
+        using var response = await client.GetAsync("/me", TestContext.Current.CancellationToken);
+
+        Assert.True((int)response.StatusCode >= 500, $"Expected a server error, got {(int)response.StatusCode}.");
     }
 
     private async Task<HttpResponseMessage> GetMeAsync(string? token, string path = "/me", Action<HttpRequestMessage>? configure = null)

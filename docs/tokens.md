@@ -23,6 +23,10 @@ Name, Mail-Adresse oder andere Angaben zur Person stehen nie im Token. Ein Servi
 
 Das Token eines Logins gilt eine Stunde, ein Client-Token fünf Minuten (`Tokens:UserLifetime` und `Tokens:Lifetime` in der `appsettings.json` von Identity). Einen Refresh-Token gibt es noch nicht. Läuft das Token eines Nutzers ab, meldet er sich neu an. Kommt später ein Refresh-Token dazu, ändert sich am Access-Token nichts.
 
+Wird ein Konto gelöscht, gilt sein Token nicht bis zum Ablauf weiter. Jeder Service mit Nutzerdaten merkt sich den gelöschten Nutzer, sobald `UserDeleted` bei ihm ankommt ([Nutzer löschen](service-internals.md#nutzer-löschen)), und lehnt danach jede Anfrage mit einem Token dieses Kontos mit 401 ab, wie bei einem ungültigen Token. Das Gateway prüft das nicht selbst, es reicht die 401 des Service unverändert weiter, und jede Route für Nutzer endet bei einem solchen Service. Der Web-Host beendet die Anmeldung, sobald das Backend das Token des Nutzers mit 401 ablehnt, so wie bei einem Logout. Tokens anderer Konten bleiben gültig.
+
+Zwischen dem Löschen und der Ablehnung liegt höchstens eine Minute, solange Broker und Services laufen. Identity legt `UserDeleted` im selben Speichern wie die Löschung in die Outbox, der Dispatcher sendet jede Sekunde, und der Service speichert den gelöschten Nutzer zusammen mit dem Entfernen seiner Daten. Das dauert Sekunden, die Minute lässt Platz für eine erneute Zustellung. Ist der Broker länger weg, endet das Token spätestens mit seinem Ablauf. Belegt ist das mit `TokenOfADeletedAccount_IsRejectedEverywhere_WithinAMinute` in `Edvaniq.EventFlowTests`. Kann ein Service seine Datenbank nicht fragen, antwortet er mit einem Fehler, nie mit 401.
+
 ## Token holen
 
 Beide Wege laufen über `POST /connect/token` mit einem Formular (`application/x-www-form-urlencoded`) nach RFC 6749. Das Gateway leitet den Endpunkt als `POST /identity/connect/token` weiter, der Browser erreicht ihn nie. Jede Anfrage trägt `client_id` und `client_secret` des Clients.

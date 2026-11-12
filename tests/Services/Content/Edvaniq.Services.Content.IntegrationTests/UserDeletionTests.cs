@@ -224,6 +224,29 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         return days.ToDictionary();
     }
 
+    // #953: once the deletion is through, a token issued before it is turned away like an invalid one. Others still work.
+    [Fact]
+    public async Task TokenOfADeletedUser_IsRejected_OthersStillWork()
+    {
+        var alice = NewUser("alice");
+        var bob = NewUser("bob");
+        Assert.Equal(HttpStatusCode.OK, await MeAsync(alice));
+
+        var messageId = await DeleteAsync(alice);
+
+        await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
+        Assert.Equal(HttpStatusCode.Unauthorized, await MeAsync(alice));
+        Assert.Equal(HttpStatusCode.OK, await MeAsync(bob));
+    }
+
+    private async Task<HttpStatusCode> MeAsync(string user)
+    {
+        using var client = service.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.Create(user));
+        using var response = await client.GetAsync("/me", TestContext.Current.CancellationToken);
+        return response.StatusCode;
+    }
+
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
 
     private async Task CreateItemAsync(string user, string text)
