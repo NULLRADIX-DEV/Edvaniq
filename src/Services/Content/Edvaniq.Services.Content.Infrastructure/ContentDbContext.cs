@@ -91,6 +91,7 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
         // One charge per topic, a retry takes nothing twice.
         var generation = modelBuilder.Entity<GenerationCharge>();
+        generation.Property(item => item.StudyDay).HasConversion(StudyDayConverter).HasColumnType("date");
         generation.HasIndex(item => item.TopicId).IsUnique();
         generation.HasIndex(item => new { item.OwnerId, item.StudyDay });
 
