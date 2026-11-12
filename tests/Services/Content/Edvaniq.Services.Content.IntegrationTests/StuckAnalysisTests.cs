@@ -64,7 +64,7 @@ public sealed class StuckAnalysisTests(ServiceFactory service) : IClassFixture<S
         using var client = ClientFor(NewUser());
         var file = new ByteArrayContent("Licht spaltet Wasser, dabei entsteht Sauerstoff für die Luft der Erde."u8.ToArray());
         file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-        using var uploaded = await client.PostAsync("/documents/files", new MultipartFormDataContent { { file, "file", "Notizen.txt" } }, Cancel);
+        using var uploaded = await client.PostAsync("/documents/files?confirmation=material-1", new MultipartFormDataContent { { file, "file", "Notizen.txt" } }, Cancel);
         Assert.Equal(HttpStatusCode.Created, uploaded.StatusCode);
         var id = (await uploaded.Content.ReadFromJsonAsync<JsonElement>(Cancel)).GetProperty("id").GetGuid();
 
@@ -187,7 +187,7 @@ public sealed class StuckAnalysisTests(ServiceFactory service) : IClassFixture<S
 
     private static async Task<Guid> PasteAsync(HttpClient client, string text = Text)
     {
-        using var response = await client.PostAsJsonAsync("/documents", new { text }, Cancel);
+        using var response = await client.PostAsJsonAsync("/documents", new { text, confirmation = "material-1" }, Cancel);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonElement>(Cancel)).GetProperty("id").GetGuid();
     }

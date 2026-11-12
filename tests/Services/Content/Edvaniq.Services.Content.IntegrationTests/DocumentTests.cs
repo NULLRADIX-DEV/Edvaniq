@@ -23,7 +23,7 @@ public sealed class DocumentTests(ServiceFactory service) : IClassFixture<Servic
         using var client = ClientFor(alice);
         const string text = $"Photosynthese\r\n{TestTexts.Lesson}";
 
-        using var response = await client.PostAsJsonAsync("/documents", new { text }, TestContext.Current.CancellationToken);
+        using var response = await client.PostAsJsonAsync("/documents", new { text, confirmation = "material-1" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var created = (await response.Content.ReadFromJsonAsync<DocumentDto>(TestContext.Current.CancellationToken))!;
@@ -48,7 +48,7 @@ public sealed class DocumentTests(ServiceFactory service) : IClassFixture<Servic
     {
         using var client = ClientFor($"alice-{Guid.NewGuid():N}");
 
-        using var response = await client.PostAsJsonAsync("/documents", new { text = "  " }, TestContext.Current.CancellationToken);
+        using var response = await client.PostAsJsonAsync("/documents", new { text = "  ", confirmation = "material-1" }, TestContext.Current.CancellationToken);
 
         var errors = await ErrorsAsync(response);
         Assert.Equal(["Der Text ist leer. Füge den Text ein, aus dem du lernen willst."], errors["Text"]);
@@ -58,7 +58,7 @@ public sealed class DocumentTests(ServiceFactory service) : IClassFixture<Servic
     public async Task TooLongTextAndTitle_AreRejectedWithTheirReasons()
     {
         using var client = ClientFor($"alice-{Guid.NewGuid():N}");
-        var request = new { title = new string('t', 81), text = new string('a', 200_001) };
+        var request = new { title = new string('t', 81), text = new string('a', 200_001), confirmation = "material-1" };
 
         using var response = await client.PostAsJsonAsync("/documents", request, TestContext.Current.CancellationToken);
 
@@ -75,7 +75,7 @@ public sealed class DocumentTests(ServiceFactory service) : IClassFixture<Servic
         using var client = ClientFor(alice);
 
         using var response = await client.PostAsJsonAsync(
-            "/documents", new { text = "- 1 -\n\n  .  ,  '  .\n | _ ~ ;\n\n- 2 -\n\n ab cd" }, TestContext.Current.CancellationToken);
+            "/documents", new { text = "- 1 -\n\n  .  ,  '  .\n | _ ~ ;\n\n- 2 -\n\n ab cd", confirmation = "material-1" }, TestContext.Current.CancellationToken);
 
         var errors = await ErrorsAsync(response);
         Assert.Equal([Document.TooFewWords], errors["Text"]);
@@ -89,7 +89,7 @@ public sealed class DocumentTests(ServiceFactory service) : IClassFixture<Servic
         using var client = ClientFor($"alice-{Guid.NewGuid():N}");
 
         using var response = await client.PostAsJsonAsync(
-            "/documents", new { text = string.Concat(Enumerable.Repeat("Äpfel ", 33_334))[..200_000] }, TestContext.Current.CancellationToken);
+            "/documents", new { text = string.Concat(Enumerable.Repeat("Äpfel ", 33_334))[..200_000], confirmation = "material-1" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }

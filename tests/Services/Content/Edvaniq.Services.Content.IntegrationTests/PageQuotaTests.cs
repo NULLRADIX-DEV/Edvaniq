@@ -33,7 +33,7 @@ public sealed class PageQuotaTests(PageQuotaFactory service) : IClassFixture<Pag
         var first = await PasteAsync(client, Text(pages: 2));
         await SplitAsync(first);
 
-        using var response = await client.PostAsJsonAsync("/documents", new { text = Text(pages: 2) }, Cancel);
+        using var response = await client.PostAsJsonAsync("/documents", new { text = Text(pages: 2), confirmation = "material-1" }, Cancel);
 
         Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>(Cancel);
@@ -110,7 +110,7 @@ public sealed class PageQuotaTests(PageQuotaFactory service) : IClassFixture<Pag
         using var file = new ByteArrayContent(Encoding.UTF8.GetBytes(Text(pages: 1)));
         file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         using var form = new MultipartFormDataContent { { file, "file", "Notizen.txt" } };
-        using var response = await client.PostAsync("/documents/files", form, Cancel);
+        using var response = await client.PostAsync("/documents/files?confirmation=material-1", form, Cancel);
 
         Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>(Cancel);
@@ -133,7 +133,7 @@ public sealed class PageQuotaTests(PageQuotaFactory service) : IClassFixture<Pag
         Assert.Equal(4, Query(db => db.PageCharges.IgnoreQueryFilters().Single(charge => charge.DocumentId == big).Pages));
         Assert.Equal((0, 3), await QuotaAsync(client));
 
-        using var next = await client.PostAsJsonAsync("/documents", new { text = Text(pages: 4) }, Cancel);
+        using var next = await client.PostAsJsonAsync("/documents", new { text = Text(pages: 4), confirmation = "material-1" }, Cancel);
         Assert.Equal(HttpStatusCode.TooManyRequests, next.StatusCode);
     }
 
@@ -182,7 +182,7 @@ public sealed class PageQuotaTests(PageQuotaFactory service) : IClassFixture<Pag
 
     private static async Task<Guid> PasteAsync(HttpClient client, string text)
     {
-        using var response = await client.PostAsJsonAsync("/documents", new { text }, Cancel);
+        using var response = await client.PostAsJsonAsync("/documents", new { text, confirmation = "material-1" }, Cancel);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonElement>(Cancel)).GetProperty("id").GetGuid();
     }
@@ -192,7 +192,7 @@ public sealed class PageQuotaTests(PageQuotaFactory service) : IClassFixture<Pag
         using var file = new ByteArrayContent(Encoding.UTF8.GetBytes(text));
         file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         using var form = new MultipartFormDataContent { { file, "file", "Notizen.txt" } };
-        using var response = await client.PostAsync("/documents/files", form, Cancel);
+        using var response = await client.PostAsync("/documents/files?confirmation=material-1", form, Cancel);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonElement>(Cancel)).GetProperty("id").GetGuid();
     }

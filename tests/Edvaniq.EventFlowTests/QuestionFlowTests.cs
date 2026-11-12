@@ -106,7 +106,7 @@ public sealed class QuestionFlowTests(FlowServices services) : IDisposable
     private async Task<Guid> PasteAsync(string token)
     {
         using var client = ContentClient(token);
-        using var response = await client.PostAsJsonAsync("/documents", new { text = Text }, TestContext.Current.CancellationToken);
+        using var response = await client.PostAsJsonAsync("/documents", new { text = Text, confirmation = "material-1" }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("id").GetGuid();
     }

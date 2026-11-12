@@ -31,6 +31,7 @@ internal static class FileUploadEndpoint
     private static async Task<IResult> UploadAsync(
         HttpContext context,
         Guid? learningGoalId,
+        string? confirmation,
         ILearningGoals goals,
         IFiles files,
         IDocuments documents,
@@ -41,6 +42,14 @@ internal static class FileUploadEndpoint
         TimeProvider time,
         CancellationToken cancellationToken)
     {
+        // The confirmation first (MaterialConfirmation), without it not a byte is read or stored.
+        if (MaterialConfirmation.Check(confirmation) is { } unconfirmed)
+        {
+            return Results.ValidationProblem(
+                new Dictionary<string, string[]> { ["confirmation"] = [unconfirmed] },
+                statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
+
         var request = context.Request;
         if (request.ContentLength > MaxBodyLength)
         {
@@ -146,7 +155,7 @@ internal static class FileUploadEndpoint
         Document document;
         try
         {
-            document = await documents.UploadAsync(goal, fileName, stored.Id, format, cancellationToken);
+            document = await documents.UploadAsync(goal, fileName, stored.Id, format, confirmation!, cancellationToken);
         }
         catch
         {

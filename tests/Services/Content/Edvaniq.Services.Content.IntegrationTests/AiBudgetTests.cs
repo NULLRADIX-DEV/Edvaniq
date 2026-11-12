@@ -133,11 +133,11 @@ public sealed class AiBudgetTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(("Failed", Document.AiBudgetReached), (failed!.Status, failed.FailureReason));
         Assert.Equal(0, asked);
 
-        using var pasted = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson }, Cancel);
+        using var pasted = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson, confirmation = "material-1" }, Cancel);
         using var file = new ByteArrayContent("Ein Text mit genug Worten zum Lernen."u8.ToArray());
         file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         using var form = new MultipartFormDataContent { { file, "file", "Notizen.txt" } };
-        using var uploaded = await client.PostAsync("/documents/files", form, Cancel);
+        using var uploaded = await client.PostAsync("/documents/files?confirmation=material-1", form, Cancel);
         using var retried = await client.PostAsync($"/documents/{id}/retry", null, Cancel);
 
         foreach (var response in new[] { pasted, uploaded, retried })
@@ -209,7 +209,7 @@ public sealed class AiBudgetTests(ServiceFactory service) : IClassFixture<Servic
 
     private static async Task<Guid> PasteAsync(HttpClient client)
     {
-        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson }, Cancel);
+        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson, confirmation = "material-1" }, Cancel);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<DocumentDto>(Cancel))!.Id;
     }

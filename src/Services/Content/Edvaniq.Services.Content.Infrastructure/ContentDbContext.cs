@@ -50,6 +50,7 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         document.Property(item => item.Level).HasMaxLength(Document.LevelMaxLength);
         document.Property(item => item.OutputLanguage).HasMaxLength(Document.OutputLanguageMaxLength);
         document.Property(item => item.FileFormat).HasConversion<string>().HasMaxLength(16);
+        document.Property(item => item.MaterialConfirmationVersion).HasMaxLength(MaterialConfirmation.VersionMaxLength);
 
         // A document takes its sections along when it goes. Each place in a document exists once, so splitting the
         // same document again cannot add a section twice.

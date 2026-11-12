@@ -49,7 +49,7 @@ public sealed class LearningGoalTests(ServiceFactory service) : IClassFixture<Se
         var goal = service.Planning.GoalOf(alice);
         using var client = ClientFor(alice);
 
-        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson, learningGoalId = goal }, TestContext.Current.CancellationToken);
+        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson, learningGoalId = goal, confirmation = "material-1" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Equal(goal, Assert.Single(await StoredAsync(alice)).LearningGoalId);
@@ -69,13 +69,13 @@ public sealed class LearningGoalTests(ServiceFactory service) : IClassFixture<Se
         var answers = new List<(HttpStatusCode Status, string Title)>();
         foreach (var goal in new[] { foreign, Guid.NewGuid() })
         {
-            using var pasted = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson, learningGoalId = goal }, TestContext.Current.CancellationToken);
+            using var pasted = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson, learningGoalId = goal, confirmation = "material-1" }, TestContext.Current.CancellationToken);
             answers.Add(await AnswerAsync(pasted));
 
             using var file = new ByteArrayContent("Ein Text mit genug Worten zum Lernen."u8.ToArray());
             file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
             using var form = new MultipartFormDataContent { { file, "file", "Notizen.txt" } };
-            using var uploaded = await client.PostAsync($"/documents/files?learningGoalId={goal}", form, TestContext.Current.CancellationToken);
+            using var uploaded = await client.PostAsync($"/documents/files?learningGoalId={goal}&confirmation=material-1", form, TestContext.Current.CancellationToken);
             answers.Add(await AnswerAsync(uploaded));
         }
 
@@ -93,7 +93,7 @@ public sealed class LearningGoalTests(ServiceFactory service) : IClassFixture<Se
         var alice = $"alice-{Guid.NewGuid():N}";
         var token = TestTokens.Create(alice);
         using var client = service.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/documents") { Content = JsonContent.Create(new { text = TestTexts.Lesson }) };
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/documents") { Content = JsonContent.Create(new { text = TestTexts.Lesson, confirmation = "material-1" }) };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Headers.Add("Cookie", "__Host-edvaniq-session=secret");
         request.Headers.Add("X-Forwarded-For", "203.0.113.7");
@@ -131,7 +131,7 @@ public sealed class LearningGoalTests(ServiceFactory service) : IClassFixture<Se
         service.Planning.Down(alice, status);
         using var client = ClientFor(alice);
 
-        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson }, TestContext.Current.CancellationToken);
+        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson, confirmation = "material-1" }, TestContext.Current.CancellationToken);
 
         await AssertUnavailableAsync(response);
         Assert.Empty(await StoredAsync(alice));
@@ -146,7 +146,7 @@ public sealed class LearningGoalTests(ServiceFactory service) : IClassFixture<Se
         using var client = ClientFor(alice);
         var watch = Stopwatch.StartNew();
 
-        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson }, TestContext.Current.CancellationToken);
+        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson, confirmation = "material-1" }, TestContext.Current.CancellationToken);
 
         watch.Stop();
         await AssertUnavailableAsync(response);
@@ -164,7 +164,7 @@ public sealed class LearningGoalTests(ServiceFactory service) : IClassFixture<Se
 
     private static async Task<Guid> PasteAsync(HttpClient client)
     {
-        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson }, TestContext.Current.CancellationToken);
+        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson, confirmation = "material-1" }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("id").GetGuid();
     }

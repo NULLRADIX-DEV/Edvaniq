@@ -95,7 +95,7 @@ public sealed class DeletionFlowTests(FlowServices services) : IDisposable
         Guid documentId;
         using (var client = ContentClient(token))
         {
-            using var response = await client.PostAsJsonAsync("/documents", new { text }, TestContext.Current.CancellationToken);
+            using var response = await client.PostAsJsonAsync("/documents", new { text, confirmation = "material-1" }, TestContext.Current.CancellationToken);
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
             documentId = (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("id").GetGuid();
         }

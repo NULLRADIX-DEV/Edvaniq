@@ -25,6 +25,11 @@ internal static class DocumentEndpoints
             CancellationToken cancellationToken) =>
         {
             var errors = new Dictionary<string, string[]>();
+            if (MaterialConfirmation.Check(request.Confirmation) is { } confirmation)
+            {
+                errors[nameof(request.Confirmation)] = [confirmation];
+            }
+
             if (Document.CheckText(request.Text) is { } text)
             {
                 errors[nameof(request.Text)] = [text];
@@ -81,7 +86,7 @@ internal static class DocumentEndpoints
                 return full;
             }
 
-            var document = await documents.PasteAsync(learningGoal, request.Title, request.Text!, cancellationToken);
+            var document = await documents.PasteAsync(learningGoal, request.Title, request.Text!, request.Confirmation!, cancellationToken);
             return Results.Created($"/documents/{document.Id}", DocumentResponse.From(document));
         });
 
@@ -132,7 +137,9 @@ internal static class DocumentEndpoints
             : null;
 }
 
-internal sealed record PastedText(string? Title, string? Text, Guid? LearningGoalId = null);
+// Confirmation is the version of the wording the user confirmed (MaterialConfirmation), a URL is just text: Content never
+// fetches anything from one.
+internal sealed record PastedText(string? Title, string? Text, Guid? LearningGoalId = null, string? Confirmation = null);
 
 // Status goes out by name (Uploaded, Analyzing, Ready, Failed), the client words it. A failed document says why. Source
 // says where it came from, Text or File: one from a file stays Uploaded until its text is extracted (#282). FailureCode

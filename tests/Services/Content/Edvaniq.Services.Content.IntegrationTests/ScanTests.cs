@@ -81,7 +81,7 @@ public sealed class ScanTests(ServiceFactory service) : IClassFixture<ServiceFac
         var file = new ByteArrayContent(pdf);
         file.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
         using var form = new MultipartFormDataContent { { file, "file", "Scan Erdkunde.pdf" } };
-        using var response = await client.PostAsync("/documents/files", form, Cancel);
+        using var response = await client.PostAsync("/documents/files?confirmation=material-1", form, Cancel);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonElement>(Cancel)).GetProperty("id").GetGuid();
     }

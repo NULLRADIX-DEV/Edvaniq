@@ -133,7 +133,7 @@ public sealed class DocumentCommandTests(ServiceFactory service) : IClassFixture
     private static async Task<Guid> PasteAsync(HttpClient client)
     {
         using var response = await client.PostAsJsonAsync(
-            "/documents", new { Title = "Photosynthese", Text = TestTexts.Lesson }, Cancel);
+            "/documents", new { Title = "Photosynthese", Text = TestTexts.Lesson, Confirmation = "material-1" }, Cancel);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonElement>(Cancel)).GetProperty("id").GetGuid();
     }
@@ -142,7 +142,7 @@ public sealed class DocumentCommandTests(ServiceFactory service) : IClassFixture
     {
         var file = new ByteArrayContent("Licht spaltet Wasser, dabei entsteht Sauerstoff."u8.ToArray());
         file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-        using var response = await client.PostAsync("/documents/files", new MultipartFormDataContent { { file, "file", "Notizen.txt" } }, Cancel);
+        using var response = await client.PostAsync("/documents/files?confirmation=material-1", new MultipartFormDataContent { { file, "file", "Notizen.txt" } }, Cancel);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonElement>(Cancel)).GetProperty("id").GetGuid();
     }
