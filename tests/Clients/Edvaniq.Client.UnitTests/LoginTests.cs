@@ -6,6 +6,7 @@ using Edvaniq.Client.UI.Pages;
 
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.JSInterop;
 
 namespace Edvaniq.Client.UnitTests;
 
@@ -15,13 +16,77 @@ public sealed class LoginTests : BunitContext
 {
     private const string TraceId = "4bf92f3577b34da6a3ce929d0e0e4736";
 
+    private const string Password = "richtig-langes-passwort";
+
     private FakeWebSession session = new();
+
+    // What the fields show in the browser on submit. Null: the binding knows it all, as when somebody typed.
+    private readonly JSRuntimeInvocationHandler<string?[]?> shown;
 
     public LoginTests()
     {
         Services.AddSingleton<IWebSession>(_ => session);
         AddAuthorization();
         SetRendererInfo(new RendererInfo("WebAssembly", isInteractive: true));
+        JSInterop.Mode = JSRuntimeMode.Strict;
+        shown = JSInterop.SetupModule(LoginForm.FormValuesModule)
+            .Setup<string?[]?>("read", call => call.Arguments is [string[] ids] && ids.SequenceEqual(["login-name", "login-password"]));
+        shown.SetResult(null);
+    }
+
+    // #1013: autofill or a password manager filled the fields, and the page heard nothing of it.
+    [Fact]
+    public void FieldsFilledWithoutAnEvent_SignIn()
+    {
+        var session = new FakeWebSession();
+        var form = RenderForm(session);
+        shown.SetResult(["ben", Password]);
+
+        form.Find("form").Submit();
+
+        Assert.Equal(("ben", Password), Assert.Single(session.Logins));
+    }
+
+    // What the user sees counts, also when the binding knows something else.
+    [Fact]
+    public void WhatTheFieldsShow_WinsOverTheBinding()
+    {
+        var session = new FakeWebSession();
+        var form = RenderForm(session);
+        form.Find("#login-name").Change("bne");
+        form.Find("#login-password").Change("alt");
+        shown.SetResult([" ben ", Password]);
+
+        form.Find("form").Submit();
+
+        Assert.Equal(("ben", Password), Assert.Single(session.Logins));
+    }
+
+    // Read first, then checked: fields that are empty in the browser still get the hint.
+    [Fact]
+    public void FieldsEmptyInTheBrowser_SendNothing()
+    {
+        var session = new FakeWebSession();
+        var form = RenderForm(session);
+        shown.SetResult(["", ""]);
+
+        form.Find("form").Submit();
+
+        Assert.Empty(session.Logins);
+        Assert.Equal("Gib deinen Namen und dein Passwort ein.", form.Find("[role=alert] p").TextContent);
+    }
+
+    // Without the script the binding still works.
+    [Fact]
+    public void WithoutTheScript_TheBindingCounts()
+    {
+        var session = new FakeWebSession();
+        var form = RenderForm(session);
+        shown.SetException(new JSException("no module"));
+
+        SignIn(form);
+
+        Assert.Equal(("ben", Password), Assert.Single(session.Logins));
     }
 
     [Fact]

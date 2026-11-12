@@ -1,6 +1,8 @@
 @inject IWebSession Session
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider Authentication
+@inject IJSRuntime JS
+@using Microsoft.JSInterop
 
 <form class="login-form" @onsubmit="SignInAsync" novalidate>
     <div class="login-field">
@@ -30,6 +32,10 @@
 </form>
 
 @code {
+    public const string FormValuesModule = "./_content/Edvaniq.Client.UI/form-values.js";
+    private const string NameId = "login-name";
+    private const string PasswordId = "login-password";
+
     // Where to go once signed in, only a path of this site (ReturnUrl).
     [Parameter]
     public string? ReturnTo { get; set; }
@@ -47,13 +53,15 @@
             return;
         }
 
+        signingIn = true;
+        await TakeWhatTheFieldsShowAsync();
         if (string.IsNullOrWhiteSpace(name) || string.IsNullOrEmpty(password))
         {
+            signingIn = false;
             Show("Gib deinen Namen und dein Passwort ein.");
             return;
         }
 
-        signingIn = true;
         var outcome = await Session.SignInAsync(name.Trim(), password);
         signingIn = false;
 
@@ -71,6 +79,26 @@
 
         password = "";
         Show(Hint(outcome), outcome.TraceId);
+    }
+
+    // Autofill and password managers may fill the fields without an event, so the binding can still be empty. What the
+    // fields show wins, that's what the user sees. Without the script the bound values stay.
+    private async Task TakeWhatTheFieldsShowAsync()
+    {
+        try
+        {
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", FormValuesModule);
+            var values = await module.InvokeAsync<string?[]?>("read", new object[] { new[] { NameId, PasswordId } });
+            if (values is [var shownName, var shownPassword])
+            {
+                name = shownName ?? name;
+                password = shownPassword ?? password;
+            }
+        }
+        catch (Exception exception) when (exception is JSException or JSDisconnectedException or InvalidOperationException)
+        {
+            // No script, the binding has to do.
+        }
     }
 
     private void Show(string text, string? trace = null)
