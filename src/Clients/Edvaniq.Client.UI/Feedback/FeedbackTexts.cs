@@ -201,6 +201,35 @@ public static class FeedbackTexts
 
         // Followed by the names of the topics.
         public const string NotReady = "Zu diesen Themen entstehen die Fragen noch. Sie kommen in den Plan, sobald die Fragen da sind:";
+
+        // The link from Home to the page with the whole week.
+        public const string WeekLink = "Ganzen Plan ansehen";
+    }
+
+    // The page /plan with the days from today on (#379). Kinds, minutes and hints as in Plan.
+    public static class Week
+    {
+        public const string Heading = "Dein Plan";
+
+        public const string LoadFailed = "Dein Plan ließ sich gerade nicht laden.";
+
+        public const string Today = "Heute";
+
+        // A day of the list without blocks.
+        public const string FreeDay = "Nichts geplant.";
+
+        // Next to a block whose topic got less time than it needs.
+        public const string ShortenedMark = "gekürzt";
+
+        public const string NoTopics = "Noch gibt es keinen Plan.";
+
+        public const string NoTopicsHint = "Leg ein Lernziel an und füge Material hinzu. Aus seinen Themen entsteht dein Plan.";
+
+        public const string NoTopicsLink = "Lernziel anlegen";
+
+        public const string AllMastered = "In den nächsten Tagen steht nichts an.";
+
+        public const string Nothing = "In den nächsten Tagen ist nichts geplant.";
     }
 
     // The assistant for a new learning goal. Option texts are keyed by the values in LearningGoalValues.

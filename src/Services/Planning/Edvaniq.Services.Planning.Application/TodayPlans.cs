@@ -17,7 +17,12 @@ public sealed class TodayPlans(
     ICurrentUser currentUser,
     TimeProvider time)
 {
-    public async Task<TodayPlanResult> TodayAsync(CancellationToken cancellationToken)
+    public async Task<TodayPlanResult> TodayAsync(CancellationToken cancellationToken) =>
+        (await WeekAsync(cancellationToken)).Today;
+
+    // The rolling week (#379). Today is exactly TodayAsync, the later days are the fresh plan with ids, nothing is done
+    // there yet.
+    public async Task<WeekPlanResult> WeekAsync(CancellationToken cancellationToken)
     {
         var owner = currentUser.Id;
         var goal = LearningGoal.DefaultIdFor(owner);
@@ -38,7 +43,7 @@ public sealed class TodayPlans(
         var foundations = await knownTopics.FoundationsAsync(owner, goal, cancellationToken);
         var sizes = await knownTopics.SizesAsync(owner, goal, cancellationToken);
 
-        var plan = TodayPlanner.Plan(
+        var week = TodayPlanner.Week(
             topics,
             mastery ?? new Dictionary<Guid, TopicStanding>(),
             budget,
@@ -46,6 +51,7 @@ public sealed class TodayPlans(
             readyTopics: ready,
             foundations: foundations,
             sizes: sizes);
+        var plan = week.Today;
 
         // What was done today stays, the rest comes from the fresh plan (#375).
         var done = await doneBlocks.OnAsync(goal, plan.StudyDay, cancellationToken);
@@ -53,7 +59,7 @@ public sealed class TodayPlans(
 
         // A block started already goes on first (#407).
         var started = await startedBlocks.OnAsync(goal, plan.StudyDay, cancellationToken);
-        return new TodayPlanResult(
+        var today = new TodayPlanResult(
             goal,
             plan,
             blocks,
@@ -63,6 +69,14 @@ public sealed class TodayPlans(
         {
             Standings = mastery ?? new Dictionary<Guid, TopicStanding>(),
         };
+
+        List<WeekDayBlocks> days =
+        [
+            new(plan.StudyDay, blocks),
+            .. week.Days.Skip(1).Select(day => new WeekDayBlocks(
+                day.StudyDay, DayBlocks.WithDone(owner, goal, day.StudyDay, day.Blocks, [], budget.MinutesOn(day.StudyDay)))),
+        ];
+        return new WeekPlanResult(today, week, days);
     }
 
     // The sources answer null when their service is down. Should one throw anyway, it counts the same, unless the
@@ -79,6 +93,11 @@ public sealed class TodayPlans(
         }
     }
 }
+
+// Today: what TodayAsync answers. Days: the blocks with ids of every day of the week, Days[0] are Today.Blocks.
+public sealed record WeekPlanResult(TodayPlanResult Today, WeekPlan Plan, IReadOnlyList<WeekDayBlocks> Days);
+
+public sealed record WeekDayBlocks(DateOnly StudyDay, IReadOnlyList<DayBlock> Blocks);
 
 // Blocks: today's blocks with their ids, the done ones first. Plan.Blocks is only the fresh part.
 // NextBlockId: the block "Jetzt lernen" goes on with, null when nothing is open (#407). Standings: what LearningEngine

@@ -1,0 +1,196 @@
+@using System.Globalization
+@inject IWeekPlan Plans
+@inject ILearningMaterial Material
+
+@* The plan is worked out anew on every call, so the page asks again when the user comes back. *@
+<RefreshOnReturn OnReturn="LoadAsync" />
+
+<div class="week-status" role="status">
+    @switch (state)
+    {
+        case ViewState.Loading:
+            <Loading />
+            break;
+        case ViewState.LoadFailed:
+            <ConnectionProblem Title="@FeedbackTexts.Week.LoadFailed" TraceId="@trace" />
+            break;
+        case ViewState.Shown when IsEmpty:
+            <EmptyState Title="@Empty.Title" Hint="@Empty.Hint" />
+            break;
+    }
+</div>
+
+@if (state == ViewState.LoadFailed)
+{
+    <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="LoadAsync" />
+}
+else if (state == ViewState.Shown && IsEmpty)
+{
+    <StateActions Href="@Empty.Href" LinkText="@Empty.Link" />
+}
+
+@if (state == ViewState.Shown && !IsEmpty)
+{
+    <ol class="week-days">
+        @foreach (var (day, index) in plan!.Days.Select((day, index) => (day, index)))
+        {
+            var headingId = $"week-day-{index}";
+            <li @key="day.StudyDay" class="week-day">
+                <h2 id="@headingId" class="week-date">@DayOf(day.StudyDay, index)</h2>
+                @if (day.Blocks.Count == 0)
+                {
+                    <p class="week-free">@FeedbackTexts.Week.FreeDay</p>
+                }
+                else
+                {
+                    <ol class="week-blocks" aria-labelledby="@headingId">
+                        @foreach (var (block, position) in day.Blocks.Select((block, position) => (block, position)))
+                        {
+                            <li @key="position" class="week-block">
+                                <span class="week-topic">@NameOf(block.TopicId)</span>
+                                <span class="week-details">
+                                    @if (KindOf(block.Kind) is { } kind)
+                                    {
+                                        <span class="week-kind">@kind</span>
+                                    }
+                                    <span class="week-minutes">@MinutesOf(block.Minutes)</span>
+                                    @if (plan.ShortenedTopicIds.Contains(block.TopicId))
+                                    {
+                                        <span class="week-shortened">@FeedbackTexts.Week.ShortenedMark</span>
+                                    }
+                                </span>
+                            </li>
+                        }
+                    </ol>
+                }
+            </li>
+        }
+    </ol>
+}
+
+@if (state == ViewState.Shown)
+{
+    @if (!plan!.MasteryAvailable)
+    {
+        <Notice Kind="NoticeKind.Info" class="plan-hint plan-mastery">
+            <p>@FeedbackTexts.Plan.MasteryUnavailable</p>
+        </Notice>
+    }
+
+    @if (plan.ShortenedTopicIds.Count > 0)
+    {
+        <Notice Kind="NoticeKind.Info" class="plan-hint plan-shortened">
+            <p>@FeedbackTexts.Plan.Shortened</p>
+            <ul>
+                @foreach (var id in plan.ShortenedTopicIds)
+                {
+                    <li @key="id">@NameOf(id)</li>
+                }
+            </ul>
+        </Notice>
+    }
+
+    @if (plan.NotReadyTopicIds.Count > 0 && plan.Empty != PlanEmpty.QuestionsPending)
+    {
+        <Notice Kind="NoticeKind.Info" class="plan-hint plan-not-ready">
+            <p>@FeedbackTexts.Plan.NotReady</p>
+            <ul>
+                @foreach (var id in plan.NotReadyTopicIds)
+                {
+                    <li @key="id">@NameOf(id)</li>
+                }
+            </ul>
+        </Notice>
+    }
+}
+
+@code {
+    private static readonly CultureInfo German = CultureInfo.GetCultureInfo("de-DE");
+
+    private ViewState state = ViewState.Loading;
+    private WeekPlan? plan;
+    private Dictionary<Guid, string> names = [];
+    private string? trace;
+    private int loads;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    // A shown plan stays until the new one is there. Only the newest load counts when two overlap.
+    private async Task LoadAsync()
+    {
+        var load = ++loads;
+        var planCall = Plans.GetAsync();
+        var topicsCall = Material.ListTopicsAsync();
+        var (planned, topics) = (await planCall, await topicsCall);
+        if (load != loads)
+        {
+            return;
+        }
+
+        if (planned.Result == CallResult.SignedOut || topics.Result == CallResult.SignedOut)
+        {
+            // The shell says the login ran out (SessionEndedNotice).
+            if (state != ViewState.Shown)
+            {
+                state = ViewState.SignedOut;
+            }
+        }
+        else if (planned.Result != CallResult.Ok || topics.Result != CallResult.Ok)
+        {
+            trace = planned.TraceId ?? topics.TraceId;
+            state = ViewState.LoadFailed;
+        }
+        else
+        {
+            plan = planned.Value!;
+            names = [];
+            foreach (var topic in topics.Value!)
+            {
+                names.TryAdd(topic.Id, topic.Name);
+                foreach (var subtopic in topic.Subtopics)
+                {
+                    names.TryAdd(subtopic.Id, subtopic.Name);
+                }
+            }
+
+            state = ViewState.Shown;
+        }
+    }
+
+    private bool IsEmpty => plan!.Days.All(day => day.Blocks.Count == 0);
+
+    // Without topics the next step is a learning goal, the other reasons point where Home points.
+    private (string Title, string? Hint, string Href, string Link) Empty => plan?.Empty switch
+    {
+        PlanEmpty.NoTopics => (FeedbackTexts.Week.NoTopics, FeedbackTexts.Week.NoTopicsHint, "lernziele/neu", FeedbackTexts.Week.NoTopicsLink),
+        PlanEmpty.QuestionsPending => (FeedbackTexts.Plan.QuestionsPending, FeedbackTexts.Plan.QuestionsPendingHint, "themen", FeedbackTexts.Plan.QuestionsPendingLink),
+        PlanEmpty.AllMastered => (FeedbackTexts.Week.AllMastered, FeedbackTexts.Plan.AllMasteredHint, "themen", FeedbackTexts.Plan.AllMasteredLink),
+        _ => (FeedbackTexts.Week.Nothing, null, "themen", FeedbackTexts.Plan.NothingLink),
+    };
+
+    private static string DayOf(DateOnly day, int index)
+    {
+        var date = day.ToString("dddd, d. MMMM", German);
+        return index == 0 ? $"{FeedbackTexts.Week.Today}, {date}" : date;
+    }
+
+    private string NameOf(Guid topicId) => names.GetValueOrDefault(topicId) ?? FeedbackTexts.Plan.UnnamedTopic;
+
+    private static string? KindOf(BlockKind? kind) => kind switch
+    {
+        BlockKind.Learn => FeedbackTexts.Plan.Learn,
+        BlockKind.Review => FeedbackTexts.Plan.Review,
+        _ => null,
+    };
+
+    private static string MinutesOf(int minutes) =>
+        $"{minutes} {(minutes == 1 ? FeedbackTexts.Plan.Minute : FeedbackTexts.Plan.Minutes)}";
+
+    private enum ViewState
+    {
+        Loading,
+        SignedOut,
+        LoadFailed,
+        Shown,
+    }
+}

@@ -100,6 +100,43 @@ internal static class Material
             FulfillAsync(route, plans[Math.Min(Interlocked.Increment(ref calls) - 1, plans.Length - 1)]));
     }
 
+    // The week as Planning answers it (#379): today the blocks of Plan, tomorrow nothing, the day after one learn block.
+    // Without blocks it says why with emptyReason.
+    public static object Week(string? emptyReason = null)
+    {
+        var empty = emptyReason is not null;
+        var longWord = Guid.Parse("7b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e");
+        object[] today = empty
+            ? []
+            :
+            [
+                new { topicId = TopicId, minutes = 10, kind = "review" },
+                new { topicId = longWord, minutes = 15, kind = "learn" },
+            ];
+        object[] later = empty ? [] : [new { topicId = TopicId, minutes = 30, kind = "learn" }];
+        return new
+        {
+            learningGoalId = Guid.Empty,
+            days = new[]
+            {
+                new { studyDay = new DateOnly(2026, 11, 11), blocks = today },
+                new { studyDay = new DateOnly(2026, 11, 12), blocks = Array.Empty<object>() },
+                new { studyDay = new DateOnly(2026, 11, 13), blocks = later },
+            },
+            emptyReason,
+            masteryAvailable = true,
+            shortenedTopicIds = empty ? Array.Empty<Guid>() : [longWord],
+            questionPoolsAvailable = true,
+            notReadyTopicIds = Array.Empty<Guid>(),
+        };
+    }
+
+    public static async Task AnswerWeekAsync(IPage page, object week)
+    {
+        await AnswerAsync(page, documents: [new[] { Document("Ready") }], topics: [Topics]);
+        await page.RouteAsync("**/api/planning/plan/week", route => FulfillAsync(route, week));
+    }
+
     // A question of the topic as Assessment asks it, or 409 while there are none. The answer is graded with the given
     // option against the second one being right.
     public static async Task AnswerQuizAsync(IPage page, bool ready = true, string explanation = "Die Lichtreaktion läuft an den Membranen der Thylakoide ab.")

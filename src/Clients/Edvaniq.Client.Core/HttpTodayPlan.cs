@@ -44,25 +44,30 @@ internal sealed record PlanBody(
 {
     public TodayPlan ToPlan() => new(
         StudyDay,
-        [.. Blocks.Select(block => new PlanBlock(block.TopicId, block.Minutes, block.Kind switch
-        {
-            "learn" => BlockKind.Learn,
-            "review" => BlockKind.Review,
-            _ => null,
-        }))],
-        Blocks.Count > 0 ? null : EmptyReason switch
-        {
-            "noTopics" => PlanEmpty.NoTopics,
-            "questionsPending" => PlanEmpty.QuestionsPending,
-            "allMastered" => PlanEmpty.AllMastered,
-            _ => null,
-        },
+        [.. Blocks.Select(block => block.ToBlock())],
+        Blocks.Count > 0 ? null : EmptyOf(EmptyReason),
         MasteryAvailable,
         ShortenedTopicIds ?? [],
         NotReadyTopicIds ?? []);
+
+    public static PlanEmpty? EmptyOf(string? reason) => reason switch
+    {
+        "noTopics" => PlanEmpty.NoTopics,
+        "questionsPending" => PlanEmpty.QuestionsPending,
+        "allMastered" => PlanEmpty.AllMastered,
+        _ => null,
+    };
 }
 
-internal sealed record BlockBody(Guid TopicId, int Minutes, string? Kind = null);
+internal sealed record BlockBody(Guid TopicId, int Minutes, string? Kind = null)
+{
+    public PlanBlock ToBlock() => new(TopicId, Minutes, Kind switch
+    {
+        "learn" => BlockKind.Learn,
+        "review" => BlockKind.Review,
+        _ => null,
+    });
+}
 
 // Source-generated for the trimmed browser app. A plan without its day, blocks or mastery flag fails.
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, RespectRequiredConstructorParameters = true)]

@@ -1,0 +1,56 @@
+.week-days,
+.week-blocks {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.week-day {
+    margin-bottom: var(--space-4);
+}
+
+.week-date {
+    margin: 0 0 var(--space-2);
+    font-size: 1.125rem;
+}
+
+.week-free {
+    margin: 0;
+    color: var(--color-ink-muted);
+}
+
+/* Name on top, kind and minutes next to it; on a phone the details wrap under the name. */
+.week-block {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-4);
+    margin-bottom: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-surface);
+    border-radius: var(--radius);
+}
+
+/* Names from the analysis can be one long word. */
+.week-topic {
+    flex: 1 1 12rem;
+    min-width: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.week-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    color: var(--color-ink-muted);
+}
+
+.week-kind,
+.week-shortened {
+    font-weight: 600;
+}
+
+.week-status {
+    overflow-wrap: anywhere;
+}

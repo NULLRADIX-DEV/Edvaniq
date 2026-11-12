@@ -45,6 +45,7 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<IDoneBlocks, DoneBlocks>();
         builder.Services.AddScoped<IStartedBlocks, StartedBlocks>();
         builder.Services.AddScoped<TodayPlans>();
+        builder.Services.AddScoped<WeekPlans>();
         builder.Services.AddScoped<ISessions, Sessions>();
         builder.Services.AddScoped<SessionStarts>();
         builder.Services.AddScoped<SessionChanges>();
