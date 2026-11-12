@@ -22,11 +22,13 @@ public sealed class Quiz(IAttempts attempts, IEventOutbox outbox, TimeProvider t
             return new(AskOutcome.NoQuestions, null, null);
         }
 
-        var question = QuestionSelection.Pick(questions, 1, Random.Shared)[0];
-        var attempt = Attempt.Ask(question, topicId, time.GetUtcNow().UtcDateTime);
+        var now = time.GetUtcNow().UtcDateTime;
+        var selection = QuestionSelection.Pick(questions, await attempts.LastAnsweredAsync([topicId], cancellationToken), 1, now, Random.Shared);
+        var question = selection.Questions[0];
+        var attempt = Attempt.Ask(question, topicId, now);
         attempts.Add(attempt);
         await attempts.SaveAsync(cancellationToken);
-        return new(AskOutcome.Asked, attempt, question);
+        return new(AskOutcome.Asked, attempt, question, selection.PoolTooSmall);
     }
 
     // Asks the check questions in one save. Asking again brings a new set and leaves the open ones unanswered, keeping
@@ -128,7 +130,8 @@ public enum AskOutcome
     NoQuestions,
 }
 
-public sealed record Asked(AskOutcome Outcome, Attempt? Attempt, Question? Question);
+// Repeated: the user answered the question recently, the topic has no other left (#387).
+public sealed record Asked(AskOutcome Outcome, Attempt? Attempt, Question? Question, bool Repeated = false);
 
 public enum GradeOutcome
 {

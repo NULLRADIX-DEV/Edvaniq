@@ -135,7 +135,7 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
         var attempt = await asked.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
 
         Assert.Equal(
-            ["difficulty", "id", "options", "questionId", "text", "topicId", "type"],
+            ["difficulty", "id", "options", "questionId", "repeated", "text", "topicId", "type"],
             attempt.EnumerateObject().Select(property => property.Name).Order());
         var routes = service.Services.GetServices<EndpointDataSource>()
             .SelectMany(source => source.Endpoints)
@@ -143,7 +143,7 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
             .Select(endpoint => endpoint.RoutePattern.RawText!.TrimEnd('/'))
             .Where(route => route is not ("/health" or "/alive" or "/me"))
             .Order();
-        Assert.Equal(["/attempts", "/attempts/{id:guid}/answer", "/check-questions", "/question-pools", "/question-pools/{topicId:guid}", "/quizzes"], routes);
+        Assert.Equal(["/attempts", "/attempts/{id:guid}/answer", "/check-questions", "/question-pools", "/question-pools/{topicId:guid}", "/quizzes", "/quizzes/weaknesses"], routes);
     }
 
     // A double click, a retry and a second answer to the same question all get the first answer back.

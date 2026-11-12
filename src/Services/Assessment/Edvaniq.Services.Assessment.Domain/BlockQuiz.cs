@@ -28,9 +28,13 @@ public sealed class BlockQuiz : IOwnedByUser
     // UTC.
     public DateTime CreatedAt { get; private set; }
 
-    public static BlockQuiz Create(string ownerId, Guid blockId, Guid topicId, DateTime createdAt)
+    // Whether the pool was too small when the quiz was made (#387): it repeats a question answered recently or has fewer
+    // questions than asked for. Null for quizzes from before.
+    public bool? PoolTooSmall { get; private set; }
+
+    public static BlockQuiz Create(string ownerId, Guid blockId, Guid topicId, DateTime createdAt, bool poolTooSmall = false)
     {
         ArgumentException.ThrowIfNullOrEmpty(ownerId);
-        return new BlockQuiz(Guid.CreateVersion7(createdAt), ownerId, blockId, topicId, createdAt);
+        return new BlockQuiz(Guid.CreateVersion7(createdAt), ownerId, blockId, topicId, createdAt) { PoolTooSmall = poolTooSmall };
     }
 }

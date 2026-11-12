@@ -48,7 +48,7 @@ public sealed class BlockQuizTests(ServiceFactory service) : IClassFixture<Servi
         using var response = await client.PostAsJsonAsync("/quizzes", new { topicId = topic, blockId = block, size = 3 }, TestContext.Current.CancellationToken);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
 
-        Assert.Equal(["blockId", "id", "questions", "topicId"], body.EnumerateObject().Select(property => property.Name).Order());
+        Assert.Equal(["blockId", "id", "poolTooSmall", "questions", "topicId"], body.EnumerateObject().Select(property => property.Name).Order());
         Assert.All(body.GetProperty("questions").EnumerateArray(), question => Assert.Equal(
             ["answered", "correct", "difficulty", "id", "options", "questionId", "text", "topicId", "type"],
             question.EnumerateObject().Select(property => property.Name).Order()));

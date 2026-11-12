@@ -10,6 +10,9 @@ public interface IAttempts
 
     Task<IReadOnlyList<Question>> QuestionsOfAsync(Guid topicId, CancellationToken cancellationToken);
 
+    // When the user last answered each question of these topics, only the questions they answered.
+    Task<IReadOnlyDictionary<Guid, DateTime>> LastAnsweredAsync(IReadOnlyCollection<Guid> topicIds, CancellationToken cancellationToken);
+
     Task<Question?> FindQuestionAsync(Guid id, CancellationToken cancellationToken);
 
     Task<Attempt?> FindAsync(Guid id, CancellationToken cancellationToken);

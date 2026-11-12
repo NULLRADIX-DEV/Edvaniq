@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using Edvaniq.Services.Assessment.Application;
 using Edvaniq.Services.Assessment.Domain;
@@ -30,7 +31,8 @@ internal static class AttemptEndpoints
                 AskOutcome.NoQuestions => Results.Problem(
                     statusCode: StatusCodes.Status409Conflict,
                     title: "Zu diesem Thema gibt es noch keine Fragen."),
-                _ => Results.Created($"/attempts/{asked.Attempt!.Id}", AskedResponse.From(asked.Attempt, asked.Question!)),
+                _ => Results.Created(
+                    $"/attempts/{asked.Attempt!.Id}", AskedResponse.From(asked.Attempt, asked.Question!) with { Repeated = asked.Repeated }),
             };
         });
 
@@ -92,8 +94,17 @@ internal sealed record AskRequest(Guid? TopicId);
 
 internal sealed record CheckRequest(Guid? TopicId, Guid? SessionId);
 
-// Without the solution, that comes with the grade. Type is singleChoice, multipleChoice or trueFalse.
-internal sealed record AskedResponse(Guid Id, Guid TopicId, Guid QuestionId, string Type, string Text, IReadOnlyList<string> Options, int Difficulty)
+// Without the solution, that comes with the grade. Type is singleChoice, multipleChoice or trueFalse. Repeated only on
+// POST /attempts: true when the user answered the question recently and the topic has no other left (#387).
+internal sealed record AskedResponse(
+    Guid Id,
+    Guid TopicId,
+    Guid QuestionId,
+    string Type,
+    string Text,
+    IReadOnlyList<string> Options,
+    int Difficulty,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Repeated = null)
 {
     public static AskedResponse From(Attempt attempt, Question question) =>
         new(attempt.Id, attempt.TopicId, question.Id, AttemptEndpoints.Name(question.Type), question.Text, question.Options, question.Difficulty);
