@@ -1,6 +1,8 @@
 using Edvaniq.BuildingBlocks.Application;
+
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
@@ -30,10 +32,13 @@ public static class TokenValidationExtensions
         var policy = new AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
             .RequireClaim(CurrentUser.IdClaim)
+            .AddRequirements(new NotDeletedUserRequirement())
             .Build();
         builder.Services.AddAuthorizationBuilder()
             .SetDefaultPolicy(policy)
             .SetFallbackPolicy(policy);
+        builder.Services.AddScoped<IAuthorizationHandler, NotDeletedUserHandler>();
+        builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, DeletedUserResultHandler>();
 
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<ICurrentUser, CurrentUser>();

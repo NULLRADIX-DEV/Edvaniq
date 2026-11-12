@@ -66,6 +66,21 @@ public sealed class DeletedUserTests(MySqlTestServer mysql) : IAsyncLifetime
         Assert.NotEqual(DeletedUser.HashOf(alice.ToUpperInvariant()), hash);
     }
 
+    // What the token check asks (#953).
+    [Fact]
+    public async Task DeletedUsers_KnowsOnlyTheDeletedUser()
+    {
+        await StartAsync();
+        var alice = NewUser("alice");
+        Delete(alice);
+
+        using var scope = notes!.Scope();
+        var deleted = scope.ServiceProvider.GetRequiredService<IDeletedUsers>();
+        Assert.True(deleted.IsDeleted(alice));
+        Assert.False(deleted.IsDeleted(alice.ToUpperInvariant()));
+        Assert.False(deleted.IsDeleted(NewUser("bob")));
+    }
+
     // A handler that checked before the deletion was stored saves its note afterwards. The sweep removes it.
     [Fact]
     public async Task Sweep_RemovesRowsStoredAfterTheDeletion_AndLooksOnlyOnce()

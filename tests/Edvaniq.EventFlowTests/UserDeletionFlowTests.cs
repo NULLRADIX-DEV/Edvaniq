@@ -117,6 +117,45 @@ public sealed class UserDeletionFlowTests(FlowServices services) : IDisposable
             cancellationToken);
     }
 
+    // #953: within a minute of UserDeleted every service turns the deleted account's token away, over the real broker.
+    // Another account's token keeps working.
+    [Fact(Timeout = 120_000)]
+    public async Task TokenOfADeletedAccount_IsRejectedEverywhere_WithinAMinute()
+    {
+        var aliceId = $"alice-{Guid.NewGuid():N}";
+        var alice = TestTokens.Create(aliceId);
+        var bob = TestTokens.Create($"bob-{Guid.NewGuid():N}");
+        Assert.All(await MeEverywhereAsync(alice), status => Assert.Equal(HttpStatusCode.OK, status.Value));
+
+        await PublishAsync(new UserDeleted(aliceId), Guid.NewGuid());
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
+        Dictionary<string, HttpStatusCode> statuses;
+        while ((statuses = await MeEverywhereAsync(alice)).Values.Any(status => status != HttpStatusCode.Unauthorized))
+        {
+            Assert.True(DateTime.UtcNow < deadline, $"Still accepted after a minute: {string.Join(", ", statuses.Where(s => s.Value != HttpStatusCode.Unauthorized).Select(s => s.Key))}");
+            await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        }
+
+        Assert.All(await MeEverywhereAsync(bob), status => Assert.Equal(HttpStatusCode.OK, status.Value));
+    }
+
+    private async Task<Dictionary<string, HttpStatusCode>> MeEverywhereAsync(string token) => new()
+    {
+        ["planning"] = await MeAsync(services.Planning.CreateClient(), token),
+        ["content"] = await MeAsync(services.Content.CreateClient(), token),
+        ["knowledge"] = await MeAsync(services.Knowledge.CreateClient(), token),
+        ["assessment"] = await MeAsync(services.Assessment.CreateClient(), token),
+        ["learningengine"] = await MeAsync(services.LearningEngine.CreateClient(), token),
+    };
+
+    private static async Task<HttpStatusCode> MeAsync(HttpClient client, string token)
+    {
+        using var authorized = Client(client, token);
+        using var response = await authorized.GetAsync("/me", TestContext.Current.CancellationToken);
+        return response.StatusCode;
+    }
+
     public void Dispose() => ai.Dispose();
 
     private IChatClient Chat => ai.Services.GetRequiredService<IChatClient>();

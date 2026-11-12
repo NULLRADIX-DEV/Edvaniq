@@ -18,6 +18,8 @@ public static class BackendToken
 {
     public const string MetadataKey = "BackendToken";
 
+    private const string UserTokenSent = "edvaniq-user-token-sent";
+
     public static IReverseProxyBuilder AddBackendToken(this IReverseProxyBuilder proxy)
     {
         proxy.Services.AddOptions<BackendTokenOptions>()
@@ -52,9 +54,22 @@ public static class BackendToken
             }
 
             context.AddRequestTransform(AddTokenAsync);
+            context.AddResponseTransform(EndRejectedLoginAsync);
         });
 
         return proxy;
+    }
+
+    // The backend turns the user's token away, so the account is gone (docs/tokens.md#gültigkeit). The login ends like a
+    // logout, and every later call gets 401 here without reaching the backend. Only for the user's own token and only
+    // for 401: the technical token, a 403 or an outage end nothing.
+    private static async ValueTask EndRejectedLoginAsync(ResponseTransformContext transform)
+    {
+        if (transform.ProxyResponse?.StatusCode == System.Net.HttpStatusCode.Unauthorized
+            && transform.HttpContext.Items.ContainsKey(UserTokenSent))
+        {
+            await WebSession.EndLoginAsync(transform.HttpContext);
+        }
     }
 
     // A window of a minute per key for calls with the technical token. The keys never meet the one of the other calls.
@@ -91,6 +106,10 @@ public static class BackendToken
             }
 
             transform.ProxyRequest.Headers.Authorization = new("Bearer", token);
+            if (WebSession.IsUser(context.User))
+            {
+                context.Items[UserTokenSent] = true;
+            }
         }
         catch (Exception exception) when (!context.RequestAborted.IsCancellationRequested)
         {

@@ -28,6 +28,7 @@ public static partial class DatabaseExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IUserDataRemover, UserDataRemover<TContext>>();
         services.AddScoped<IUserDeletion, TDeletion>();
+        services.AddScoped<IDeletedUsers, DeletedUsers<TContext>>();
         services.AddHostedService<DeletedUserSweep<TContext>>();
         return services;
     }

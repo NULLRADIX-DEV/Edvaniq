@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json;
 
 using Edvaniq.BuildingBlocks.Messaging;
@@ -128,6 +130,29 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
             "No log line says with the TraceId of the request that the deletion was handled.");
         Assert.Equal(1, InboxEntries(messageId));
         Assert.Contains(service.Logs.Entries, entry => entry.Message == "Rows of a deleted user to remove: 1" && entry.TraceId == traceId);
+    }
+
+    // #953: once the deletion is through, a token issued before it is turned away like an invalid one. Others still work.
+    [Fact]
+    public async Task TokenOfADeletedUser_IsRejected_OthersStillWork()
+    {
+        var alice = NewUser("alice");
+        var bob = NewUser("bob");
+        Assert.Equal(HttpStatusCode.OK, await MeAsync(alice));
+
+        var messageId = await DeleteAsync(alice);
+
+        await WaitForAsync(() => InboxEntries(messageId) == 1, "The deletion was not handled.");
+        Assert.Equal(HttpStatusCode.Unauthorized, await MeAsync(alice));
+        Assert.Equal(HttpStatusCode.OK, await MeAsync(bob));
+    }
+
+    private async Task<HttpStatusCode> MeAsync(string user)
+    {
+        using var client = service.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.Create(user));
+        using var response = await client.GetAsync("/me", TestContext.Current.CancellationToken);
+        return response.StatusCode;
     }
 
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";

@@ -126,12 +126,18 @@ public static class WebSession
 
         session.MapDelete("/", async (HttpContext context) =>
         {
-            await EndAsync(context);
-            await context.SignOutAsync();
+            await EndLoginAsync(context);
             return TypedResults.NoContent();
         });
 
         return app;
+    }
+
+    // Ends the session for good: an ended login stays ended, even for a copy of its cookie.
+    internal static async Task EndLoginAsync(HttpContext context)
+    {
+        await EndAsync(context);
+        await context.SignOutAsync();
     }
 
     public static bool IsUser(ClaimsPrincipal user) => user.HasClaim(KindClaim, UserKind);
