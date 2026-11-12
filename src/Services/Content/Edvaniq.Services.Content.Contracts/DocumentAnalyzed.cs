@@ -6,7 +6,7 @@ namespace Edvaniq.Services.Content.Contracts;
 // topicId. UserId is the OwnerId of the document, LearningGoalId the goal the text was pasted into, null in messages from
 // before the default goal (#215). Existing topics as a target come with the stable topic IDs (#208), key terms in M2.
 public sealed record DocumentAnalyzed(
-    string UserId, Guid DocumentId, IReadOnlyList<TopicSuggestion> Topics, Guid? LearningGoalId = null) : IIntegrationEvent;
+    string UserId, Guid DocumentId, IReadOnlyList<TopicSuggestion> Topics, Guid? LearningGoalId = null) : IUserEvent;
 
 // A new topic as the analysis suggests it. Parent is the index of another suggestion in the same event, which always
 // comes first, or null for a topic at the top. SectionIds are the sections of the document that belong to it, each

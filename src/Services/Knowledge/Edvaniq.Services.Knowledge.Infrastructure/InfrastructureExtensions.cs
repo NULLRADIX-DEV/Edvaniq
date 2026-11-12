@@ -31,7 +31,7 @@ public static class InfrastructureExtensions
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<KnowledgeDbContext>(ServiceKey);
 
-        builder.Services.AddUserDataRemover<KnowledgeDbContext>();
+        builder.Services.AddUserDeletion<KnowledgeDbContext, UserDeletedHandler>();
         builder.Services.AddIntegrationEventHandler<UserDeleted, UserDeletedHandler>();
         builder.Services.AddIntegrationEventHandler<DocumentAnalyzed, DocumentAnalyzedHandler>();
         builder.Services.AddIntegrationEventHandler<DocumentDeleted, DocumentDeletedHandler>();

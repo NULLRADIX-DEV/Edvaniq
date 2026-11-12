@@ -18,19 +18,21 @@ internal abstract class EventSubscription(Type eventType, Type handlerType)
 
     public EventRoute Route { get; } = EventRoute.For(eventType);
 
-    // Reads the event from its JSON and hands it to the handler, which the scope provides.
-    public abstract Task HandleAsync(IServiceProvider scope, string payload, CancellationToken cancellationToken);
+    // Reads the event from its JSON.
+    public abstract IIntegrationEvent Read(string payload);
+
+    // Hands the event to the handler, which the scope provides.
+    public abstract Task HandleAsync(IServiceProvider scope, IIntegrationEvent integrationEvent, CancellationToken cancellationToken);
 }
 
 internal sealed class EventSubscription<TEvent, THandler>() : EventSubscription(typeof(TEvent), typeof(THandler))
     where TEvent : IIntegrationEvent
     where THandler : IIntegrationEventHandler<TEvent>
 {
-    public override Task HandleAsync(IServiceProvider scope, string payload, CancellationToken cancellationToken)
-    {
-        var integrationEvent = JsonSerializer.Deserialize<TEvent>(payload, EventJson.Options)
+    public override IIntegrationEvent Read(string payload) =>
+        JsonSerializer.Deserialize<TEvent>(payload, EventJson.Options)
             ?? throw new JsonException($"The message is no {typeof(TEvent).Name}.");
 
-        return scope.GetRequiredService<THandler>().HandleAsync(integrationEvent, cancellationToken);
-    }
+    public override Task HandleAsync(IServiceProvider scope, IIntegrationEvent integrationEvent, CancellationToken cancellationToken) =>
+        scope.GetRequiredService<THandler>().HandleAsync((TEvent)integrationEvent, cancellationToken);
 }

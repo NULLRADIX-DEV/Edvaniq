@@ -5,6 +5,7 @@ using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Assessment.Domain;
 using Edvaniq.Services.Assessment.Infrastructure;
 using Edvaniq.Services.Content.Contracts;
+using Edvaniq.Services.Identity.Contracts;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -160,6 +161,29 @@ public sealed class QuestionTests(ServiceFactory service) : IClassFixture<Servic
         await DeliverAsync(payload.ToJsonString());
 
         Assert.Single(QuestionsOf(generated.UserId));
+    }
+
+    // #944: items that come after the user's deletion are confirmed at once and store nothing, they don't wait for
+    // the topic that went with the user.
+    [Fact]
+    public async Task LateItems_OfADeletedUser_AreConfirmedWithoutEffect()
+    {
+        var generated = await GeneratedAsync(NewUser("alice"), topicPosition: 0, Item());
+        var deletion = Guid.NewGuid();
+        await Broker.PublishAsync(
+            new OutgoingMessage(
+                EventRoute.For(typeof(UserDeleted)).Subject,
+                deletion,
+                JsonSerializer.Serialize(new UserDeleted(generated.UserId), JsonSerializerOptions.Web),
+                null),
+            TestContext.Current.CancellationToken);
+        await WaitForAsync(
+            () => Query(db => db.Set<InboxMessage>().Count(entry => entry.MessageId == deletion)) == 1,
+            "The deletion was not handled.");
+
+        await DeliverAsync(Payload(generated));
+
+        Assert.Empty(QuestionsOf(generated.UserId));
     }
 
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";

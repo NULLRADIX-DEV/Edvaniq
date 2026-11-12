@@ -12,7 +12,7 @@ public sealed record TopicsChanged(
     DateTime ChangedAt,
     IReadOnlyList<Guid> TopicIds,
     IReadOnlyList<Guid> HiddenTopicIds,
-    IReadOnlyList<TopicParent>? Parents = null) : IIntegrationEvent;
+    IReadOnlyList<TopicParent>? Parents = null) : IUserEvent;
 
 // A subtopic and the topic it belongs to.
 public sealed record TopicParent(Guid TopicId, Guid ParentId);

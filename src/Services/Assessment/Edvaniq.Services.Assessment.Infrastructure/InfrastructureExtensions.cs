@@ -35,7 +35,7 @@ public static class InfrastructureExtensions
         builder.Services.AddIntegrationEventHandler<TopicsChanged, TopicsChangedHandler>();
 
         // Every IOwnedByUser entity, questions included.
-        builder.Services.AddUserDataRemover<AssessmentDbContext>();
+        builder.Services.AddUserDeletion<AssessmentDbContext, UserDeletedHandler>();
         builder.Services.AddIntegrationEventHandler<UserDeleted, UserDeletedHandler>();
 
         // Ready only with a reachable database, alive without it.

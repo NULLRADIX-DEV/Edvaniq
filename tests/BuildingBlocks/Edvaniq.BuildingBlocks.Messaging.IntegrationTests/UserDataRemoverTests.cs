@@ -17,7 +17,7 @@ public sealed class UserDataRemoverTests(MySqlTestServer mysql) : IAsyncLifetime
         service = TestService<NotesDbContext>.Create(
             "notes",
             await mysql.CreateDatabaseAsync("notes"),
-            configure: services => services.AddUserDataRemover<NotesDbContext>());
+            configure: services => services.AddUserDeletion<NotesDbContext, NotesDeletion>());
 
     public async ValueTask DisposeAsync() => await service!.DisposeAsync();
 
@@ -153,3 +153,13 @@ public class Entry : IOwnedByUser
 
 // TPH: removed with Entry, not twice.
 public sealed class ArchivedEntry : Entry;
+
+// The whole deletion of the notes service is the remover.
+public sealed class NotesDeletion(IUserDataRemover userData) : IUserDeletion
+{
+    public Task DeleteAsync(string userId, CancellationToken cancellationToken)
+    {
+        userData.RemoveAll(userId);
+        return Task.CompletedTask;
+    }
+}

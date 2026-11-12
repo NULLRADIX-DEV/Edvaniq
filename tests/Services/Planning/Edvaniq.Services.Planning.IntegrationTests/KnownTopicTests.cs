@@ -98,6 +98,23 @@ public sealed class KnownTopicTests(ServiceFactory service) : IClassFixture<Serv
         Assert.Equal(1, Query(db => db.TopicsSnapshots.IgnoreQueryFilters().Count(snapshot => snapshot.OwnerId == bob)));
     }
 
+    // #944: a state that comes after the user's deletion is confirmed and stores nothing.
+    [Fact]
+    public async Task LateState_OfADeletedUser_IsConfirmedWithoutEffect()
+    {
+        var alice = NewUser("alice");
+        var deletion = await PublishAsync(new UserDeleted(alice));
+        await WaitForAsync(
+            () => Query(db => db.Set<InboxMessage>().Count(entry => entry.MessageId == deletion)) == 1,
+            "The deletion was not handled.");
+
+        var late = await PublishAsync(new TopicsChanged(alice, Guid.NewGuid(), First, [Guid.NewGuid()], []));
+
+        await WaitForAsync(() => InboxEntries(late) == 1, "The late state was not confirmed.");
+        Assert.Empty(Known(alice));
+        Assert.Equal(0, Query(db => db.TopicsSnapshots.IgnoreQueryFilters().Count(snapshot => snapshot.OwnerId == alice)));
+    }
+
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
 
     private async Task DeliverAsync(TopicsChanged changed)

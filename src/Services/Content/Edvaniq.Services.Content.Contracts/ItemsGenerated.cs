@@ -8,7 +8,7 @@ namespace Edvaniq.Services.Content.Contracts;
 // Messages sent before TopicId came have none.
 public sealed record ItemsGenerated(
     string UserId, Guid DocumentId, int TopicPosition, IReadOnlyList<GeneratedItem> Items, Guid? TopicId = null)
-    : IIntegrationEvent;
+    : IUserEvent;
 
 // ItemId comes from Content, so a second delivery of the event is the same item. DocumentId and SectionId are the source.
 // Question is set for a question, cards come with their own field (M4).

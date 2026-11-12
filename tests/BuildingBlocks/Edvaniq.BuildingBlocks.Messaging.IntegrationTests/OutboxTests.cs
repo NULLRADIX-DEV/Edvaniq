@@ -193,7 +193,7 @@ public sealed class OutboxTests(MySqlTestServer mysql) : IAsyncLifetime
     }
 
     [Fact]
-    public void Cleanup_DeletesOldSentEventsAndOldInboxEntries_ButKeepsTheRest()
+    public void Cleanup_DeletesOldSentEventsOldInboxEntriesAndExpiredDeletedUsers_ButKeepsTheRest()
     {
         var now = DateTime.UtcNow;
         sender.Save((db, _) =>
@@ -205,13 +205,17 @@ public sealed class OutboxTests(MySqlTestServer mysql) : IAsyncLifetime
             db.Set<InboxMessage>().AddRange(
                 new InboxMessage { MessageId = Guid.NewGuid(), Consumer = "sender-old", ReceivedAt = now.AddDays(-15) },
                 new InboxMessage { MessageId = Guid.NewGuid(), Consumer = "sender-recent", ReceivedAt = now.AddDays(-1) });
+            db.Set<DeletedUser>().AddRange(
+                DeletedUser.Of("deleted 31 days ago", now.AddDays(-31)),
+                DeletedUser.Of("deleted 29 days ago", now.AddDays(-29)));
         });
 
         var deleted = sender.Cleanup.RunOnce();
 
-        Assert.Equal((1, 1), deleted);
+        Assert.Equal((1, 1, 1), deleted);
         Assert.Equal(["old and unsent", "recent and sent"], sender.Query(db => db.Set<OutboxMessage>().Select(m => m.Subject).OrderBy(s => s).ToList()));
         Assert.Equal(["sender-recent"], sender.Query(db => db.Set<InboxMessage>().Select(m => m.Consumer).ToList()));
+        Assert.Equal([DeletedUser.HashOf("deleted 29 days ago")], sender.Query(db => db.Set<DeletedUser>().Select(u => u.Hash).ToList()));
     }
 
     private Guid CreateDocument(string title)

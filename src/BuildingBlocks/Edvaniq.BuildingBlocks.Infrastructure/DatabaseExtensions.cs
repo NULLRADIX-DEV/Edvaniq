@@ -3,6 +3,7 @@ using Edvaniq.BuildingBlocks.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -18,10 +19,18 @@ public static partial class DatabaseExtensions
             provider.GetRequiredService<IConfiguration>().GetConnectionString(connectionName)
             ?? throw new InvalidOperationException($"Connection string '{connectionName}' is missing.")).ConnectionString));
 
-    // For the UserDeleted handler (docs/service-internals.md#nutzer-löschen).
-    public static IServiceCollection AddUserDataRemover<TContext>(this IServiceCollection services)
-        where TContext : ServiceDbContext =>
+    // The remover for TDeletion, the service's whole deletion of a user (usually its UserDeleted handler), and the sweep
+    // that runs it again for rows stored while the deletion ran (docs/service-internals.md#nutzer-löschen).
+    public static IServiceCollection AddUserDeletion<TContext, TDeletion>(this IServiceCollection services)
+        where TContext : ServiceDbContext
+        where TDeletion : class, IUserDeletion
+    {
+        services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IUserDataRemover, UserDataRemover<TContext>>();
+        services.AddScoped<IUserDeletion, TDeletion>();
+        services.AddHostedService<DeletedUserSweep<TContext>>();
+        return services;
+    }
 
     // Applies all pending migrations and returns the exit code. A second run finds nothing to do. Like Run(), it
     // disposes the host at the end, so the last log lines get out.

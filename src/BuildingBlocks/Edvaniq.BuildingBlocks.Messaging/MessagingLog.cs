@@ -44,6 +44,10 @@ internal static partial class MessagingLog
     [LoggerMessage(Level = LogLevel.Warning, Message = "Cleanup of old outbox and inbox rows failed")]
     public static partial void CleanupFailed(ILogger logger, Exception exception);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Cleanup deleted {Outbox} sent outbox rows and {Inbox} inbox rows")]
-    public static partial void CleanedUp(ILogger logger, int outbox, int inbox);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cleanup deleted {Outbox} sent outbox rows, {Inbox} inbox rows and {DeletedUsers} deleted users")]
+    public static partial void CleanedUp(ILogger logger, int outbox, int inbox, int deletedUsers);
+
+    // Without the user id: the user is gone, the log keeps nothing of them.
+    [LoggerMessage(Level = LogLevel.Information, Message = "Consumer {Consumer} skipped {Event} of a deleted user")]
+    public static partial void DeletedUserSkipped(ILogger logger, string consumer, string @event);
 }

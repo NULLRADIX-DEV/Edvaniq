@@ -33,4 +33,12 @@ public sealed class MessagingOptions
 
     // After this time sent outbox rows and inbox rows are deleted.
     public TimeSpan Retention { get; set; } = TimeSpan.FromDays(14);
+
+    // How long a service remembers a deleted user (DeletedUser). Longer than any event can come late: the stream keeps
+    // it 7 days, the inbox 14, an unsent one waits in the outbox. Backups of the user's data are gone after about as long.
+    public TimeSpan DeletedUserRetention { get; set; } = TimeSpan.FromDays(30);
+
+    // How long after a deletion the sweep looks once more for rows of the user. A handler that checked before the
+    // deletion was stored commits within seconds, or the broker delivers its message again after AckWait.
+    public TimeSpan DeletedUserSweepAfter { get; set; } = TimeSpan.FromMinutes(2);
 }

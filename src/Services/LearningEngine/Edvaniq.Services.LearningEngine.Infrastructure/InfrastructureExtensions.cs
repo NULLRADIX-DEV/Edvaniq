@@ -36,7 +36,7 @@ public static class InfrastructureExtensions
         builder.Services.AddIntegrationEventHandler<SessionCompleted, SessionCompletedHandler>();
 
         // Every IOwnedByUser entity, learning records included.
-        builder.Services.AddUserDataRemover<LearningEngineDbContext>();
+        builder.Services.AddUserDeletion<LearningEngineDbContext, UserDeletedHandler>();
         builder.Services.AddIntegrationEventHandler<UserDeleted, UserDeletedHandler>();
 
         // Ready only with a reachable database, alive without it.
