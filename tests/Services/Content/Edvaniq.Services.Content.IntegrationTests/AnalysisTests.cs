@@ -6,6 +6,7 @@ using System.Text.Json;
 
 using Edvaniq.BuildingBlocks.AI;
 using Edvaniq.BuildingBlocks.Messaging;
+using Edvaniq.Services.Content.Api;
 using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Contracts;
 using Edvaniq.Services.Content.Domain;
@@ -14,6 +15,7 @@ using Edvaniq.Services.Content.Infrastructure.Ai;
 using Edvaniq.Services.Content.UnitTests;
 using Edvaniq.Testing;
 
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
@@ -228,6 +230,42 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
         Assert.Equal("Ready", found!.Status);
         Assert.Equal(topics.Select(topic => topic.Id).Order(), (await GeneratedAsync(id)).Select(pool => pool.TopicId!.Value).Order());
+    }
+
+    // #1018: before #989 a topic could come without its sections, and the document got ready without its questions.
+    // Reopened by the operator, the next round asks only for that topic, charges only it, and takes no topic over again.
+    [Fact]
+    public async Task ReopenedReadyDocument_GetsOnlyTheMissingQuestions_AndIsReadyAgain()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        await AnalyzeAsync(id);
+        var topics = service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
+        service.Knowledge.Give(id, [.. topics.Take(3), topics[3] with { SectionIds = [] }]);
+        Assert.True(await Pools().FinishAsync(id, TestContext.Current.CancellationToken));
+        Assert.Equal(DocumentStatus.Ready, Stored(id).Status);
+        Assert.DoesNotContain(topics[3].Id, PooledTopics(id));
+        var calls = QuestionCalls(id);
+
+        service.Knowledge.Give(id, topics);
+        await using (var command = service.WithWebHostBuilder(builder => builder.ConfigureTestServices(DocumentCommand.Register)))
+        {
+            using var output = new StringWriter();
+            Assert.Equal(DocumentCommand.Ok, await DocumentCommand.RunAsync(command.Services, ["document", "reopen", id.ToString()], output, TextWriter.Null));
+            Assert.Equal($"reopened {id:D}", output.ToString().Trim());
+        }
+
+        Assert.Equal(DocumentStatus.Analyzing, Stored(id).Status);
+        Assert.True(await Pools().FinishAsync(id, TestContext.Current.CancellationToken));
+
+        Assert.Equal(DocumentStatus.Ready, Stored(id).Status);
+        Assert.Equal(topics.Select(topic => topic.Id).Order(), (await GeneratedAsync(id)).Select(pool => pool.TopicId!.Value).Order());
+        Assert.Equal(topics.Select(topic => topic.Id).Order(), PooledTopics(id).Order());
+        Assert.Equal(calls + 1, QuestionCalls(id));
+        Assert.Single(await ReportedAsync(id));
+        using var scope = service.Services.CreateScope();
+        Assert.Equal(topics.Count, scope.ServiceProvider.GetRequiredService<ContentDbContext>().GenerationCharges
+            .IgnoreQueryFilters().Count(charge => charge.DocumentId == id));
     }
 
     [Fact]
@@ -1077,6 +1115,10 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         return [.. scope.ServiceProvider.GetRequiredService<ContentDbContext>().AiAttempts.IgnoreQueryFilters()
             .Where(attempt => attempt.DocumentId == documentId)];
     }
+
+    // Calls for questions, not attempts: a call may need a second try.
+    private int QuestionCalls(Guid documentId) =>
+        AttemptsOf(documentId).Where(attempt => attempt.Purpose == AiAttempt.Questions).Select(attempt => attempt.CallId).Distinct().Count();
 
     private sealed class BrokenScopes : IServiceScopeFactory
     {

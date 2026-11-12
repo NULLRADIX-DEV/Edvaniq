@@ -436,6 +436,21 @@ public sealed class Document : IOwnedByUser
         UnfinishedReads = 0;
     }
 
+    // Puts a ready document back to waiting for its questions, for the operator (#1018). Before #989 a document could get
+    // ready while some of its topics had no material yet, those never got questions. The worker takes it like any waiting
+    // one: topics with a pool stay as they are, the topics stay as Knowledge has them, DocumentAnalyzed doesn't go again.
+    public void ReopenForQuestions(DateTime reopenedAt)
+    {
+        if (Status != DocumentStatus.Ready)
+        {
+            throw new InvalidOperationException($"Document {Id} is {Status}, only a ready document can be reopened.");
+        }
+
+        Status = DocumentStatus.Analyzing;
+        RetriedAt = reopenedAt;
+        ClearOutages();
+    }
+
     private void ClearOutages()
     {
         AiOutages = 0;

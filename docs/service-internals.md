@@ -249,6 +249,16 @@ dotnet Edvaniq.Services.Content.Api.dll document delete <id>
 
 Der Befehl startet keinen Webserver und hat keinen Weg über HTTP. Er sucht den Eigentümer des Dokuments und löscht dann in dessen Namen, genau wie der Endpunkt: Datei, Abschnitte und Fragenpools gehen mit, und `DocumentDeleted` landet im selben Speichern in der Outbox. Die laufende Content-Api schickt das Ereignis, Knowledge und Assessment entfernen, was aus dem Dokument entstanden ist. Er schreibt nur `deleted <id>` und endet mit 0. Gibt es das Dokument nicht, schreibt er `no document <id>`, schickt nichts und endet ebenfalls mit 0, ein zweiter Lauf ist also harmlos. Fehlt die ID oder ist sie keine GUID, endet er mit 2, bei einem anderen Fehler mit 1.
 
+## Fehlende Fragen nachholen (Betreiber)
+
+Vor #989 konnte ein Dokument fertig werden, obwohl einzelne Themen ihre Abschnitte noch nicht hatten. Diese Themen bekamen nie Fragen. Ein solches Dokument öffnet das Team mit einem Befehl im Prozess der Content-Api wieder:
+
+```bash
+dotnet Edvaniq.Services.Content.Api.dll document reopen <id>
+```
+
+Das Dokument wartet danach wieder auf seine Fragen, und der Worker nimmt es in der nächsten Runde wie jedes wartende. Themen mit Fragenpool bleiben, wie sie sind: kein KI-Aufruf, kein zweites Kontingent. Nur Themen mit Material und ohne Pool bekommen ihre Fragen, danach ist das Dokument wieder fertig. Die Themen selbst bleiben bei Knowledge unverändert, `DocumentAnalyzed` geht nicht noch einmal raus. Ein vollständiges Dokument wieder zu öffnen ist also harmlos. Der Befehl schreibt nur `reopened <id>` und endet mit 0. Ein unbekanntes Dokument (`no document <id>`) und eines, das nicht fertig ist (`not ready <id>`), lehnt er ab, ändert nichts und endet mit 3. Fehlt die ID oder ist sie keine GUID, endet er mit 2, bei einem anderen Fehler mit 1.
+
 ## KI pausieren (Betreiber)
 
 Kostet die KI plötzlich zu viel oder antwortet sie Unsinn, hält das Team alle KI-Aufrufe sofort an, ohne Deploy, mit einem Befehl im Prozess der Content-Api:

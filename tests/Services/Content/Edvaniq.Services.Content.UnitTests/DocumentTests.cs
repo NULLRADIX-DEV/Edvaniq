@@ -211,6 +211,36 @@ public class DocumentTests
         Assert.Equal(Now.AddMinutes(1), document.WaitsForTopicsSince);
     }
 
+    // #1018: a ready document waits for its questions again, the topics stay out, the wait starts now.
+    [Fact]
+    public void Reopen_OfAReadyDocument_WaitsForTheQuestionsAgain()
+    {
+        var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
+        document.Split();
+        document.ReportTopics(Now.AddMinutes(1));
+        document.FinishAnalysis();
+
+        document.ReopenForQuestions(Now.AddDays(3));
+
+        Assert.Equal((DocumentStatus.Analyzing, true, (DateTime?)Now.AddMinutes(1), (string?)null),
+            (document.Status, document.WaitsForQuestions, document.AnalyzedAt, document.FailureReason));
+        Assert.Equal(Now.AddDays(3), document.WaitsForTopicsSince);
+    }
+
+    [Fact]
+    public void Reopen_OfADocumentThatIsNotReady_IsRefused()
+    {
+        var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
+        Assert.Throws<InvalidOperationException>(() => document.ReopenForQuestions(Now));
+
+        document.Split();
+        document.ReportTopics(Now.AddMinutes(1));
+        Assert.Throws<InvalidOperationException>(() => document.ReopenForQuestions(Now));
+
+        document.Fail(DocumentFailures.QuestionsFailed);
+        Assert.Throws<InvalidOperationException>(() => document.ReopenForQuestions(Now));
+    }
+
     [Fact]
     public void Retry_OfADocumentThatIsNotFailed_IsRefused()
     {

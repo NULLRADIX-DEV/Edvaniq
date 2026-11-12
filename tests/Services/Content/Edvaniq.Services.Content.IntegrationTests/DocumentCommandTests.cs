@@ -8,6 +8,7 @@ using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Content.Api;
 using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Contracts;
+using Edvaniq.Services.Content.Domain;
 using Edvaniq.Services.Content.Infrastructure;
 using Edvaniq.Testing;
 
@@ -80,8 +81,30 @@ public sealed class DocumentCommandTests(ServiceFactory service) : IClassFixture
         Assert.DoesNotContain(Deleted(), item => item.DocumentId == id);
     }
 
+    // #1018: only a ready document of some user can be reopened. Anything else is refused by id alone, nothing changes.
+    [Fact]
+    public async Task Reopen_RefusesUnknownAndUnfinishedDocuments()
+    {
+        using var client = ClientFor(NewUser("alice"));
+        var analyzing = await PasteAsync(client);
+        await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(analyzing, Cancel);
+        var unknown = Guid.NewGuid();
+        await using var command = CommandHost();
+
+        var (notReady, notReadyOutput, notReadyError) = await RunAsync(command, "document", "reopen", analyzing.ToString());
+        var (missing, missingOutput, _) = await RunAsync(command, "document", "reopen", unknown.ToString());
+
+        Assert.Equal((DocumentCommand.Refused, DocumentCommand.Refused), (notReady, missing));
+        Assert.Empty(notReadyError);
+        Assert.Equal($"not ready {analyzing:D}", notReadyOutput.Trim());
+        Assert.Equal($"no document {unknown:D}", missingOutput.Trim());
+        var stored = Query(db => db.Documents.IgnoreQueryFilters().Single(document => document.Id == analyzing));
+        Assert.Equal((DocumentStatus.Analyzing, (DateTime?)null), (stored.Status, stored.RetriedAt));
+    }
+
     [Theory]
     [InlineData("document")]
+    [InlineData("document", "reopen")]
     [InlineData("document", "delete")]
     [InlineData("document", "delete", "not-a-guid")]
     [InlineData("document", "remove", "3f2b9c1e-8d4a-4e0f-9b6a-2c7d1e5f4a10")]
