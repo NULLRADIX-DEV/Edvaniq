@@ -93,6 +93,39 @@ public sealed class TopicFlowTests(FlowServices services)
         }
     }
 
+    // #380 AC1: after the analysis Planning knows each topic's place in the material and its size, the number of its
+    // sections, for the user of the analysis.
+    [Fact]
+    public async Task Analysis_GivesPlanningTheOrderAndSizeOfTheTopics()
+    {
+        var carol = NewUser("carol");
+        await services.Broker.EnsureStreamAsync(
+            new StreamSpec(EventRoute.StreamOf("content"), EventRoute.SubjectsOf("content")),
+            TestContext.Current.CancellationToken);
+
+        await PublishAsync(
+            EventRoute.For(typeof(DocumentAnalyzed)).Subject,
+            new DocumentAnalyzed(carol, Guid.NewGuid(), [
+                new TopicSuggestion("Zelle", null, [Guid.NewGuid(), Guid.NewGuid()]),
+                new TopicSuggestion("Gewebe", null, [Guid.NewGuid()]),
+                new TopicSuggestion("Kern", 0, [Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()])]));
+
+        await WaitForTopicsAsync(carol, 3);
+        var changed = (await WaitForEventsAsync(carol, 1))[0];
+        await WaitForAsync(
+            () => services.QueryPlanning(db => db.TopicsSnapshots.IgnoreQueryFilters().Any(snapshot => snapshot.OwnerId == carol && snapshot.ChangedAt == changed.ChangedAt)),
+            "Planning did not take the state over.");
+        var names = services.QueryKnowledge(db => db.Topics.IgnoreQueryFilters().Where(topic => topic.OwnerId == carol).ToDictionary(topic => topic.Id, topic => topic.Name));
+        var known = services.QueryPlanning(db => db.KnownTopics.IgnoreQueryFilters()
+            .Where(topic => topic.OwnerId == carol)
+            .Select(topic => new { topic.TopicId, topic.Rank, topic.Size })
+            .ToList());
+
+        Assert.Equal(
+            [("Zelle", 0, 2), ("Kern", 1, 3), ("Gewebe", 2, 1)],
+            known.OrderBy(topic => topic.Rank).Select(topic => (names[topic.TopicId], topic.Rank!.Value, topic.Size)));
+    }
+
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
 
     private Task AnalyseAsync(string user, params string[] names) => AnalyseAsync(user, null, names);

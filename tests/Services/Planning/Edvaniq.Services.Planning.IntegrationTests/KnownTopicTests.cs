@@ -49,6 +49,25 @@ public sealed class KnownTopicTests(ServiceFactory service) : IClassFixture<Serv
             Query(db => db.KnownTopics.IgnoreQueryFilters().Where(topic => topic.OwnerId == alice && topic.IsFoundation).Select(topic => topic.TopicId).ToList()));
     }
 
+    // #380: rank and size of every topic, hidden ones too, only for the user of the event.
+    [Fact]
+    public async Task RankAndSize_AreStored_ForTheUserOfTheEvent()
+    {
+        var (alice, bob) = (NewUser("alice"), NewUser("bob"));
+        var (a, b, hidden) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var bobs = Guid.NewGuid();
+        await DeliverAsync(new TopicsChanged(bob, Guid.NewGuid(), First, [bobs], [], [], [new(bobs, 0, 9)]));
+
+        await DeliverAsync(new TopicsChanged(alice, Guid.NewGuid(), First, [a, b], [hidden], [], [new(b, 0, 2), new(a, 1, 0), new(hidden, 2, 5)]));
+
+        Assert.Equal(
+            new[] { (a, (int?)1, 1), (b, 0, 2), (hidden, 2, 5) }.OrderBy(topic => topic.Item1),
+            Query(db => db.KnownTopics.IgnoreQueryFilters().Where(topic => topic.OwnerId == alice)
+                .Select(topic => new { topic.TopicId, topic.Rank, topic.Size }).ToList())
+                .Select(topic => (topic.TopicId, topic.Rank, topic.Size)).OrderBy(topic => topic.TopicId));
+        Assert.Equal(9, Query(db => db.KnownTopics.IgnoreQueryFilters().Single(topic => topic.OwnerId == bob).Size));
+    }
+
     // A redelivery is dropped by the inbox, the same state under a new id and an older state by the stored snapshot.
     [Fact]
     public async Task StateDeliveredTwice_SentTwice_OrOlder_ChangesNothing()

@@ -128,6 +128,9 @@ public class TodayPlansTests
         public Task<IReadOnlyList<Guid>> ActiveAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
             Task.FromResult(active);
 
+        public Task<IReadOnlyDictionary<Guid, int>> SizesAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int>());
+
         public Task<IReadOnlySet<Guid>> FoundationsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlySet<Guid>>(new HashSet<Guid>());
 

@@ -26,6 +26,34 @@ public class TodayPlannerTests
         Assert.Null(plan.Empty);
     }
 
+    // #380: of two topics with the same weight the one earlier in the material comes first, whatever its id.
+    [Fact]
+    public void SameWeight_GoesByTheOrderOfTheMaterial()
+    {
+        var mastery = Introduced(new() { [A] = 50, [B] = 50 });
+
+        var bFirst = TodayPlanner.Plan([B, A], mastery, Budget, Now);
+        var aFirst = TodayPlanner.Plan([A, B], mastery, Budget, Now);
+
+        Assert.Equal(B, bFirst.Blocks.First(block => block.Kind == BlockKind.Learn).TopicId);
+        Assert.Equal(A, aFirst.Blocks.First(block => block.Kind == BlockKind.Learn).TopicId);
+    }
+
+    // #380: weight is size × (100 - mastery), so a topic with three times the sections outweighs a weaker small one.
+    [Fact]
+    public void BiggerTopic_GetsMoreTime()
+    {
+        var plan = TodayPlanner.Plan(
+            [A, B], Introduced(new() { [A] = 50, [B] = 30 }), DailyBudget.Uniform(60), Now, sizes: new Dictionary<Guid, int> { [A] = 3 });
+
+        Assert.True(Minutes(plan, A) > Minutes(plan, B));
+        Assert.True(Minutes(TodayPlanner.Plan([A, B], Introduced(new() { [A] = 50, [B] = 30 }), DailyBudget.Uniform(60), Now), A)
+            < Minutes(TodayPlanner.Plan([A, B], Introduced(new() { [A] = 50, [B] = 30 }), DailyBudget.Uniform(60), Now), B));
+    }
+
+    private static int Minutes(TodayPlan plan, Guid topic) =>
+        plan.Blocks.Where(block => block.TopicId == topic && block.Kind == BlockKind.Learn).Sum(block => block.Minutes);
+
     [Fact]
     public void Blocks_FillTodaysBudget()
     {
@@ -117,27 +145,29 @@ public class TodayPlannerTests
         Assert.All(plan.Blocks, block => Assert.Equal(B, block.TopicId));
     }
 
-    // Without mastery (LearningEngine down) every topic weighs the same and counts as new, so the id decides and there
-    // is no review.
+    // Without mastery (LearningEngine down) every topic weighs the same and counts as new, so the order of the material
+    // decides (#380, before it was the id) and there is no review.
     [Fact]
-    public void WithoutMastery_TopicsGoByIdAlone()
+    public void WithoutMastery_TopicsGoByTheOrderOfTheMaterial()
     {
         var plan = TodayPlanner.Plan([C, A, B], NothingFromLearningEngine, Budget, Now);
 
-        // Since #371 today is the first day of the week's plan: the 30 learn minutes go to A and B, C comes up tomorrow.
-        Assert.Equal([new Block(A, 15), new Block(B, 15)], plan.Blocks);
-        var week = StudyPlanner.Plan([new(C, 1, 0, IsNew: true), new(A, 1, 0, IsNew: true), new(B, 1, 0, IsNew: true)], Budget, Monday, examDay: null);
-        Assert.Equal(C, week.Days[1].Blocks.First(block => block.Kind == BlockKind.Learn).TopicId);
+        // Since #371 today is the first day of the week's plan: the 30 learn minutes go to C and A, B comes up tomorrow.
+        Assert.Equal([new Block(C, 15), new Block(A, 15)], plan.Blocks);
+        var week = StudyPlanner.Plan(
+            [new(C, 1, 0, IsNew: true, Rank: 0), new(A, 1, 0, IsNew: true, Rank: 1), new(B, 1, 0, IsNew: true, Rank: 2)], Budget, Monday, examDay: null);
+        Assert.Equal(B, week.Days[1].Blocks.First(block => block.Kind == BlockKind.Learn).TopicId);
     }
 
+    // The order of the topics is part of the input (#380), the order LearningEngine names them in isn't.
     [Fact]
-    public void SameInput_InAnyOrder_GivesTheSamePlan()
+    public void SameInput_GivesTheSamePlan_WhateverOrderTheMasteryComesIn()
     {
         var masteries = Introduced(new() { [A] = 30, [B] = 30, [C] = 60 });
         var reversed = Introduced(new() { [C] = 60, [B] = 30, [A] = 30 });
 
         var first = TodayPlanner.Plan([A, B, C], masteries, Budget, Now);
-        var second = TodayPlanner.Plan([C, B, A], reversed, Budget, Now);
+        var second = TodayPlanner.Plan([A, B, C], reversed, Budget, Now);
         var third = TodayPlanner.Plan([A, B, C], masteries, Budget, Now);
 
         Assert.Equal(first.Blocks, second.Blocks);

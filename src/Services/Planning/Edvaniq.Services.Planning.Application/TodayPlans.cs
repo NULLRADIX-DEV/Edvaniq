@@ -36,6 +36,7 @@ public sealed class TodayPlans(
 
         var budget = await budgets.ForUserAsync(owner, cancellationToken);
         var foundations = await knownTopics.FoundationsAsync(owner, goal, cancellationToken);
+        var sizes = await knownTopics.SizesAsync(owner, goal, cancellationToken);
 
         var plan = TodayPlanner.Plan(
             topics,
@@ -43,7 +44,8 @@ public sealed class TodayPlans(
             budget,
             time.GetUtcNow().UtcDateTime,
             readyTopics: ready,
-            foundations: foundations);
+            foundations: foundations,
+            sizes: sizes);
 
         // What was done today stays, the rest comes from the fresh plan (#375).
         var done = await doneBlocks.OnAsync(goal, plan.StudyDay, cancellationToken);

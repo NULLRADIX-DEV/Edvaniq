@@ -11,8 +11,12 @@ public interface IKnownTopics
     // The owner's topics of this learning goal and those with one of the ids, wherever they belong now.
     Task<IReadOnlyList<KnownTopic>> ListAsync(string ownerId, Guid learningGoalId, IReadOnlyCollection<Guid> topicIds, CancellationToken cancellationToken);
 
-    // The ids of the owner's topics of this learning goal that aren't hidden, ascending.
+    // The ids of the owner's topics of this learning goal that aren't hidden, in the order of the material (#380). Topics
+    // Knowledge gave no rank yet come last, by id.
     Task<IReadOnlyList<Guid>> ActiveAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken);
+
+    // The size of each of them (#380).
+    Task<IReadOnlyDictionary<Guid, int>> SizesAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken);
 
     // Those of them that are foundations (#909).
     Task<IReadOnlySet<Guid>> FoundationsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken);

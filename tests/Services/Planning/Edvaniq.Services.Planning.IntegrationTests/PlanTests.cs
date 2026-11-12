@@ -173,6 +173,42 @@ public sealed class PlanTests(ServiceFactory service) : IClassFixture<ServiceFac
         Assert.Equal([shown], plan.Blocks.Select(block => block.TopicId).Distinct());
     }
 
+    // #380: of two equally weak topics the one earlier in the material comes first, and a bigger topic gets more time.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_FollowsTheOrderOfTheMaterial_AndTheSizeOfTheTopics(bool reversed)
+    {
+        var (alice, token) = NewUser("alice");
+        var goal = LearningGoal.DefaultIdFor(alice);
+        // Once the smaller id comes first in the material, once the bigger: the id never decides.
+        var (x, y) = (Guid.NewGuid(), Guid.NewGuid());
+        var (lower, higher) = x.CompareTo(y) < 0 ? (x, y) : (y, x);
+        var (first, second) = reversed ? (higher, lower) : (lower, higher);
+        Seed(KnownTopic.Create(alice, second, goal, hidden: false, rank: 1, sections: 1));
+        Seed(KnownTopic.Create(alice, first, goal, hidden: false, rank: 0, sections: 1));
+        service.LearningEngine.Set(token, first, 50, "building");
+        service.LearningEngine.Set(token, second, 50, "building");
+
+        var plan = await PlanAsync(token);
+
+        Assert.Equal(first, plan.Blocks.First(block => block.Kind == "learn").TopicId);
+
+        var (bob, bobsToken) = NewUser("bob");
+        var (big, small) = (Guid.NewGuid(), Guid.NewGuid());
+        Seed(KnownTopic.Create(bob, small, LearningGoal.DefaultIdFor(bob), hidden: false, rank: 0, sections: 1));
+        Seed(KnownTopic.Create(bob, big, LearningGoal.DefaultIdFor(bob), hidden: false, rank: 1, sections: 4));
+        service.LearningEngine.Set(bobsToken, small, 30, "building");
+        service.LearningEngine.Set(bobsToken, big, 50, "building");
+
+        var bobsPlan = await PlanAsync(bobsToken);
+
+        Assert.True(LearnMinutes(bobsPlan, big) > LearnMinutes(bobsPlan, small));
+    }
+
+    private static int LearnMinutes(Plan plan, Guid topic) =>
+        plan.Blocks.Where(block => block.TopicId == topic && block.Kind == "learn").Sum(block => block.Minutes);
+
     [Fact]
     public async Task Plan_WithEveryTopicMastered_IsEmpty_WithTheAllMasteredHint()
     {
