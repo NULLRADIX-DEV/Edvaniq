@@ -236,5 +236,20 @@ public class TopicImportTests
         Assert.Equal(added.Id, Assert.Single(import.Sections).TopicId);
     }
 
+    // #317: a subtopic the user added under their own topic is found too, under that topic only.
+    [Fact]
+    public void AddedSubtopic_IsFoundUnderItsTopic()
+    {
+        var added = Topic.Create("alice", Goal, "Zelle", Now);
+        var subtopic = added.AddSubtopic("Zellkern", Now);
+        var sections = new[] { Guid.NewGuid(), Guid.NewGuid() };
+
+        var import = TopicImport.From(
+            Analysis(new TopicSuggestion("Zelle", null, [sections[0]]), new("ZELLKERN", 0, [sections[1]])), Goal, Now, [added, subtopic]);
+
+        Assert.Empty(import.Topics);
+        Assert.Equal([(added.Id, sections[0]), (subtopic.Id, sections[1])], import.Sections.Select(section => (section.TopicId, section.SectionId)));
+    }
+
     private static DocumentAnalyzed Analysis(params TopicSuggestion[] topics) => new("alice", Guid.NewGuid(), topics);
 }
