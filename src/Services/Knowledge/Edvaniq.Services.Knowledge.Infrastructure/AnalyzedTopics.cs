@@ -1,3 +1,5 @@
+using System.Data;
+
 using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.Services.Knowledge.Application;
 using Edvaniq.Services.Knowledge.Domain;
@@ -29,8 +31,12 @@ internal sealed class AnalyzedTopics(KnowledgeDbContext db) : IAnalyzedTopics
             .Where(topic => topic.OwnerId == ownerId && topic.LearningGoalId == learningGoalId)
             .ToListAsync(cancellationToken);
 
+    // Both reads in one snapshot: the analysis saves topics and sections together, and a save between two loose reads
+    // gave topics without their sections, so Content saw no material and made no questions (#985). Synchronous on purpose,
+    // MySql.Data's async open can hang (MySqlHealthCheck).
     public async Task<IReadOnlyList<DocumentTopic>> OfDocumentAsync(Guid documentId, CancellationToken cancellationToken)
     {
+        using var snapshot = db.Database.BeginTransaction(IsolationLevel.RepeatableRead);
         var sections = (await db.TopicSections.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
                 .Where(section => section.DocumentId == documentId)
                 .Select(section => new { section.TopicId, section.SectionId })
