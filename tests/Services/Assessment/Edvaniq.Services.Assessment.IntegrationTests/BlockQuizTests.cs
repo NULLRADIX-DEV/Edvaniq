@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 using Edvaniq.Services.Assessment.Domain;
 using Edvaniq.Services.Assessment.Infrastructure;
@@ -31,6 +32,26 @@ public sealed class BlockQuizTests(ServiceFactory service) : IClassFixture<Servi
         Assert.All(first.Questions, question => Assert.False(question.Answered));
         Assert.Equal(first.Questions.Select(question => question.Id), second!.Questions.Select(question => question.Id));
         Assert.Equal((block, topic), (first.BlockId, first.TopicId));
+    }
+
+    // Like POST /attempts: no question of the quiz carries its solution, answered or not.
+    [Fact]
+    public async Task Solution_IsNowhere_InTheQuiz()
+    {
+        var alice = User.New("alice");
+        var topic = await AddTopicAsync(alice, questions: 3);
+        var block = Guid.NewGuid();
+        var (_, quiz) = await OpenAsync(alice, topic, block, size: 3);
+        await AnswerAsync(alice, quiz!.Questions[0].Id, option: 1);
+
+        using var client = ClientFor(alice);
+        using var response = await client.PostAsJsonAsync("/quizzes", new { topicId = topic, blockId = block, size = 3 }, TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+
+        Assert.Equal(["blockId", "id", "questions", "topicId"], body.EnumerateObject().Select(property => property.Name).Order());
+        Assert.All(body.GetProperty("questions").EnumerateArray(), question => Assert.Equal(
+            ["answered", "correct", "difficulty", "id", "options", "questionId", "text", "topicId", "type"],
+            question.EnumerateObject().Select(property => property.Name).Order()));
     }
 
     // AC1 of #393 (A88): two of five answered, broken off, started again: the same five, two of them answered, so only
