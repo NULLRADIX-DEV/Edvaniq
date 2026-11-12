@@ -179,6 +179,26 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(topics.Take(3).Select(topic => topic.Id).Order(), (await GeneratedAsync(id)).Select(pool => pool.TopicId!.Value).Order());
     }
 
+    // Knowledge merges topics of the same name across documents (#208). A topic whose sections all lie in another
+    // document has no material here: it gets no questions from this document, the others do, and the document gets
+    // ready. Before, the AI was asked about nothing and the document failed.
+    [Fact]
+    public async Task TopicWithSectionsOfAnotherDocumentOnly_IsLeftOut_AndTheDocumentGetsReady()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        await AnalyzeAsync(id);
+        var topics = service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
+        var merged = new KnowledgeTopic(Guid.NewGuid(), null, topics.Count, [Guid.NewGuid(), Guid.NewGuid()]);
+        service.Knowledge.Give(id, [.. topics, merged]);
+
+        Assert.True(await Pools().FinishAsync(id, TestContext.Current.CancellationToken));
+
+        var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
+        Assert.Equal("Ready", found!.Status);
+        Assert.Equal(topics.Select(topic => topic.Id).Order(), (await GeneratedAsync(id)).Select(pool => pool.TopicId!.Value).Order());
+    }
+
     [Fact]
     public async Task SecondRun_SendsNoQuestionTwice()
     {

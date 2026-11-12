@@ -139,7 +139,13 @@ public sealed class QuestionPools(
         var made = new List<(KnowledgeTopic Topic, List<GeneratedItem> Items)>();
         foreach (var topic in topics.Where(topic => !pooled.Contains(topic.Id)))
         {
-            var (items, failure) = await PoolAsync(document, SectionsOf(topics, topic, texts), texts, cancellationToken);
+            var material = SectionsOf(topics, topic, texts);
+            if (material.Count == 0)
+            {
+                continue;
+            }
+
+            var (items, failure) = await PoolAsync(document, material, texts, cancellationToken);
             if (items is null)
             {
                 if (failure is not null)
@@ -187,14 +193,15 @@ public sealed class QuestionPools(
         }
     }
 
-    // A topic's own sections. One that is only the roof of its subtopics gets theirs, so every topic has material. Only
-    // sections of this document count.
+    // A topic's own sections of this document. One without any, like the roof of its subtopics, gets theirs. Knowledge
+    // merges topics of the same name across documents (#208), so a topic may have sections only in another document:
+    // filtering before the fallback keeps it from asking the AI about nothing, it simply has no material here.
     private static List<Guid> SectionsOf(IReadOnlyList<KnowledgeTopic> topics, KnowledgeTopic topic, Dictionary<Guid, string> texts)
     {
-        var own = topic.SectionIds.Count > 0
-            ? topic.SectionIds
-            : topics.Where(other => other.ParentId == topic.Id).SelectMany(other => other.SectionIds);
-        return [.. own.Where(texts.ContainsKey)];
+        List<Guid> own = [.. topic.SectionIds.Where(texts.ContainsKey)];
+        return own.Count > 0
+            ? own
+            : [.. topics.Where(other => other.ParentId == topic.Id).SelectMany(other => other.SectionIds).Where(texts.ContainsKey)];
     }
 
     // The questions of one topic, or null if it got none, then with the failure of the provider if that was why. An

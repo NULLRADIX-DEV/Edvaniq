@@ -25,6 +25,9 @@ public sealed class KnowledgeStub : IKnowledgeTopics
         return made;
     }
 
+    // What Knowledge answers for the document from now on, e.g. with a topic merged from another document.
+    public void Give(Guid documentId, IReadOnlyList<KnowledgeTopic> given) => topics[documentId] = given;
+
     // Knowledge can't be reached for the document.
     public void Down(Guid documentId) => down[documentId] = true;
 
