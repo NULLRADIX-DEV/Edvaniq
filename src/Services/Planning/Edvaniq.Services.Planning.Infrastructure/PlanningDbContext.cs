@@ -84,6 +84,10 @@ public sealed class PlanningDbContext(DbContextOptions<PlanningDbContext> option
         session.HasIndex(item => item.ActiveOwnerId).IsUnique();
         session.Property(item => item.Kind).HasConversion<string>().HasMaxLength(16);
         session.Ignore(item => item.Steps);
+        session.Ignore(item => item.ActiveSeconds);
+
+        // Of two signals at once only one counts the gap (#394), the other one goes again on the stored session.
+        session.Property(item => item.LastActivityAt).IsConcurrencyToken();
         session.Property(item => item.Outcome).HasConversion<string>().HasMaxLength(16);
         session.Property(item => item.StudyDay)
             .HasConversion(new ValueConverter<DateOnly, DateTime>(

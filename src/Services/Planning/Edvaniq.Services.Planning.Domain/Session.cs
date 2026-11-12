@@ -23,6 +23,7 @@ public sealed class Session : IOwnedByUser
         TopicIsNew = topicIsNew;
         CurrentStep = currentStep;
         StartedAt = startedAt;
+        LastActivityAt = startedAt;
     }
 
     public Guid Id { get; private set; }
@@ -65,6 +66,16 @@ public sealed class Session : IOwnedByUser
     // over from the one broken off, so it goes on where that one stopped.
     public int CurrentStep { get; private set; }
 
+    // Active learning time so far (ActiveTime, #394), counted at every signal: the start, moving on, breaking off and the
+    // activity the client reports while the user works on a step.
+    // Kept in milliseconds, whole seconds would lose up to one at every signal.
+    public long ActiveMilliseconds { get; private set; }
+
+    public int ActiveSeconds => (int)(ActiveMilliseconds / 1000);
+
+    // UTC, the last signal. Also the concurrency token, so of two signals at once only one counts the gap.
+    public DateTime LastActivityAt { get; private set; }
+
     // previous: the session broken off last on this block. The new one goes on from its step with its steps, even if the
     // topic got introduced since.
     public static Session Start(
@@ -104,6 +115,7 @@ public sealed class Session : IOwnedByUser
             return false;
         }
 
+        Count(endedAt);
         EndedAt = Stored(endedAt);
         ActiveOwnerId = null;
         Outcome = SessionOutcome.Aborted;
@@ -111,7 +123,7 @@ public sealed class Session : IOwnedByUser
     }
 
     // Moves to the step, never back: a step at or before the current one changes nothing, so a repeated call is harmless.
-    public SessionAdvance Advance(int step)
+    public SessionAdvance Advance(int step, DateTime at)
     {
         if (!IsActive)
         {
@@ -123,6 +135,8 @@ public sealed class Session : IOwnedByUser
             return SessionAdvance.NoSuchStep;
         }
 
+        // Any call with a real step on a running session is a signal of the user (#394).
+        Count(at);
         if (step <= CurrentStep)
         {
             return SessionAdvance.Unchanged;
@@ -130,6 +144,28 @@ public sealed class Session : IOwnedByUser
 
         CurrentStep = step;
         return SessionAdvance.Advanced;
+    }
+
+    // The user is working on the session. False once it ended: time after the end never counts.
+    public bool RecordActivity(DateTime at)
+    {
+        if (!IsActive)
+        {
+            return false;
+        }
+
+        Count(at);
+        return true;
+    }
+
+    private void Count(DateTime at)
+    {
+        var stored = Stored(at);
+        ActiveMilliseconds += (long)ActiveTime.Between(LastActivityAt, stored).TotalMilliseconds;
+        if (stored > LastActivityAt)
+        {
+            LastActivityAt = stored;
+        }
     }
 
     // Whole microseconds, as the database keeps them, so the session read back is the one stored.

@@ -3,7 +3,8 @@ using Edvaniq.Services.Planning.Domain;
 
 namespace Edvaniq.Services.Planning.Api;
 
-// Sessions of the user from the token (#376). Broken off and moved on with #393, finished with #395.
+// Sessions of the user from the token (#376). Broken off and moved on with #393, active learning time with #394,
+// finished with #395.
 internal static class SessionEndpoints
 {
     public const string BlockGone = "Diesen Block gibt es im aktuellen Plan nicht mehr. Lade den Plan neu.";
@@ -65,6 +66,16 @@ internal static class SessionEndpoints
             };
         });
 
+        // The user is working on the session (#394): the client says so while a step is open, the server takes the
+        // moment from its own clock.
+        group.MapPost("/{id:guid}/activity", async (Guid id, SessionChanges changes, CancellationToken cancellationToken) =>
+            await changes.RecordActivityAsync(id, cancellationToken) switch
+            {
+                null => Results.NotFound(),
+                false => Results.Problem(title: SessionEnded, statusCode: StatusCodes.Status409Conflict),
+                true => Results.NoContent(),
+            });
+
         return app;
     }
 
@@ -81,6 +92,7 @@ internal sealed record AdvanceRequest(int? Step);
 // while it runs. Steps: the fixed order of the session (#377), each "review", "introductionUnit" or "quiz", Empty when
 // there is nothing to do in it (the review until M4), Questions the size the client passes to POST /quizzes of
 // Assessment for the quiz. CurrentStep: the index in Steps the user is at. Outcome: "running" or "aborted" (#393).
+// ActiveSeconds: the active learning time up to the last signal (#394).
 internal sealed record SessionResponse(
     Guid Id,
     Guid BlockId,
@@ -94,7 +106,8 @@ internal sealed record SessionResponse(
     bool Existing,
     IReadOnlyList<StepResponse> Steps,
     int CurrentStep,
-    string Outcome)
+    string Outcome,
+    int ActiveSeconds)
 {
     public static SessionResponse From(Session session, bool existing) =>
         new(
@@ -110,7 +123,8 @@ internal sealed record SessionResponse(
             existing,
             [.. session.Steps.Select(step => new StepResponse(NameOf(step.Kind), step.Empty, step.Questions))],
             session.CurrentStep,
-            session.Outcome == SessionOutcome.Aborted ? "aborted" : "running");
+            session.Outcome == SessionOutcome.Aborted ? "aborted" : "running",
+            session.ActiveSeconds);
 
     private static string NameOf(SessionStepKind kind) => kind switch
     {
