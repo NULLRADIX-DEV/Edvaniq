@@ -130,6 +130,19 @@ public sealed class NoticeTests : BunitContext
         Assert.Empty(notice.FindAll(".notice-title"));
         Assert.Contains("notice-info", notice.Find(".notice").ClassList);
     }
+
+    // A class from the caller marks the place, the notice keeps its own look.
+    [Fact]
+    public void ExtraClass_AddsToTheNoticesOwn()
+    {
+        var notice = Render<Notice>(parameters => parameters
+            .Add(p => p.Kind, NoticeKind.Error)
+            .AddUnmatched("class", "connection-problem")
+            .AddUnmatched("id", "problem"));
+
+        var root = notice.Find("#problem");
+        Assert.Equal(["notice", "notice-error", "connection-problem"], root.ClassList);
+    }
 }
 
 // A status region is there before its content, so a screen reader announces what appears in it.

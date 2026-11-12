@@ -19,18 +19,16 @@
     @switch (State)
     {
         case ViewState.Loading:
-            <p>@FeedbackTexts.Quiz.Loading</p>
+            <Loading Text="@FeedbackTexts.Quiz.Loading" />
             break;
         case ViewState.SignedOut:
             @* No question yet: the shell says that the login ran out and leads to it (SessionEndedNotice). *@
             break;
         case ViewState.NotReady:
-            <p class="quiz-note">
-                <strong>@FeedbackTexts.Quiz.NoQuestions</strong> @FeedbackTexts.Quiz.NoQuestionsHint
-            </p>
+            <EmptyState Title="@FeedbackTexts.Quiz.NoQuestions" Hint="@FeedbackTexts.Quiz.NoQuestionsHint" />
             break;
         case ViewState.NotFound:
-            <p class="quiz-note quiz-alert"><strong>@FeedbackTexts.Quiz.TopicGone</strong></p>
+            <Notice Kind="NoticeKind.Error" Title="@FeedbackTexts.Quiz.TopicGone" class="quiz-topic-gone" />
             break;
         case ViewState.LoadFailed:
             <ConnectionProblem Title="@FeedbackTexts.Quiz.LoadFailed" TraceId="@loadTrace" />
@@ -41,21 +39,15 @@
 @switch (State)
 {
     case ViewState.NotReady:
-        <div class="quiz-actions">
-            <button type="button" class="button" @onclick="() => AskAsync(focus: true)">Noch einmal versuchen</button>
-            <a href="themen">Anderes Thema wählen</a>
-        </div>
+        <StateActions ActionText="@FeedbackTexts.Quiz.AskAgain" OnAction="() => AskAsync(focus: true)"
+                      Href="themen" LinkText="@FeedbackTexts.Quiz.OtherTopic" />
         break;
     case ViewState.NotFound:
-        <div class="quiz-actions">
-            <a href="themen">Zurück zu den Themen</a>
-        </div>
+        <StateActions Href="themen" LinkText="@FeedbackTexts.Quiz.BackToTopics" />
         break;
     case ViewState.LoadFailed:
-        <div class="quiz-actions">
-            <button type="button" class="button" @onclick="() => AskAsync(focus: true)">Erneut laden</button>
-            <a href="themen">Zurück zu den Themen</a>
-        </div>
+        <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="() => AskAsync(focus: true)"
+                      Href="themen" LinkText="@FeedbackTexts.Quiz.BackToTopics" />
         break;
     case ViewState.Asking or ViewState.Graded:
         <form class="quiz-form" @onsubmit="SubmitAsync" novalidate>
@@ -96,10 +88,10 @@
                 }
                 else if (answerMessage is not null)
                 {
-                    <div class="quiz-note quiz-alert">
+                    <Notice Kind="@(answerMessage is FeedbackTexts.Session.AnswerBack ? NoticeKind.Info : NoticeKind.Error)" class="quiz-answer-message">
                         <p>@answerMessage</p>
                         <RequestId Value="@answerTrace" />
-                    </div>
+                    </Notice>
                 }
             </div>
 

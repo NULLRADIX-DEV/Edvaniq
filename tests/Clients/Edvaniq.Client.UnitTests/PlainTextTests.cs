@@ -88,7 +88,8 @@ public sealed class PlainTextTests
     private static void AssertSameElements(INodeList expected, INodeList actual)
     {
         Assert.Equal(Elements(expected).Select(Describe), Elements(actual).Select(Describe));
-        Assert.DoesNotContain(Elements(actual), element => element.Matches(HostileText.Injected));
+        // The symbol of a notice is the page's own svg, the same with any text (see the comparison above).
+        Assert.DoesNotContain(Elements(actual), element => element.Matches(HostileText.Injected) && element.Closest(".status-symbol") is null);
         Assert.DoesNotContain(Elements(actual).SelectMany(element => element.Attributes),
             attribute => attribute.Name.StartsWith("on", StringComparison.OrdinalIgnoreCase));
     }

@@ -1,6 +1,7 @@
 using Bunit;
 
 using Edvaniq.Client.Core;
+using Edvaniq.Client.UI.Feedback;
 using Edvaniq.Client.UI.Pages;
 
 using Microsoft.AspNetCore.Components;
@@ -196,11 +197,12 @@ public sealed class QuizTests : BunitContext
 
         Assert.Contains("Zu diesem Thema gibt es noch keine Fragen.", page.Find("[role=status]").TextContent);
         Assert.Contains("ein paar Minuten", page.Find("[role=status]").TextContent);
-        Assert.Empty(page.FindAll(".quiz-alert"));
-        Assert.Equal("themen", page.Find(".quiz-actions a").GetAttribute("href"));
-        Assert.Equal("Anderes Thema wählen", page.Find(".quiz-actions a").TextContent);
+        Assert.Empty(page.FindAll("[role=status] .notice-error"));
+        Assert.NotNull(page.Find("[role=status] .empty-state"));
+        Assert.Equal("themen", page.Find(".state-actions a").GetAttribute("href"));
+        Assert.Equal("Anderes Thema wählen", page.Find(".state-actions a").TextContent);
 
-        page.Find(".quiz-actions button").Click();
+        page.Find(".state-actions button").Click();
 
         Assert.Equal("Wo findet die Lichtreaktion statt?", page.Find("legend").TextContent);
         AssertFocused(page, "legend");
@@ -211,8 +213,8 @@ public sealed class QuizTests : BunitContext
     {
         var page = RenderPage(new FakeQuiz().Ask(new CallOutcome<AskedQuestion>(CallResult.NotFound)));
 
-        Assert.Contains("Dieses Thema gibt es nicht oder nicht mehr.", page.Find(".quiz-alert").TextContent);
-        Assert.Equal("Zurück zu den Themen", page.Find(".quiz-actions a").TextContent);
+        Assert.Contains("Dieses Thema gibt es nicht oder nicht mehr.", page.Find("[role=status] .quiz-topic-gone.notice-error").TextContent);
+        Assert.Equal("Zurück zu den Themen", page.Find(".state-actions a").TextContent);
         Assert.Empty(page.FindAll("form"));
     }
 
@@ -224,8 +226,9 @@ public sealed class QuizTests : BunitContext
 
         Assert.Contains("Die Frage ließ sich gerade nicht laden.", page.Find(".connection-problem").TextContent);
         Assert.Contains(TraceId, page.Find(".connection-problem").TextContent);
+        Assert.Equal(FeedbackTexts.Connection.Retry, page.Find(".state-actions button").TextContent);
 
-        page.Find(".quiz-actions button").Click();
+        page.Find(".state-actions button").Click();
 
         Assert.Equal(2, quiz.Asked.Count);
         Assert.NotNull(page.Find("legend"));
@@ -340,7 +343,7 @@ public sealed class QuizTests : BunitContext
         page.Find("button.quiz-reveal").Click();
 
         Assert.Single(quiz.Revealed);
-        Assert.Empty(page.FindAll("[role=alert] .quiz-note"));
+        Assert.Empty(page.FindAll("[role=alert] .notice"));
     }
 
     // While the solution is on its way, a second click or an answer sends nothing more.

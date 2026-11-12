@@ -40,7 +40,7 @@ public sealed class PlainTextPageTests(WebShell shell)
             await Assertions.Expect(list).ToContainTextAsync(text);
         }
 
-        await AssertNothingRanAsync(page, watch, ".material-status, .topic-list");
+        await AssertNothingRanAsync(page, watch, ".material-status .notice-body, .topic-list");
     }
 
     [Fact]

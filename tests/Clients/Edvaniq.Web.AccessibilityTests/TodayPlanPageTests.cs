@@ -35,7 +35,7 @@ public sealed class TodayPlanPageTests(WebShell shell)
     {
         await using var page = await shell.OpenSignedInAsync("/", width, prepare: browser =>
             Material.AnswerPlanAsync(browser, Material.Plan(reason)));
-        var next = page.Page.Locator(".plan-status").GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = link, Exact = true });
+        var next = page.Page.Locator(".plan .state-actions").GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = link, Exact = true });
         await Assertions.Expect(next).ToBeVisibleAsync();
 
         await AssertNoSidewaysScrollAsync(page.Page);

@@ -61,6 +61,24 @@ public static class FeedbackTexts
         public const string NotThroughHint = "Schickst du sie noch einmal, zählt sie trotzdem nur einmal.";
 
         public const string NothingChosen = "Wähl zuerst eine Antwort aus.";
+
+        public const string AskAgain = "Noch einmal versuchen";
+
+        public const string OtherTopic = "Anderes Thema wählen";
+
+        public const string BackToTopics = "Zurück zu den Themen";
+    }
+
+    // The newest text and the topics on the topics page.
+    public static class Material
+    {
+        public const string LoadFailed = "Der Stand ließ sich gerade nicht laden.";
+
+        public const string Empty = "Du hast noch keinen Text eingefügt.";
+
+        public const string EmptyHint = "Füge unten deinen ersten Text ein, dann erscheinen hier deine Themen.";
+
+        public const string KeepWaiting = "Weiter warten";
     }
 
     // When the login ran out or ended elsewhere. What was not sent yet stays (Shell/Drafts).
@@ -127,6 +145,7 @@ public static class FeedbackTexts
 
         public const string LoadFailed = "Dein Plan für heute ließ sich gerade nicht laden.";
 
+        // After the plan came late, not after a failure (Connection.Retry).
         public const string Reload = "Erneut laden";
 
         public const string NoTopics = "Für heute ist noch nichts geplant.";
@@ -206,6 +225,9 @@ public static class FeedbackTexts
         public const string LoadingStuck = "Bleibt das so, prüf deine Internetverbindung und";
 
         public const string LoadingStuckLink = "lade die Seite neu";
+
+        // The button under a view that couldn't load.
+        public const string Retry = "Erneut versuchen";
     }
 }
 

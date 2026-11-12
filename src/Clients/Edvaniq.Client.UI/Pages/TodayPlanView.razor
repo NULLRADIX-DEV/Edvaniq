@@ -21,44 +21,33 @@
                 <ConnectionProblem Title="@FeedbackTexts.Plan.LoadFailed" TraceId="@trace" />
                 break;
             case ViewState.Shown when plan!.Blocks.Count == 0:
-                <div class="plan-note plan-empty">
-                    @switch (plan.Empty)
-                    {
-                        case PlanEmpty.NoTopics:
-                            <p><strong>@FeedbackTexts.Plan.NoTopics</strong> @FeedbackTexts.Plan.NoTopicsHint</p>
-                            <p><a class="button" href="themen">@FeedbackTexts.Plan.NoTopicsLink</a></p>
-                            break;
-                        case PlanEmpty.QuestionsPending:
-                            <p><strong>@FeedbackTexts.Plan.QuestionsPending</strong> @FeedbackTexts.Plan.QuestionsPendingHint</p>
-                            <p><a class="button" href="themen">@FeedbackTexts.Plan.QuestionsPendingLink</a></p>
-                            break;
-                        case PlanEmpty.AllMastered:
-                            <p><strong>@FeedbackTexts.Plan.AllMastered</strong> @FeedbackTexts.Plan.AllMasteredHint</p>
-                            <p><a class="button" href="themen">@FeedbackTexts.Plan.AllMasteredLink</a></p>
-                            break;
-                        default:
-                            <p><strong>@FeedbackTexts.Plan.Nothing</strong></p>
-                            <p><a class="button" href="themen">@FeedbackTexts.Plan.NothingLink</a></p>
-                            break;
-                    }
-                </div>
+                <EmptyState Title="@Empty.Title" Hint="@Empty.Hint" />
                 break;
         }
 
         @* An answer just given is on its way to LearningEngine, the plan below doesn't contain it yet. *@
         @if (state == ViewState.Shown && syncing)
         {
-            <p class="plan-note plan-updating">@FeedbackTexts.Plan.Updating</p>
+            <Notice Kind="NoticeKind.Info" class="plan-updating"><p>@FeedbackTexts.Plan.Updating</p></Notice>
         }
         else if (state == ViewState.Shown && syncLate)
         {
-            <p class="plan-note"><strong>@FeedbackTexts.Plan.Late</strong> @FeedbackTexts.Plan.LateHint</p>
+            <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.Plan.Late" class="plan-late"><p>@FeedbackTexts.Plan.LateHint</p></Notice>
         }
     </div>
 
-    @if (state == ViewState.LoadFailed || (state == ViewState.Shown && syncLate && !syncing))
+    @if (state == ViewState.LoadFailed)
     {
-        <button type="button" class="button" @onclick="LoadAsync">@FeedbackTexts.Plan.Reload</button>
+        <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="LoadAsync" />
+    }
+    else if (state == ViewState.Shown && plan!.Blocks.Count == 0)
+    {
+        <StateActions Href="themen" LinkText="@Empty.Link" />
+    }
+
+    @if (state == ViewState.Shown && syncLate && !syncing)
+    {
+        <StateActions ActionText="@FeedbackTexts.Plan.Reload" OnAction="LoadAsync" />
     }
 
     @if (state == ViewState.Shown && plan!.Blocks.Count > 0)
@@ -211,6 +200,15 @@
             state = ViewState.Shown;
         }
     }
+
+    // Each reason for an empty plan names its own next step.
+    private (string Title, string? Hint, string Link) Empty => plan?.Empty switch
+    {
+        PlanEmpty.NoTopics => (FeedbackTexts.Plan.NoTopics, FeedbackTexts.Plan.NoTopicsHint, FeedbackTexts.Plan.NoTopicsLink),
+        PlanEmpty.QuestionsPending => (FeedbackTexts.Plan.QuestionsPending, FeedbackTexts.Plan.QuestionsPendingHint, FeedbackTexts.Plan.QuestionsPendingLink),
+        PlanEmpty.AllMastered => (FeedbackTexts.Plan.AllMastered, FeedbackTexts.Plan.AllMasteredHint, FeedbackTexts.Plan.AllMasteredLink),
+        _ => (FeedbackTexts.Plan.Nothing, null, FeedbackTexts.Plan.NothingLink),
+    };
 
     private string NameOf(Guid topicId) => names.GetValueOrDefault(topicId) ?? FeedbackTexts.Plan.UnnamedTopic;
 
