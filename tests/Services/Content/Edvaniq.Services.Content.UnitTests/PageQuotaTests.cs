@@ -23,7 +23,7 @@ public sealed class PageQuotaTests
         var pdf = Document.Upload("alice", Guid.NewGuid(), "Skript.pdf", Guid.NewGuid(), FileFormat.Pdf, Now);
         pdf.TakeText([.. Enumerable.Repeat("kurz", 12)], Now);
         var text = Document.Upload("alice", Guid.NewGuid(), "Notizen.txt", Guid.NewGuid(), FileFormat.Text, Now);
-        text.TakeText([new string('a', 7_000)], Now);
+        text.TakeText([string.Concat(Enumerable.Repeat("Wasser ", 1_000))], Now);
 
         Assert.Equal(12, PageQuota.PagesOf(pdf, 12));
         Assert.Equal(3, PageQuota.PagesOf(text, 1));
