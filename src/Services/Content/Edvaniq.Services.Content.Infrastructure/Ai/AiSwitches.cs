@@ -5,6 +5,7 @@ using Edvaniq.Services.Content.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.Services.Content.Infrastructure.Ai;
 
@@ -39,9 +40,11 @@ internal sealed class AiSwitches(ContentDbContext db, TimeProvider time) : IAiSw
     }
 }
 
-// Every AI call of Content goes through this, also the operator's ai-check: with the AI paused it never reaches the
-// provider and fails with AiPausedException instead, like an outage would but on purpose.
-public sealed class PausableChatClient(IChatClient inner, IServiceScopeFactory scopes) : DelegatingChatClient(inner)
+// Every AI call of Content goes through this, also the operator's ai-check. With the AI paused it never reaches the
+// provider and fails with AiPausedException, with this month's budget used up with AiBudgetExhaustedException, like an
+// outage would but on purpose. The first call of a month that finds 80 % or all of the budget used tells the operator,
+// once each, in a log line with a fixed event (AiBudgetWarning, AiBudgetExhausted) and only the percentage.
+public sealed class AiGate(IChatClient inner, IServiceScopeFactory scopes, ILogger<AiGate> logger) : DelegatingChatClient(inner)
 {
     public override async Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
@@ -69,7 +72,27 @@ public sealed class PausableChatClient(IChatClient inner, IServiceScopeFactory s
         {
             throw new AiPausedException();
         }
+
+        var budget = scope.ServiceProvider.GetRequiredService<IAiBudget>();
+        var state = await budget.StateAsync(cancellationToken);
+        var (warn, exhausted) = await budget.NoteAsync(state, cancellationToken);
+        if (warn)
+        {
+            ContentLog.AiBudgetWarning(logger, state.Percent ?? 0);
+        }
+
+        if (exhausted)
+        {
+            ContentLog.AiBudgetExhausted(logger, state.Percent ?? 0);
+        }
+
+        if (state.Exhausted)
+        {
+            throw new AiBudgetExhaustedException();
+        }
     }
 }
 
 public sealed class AiPausedException() : Exception("The operator paused the AI.");
+
+public sealed class AiBudgetExhaustedException() : Exception("The AI budget of this month is used up.");

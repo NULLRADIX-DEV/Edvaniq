@@ -12,7 +12,7 @@ internal static class DocumentEndpoints
         var documents = app.MapGroup("/documents");
         documents.MapFileUpload();
 
-        documents.MapPost("/", async (PastedText request, ILearningGoals goal, IDocuments documents, CancellationToken cancellationToken) =>
+        documents.MapPost("/", async (PastedText request, ILearningGoals goal, IDocuments documents, IAiBudget budget, CancellationToken cancellationToken) =>
         {
             var errors = new Dictionary<string, string[]>();
             if (Document.CheckText(request.Text) is { } text)
@@ -28,6 +28,11 @@ internal static class DocumentEndpoints
             if (errors.Count > 0)
             {
                 return Results.ValidationProblem(errors);
+            }
+
+            if (await BudgetRefusal.OfAsync(budget, cancellationToken) is { } refused)
+            {
+                return refused;
             }
 
             // The goal before the save: without Planning nothing is stored, the user just sends the text again. Without
@@ -69,9 +74,9 @@ internal static class DocumentEndpoints
                 : Results.NotFound());
 
         // Starts the analysis of a failed document again, the worker picks it up like a new one. 202 with the document as
-        // it is now, 409 if it isn't failed (any more).
-        documents.MapPost("/{id:guid}/retry", async (Guid id, IDocuments documents, CancellationToken cancellationToken) =>
-            await documents.RetryAsync(id, cancellationToken) switch
+        // it is now, 409 if it isn't failed (any more). With the budget of the month used up, 429 for any id.
+        documents.MapPost("/{id:guid}/retry", async (Guid id, IDocuments documents, IAiBudget budget, CancellationToken cancellationToken) =>
+            await BudgetRefusal.OfAsync(budget, cancellationToken) ?? await documents.RetryAsync(id, cancellationToken) switch
             {
                 (RetryResult.Started, { } document) => Results.Accepted($"/documents/{document.Id}", DocumentResponse.From(document)),
                 (RetryResult.NotFound, _) => Results.NotFound(),

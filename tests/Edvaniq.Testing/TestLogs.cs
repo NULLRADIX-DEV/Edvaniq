@@ -43,7 +43,7 @@ public sealed class TestLogs : ILoggerProvider, ISupportExternalScope
                 Append(text, state);
                 text.Append(' ').Append(exception);
                 owner.scopes.ForEachScope((scope, builder) => Append(builder, scope), text);
-                owner.entries.Enqueue(new TestLogEntry(category, logLevel, message, Activity.Current?.TraceId.ToHexString(), text.ToString()));
+                owner.entries.Enqueue(new TestLogEntry(category, logLevel, message, Activity.Current?.TraceId.ToHexString(), text.ToString(), eventId.Name));
             }
         }
 
@@ -62,4 +62,5 @@ public sealed class TestLogs : ILoggerProvider, ISupportExternalScope
     }
 }
 
-public sealed record TestLogEntry(string Category, LogLevel Level, string Message, string? TraceId, string Text);
+// EventName is the name a LoggerMessage gives its event, a line the platform matches has one.
+public sealed record TestLogEntry(string Category, LogLevel Level, string Message, string? TraceId, string Text, string? EventName = null);

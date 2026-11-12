@@ -121,7 +121,7 @@ public sealed class AiSwitchTests(ServiceFactory service) : IClassFixture<Servic
         using var error = new StringWriter();
         var exitCode = await AiCommand.RunAsync(service.Services, args, output, error);
         Assert.Empty(error.ToString());
-        return (exitCode, output.ToString().Trim());
+        return (exitCode, output.ToString().Trim().Split(',')[0]);
     }
 
     private async Task SetAsync(bool paused)
@@ -155,7 +155,10 @@ public sealed class AiSwitchTests(ServiceFactory service) : IClassFixture<Servic
     private Task SplitAsync(Guid id) => ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(id, Cancel);
 
     // The worker's AI: the simulated provider behind the switch, counting what reaches the provider.
-    private IChatClient Chat() => new PausableChatClient(new CountingChatClient(ai.Services.GetRequiredService<IChatClient>(), () => asked++), service.Services.GetRequiredService<IServiceScopeFactory>());
+    private IChatClient Chat() => new AiGate(
+        new CountingChatClient(ai.Services.GetRequiredService<IChatClient>(), () => asked++),
+        service.Services.GetRequiredService<IServiceScopeFactory>(),
+        service.Services.GetRequiredService<ILogger<AiGate>>());
 
     private DocumentAnalyzer Analyzer()
     {

@@ -7,6 +7,7 @@ using Edvaniq.Services.Content.Domain;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.Services.Content.Infrastructure.Ai;
 
@@ -45,7 +46,7 @@ public static class ContentAi
     internal static IChatClient For(Document document, IChatClient ai, TestDoubleAi testDouble) =>
         document.UsesTestDouble ? testDouble.Client : ai;
 
-    // Puts the operator's emergency stop in front of the configured AI (PausableChatClient), the one place every call
+    // Puts the operator's emergency stop and monthly budget in front of the configured AI (AiGate), the one place every call
     // to the provider passes. The test double of a test account calls no provider and stays. Call it after
     // AddContentAi, in a process with the database.
     public static TBuilder AddAiSwitch<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
@@ -53,8 +54,9 @@ public static class ContentAi
         var provider = builder.Services.Last(service => service.ServiceType == typeof(IChatClient));
         var inner = provider.ImplementationFactory ?? throw new InvalidOperationException("The AI is registered without a factory.");
         builder.Services.Remove(provider);
+        builder.Services.AddHostedService<AiBudgetCheck>();
         builder.Services.AddSingleton<IChatClient>(services =>
-            new PausableChatClient((IChatClient)inner(services), services.GetRequiredService<IServiceScopeFactory>()));
+            new AiGate((IChatClient)inner(services), services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<ILogger<AiGate>>()));
         return builder;
     }
 

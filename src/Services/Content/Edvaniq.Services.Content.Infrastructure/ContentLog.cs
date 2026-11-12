@@ -27,6 +27,23 @@ internal static partial class ContentLog
     [LoggerMessage(Level = LogLevel.Warning, Message = "The learning goal of document {DocumentId} is gone, it is marked as failed")]
     public static partial void GoalGone(ILogger logger, Guid documentId);
 
+    // The two lines the operator gets an alert for. Event names and the "AI budget:" prefix stay, the platform matches
+    // them. Only the percentage, never the budget or an amount.
+    [LoggerMessage(EventId = 3031, EventName = "AiBudgetWarning", Level = LogLevel.Warning, Message = "AI budget: {Percent} % of this month's budget used")]
+    public static partial void AiBudgetWarning(ILogger logger, int percent);
+
+    [LoggerMessage(EventId = 3032, EventName = "AiBudgetExhausted", Level = LogLevel.Error, Message = "AI budget: this month's budget is used up ({Percent} %), AI calls are refused until next month")]
+    public static partial void AiBudgetExhausted(ILogger logger, int percent);
+
+    [LoggerMessage(EventId = 3033, EventName = "AiBudgetMissing", Level = LogLevel.Warning, Message = "AI budget: no monthly budget is set, the AI has no limit")]
+    public static partial void AiBudgetMissing(ILogger logger);
+
+    [LoggerMessage(EventId = 3034, EventName = "AiBudgetUnknown", Level = LogLevel.Warning, Message = "AI budget: could not be read at the start ({Error})")]
+    public static partial void AiBudgetUnknown(ILogger logger, string error);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "The AI budget is used up, the {Task} of document {DocumentId} is marked as failed")]
+    public static partial void AiBudgetRefused(ILogger logger, string task, Guid documentId);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "The AI is paused, the {Task} of document {DocumentId} is marked as failed")]
     public static partial void AiPaused(ILogger logger, string task, Guid documentId);
 

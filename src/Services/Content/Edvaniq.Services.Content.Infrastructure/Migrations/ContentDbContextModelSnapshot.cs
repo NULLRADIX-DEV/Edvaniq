@@ -179,8 +179,18 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.Property<int>("Id")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("BudgetExhaustedFor")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("BudgetWarnedFor")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<DateTime>("ChangedAt")
                         .HasColumnType("datetime(6)");
+
+                    b.Property<decimal?>("MonthlyBudget")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
 
                     b.Property<bool>("Paused")
                         .HasColumnType("tinyint(1)");
