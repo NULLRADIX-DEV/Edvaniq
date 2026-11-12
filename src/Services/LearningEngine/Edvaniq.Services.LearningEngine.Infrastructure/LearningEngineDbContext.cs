@@ -19,12 +19,17 @@ public sealed class LearningEngineDbContext(DbContextOptions<LearningEngineDbCon
 
     public DbSet<TopicIntroduction> TopicIntroductions => Set<TopicIntroduction>();
 
+    public DbSet<MasteryCarry> MasteryCarries => Set<MasteryCarry>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         var record = modelBuilder.Entity<LearningRecord>();
         record.HasKey(entry => entry.AnswerId);
         record.Property(entry => entry.AnswerId).ValueGeneratedNever();
         record.HasIndex(entry => new { entry.OwnerId, entry.TopicId });
+
+        // The retention run looks for the oldest records (#365).
+        record.HasIndex(entry => entry.AnsweredAt);
 
         // Topics of Knowledge, only ids (TopicsChanged).
         var topic = modelBuilder.Entity<KnownTopic>();
@@ -39,5 +44,10 @@ public sealed class LearningEngineDbContext(DbContextOptions<LearningEngineDbCon
         // One per user and topic (SessionCompleted).
         var introduction = modelBuilder.Entity<TopicIntroduction>();
         introduction.HasKey(item => new { item.OwnerId, item.TopicId });
+
+        // One per user and topic, what expired records left behind (#365).
+        var carry = modelBuilder.Entity<MasteryCarry>();
+        carry.HasKey(item => new { item.OwnerId, item.TopicId });
+        carry.Property(item => item.Version).IsConcurrencyToken();
     }
 }

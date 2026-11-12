@@ -29,6 +29,14 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<ITopicIntroductions, TopicIntroductions>();
         builder.Services.TryAddSingleton(TimeProvider.System);
 
+        // Expired learning records go into the carry of their topic (#365).
+        builder.Services.AddOptions<LearningRecordRetentionOptions>()
+            .BindConfiguration(LearningRecordRetentionOptions.Section)
+            .Validate(retention => retention.Months >= 1 && retention.BatchSize >= 1, "Months and BatchSize must be at least 1.")
+            .ValidateOnStart();
+        builder.Services.AddSingleton<LearningRecordRetention>();
+        builder.Services.AddHostedService(provider => provider.GetRequiredService<LearningRecordRetention>());
+
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<LearningEngineDbContext>(ServiceKey);
         builder.Services.AddIntegrationEventHandler<AnswerRecorded, AnswerRecordedHandler>();

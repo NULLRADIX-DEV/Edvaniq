@@ -35,4 +35,13 @@ public sealed class PrivacyTests : BunitContext
 
         Assert.Contains("Aus PDF-, Word-, Text- und Markdown-Dateien liest Edvaniq den Text und übermittelt ihn wie einen eingefügten Text an den KI-Dienst", text);
     }
+
+    // The retention of learning records (Q27, #365).
+    [Fact]
+    public void Notice_NamesTheRetentionOfLearningRecords()
+    {
+        var text = string.Join(' ', Render<Privacy>().Find("h1").ParentElement!.TextContent.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+        Assert.Contains("Lern-Nachweise werden 12 Monate nach der Antwort gelöscht", text);
+    }
 }
