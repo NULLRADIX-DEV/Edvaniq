@@ -99,6 +99,12 @@ internal static class DocumentEndpoints
                 ? Results.Ok(DocumentResponse.From(document))
                 : Results.NotFound());
 
+        // Where each section stands (#294): its position in the text and, for a file, its first and last page.
+        documents.MapGet("/{id:guid}/sections", async (Guid id, IDocuments documents, CancellationToken cancellationToken) =>
+            await documents.SectionsAsync(id, cancellationToken) is { } sections
+                ? Results.Ok(sections.Select(section => new SectionResponse(section.SectionId, section.Position, section.PageFrom, section.PageTo)))
+                : Results.NotFound());
+
         // Starts the analysis of a failed document again, the worker picks it up like a new one. 202 with the document as
         // it is now, 409 if it isn't failed (any more). With the budget of the month or today's generations used up, 429
         // for any id. Pages are the worker's to check, a document charged before takes none again.
@@ -140,6 +146,9 @@ internal static class DocumentEndpoints
 // Confirmation is the version of the wording the user confirmed (MaterialConfirmation), a URL is just text: Content never
 // fetches anything from one.
 internal sealed record PastedText(string? Title, string? Text, Guid? LearningGoalId = null, string? Confirmation = null);
+
+// Position counts from 0 in the text. The pages are the first and last the section stands on, null for pasted text.
+internal sealed record SectionResponse(Guid SectionId, int Position, int? PageFrom, int? PageTo);
 
 // Status goes out by name (Uploaded, Analyzing, Ready, Failed), the client words it. A failed document says why. Source
 // says where it came from, Text or File: one from a file stays Uploaded until its text is extracted (#282). FailureCode

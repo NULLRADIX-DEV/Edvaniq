@@ -135,5 +135,28 @@ public sealed class UploadedDocumentTests
     public void ScanHint_FitsAsAReason() =>
         Assert.InRange(Document.NoTextInFile.Length, 1, Document.FailureReasonMaxLength);
 
+    // #294: short paragraphs go together, so the first section runs over the page break, the heading starts the next one.
+    // An empty page in between counts for neither.
+    [Fact]
+    public void Section_KnowsTheFirstAndLastPageItStandsOn()
+    {
+        var document = Upload();
+        var pages = document.TakeText(["# Fotosynthese\nLicht spaltet Wasser.", "", "Zucker entsteht.", "# Zellatmung\nZucker wird zu Energie."], Now);
+
+        var sections = document.Split();
+
+        Assert.Equal([(1, 3), (4, 4)], sections.Select(section => section.PagesIn(pages)).Select(range => (range.From!.Value, range.To!.Value)));
+    }
+
+    [Fact]
+    public void SectionOfPastedText_HasNoPages()
+    {
+        var document = Document.Paste("alice", Guid.NewGuid(), null, "Licht spaltet Wasser in der Pflanze.", Now);
+
+        var section = Assert.Single(document.Split());
+
+        Assert.Equal((null, null), section.PagesIn([]));
+    }
+
     private static Document Upload() => Document.Upload("alice", Guid.NewGuid(), "Skript.pdf", Guid.NewGuid(), FileFormat.Pdf, Now);
 }

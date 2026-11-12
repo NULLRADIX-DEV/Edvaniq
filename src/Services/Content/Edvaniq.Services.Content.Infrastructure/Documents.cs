@@ -68,6 +68,27 @@ internal sealed class Documents(
     public Task<Document?> FindAsync(Guid id, CancellationToken cancellationToken) =>
         db.Documents.AsNoTracking().FirstOrDefaultAsync(document => document.Id == id, cancellationToken);
 
+    public async Task<IReadOnlyList<SectionPlace>?> SectionsAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (!await db.Documents.AnyAsync(document => document.Id == id, cancellationToken))
+        {
+            return null;
+        }
+
+        var sections = await db.Sections.AsNoTracking()
+            .Where(section => section.DocumentId == id)
+            .OrderBy(section => section.Ordinal)
+            .ToListAsync(cancellationToken);
+        var pages = await db.DocumentPages.AsNoTracking()
+            .Where(page => page.DocumentId == id)
+            .ToListAsync(cancellationToken);
+        return [.. sections.Select(section =>
+        {
+            var (from, to) = section.PagesIn(pages);
+            return new SectionPlace(section.Id, section.Ordinal, from, to);
+        })];
+    }
+
     // The status is a concurrency token: of two retries at once only the first save wins, the second finds the
     // document no longer failed.
     public async Task<(RetryResult Result, Document? Document)> RetryAsync(Guid id, CancellationToken cancellationToken)

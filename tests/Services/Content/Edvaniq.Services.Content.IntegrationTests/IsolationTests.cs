@@ -18,6 +18,7 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         .Exempt("GET", "/me", "Only the caller's own id from the token.")
         .List("GET", "/documents")
         .Item("GET", "/documents/{id:guid}")
+        .Item("GET", "/documents/{id:guid}/sections")
         .Item("POST", "/documents/{id:guid}/retry")
         .Item("DELETE", "/documents/{id:guid}")
         .Exempt("POST", "/documents", "Adds a document of the caller, a foreign goal is Planning's: LearningGoalTests.")
