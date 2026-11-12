@@ -52,16 +52,22 @@ public static class PageQuota
     public static int PagesOf(Document document, int filePages) =>
         document.FileFormat == FileFormat.Pdf ? Math.Max(1, filePages) : PagesOfText(document.Text);
 
+    // The reasons the user reads, as templates: {0} pages, {1} "Seite" or "Seiten", {2} "ist" or "sind", {3} pages left,
+    // {4} when the quota starts again (ResetText).
+    public const string TooManyPagesReason =
+        "Dein Tageskontingent reicht für dieses Dokument nicht: {0} {1}, frei {2} heute noch {3}. Es wird {4} zurückgesetzt.";
+
+    // {0} when the quota starts again.
+    public const string UsedUpReason = "Dein Tageskontingent an Seiten ist aufgebraucht. Es wird {0} zurückgesetzt.";
+
     // When the quota of the study day of now starts again, as the user reads it: always 04:00 in Berlin.
     public static string ResetText(DateTime now) =>
         $"am {SharedKernel.StudyDay.Of(now).AddDays(1).ToString("dd.MM.", CultureInfo.InvariantCulture)} um 04:00 Uhr";
 
     public static string TooManyPages(int pages, int left, DateTime now) =>
-        $"Dein Tageskontingent reicht für dieses Dokument nicht: {pages} {Pages(pages)}, frei {(left == 1 ? "ist" : "sind")} heute noch {left}. "
-        + $"Es wird {ResetText(now)} zurückgesetzt.";
+        string.Format(CultureInfo.InvariantCulture, TooManyPagesReason, pages, Pages(pages), left == 1 ? "ist" : "sind", left, ResetText(now));
 
-    public static string UsedUp(DateTime now) =>
-        $"Dein Tageskontingent an Seiten ist aufgebraucht. Es wird {ResetText(now)} zurückgesetzt.";
+    public static string UsedUp(DateTime now) => string.Format(CultureInfo.InvariantCulture, UsedUpReason, ResetText(now));
 
     private static string Pages(int count) => count == 1 ? "Seite" : "Seiten";
 }
