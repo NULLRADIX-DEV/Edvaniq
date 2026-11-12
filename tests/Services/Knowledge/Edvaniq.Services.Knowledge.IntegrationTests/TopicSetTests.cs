@@ -42,7 +42,7 @@ public sealed class TopicSetTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(["Membran", "Zelle", "Zellkern"], topics.Select(topic => topic.Name).Order());
         var documents = Query(db => db.TopicSections.IgnoreQueryFilters().Where(section => section.OwnerId == alice)
             .Select(section => section.DocumentId).Distinct().ToList());
-        Assert.Equal([first.DocumentId, second.DocumentId], documents.Order());
+        Assert.Equal(new[] { first.DocumentId, second.DocumentId }.Order(), documents.Order());
     }
 
     // The analysis read the goal, then the user renamed a topic. The analysis loses, tries again, and hangs its new
