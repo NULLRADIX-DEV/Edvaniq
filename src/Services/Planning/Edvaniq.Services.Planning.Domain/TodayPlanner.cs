@@ -69,9 +69,16 @@ public static class TodayPlanner
                 topicId,
                 Size,
                 Math.Clamp(standing.Mastery, 0, 100),
-                IsNew: standing.State == TopicState.New,
+                IsNew: IsNew(topicId, standings),
                 IsWeakness: standing.State == TopicState.Weakness)
             : new TopicToPlan(topicId, Size, MasteryOfATopicLearningEngineDoesNotKnow, IsNew: true);
+
+    // New exactly when LearningEngine says so or knows nothing of the topic, also when it couldn't be asked (#377).
+    public static bool IsNew(Guid topicId, IReadOnlyDictionary<Guid, TopicStanding> standings)
+    {
+        ArgumentNullException.ThrowIfNull(standings);
+        return !standings.TryGetValue(topicId, out var standing) || standing.State == TopicState.New;
+    }
 }
 
 // The blocks of today in the order they come up. Empty says why there are none, null while there are blocks.
