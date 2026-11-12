@@ -24,6 +24,24 @@ public sealed record LearnerProfile(LearnerLevel Level, string Language)
     // The language as the German prompt names it.
     internal string LanguageName => Language == English ? "Englisch" : "Deutsch";
 
+    // How the names of the topics fit the level. Only the wording, how the material splits stays the material's.
+    internal string TopicNameInstruction => Level switch
+    {
+        LearnerLevel.LowerSecondary =>
+            "Die Lernenden sind in der Unterstufe (etwa Klasse 5 bis 7). Wähle für die Namen einfache, kurze Wörter, die sie verstehen.",
+        LearnerLevel.MiddleSecondary =>
+            "Die Lernenden sind in der Mittelstufe (etwa Klasse 8 bis 10). Wähle für die Namen klare Wörter und die Grundbegriffe des Fachs.",
+        LearnerLevel.UpperSecondary =>
+            "Die Lernenden sind in der Oberstufe. Verwende für die Namen die Fachsprache.",
+        LearnerLevel.Apprenticeship =>
+            "Die Lernenden sind in der Berufsausbildung. Verwende für die Namen die Fachsprache des Berufs.",
+        LearnerLevel.University =>
+            "Die Lernenden studieren. Verwende für die Namen die wissenschaftliche Fachsprache.",
+        LearnerLevel.SelfLearner =>
+            "Die Lernenden lernen selbstständig, ohne Schule oder Ausbildung. Wähle für die Namen verständliche Wörter, ohne Vorwissen vorauszusetzen.",
+        _ => throw new ArgumentOutOfRangeException(nameof(Level), Level, null),
+    };
+
     // How the questions fit the level. Plain about what to ask, never a judgement of the learner.
     internal string LevelInstruction => Level switch
     {
