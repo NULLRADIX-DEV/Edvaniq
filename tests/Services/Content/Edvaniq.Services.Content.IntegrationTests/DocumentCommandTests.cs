@@ -133,7 +133,7 @@ public sealed class DocumentCommandTests(ServiceFactory service) : IClassFixture
     private static async Task<Guid> PasteAsync(HttpClient client)
     {
         using var response = await client.PostAsJsonAsync(
-            "/documents", new { Title = "Photosynthese", Text = "Licht spaltet Wasser.\n\nDabei entsteht Sauerstoff." }, Cancel);
+            "/documents", new { Title = "Photosynthese", Text = TestTexts.Lesson }, Cancel);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonElement>(Cancel)).GetProperty("id").GetGuid();
     }
