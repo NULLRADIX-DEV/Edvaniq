@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Edvaniq.Services.Content.Infrastructure.Migrations
 {
     [DbContext(typeof(ContentDbContext))]
-    [Migration("20261112125211_PageCharges")]
+    [Migration("20261112133510_PageCharges")]
     partial class PageCharges
     {
         /// <inheritdoc />
