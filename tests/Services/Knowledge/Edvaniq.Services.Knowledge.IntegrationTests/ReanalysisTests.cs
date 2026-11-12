@@ -18,6 +18,8 @@ namespace Edvaniq.Services.Knowledge.IntegrationTests;
 // there twice. All through DocumentAnalyzed as Content sends it.
 public sealed class ReanalysisTests(ServiceFactory service) : IClassFixture<ServiceFactory>
 {
+    private const string Consumer = $"{InfrastructureExtensions.ServiceKey}-DocumentAnalyzedHandler";
+
     private static CancellationToken Cancel => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -77,22 +79,22 @@ public sealed class ReanalysisTests(ServiceFactory service) : IClassFixture<Serv
         (await client.GetFromJsonAsync<Tree[]>($"/topics?learningGoalId={goal}&includeHidden=true", Cancel))!;
 
     // Like Content's dispatcher would, each topic with a new section, the subtopic under the first one. Waits until the
-    // sections are there.
+    // handler confirmed it: the same document again replaces its sections, so their count says nothing.
     private async Task AnalyzeAsync(string user, Guid goal, Guid document, IReadOnlyList<string> names, string subtopicOfFirst)
     {
         List<TopicSuggestion> topics = [.. names.Select(name => new TopicSuggestion(name, null, [Guid.NewGuid()]))];
         topics.Insert(1, new TopicSuggestion(subtopicOfFirst, 0, [Guid.NewGuid()]));
-        var expected = topics.Count + Query(db => db.TopicSections.IgnoreQueryFilters().Count(section => section.OwnerId == user));
+        var messageId = Guid.NewGuid();
         await service.Services.GetRequiredService<InMemoryTransport>().PublishAsync(
             new OutgoingMessage(
                 EventRoute.For(typeof(DocumentAnalyzed)).Subject,
-                Guid.NewGuid(),
+                messageId,
                 JsonSerializer.Serialize(new DocumentAnalyzed(user, document, topics, goal), JsonSerializerOptions.Web),
                 null),
             Cancel);
 
         var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (Query(db => db.TopicSections.IgnoreQueryFilters().Count(section => section.OwnerId == user)) < expected)
+        while (Query(db => db.Set<InboxMessage>().Count(entry => entry.MessageId == messageId && entry.Consumer == Consumer)) == 0)
         {
             Assert.True(DateTime.UtcNow < deadline, "The analysis was not handled.");
             await Task.Delay(100, Cancel);
