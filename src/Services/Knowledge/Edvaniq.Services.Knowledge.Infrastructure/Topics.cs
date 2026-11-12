@@ -8,7 +8,9 @@ namespace Edvaniq.Services.Knowledge.Infrastructure;
 
 // No query here mentions the owner: the filter of ServiceDbContext adds it to every one of them. So the check for a name
 // that is taken only ever sees the user's own topics.
-internal sealed class Topics(KnowledgeDbContext db, TopicsChangedEvents changes, ICurrentUser user, TimeProvider time) : ITopics
+// Every change reads the TopicSet of the goal first and only then checks names: a change that commits in between bumps
+// the version this save then loses on, so no two changes pass each other on stale reads (#322).
+internal sealed class Topics(KnowledgeDbContext db, TopicsChangedEvents changes, ITopicState state, ICurrentUser user, TimeProvider time) : ITopics
 {
     public async Task<IReadOnlyList<Topic>> ListAsync(Guid? learningGoalId, CancellationToken cancellationToken)
     {
@@ -32,6 +34,7 @@ internal sealed class Topics(KnowledgeDbContext db, TopicsChangedEvents changes,
             return TopicResult.Fail(TopicError.NotFound);
         }
 
+        await state.TouchAsync(topic.OwnerId, topic.LearningGoalId, cancellationToken);
         if (await IsTakenAsync(topic.LearningGoalId, topic.ParentId, name, topic.Id, cancellationToken))
         {
             return TopicResult.Fail(TopicError.NameTaken);
@@ -57,6 +60,7 @@ internal sealed class Topics(KnowledgeDbContext db, TopicsChangedEvents changes,
         }
 
         var goal = parent?.LearningGoalId ?? learningGoalId;
+        await state.TouchAsync(user.Id, goal, cancellationToken);
         if (await IsTakenAsync(goal, parentId, name, except: null, cancellationToken))
         {
             return TopicResult.Fail(TopicError.NameTaken);
@@ -79,6 +83,7 @@ internal sealed class Topics(KnowledgeDbContext db, TopicsChangedEvents changes,
             return TopicResult.Fail(TopicError.NotFound);
         }
 
+        await state.TouchAsync(topic.OwnerId, topic.LearningGoalId, cancellationToken);
         if (!hidden && topic.ParentId is { } parentId
             && await db.Topics.AnyAsync(parent => parent.Id == parentId && parent.Hidden, cancellationToken))
         {
