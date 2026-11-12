@@ -137,6 +137,7 @@
   </Folder>
   <Folder Name="/tests/Services/Content/">
     <Project Path="tests/Services/Content/Edvaniq.Services.Content.IntegrationTests/Edvaniq.Services.Content.IntegrationTests.csproj" />
+    <Project Path="tests/Services/Content/Edvaniq.Services.Content.ReferenceRun/Edvaniq.Services.Content.ReferenceRun.csproj" />
     <Project Path="tests/Services/Content/Edvaniq.Services.Content.UnitTests/Edvaniq.Services.Content.UnitTests.csproj" />
   </Folder>
   <Folder Name="/tests/Services/Flashcards/">

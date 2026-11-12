@@ -25,6 +25,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Services\Content\Edvaniq.Services.Content.Api\Edvaniq.Services.Content.Api.csproj" />
     <ProjectReference Include="..\..\..\Edvaniq.Testing\Edvaniq.Testing.csproj" />
+    <!-- The reference run (#309), for its smoke run with the simulated provider. -->
+    <ProjectReference Include="..\Edvaniq.Services.Content.ReferenceRun\Edvaniq.Services.Content.ReferenceRun.csproj" Aliases="referencerun" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Edvaniq.Services.Content.UnitTests\ReferenceSet.cs" Link="ReferenceSet.cs" />
+    <Compile Include="..\Edvaniq.Services.Content.UnitTests\ReferenceScore.cs" Link="ReferenceScore.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\Services\Content\Edvaniq.Services.Content.Infrastructure\Edvaniq.Services.Content.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\..\src\SharedKernel\Edvaniq.SharedKernel\Edvaniq.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>

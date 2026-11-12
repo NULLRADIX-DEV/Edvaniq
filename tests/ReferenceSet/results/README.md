@@ -1,0 +1,1 @@
+Ergebnisse der Läufe gegen den echten Anbieter, eine Datei je Lauf (siehe ../README.md, „Lauf gegen den echten Anbieter“).
