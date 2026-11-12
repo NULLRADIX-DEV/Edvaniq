@@ -32,7 +32,9 @@ public sealed class SessionStarts(
         // A session needs its goal in the database, the default goal may not be there yet.
         var goal = await goals.DefaultAsync(cancellationToken);
         var now = time.GetUtcNow();
-        var session = Session.Start(Guid.CreateVersion7(now), currentUser.Id, goal.Id, today.Plan.StudyDay, block, now.UtcDateTime);
+        // The steps are fixed here (#377): a topic LearningEngine can't vouch for gets the introduction unit.
+        var session = Session.Start(
+            Guid.CreateVersion7(now), currentUser.Id, goal.Id, today.Plan.StudyDay, block, now.UtcDateTime, today.IsNew(block.Block.TopicId));
         if (await sessions.TryAddAsync(session, cancellationToken))
         {
             return new SessionStart(SessionStartResult.Started, session);

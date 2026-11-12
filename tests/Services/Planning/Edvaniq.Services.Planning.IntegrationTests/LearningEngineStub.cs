@@ -22,6 +22,9 @@ public sealed class LearningEngineStub(OutgoingCalls calls)
     // Requests with this token can't connect at all.
     public void Unreachable(string token) => failures[token] = new Failure(null, "");
 
+    // Requests with this token are answered again.
+    public void Reachable(string token) => failures.TryRemove(token, out _);
+
     // Requests with this token get this status and body.
     public void Fail(string token, HttpStatusCode status, string body) => failures[token] = new Failure(status, body);
 

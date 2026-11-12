@@ -8,7 +8,7 @@ namespace Edvaniq.Services.Planning.Domain;
 public sealed class Session : IOwnedByUser
 {
     private Session(
-        Guid id, string ownerId, Guid learningGoalId, Guid blockId, DateOnly studyDay, Guid topicId, BlockKind kind, int minutes, DateTime startedAt)
+        Guid id, string ownerId, Guid learningGoalId, Guid blockId, DateOnly studyDay, Guid topicId, BlockKind kind, int minutes, bool topicIsNew, DateTime startedAt)
     {
         Id = id;
         OwnerId = ownerId;
@@ -19,6 +19,7 @@ public sealed class Session : IOwnedByUser
         TopicId = topicId;
         Kind = kind;
         Minutes = minutes;
+        TopicIsNew = topicIsNew;
         StartedAt = startedAt;
     }
 
@@ -42,6 +43,12 @@ public sealed class Session : IOwnedByUser
 
     public int Minutes { get; private set; }
 
+    // Whether the topic was new when the session started (#377). Kept, so the steps stay as they were even after the
+    // topic got introduced in this session or LearningEngine answers differently.
+    public bool TopicIsNew { get; private set; }
+
+    public IReadOnlyList<SessionStep> Steps => SessionSteps.For(Kind, TopicIsNew);
+
     // UTC.
     public DateTime StartedAt { get; private set; }
 
@@ -50,7 +57,7 @@ public sealed class Session : IOwnedByUser
 
     public bool IsActive => EndedAt is null;
 
-    public static Session Start(Guid id, string ownerId, Guid learningGoalId, DateOnly studyDay, DayBlock block, DateTime startedAt)
+    public static Session Start(Guid id, string ownerId, Guid learningGoalId, DateOnly studyDay, DayBlock block, DateTime startedAt, bool topicIsNew = false)
     {
         ArgumentException.ThrowIfNullOrEmpty(ownerId);
         ArgumentNullException.ThrowIfNull(block);
@@ -62,6 +69,6 @@ public sealed class Session : IOwnedByUser
         // Whole microseconds, as the database keeps them, so the session read back is the one started.
         var stored = startedAt.AddTicks(-(startedAt.Ticks % 10));
         return new Session(
-            id, ownerId, learningGoalId, block.Id, studyDay, block.Block.TopicId, block.Block.Kind, block.Block.Minutes, stored);
+            id, ownerId, learningGoalId, block.Id, studyDay, block.Block.TopicId, block.Block.Kind, block.Block.Minutes, topicIsNew, stored);
     }
 }

@@ -320,6 +320,9 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                     b.Property<Guid>("TopicId")
                         .HasColumnType("char(36)");
 
+                    b.Property<bool>("TopicIsNew")
+                        .HasColumnType("tinyint(1)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ActiveOwnerId")

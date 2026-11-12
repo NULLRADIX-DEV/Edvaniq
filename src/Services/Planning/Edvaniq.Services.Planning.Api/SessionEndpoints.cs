@@ -45,7 +45,8 @@ internal static class SessionEndpoints
 internal sealed record StartRequest(Guid BlockId);
 
 // Kind is "learn" or "review". Existing: the user had this session already, a start brought it back. EndedAt is null
-// while it runs.
+// while it runs. Steps: the fixed order of the session (#377), each "review", "introductionUnit" or "quiz", Empty when
+// there is nothing to do in it (the review until M4).
 internal sealed record SessionResponse(
     Guid Id,
     Guid BlockId,
@@ -56,7 +57,8 @@ internal sealed record SessionResponse(
     Guid LearningGoalId,
     DateTime StartedAt,
     DateTime? EndedAt,
-    bool Existing)
+    bool Existing,
+    IReadOnlyList<StepResponse> Steps)
 {
     public static SessionResponse From(Session session, bool existing) =>
         new(
@@ -69,5 +71,15 @@ internal sealed record SessionResponse(
             session.LearningGoalId,
             session.StartedAt,
             session.EndedAt,
-            existing);
+            existing,
+            [.. session.Steps.Select(step => new StepResponse(NameOf(step.Kind), step.Empty))]);
+
+    private static string NameOf(SessionStepKind kind) => kind switch
+    {
+        SessionStepKind.Review => "review",
+        SessionStepKind.IntroductionUnit => "introductionUnit",
+        _ => "quiz",
+    };
 }
+
+internal sealed record StepResponse(string Kind, bool Empty);
