@@ -4,7 +4,7 @@ using Edvaniq.Services.Content.Infrastructure;
 
 namespace Edvaniq.Services.Content.Api;
 
-// dotnet Edvaniq.Services.Content.Api.dll document delete <id>, run by the operator on the server.
+// dotnet Edvaniq.Services.Content.Api.dll document delete <id> (or reopen <id>, below), run by the operator on the server.
 // Deletes the document exactly as its owner would with DELETE /documents/{id}: file, sections and pools go, DocumentDeleted
 // goes into the outbox in the same save and the running content-api sends it. There is no HTTP way to this, the command
 // acts as the owner instead of skipping the owner filter. Prints only the document id, never the owner.
@@ -13,6 +13,7 @@ internal static partial class DocumentCommand
     public const int Ok = 0;
     public const int Failed = 1;
     public const int Invalid = 2;
+    public const int Refused = 3;
 
     public static bool Matches(string[] args) => args is ["document", ..];
 
@@ -26,10 +27,15 @@ internal static partial class DocumentCommand
 
     public static async Task<int> RunAsync(IServiceProvider services, string[] args, TextWriter output, TextWriter error)
     {
-        if (args is not ["document", "delete", var text] || !Guid.TryParse(text, out var id))
+        if (args is not ["document", "delete" or "reopen", var text] || !Guid.TryParse(text, out var id))
         {
-            await error.WriteLineAsync("Usage: document delete <id>, the id of the document as a GUID.");
+            await error.WriteLineAsync("Usage: document delete <id> or document reopen <id>, the id of the document as a GUID.");
             return Invalid;
+        }
+
+        if (args[1] == "reopen")
+        {
+            return await ReopenAsync(services, id, output, error);
         }
 
         try
@@ -48,6 +54,37 @@ internal static partial class DocumentCommand
         }
     }
 
+    // document reopen <id> (#1018): a ready document waits for its questions again, the running worker adds the missing
+    // ones. Anything but a ready document of some user is refused with exit code 3, nothing changes.
+    private static async Task<int> ReopenAsync(IServiceProvider services, Guid id, TextWriter output, TextWriter error)
+    {
+        try
+        {
+            using var scope = services.CreateScope();
+            var owner = await scope.ServiceProvider.GetRequiredService<IDocumentOwners>().OwnerOfAsync(id, CancellationToken.None);
+            var result = ReopenResult.NotFound;
+            if (owner is not null)
+            {
+                scope.ServiceProvider.GetRequiredService<OperatorUser>().ActAs(owner);
+                result = await scope.ServiceProvider.GetRequiredService<IDocuments>().ReopenAsync(id, CancellationToken.None);
+            }
+
+            await output.WriteLineAsync(result switch
+            {
+                ReopenResult.Reopened => $"reopened {id:D}",
+                ReopenResult.NotReady => $"not ready {id:D}",
+                _ => $"no document {id:D}",
+            });
+            return result == ReopenResult.Reopened ? Ok : Refused;
+        }
+        catch (Exception exception)
+        {
+            LogReopenFailed(services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(DocumentCommand)), exception);
+            await error.WriteLineAsync("Reopening the document failed, see the log above.");
+            return Failed;
+        }
+    }
+
     private static Task<bool> DeleteAsAsync(IServiceProvider scope, string owner, Guid id)
     {
         scope.GetRequiredService<OperatorUser>().ActAs(owner);
@@ -56,6 +93,9 @@ internal static partial class DocumentCommand
 
     [LoggerMessage(Level = LogLevel.Critical, Message = "Deleting the document failed")]
     private static partial void LogFailed(ILogger logger, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Critical, Message = "Reopening the document failed")]
+    private static partial void LogReopenFailed(ILogger logger, Exception exception);
 }
 
 // The user the command acts as. Until it knows the owner, every query under the owner filter fails.

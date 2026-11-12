@@ -94,6 +94,33 @@ internal sealed class Documents(
         return (RetryResult.Started, document);
     }
 
+    public async Task<ReopenResult> ReopenAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var document = await db.Documents.FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (document is null)
+        {
+            return ReopenResult.NotFound;
+        }
+
+        if (document.Status != DocumentStatus.Ready)
+        {
+            return ReopenResult.NotReady;
+        }
+
+        document.ReopenForQuestions(time.GetUtcNow().UtcDateTime);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            db.ChangeTracker.Clear();
+            return ReopenResult.NotReady;
+        }
+
+        return ReopenResult.Reopened;
+    }
+
     // A worker may save the document between our read and our save, then the status no longer matches and we read it
     // again. Its own save fails once the row is gone, so nothing of the document goes out after DocumentDeleted. The
     // uploaded file goes first, bytes and row, as with UserDeleted: if the rest fails, a second try finds only the

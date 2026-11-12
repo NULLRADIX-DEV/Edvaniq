@@ -22,6 +22,9 @@ public interface IDocuments
     // Starts a failed analysis again (Document.Retry). The document is null when the user has none with this id.
     Task<(RetryResult Result, Document? Document)> RetryAsync(Guid id, CancellationToken cancellationToken);
 
+    // Puts a ready document back to waiting for its questions (Document.ReopenForQuestions), for the operator (#1018).
+    Task<ReopenResult> ReopenAsync(Guid id, CancellationToken cancellationToken);
+
     // Deletes the document with its sections and reports DocumentDeleted in the same save. False when the user has none
     // with this id.
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
@@ -35,6 +38,16 @@ public enum RetryResult
 
     // Not failed, or someone else started it again first.
     NotFailed,
+}
+
+public enum ReopenResult
+{
+    Reopened,
+
+    NotFound,
+
+    // Still in analysis, failed, or changed by someone else meanwhile.
+    NotReady,
 }
 
 // A document without its text.
