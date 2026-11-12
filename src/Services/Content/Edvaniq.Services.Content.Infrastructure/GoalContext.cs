@@ -27,12 +27,12 @@ internal static class GoalContext
             }
 
             ContentLog.GoalGone(logger, document.Id);
-            document.Fail(Document.GoalGone);
+            document.Fail(DocumentFailures.GoalGone);
         }
         catch (LearningGoalUnavailableException)
         {
             ContentLog.GoalUnavailable(logger, document.Id);
-            document.Fail(Document.GoalUnavailable);
+            document.Fail(DocumentFailures.GoalUnavailable);
         }
 
         return null;

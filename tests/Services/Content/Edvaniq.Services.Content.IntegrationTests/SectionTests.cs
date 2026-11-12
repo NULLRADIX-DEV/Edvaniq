@@ -74,8 +74,8 @@ public sealed class SectionTests(ServiceFactory service) : IClassFixture<Service
         using var client = ClientFor(alice);
         var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{document.Id}", TestContext.Current.CancellationToken);
         Assert.Equal(
-            ("Failed", "Der Text enthält nichts, woraus sich lernen lässt. Füge einen anderen Text ein."),
-            (found!.Status, found.FailureReason));
+            ("Failed", "Der Text enthält nichts, woraus sich lernen lässt. Füge einen anderen Text ein.", "NoText"),
+            (found!.Status, found.FailureReason, found.FailureCode));
         Assert.Empty(await SectionTextsAsync(document.Id));
     }
 
@@ -106,5 +106,5 @@ public sealed class SectionTests(ServiceFactory service) : IClassFixture<Service
         return client;
     }
 
-    private sealed record DocumentDto(Guid Id, string Title, string Status, string? FailureReason, DateTime CreatedAt);
+    private sealed record DocumentDto(Guid Id, string Title, string Status, string? FailureReason, DateTime CreatedAt, string? FailureCode = null);
 }

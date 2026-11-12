@@ -22,15 +22,15 @@ public static class FileReadProtocol
     public static readonly long MaxLength = Magic.Length + 2 + 4 + (((long)Document.TextMaxLength * 4) + ((long)Document.MaxPages * 4));
 
     // Each refusal of FileText, with its code. The code is the contract between the two processes, keep the numbers.
-    private static readonly (FileReadOutcome Outcome, string Reason)[] Reasons =
+    private static readonly (FileReadOutcome Outcome, DocumentFailure Failure)[] Reasons =
     [
-        (FileReadOutcome.TextTooLong, Document.FileTextTooLong),
-        (FileReadOutcome.TooManyPages, Document.TooManyPages),
-        (FileReadOutcome.PackedTooTightly, FileCheck.PackedTooTightly),
-        (FileReadOutcome.Protected, FileCheck.PdfProtected),
-        (FileReadOutcome.TakesTooLong, FileCheck.TakesTooLong),
-        (FileReadOutcome.TooLarge, Document.FileNotProcessable),
-        (FileReadOutcome.Unreadable, Document.FileUnreadable),
+        (FileReadOutcome.TextTooLong, DocumentFailures.FileTextTooLong),
+        (FileReadOutcome.TooManyPages, DocumentFailures.TooManyPages),
+        (FileReadOutcome.PackedTooTightly, DocumentFailures.PackedTooTightly),
+        (FileReadOutcome.Protected, DocumentFailures.PdfProtected),
+        (FileReadOutcome.TakesTooLong, DocumentFailures.TakesTooLong),
+        (FileReadOutcome.TooLarge, DocumentFailures.FileNotProcessable),
+        (FileReadOutcome.Unreadable, DocumentFailures.FileUnreadable),
     ];
 
     public static void WritePages(Stream output, IReadOnlyList<string> pages)
@@ -63,10 +63,10 @@ public static class FileReadProtocol
 
     // The code for a reason FileText gave, Unreadable for any other.
     public static FileReadOutcome OutcomeOf(string reason) =>
-        Reasons.FirstOrDefault(entry => entry.Reason == reason) is { Reason: not null } found ? found.Outcome : FileReadOutcome.Unreadable;
+        Reasons.FirstOrDefault(entry => entry.Failure?.Text == reason) is { Failure: not null } found ? found.Outcome : FileReadOutcome.Unreadable;
 
-    public static string ReasonOf(FileReadOutcome outcome) =>
-        Reasons.FirstOrDefault(entry => entry.Outcome == outcome) is { Reason: not null } found ? found.Reason : Document.FileUnreadable;
+    public static DocumentFailure ReasonOf(FileReadOutcome outcome) =>
+        Reasons.FirstOrDefault(entry => entry.Outcome == outcome) is { Failure: not null } found ? found.Failure : DocumentFailures.FileUnreadable;
 
     // The pages, or the reason the file was refused. Null if the bytes are no complete, valid frame.
     public static FileReadResult? Read(ReadOnlySpan<byte> frame)
@@ -154,9 +154,11 @@ public enum FileReadOutcome : byte
 }
 
 // What came out of a file: its pages, or the reason the user reads instead.
-public sealed record FileReadResult(IReadOnlyList<string>? Pages, string? Reason)
+public sealed record FileReadResult(IReadOnlyList<string>? Pages, DocumentFailure? Failure)
 {
+    public string? Reason => Failure?.Text;
+
     public static FileReadResult Read(IReadOnlyList<string> pages) => new(pages, null);
 
-    public static FileReadResult Refused(string reason) => new(null, reason);
+    public static FileReadResult Refused(DocumentFailure failure) => new(null, failure);
 }

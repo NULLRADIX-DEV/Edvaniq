@@ -59,7 +59,7 @@ internal sealed class Documents(
     public async Task<IReadOnlyList<DocumentSummary>> ListAsync(CancellationToken cancellationToken) =>
         await db.Documents.OrderByDescending(document => document.CreatedAt)
             .Select(document => new DocumentSummary(
-                document.Id, document.Title, document.Status, document.FailureReason, document.CreatedAt, document.FileId != null))
+                document.Id, document.Title, document.Status, document.FailureReason, document.FailureCode, document.CreatedAt, document.FileId != null))
             .ToListAsync(cancellationToken);
 
     public Task<Document?> FindAsync(Guid id, CancellationToken cancellationToken) =>

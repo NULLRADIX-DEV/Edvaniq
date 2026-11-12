@@ -66,7 +66,7 @@ public sealed class StuckAnalysisSweep(
         foreach (var document in stuck)
         {
             var status = document.Status;
-            document.Fail(Document.AnalysisTimedOut);
+            document.Fail(DocumentFailures.AnalysisTimedOut);
             try
             {
                 await db.SaveChangesAsync(cancellationToken);

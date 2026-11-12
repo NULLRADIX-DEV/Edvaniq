@@ -38,4 +38,5 @@ public enum RetryResult
 }
 
 // A document without its text.
-public sealed record DocumentSummary(Guid Id, string Title, DocumentStatus Status, string? FailureReason, DateTime CreatedAt, bool IsFromFile);
+public sealed record DocumentSummary(
+    Guid Id, string Title, DocumentStatus Status, string? FailureReason, FailureCode? FailureCode, DateTime CreatedAt, bool IsFromFile);

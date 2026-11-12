@@ -370,7 +370,9 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         await analyzer.AnalyzeAsync(id, TestContext.Current.CancellationToken);
 
         var failed = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
-        Assert.Equal(("Failed", "KI derzeit nicht verfügbar. Versuch es später noch einmal."), (failed!.Status, failed.FailureReason));
+        Assert.Equal(
+            ("Failed", "KI derzeit nicht verfügbar. Versuch es später noch einmal.", "AiUnavailable"),
+            (failed!.Status, failed.FailureReason, failed.FailureCode));
         Assert.Empty(await ReportedAsync(id));
         Assert.Equal(3, Asked(ContentAi.TopicsTask));
         Assert.Equal([AiAttemptOutcome.Failed, AiAttemptOutcome.Failed, AiAttemptOutcome.Failed], AttemptsOf(id).Select(attempt => attempt.Outcome));
@@ -1347,5 +1349,5 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             inner.Log(logLevel, eventId, state, exception, formatter);
     }
 
-    private sealed record DocumentDto(Guid Id, string Title, string Status, string? FailureReason, DateTime CreatedAt);
+    private sealed record DocumentDto(Guid Id, string Title, string Status, string? FailureReason, DateTime CreatedAt, string? FailureCode = null);
 }

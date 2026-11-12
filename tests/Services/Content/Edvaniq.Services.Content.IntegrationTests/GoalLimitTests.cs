@@ -103,7 +103,7 @@ public sealed class GoalLimitTests(ServiceFactory service) : IClassFixture<Servi
         var documents = Enumerable.Range(0, count).Select(_ => Document.Paste(user, goal, null, Text, DateTime.UtcNow)).ToList();
         if (failed)
         {
-            documents.ForEach(document => document.Fail(Document.AnalysisFailed));
+            documents.ForEach(document => document.Fail(DocumentFailures.AnalysisFailed));
         }
 
         db.Documents.AddRange(documents);

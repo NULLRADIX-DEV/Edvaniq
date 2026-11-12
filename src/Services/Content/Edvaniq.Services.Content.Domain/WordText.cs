@@ -24,7 +24,7 @@ public static class WordText
     public static string Of(Stream content, CancellationToken cancellationToken)
     {
         using var zip = new ZipArchive(content, ZipArchiveMode.Read, leaveOpen: true);
-        var document = zip.GetEntry("word/document.xml") ?? throw new FileRefusedException(Document.FileUnreadable);
+        var document = zip.GetEntry("word/document.xml") ?? throw new FileRefusedException(DocumentFailures.FileUnreadable);
         var levels = zip.GetEntry("word/styles.xml") is { } styles ? HeadingLevels(styles) : [];
         return Text(document, levels, cancellationToken);
     }
@@ -225,7 +225,7 @@ public static class WordText
                     paragraph.Append(buffer, 0, read);
                     if (paragraph.Length > room)
                     {
-                        throw new FileRefusedException(Document.FileTextTooLong);
+                        throw new FileRefusedException(DocumentFailures.FileTextTooLong);
                     }
                 }
             }
@@ -260,7 +260,7 @@ public static class WordText
 
         if (text.Length > Document.TextMaxLength)
         {
-            throw new FileRefusedException(Document.FileTextTooLong);
+            throw new FileRefusedException(DocumentFailures.FileTextTooLong);
         }
     }
 
@@ -331,7 +331,7 @@ public static class WordText
         private int Count(int bytes)
         {
             read += bytes;
-            return read > maxLength ? throw new FileRefusedException(Document.FileUnreadable) : bytes;
+            return read > maxLength ? throw new FileRefusedException(DocumentFailures.FileUnreadable) : bytes;
         }
     }
 }

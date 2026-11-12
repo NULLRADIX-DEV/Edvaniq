@@ -141,7 +141,7 @@ public sealed class DocumentAnalyzer(
         }
         else
         {
-            document.Fail(Document.AnalysisFailed);
+            document.Fail(DocumentFailures.AnalysisFailed);
         }
 
         await WorkerSave.SaveAsync(db, documentId, "analysis", logger, cancellationToken);

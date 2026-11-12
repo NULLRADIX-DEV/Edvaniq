@@ -145,7 +145,7 @@ public sealed class QuestionPools(
             }
 
             ContentLog.TopicsMissing(logger, documentId);
-            document.Fail(Document.TopicsMissing);
+            document.Fail(DocumentFailures.TopicsMissing);
             await WorkerSave.SaveAsync(db, documentId, "questions", logger, cancellationToken);
             return true;
         }
@@ -170,7 +170,7 @@ public sealed class QuestionPools(
         if (needed.Count > 0 && await quota.StateOfAsync(document.OwnerId, cancellationToken) is var state && !state.Allows(needed.Count))
         {
             ContentLog.GenerationQuotaExceeded(logger, documentId, needed.Count, state.Left);
-            document.Fail(GenerationQuota.TooMany(needed.Count, state.Left, time.GetUtcNow().UtcDateTime));
+            document.Fail(DocumentFailures.GenerationsOverQuota(needed.Count, state.Left, time.GetUtcNow().UtcDateTime));
             await WorkerSave.SaveAsync(db, documentId, "questions", logger, cancellationToken);
             return true;
         }
@@ -196,7 +196,7 @@ public sealed class QuestionPools(
                 }
                 else
                 {
-                    document.Fail(Document.QuestionsFailed);
+                    document.Fail(DocumentFailures.QuestionsFailed);
                 }
 
                 await WorkerSave.SaveAsync(db, documentId, "questions", logger, cancellationToken);

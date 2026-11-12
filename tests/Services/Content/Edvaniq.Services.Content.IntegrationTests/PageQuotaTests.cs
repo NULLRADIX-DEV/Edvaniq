@@ -58,7 +58,9 @@ public sealed class PageQuotaTests(PageQuotaFactory service) : IClassFixture<Pag
 
         var now = service.Time.GetUtcNow().UtcDateTime;
         var failed = Stored(file);
-        Assert.Equal((DocumentStatus.Failed, PageQuota.TooManyPages(3, 1, now)), (failed.Status, failed.FailureReason));
+        Assert.Equal(
+            (DocumentStatus.Failed, PageQuota.TooManyPages(3, 1, now), (FailureCode?)FailureCode.LimitReached),
+            (failed.Status, failed.FailureReason, failed.FailureCode));
         Assert.Equal(0, Query(db => db.Sections.IgnoreQueryFilters().Count(section => section.DocumentId == file)));
         Assert.False(Query(db => db.PageCharges.IgnoreQueryFilters().Any(charge => charge.DocumentId == file)));
 

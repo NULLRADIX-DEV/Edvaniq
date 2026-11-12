@@ -97,7 +97,7 @@ public sealed class DocumentSplitter(
             if (!state.Allows(pages.Value))
             {
                 ContentLog.PageQuotaExceeded(logger, documentId, pages.Value, state.Left);
-                document.Fail(PageQuota.TooManyPages(pages.Value, state.Left, time.GetUtcNow().UtcDateTime));
+                document.Fail(DocumentFailures.PagesOverQuota(pages.Value, state.Left, time.GetUtcNow().UtcDateTime));
                 await WorkerSave.SaveAsync(db, documentId, "splitting", logger, cancellationToken);
                 return;
             }
@@ -117,7 +117,7 @@ public sealed class DocumentSplitter(
         {
             // A bug in splitting fails this one document instead of stopping every round at it.
             ContentLog.SplitFailed(logger, exception, documentId);
-            document.Fail(Document.SplitFailed);
+            document.Fail(DocumentFailures.SplitFailed);
         }
 
         // Only a document that goes on to the AI takes its pages, in the same save as its sections.

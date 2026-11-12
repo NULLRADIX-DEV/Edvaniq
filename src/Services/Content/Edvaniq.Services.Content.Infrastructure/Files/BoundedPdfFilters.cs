@@ -31,7 +31,7 @@ public sealed class BoundedPdfFilters(long streamLimit, long budget, Cancellatio
         left -= length;
         if (left < 0 || length > streamLimit)
         {
-            throw new FileRefusedException(FileCheck.PackedTooTightly);
+            throw new FileRefusedException(DocumentFailures.PackedTooTightly);
         }
     }
 
@@ -45,7 +45,7 @@ public sealed class BoundedPdfFilters(long streamLimit, long budget, Cancellatio
         {
             if (filter is FlateFilter && InflatedLength(input, owner.Allowed + 1) > owner.Allowed)
             {
-                throw new FileRefusedException(FileCheck.PackedTooTightly);
+                throw new FileRefusedException(DocumentFailures.PackedTooTightly);
             }
 
             var output = filter.Decode(input, streamDictionary, filterProvider, filterIndex);

@@ -93,7 +93,7 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
     {
         var title = $"Skript {Guid.NewGuid():N}";
         var document = Document.Paste(owner, Guid.NewGuid(), title, TestTexts.Lesson, DateTime.UtcNow);
-        document.Fail(Document.AnalysisFailed);
+        document.Fail(DocumentFailures.AnalysisFailed);
         using var scope = service.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
         db.Documents.Add(document);

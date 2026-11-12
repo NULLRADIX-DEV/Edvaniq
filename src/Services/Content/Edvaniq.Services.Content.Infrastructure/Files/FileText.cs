@@ -59,12 +59,12 @@ public static class FileText
         }
         catch (OperationCanceledException) when (limit.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
-            throw new FileRefusedException(FileCheck.TakesTooLong);
+            throw new FileRefusedException(DocumentFailures.TakesTooLong);
         }
         catch (PdfDocumentEncryptedException)
         {
             // A password the user didn't remove is no broken file, it gets a reason of its own.
-            throw new FileRefusedException(FileCheck.PdfProtected);
+            throw new FileRefusedException(DocumentFailures.PdfProtected);
         }
     }
 
@@ -73,7 +73,7 @@ public static class FileText
         using var pdf = Open(content, cancellationToken);
         if (pdf.NumberOfPages > Document.MaxPages)
         {
-            throw new FileRefusedException(Document.TooManyPages);
+            throw new FileRefusedException(DocumentFailures.TooManyPages);
         }
 
         var pages = new List<string>(pdf.NumberOfPages);
@@ -86,14 +86,14 @@ public static class FileText
             // Laying out costs far more than the letters, a page with more of them than a document may hold is refused first.
             if (page.Letters.Count > Document.TextMaxLength - length)
             {
-                throw new FileRefusedException(Document.FileTextTooLong);
+                throw new FileRefusedException(DocumentFailures.FileTextTooLong);
             }
 
             var text = TextOf(page);
             length += text.Length + Document.PageBreak.Length;
             if (length > Document.TextMaxLength + Document.PageBreak.Length)
             {
-                throw new FileRefusedException(Document.FileTextTooLong);
+                throw new FileRefusedException(DocumentFailures.FileTextTooLong);
             }
 
             pages.Add(text);
@@ -149,6 +149,6 @@ public static class FileText
         using var reader = new StreamReader(content, new UTF8Encoding(false, throwOnInvalidBytes: true), detectEncodingFromByteOrderMarks: true, leaveOpen: true);
         var buffer = new char[Document.TextMaxLength + 1];
         var read = reader.ReadBlock(buffer, 0, buffer.Length);
-        return read > Document.TextMaxLength ? throw new FileRefusedException(Document.FileTextTooLong) : new string(buffer, 0, read);
+        return read > Document.TextMaxLength ? throw new FileRefusedException(DocumentFailures.FileTextTooLong) : new string(buffer, 0, read);
     }
 }

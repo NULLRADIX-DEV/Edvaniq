@@ -164,7 +164,7 @@ public class DocumentTests
     {
         var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
 
-        document.Fail(new string('x', Document.FailureReasonMaxLength + 1));
+        document.Fail(new DocumentFailure(FailureCode.Unknown, new string('x', Document.FailureReasonMaxLength + 1)));
 
         Assert.Equal(Document.FailureReasonMaxLength, document.FailureReason?.Length);
     }
@@ -175,11 +175,13 @@ public class DocumentTests
     {
         var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
         document.Split();
-        document.Fail(Document.AnalysisFailed);
+        document.Fail(DocumentFailures.AnalysisFailed);
 
         document.Retry(Now.AddMinutes(5));
 
-        Assert.Equal((DocumentStatus.Uploaded, (string?)null, (DateTime?)Now.AddMinutes(5)), (document.Status, document.FailureReason, document.RetriedAt));
+        Assert.Equal(
+            (DocumentStatus.Uploaded, (string?)null, (FailureCode?)null, (DateTime?)Now.AddMinutes(5)),
+            (document.Status, document.FailureReason, document.FailureCode, document.RetriedAt));
         Assert.NotEmpty(document.Split());
     }
 
@@ -190,7 +192,7 @@ public class DocumentTests
         var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
         document.Split();
         document.ReportTopics(Now.AddMinutes(1));
-        document.Fail(Document.QuestionsFailed);
+        document.Fail(DocumentFailures.QuestionsFailed);
 
         document.Retry(Now.AddMinutes(30));
 
