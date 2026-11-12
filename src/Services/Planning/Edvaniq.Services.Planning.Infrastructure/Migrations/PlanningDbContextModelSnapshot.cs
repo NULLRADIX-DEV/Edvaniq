@@ -277,6 +277,9 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                         .HasColumnType("varchar(128)")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("OwnerId");

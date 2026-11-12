@@ -16,6 +16,11 @@ public interface ILearningGoals
 
     Task<LearningGoal?> FindAsync(Guid id, CancellationToken cancellationToken);
 
+    // The same, tracked, so SaveAsync stores what changed on it.
+    Task<LearningGoal?> FindForChangeAsync(Guid id, CancellationToken cancellationToken);
+
+    Task SaveAsync(CancellationToken cancellationToken);
+
     // Like FindAsync, but also the default goal nobody took over: Content's documents may belong to it.
     Task<LearningGoal?> FindWithDefaultAsync(Guid id, CancellationToken cancellationToken);
 }
