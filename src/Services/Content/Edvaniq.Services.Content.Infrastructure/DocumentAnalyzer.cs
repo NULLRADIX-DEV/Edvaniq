@@ -24,7 +24,7 @@ public sealed class DocumentAnalyzer(
     IChatClient ai,
     TestDoubleAi testDouble,
     IOptions<AnalysisOptions> options,
-    AiUsageLog usage,
+    AiAnswers answers,
     TimeProvider time,
     ILogger<DocumentAnalyzer> logger) : BackgroundService
 {
@@ -191,17 +191,18 @@ public sealed class DocumentAnalyzer(
     {
         IReadOnlyList<Guid> ids = [.. sections.Select(section => section.Id)];
         IReadOnlyList<string> texts = [.. sections.Select(section => document.Text.Substring(section.Start, section.Length))];
-        var answer = await chat.AskAsync(
+        var answer = await answers.AskAsync(
+            document,
+            AiAttempt.Topics,
+            TopicAnalysis.PromptVersion,
+            chat,
             [
                 new ChatMessage(ChatRole.System, TopicAnalysis.System(profile, topicsBefore)),
                 new ChatMessage(ChatRole.User, TopicAnalysis.User(texts)),
             ],
             text => TopicAnalysis.Read(text, ids, texts),
             new StructuredRequest(AiTimeout, ContentAi.TopicsFormat),
-            time,
             cancellationToken);
-        await usage.RecordAsync(
-            document, AiAttempt.Topics, TopicAnalysis.PromptVersion, answer.Tries, ContentAi.ModelOf(chat, null), cancellationToken);
         if (answer is { Value: null, Failure: null })
         {
             ContentLog.AnalysisAnswerUnusable(logger, document.Id, answer.Attempts);

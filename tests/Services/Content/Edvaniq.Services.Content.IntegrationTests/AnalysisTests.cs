@@ -799,8 +799,9 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         using var client = ClientFor($"alice-{Guid.NewGuid():N}");
         var id = await PasteAsync(client, Text);
         await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(id, TestContext.Current.CancellationToken);
-        var usage = new AiUsageLog(new BrokenScopes(), LoggerOf<AiUsageLog>());
-        var analyzer = ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, Chat(), usage, LoggerOf<DocumentAnalyzer>());
+        var answers = new AiAnswers(
+            new BrokenScopes(), new AiUsageLog(new BrokenScopes(), LoggerOf<AiUsageLog>()), service.Services.GetRequiredService<TimeProvider>(), LoggerOf<AiAnswers>());
+        var analyzer = ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, Chat(), answers, LoggerOf<DocumentAnalyzer>());
 
         await analyzer.AnalyzeAsync(id, TestContext.Current.CancellationToken);
 
@@ -1082,6 +1083,120 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(("Failed", Document.AiUnavailable), (document!.Status, document.FailureReason));
     }
 
+    // #306: the same material a second time for the same user is answered from the stored answers. No call, no row in
+    // the cost log, only its line saying so, and the same topics.
+    [Fact]
+    public async Task SameText_AsAnotherDocumentOfTheSameUser_CostsNothing()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var first = await PasteAsync(client, Text);
+        await AnalyzeAsync(first, withQuestions: true);
+        var asked = (Asked(ContentAi.TopicsTask), Asked(ContentAi.QuestionsTask));
+        Assert.NotEmpty(AttemptsOf(first));
+
+        var second = await PasteAsync(client, Text);
+        await AnalyzeAsync(second, withQuestions: true);
+
+        Assert.Equal(asked, (Asked(ContentAi.TopicsTask), Asked(ContentAi.QuestionsTask)));
+        Assert.Empty(AttemptsOf(second));
+        Assert.Equal("Ready", (await client.GetFromJsonAsync<DocumentDto>($"/documents/{second}", TestContext.Current.CancellationToken))!.Status);
+        Assert.Equal(
+            Assert.Single(await ReportedAsync(first)).Topics.Select(topic => topic.Name),
+            Assert.Single(await ReportedAsync(second)).Topics.Select(topic => topic.Name));
+        Assert.Contains(logs.Entries, entry => entry.Message.StartsWith(
+            $"AI usage for the {AiAttempt.Topics} of document {second}: reused, 0 attempts, 0 input tokens, 0 output tokens, cost 0, prompt {TopicAnalysis.PromptVersion}",
+            StringComparison.Ordinal));
+    }
+
+    // Other material, or the same material of another user, is asked again.
+    [Fact]
+    public async Task ChangedText_OrAnotherUser_IsAskedAgain()
+    {
+        using var alice = ClientFor($"alice-{Guid.NewGuid():N}");
+        using var bob = ClientFor($"bob-{Guid.NewGuid():N}");
+        await AnalyzeAsync(await PasteAsync(alice, Text));
+
+        var changed = await PasteAsync(alice, Text + "\n\nDie Dunkelreaktion bindet Kohlendioxid in Zucker, sie braucht kein Licht.");
+        await AnalyzeAsync(changed);
+        var others = await PasteAsync(bob, Text);
+        await AnalyzeAsync(others);
+
+        Assert.Contains(AttemptsOf(changed), attempt => attempt is { Purpose: AiAttempt.Topics, Outcome: AiAttemptOutcome.Answered });
+        Assert.Contains(AttemptsOf(others), attempt => attempt is { Purpose: AiAttempt.Topics, Outcome: AiAttemptOutcome.Answered });
+    }
+
+    // A retry after the AI failed in a later part asks only from that part on, the parts before come from the stored
+    // answers.
+    [Fact]
+    public async Task Retry_AfterALaterPartFailed_AsksTheFailedPartOn_Only()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, LongText(30));
+        Simulated.PromptLimit = TopicBatches.DefaultBatchCharacters + 10_000;
+        await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(id, TestContext.Current.CancellationToken);
+        var parts = TopicBatches.Of(SectionLengthsOf(id)).Count;
+        Assert.InRange(parts, 4, 6);
+        var analyzer = ActivatorUtilities.CreateInstance<DocumentAnalyzer>(
+            service.Services, (IChatClient)new DownOnCall(Chat(), ContentAi.TopicsTask, call: 3), Answers(), LoggerOf<DocumentAnalyzer>());
+        analyzer.AiTimeout = TimeSpan.FromSeconds(5);
+        analyzer.OutageDelays = [];
+        await analyzer.AnalyzeAsync(id, TestContext.Current.CancellationToken);
+        Assert.Equal(DocumentStatus.Failed, Stored(id).Status);
+
+        await RetryAsync(client, id, HttpStatusCode.Accepted);
+        await AnalyzeAsync(id);
+
+        var topics = AttemptsOf(id).Where(attempt => attempt.Purpose == AiAttempt.Topics).ToList();
+        Assert.Equal(parts, topics.Count(attempt => attempt.Outcome == AiAttemptOutcome.Answered));
+        Assert.Equal(parts + 1, topics.Select(attempt => attempt.CallId).Distinct().Count());
+        Assert.Single(await ReportedAsync(id));
+    }
+
+    // The answers are what the AI made of the material, they go with the document.
+    [Fact]
+    public async Task DeletedDocument_TakesItsAnswersAlong()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        await AnalyzeAsync(id, withQuestions: true);
+        Assert.NotEqual(0, AnswersOf(id));
+
+        await DeleteAsync(client, id);
+
+        Assert.Equal(0, AnswersOf(id));
+    }
+
+    private int AnswersOf(Guid documentId)
+    {
+        using var scope = service.Services.CreateScope();
+        return scope.ServiceProvider.GetRequiredService<ContentDbContext>().AiAnswers.IgnoreQueryFilters()
+            .Count(answer => answer.DocumentId == documentId);
+    }
+
+    private List<int> SectionLengthsOf(Guid documentId)
+    {
+        using var scope = service.Services.CreateScope();
+        return [.. scope.ServiceProvider.GetRequiredService<ContentDbContext>().Sections.IgnoreQueryFilters()
+            .Where(section => section.DocumentId == documentId)
+            .OrderBy(section => section.Ordinal)
+            .Select(section => section.Length)];
+    }
+
+    // The provider is down for the call-th request of the task, up before and after.
+    private sealed class DownOnCall(IChatClient inner, string task, int call) : DelegatingChatClient(inner)
+    {
+        private int calls;
+
+        public override Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            var list = messages.ToList();
+            return list[0].Text.StartsWith(task, StringComparison.Ordinal) && Interlocked.Increment(ref calls) == call
+                ? throw new HttpRequestException("The test AI is down.", null, HttpStatusCode.ServiceUnavailable)
+                : base.GetResponseAsync(list, options, cancellationToken);
+        }
+    }
+
     // About 6,000 characters a chapter, each under a heading of its own, in paragraphs the splitter makes sections of.
     private static string LongText(int chapters) =>
         string.Join("\n\n", Enumerable.Range(1, chapters).Select(chapter =>
@@ -1159,16 +1274,24 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     // The analyzer of the worker, on the service's database. Without delays an outage fails the document at once.
     private DocumentAnalyzer Analyzer(BrokenAnswers? questions = null, IReadOnlyList<TimeSpan>? delays = null)
     {
-        var analyzer = ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, Chat(questions), LoggerOf<DocumentAnalyzer>());
+        var analyzer = ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, Chat(questions), Answers(), LoggerOf<DocumentAnalyzer>());
         analyzer.AiTimeout = TimeSpan.FromMilliseconds(500);
         analyzer.OutageDelays = delays ?? [];
         return analyzer;
     }
 
+    // The stored answers of the worker, logging into the test's logs.
+    private AiAnswers Answers()
+    {
+        var scopes = service.Services.GetRequiredService<IServiceScopeFactory>();
+        return new AiAnswers(
+            scopes, new AiUsageLog(scopes, LoggerOf<AiUsageLog>()), service.Services.GetRequiredService<TimeProvider>(), LoggerOf<AiAnswers>());
+    }
+
     // The question pools of the worker, asking the KnowledgeStub of the service.
     private QuestionPools Pools(BrokenAnswers? questions = null, IReadOnlyList<TimeSpan>? delays = null)
     {
-        var pools = ActivatorUtilities.CreateInstance<QuestionPools>(service.Services, Chat(questions), LoggerOf<QuestionPools>());
+        var pools = ActivatorUtilities.CreateInstance<QuestionPools>(service.Services, Chat(questions), Answers(), LoggerOf<QuestionPools>());
         pools.AiTimeout = TimeSpan.FromMilliseconds(500);
         pools.OutageDelays = delays ?? [];
         return pools;

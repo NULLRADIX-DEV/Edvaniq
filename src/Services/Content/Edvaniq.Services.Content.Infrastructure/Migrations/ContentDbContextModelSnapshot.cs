@@ -103,6 +103,61 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.ToTable("outbox_messages", (string)null);
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.AiAnswer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Answer")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("PromptVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("OwnerId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("AiAnswers");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.AiAttempt", b =>
                 {
                     b.Property<Guid>("Id")
@@ -525,6 +580,15 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.HasIndex("OwnerId");
 
                     b.ToTable("StoredFiles");
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.AiAnswer", b =>
+                {
+                    b.HasOne("Edvaniq.Services.Content.Domain.Document", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.DocumentPage", b =>

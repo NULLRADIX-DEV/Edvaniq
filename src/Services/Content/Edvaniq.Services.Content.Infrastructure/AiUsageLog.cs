@@ -41,6 +41,10 @@ public sealed class AiUsageLog(IServiceScopeFactory scopes, ILogger<AiUsageLog> 
         }
     }
 
+    // A call answered from a stored answer (AiAnswers): no attempt, so no row, only the line in the log.
+    public void Reused(Document document, string purpose, string promptVersion, string model) =>
+        ContentLog.AiUsageReused(logger, purpose, document.Id, promptVersion, model);
+
     private static AiAttemptOutcome OutcomeOf(AiTryOutcome outcome) => outcome switch
     {
         AiTryOutcome.Answered => AiAttemptOutcome.Answered,

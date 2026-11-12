@@ -23,6 +23,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
     public DbSet<AiUsageDay> AiUsageDays => Set<AiUsageDay>();
 
+    public DbSet<AiAnswer> AiAnswers => Set<AiAnswer>();
+
     public DbSet<AiSwitch> AiSwitches => Set<AiSwitch>();
 
     public DbSet<PageCharge> PageCharges => Set<PageCharge>();
@@ -89,6 +91,17 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         var generation = modelBuilder.Entity<GenerationCharge>();
         generation.HasIndex(item => item.TopicId).IsUnique();
         generation.HasIndex(item => new { item.OwnerId, item.StudyDay });
+
+        // The answers go with the document that asked for them. One per request and user: of two workers storing the
+        // same answer the second one fails at its save and loses nothing.
+        var answer = modelBuilder.Entity<AiAnswer>();
+        answer.HasOne<Document>().WithMany().HasForeignKey(item => item.DocumentId).OnDelete(DeleteBehavior.Cascade);
+        answer.Property(item => item.Key).HasMaxLength(AiAnswer.KeyLength).IsFixedLength();
+        answer.Property(item => item.Purpose).HasMaxLength(AiAttempt.PurposeMaxLength);
+        answer.Property(item => item.PromptVersion).HasMaxLength(AiAttempt.PromptVersionMaxLength);
+        answer.Property(item => item.Model).HasMaxLength(AiAttempt.ModelMaxLength);
+        answer.Property(item => item.Answer).HasColumnType("longtext");
+        answer.HasIndex(item => new { item.OwnerId, item.Key }).IsUnique();
 
         var aiSwitch = modelBuilder.Entity<AiSwitch>();
         aiSwitch.Property(item => item.Id).ValueGeneratedNever();

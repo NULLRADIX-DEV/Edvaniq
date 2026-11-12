@@ -32,6 +32,7 @@ public static class InfrastructureExtensions
         builder.Services.AddHostedService<FileSweeper>();
         builder.Services.AddScoped<AiUsageReport>();
         builder.Services.AddSingleton<AiUsageLog>();
+        builder.Services.AddSingleton<AiAnswers>();
         builder.Services.AddScoped<IAiSwitch, AiSwitches>();
         builder.Services.AddScoped<IAiBudget, AiBudgets>();
         builder.Services.AddPageQuota();
@@ -62,6 +63,7 @@ public static class InfrastructureExtensions
         builder.Services.AddFileStore();
         builder.Services.AddMessaging<ContentDbContext>(ServiceKey);
         builder.Services.AddSingleton<AiUsageLog>();
+        builder.Services.AddSingleton<AiAnswers>();
         builder.Services.AddScoped<IAiSwitch, AiSwitches>();
         builder.Services.AddScoped<IAiBudget, AiBudgets>();
         builder.Services.AddOptions<FileReadingOptions>().BindConfiguration(FileReadingOptions.Section);
