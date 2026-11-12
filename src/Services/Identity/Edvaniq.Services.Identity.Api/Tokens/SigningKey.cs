@@ -8,6 +8,8 @@ namespace Edvaniq.Services.Identity.Api.Tokens;
 
 // The key Identity signs every token with (ES256), and its public half for the key set. The key id is the thumbprint
 // of the public key (RFC 7638), so the same key keeps the same id across restarts and deploys.
+// While the key is changed (#246, docs/tokens.md#schlüssel-tauschen) the previous key stays in the key set, only its
+// public half: Identity never signs with it, but the tokens it signed stay valid until they run out.
 internal sealed class SigningKey : IDisposable
 {
     private readonly ECDsa key;
@@ -20,18 +22,40 @@ internal sealed class SigningKey : IDisposable
         }
 
         key = loaded;
-        var q = key.ExportParameters(includePrivateParameters: false).Q;
-        var x = Base64UrlEncoder.Encode(q.X);
-        var y = Base64UrlEncoder.Encode(q.Y);
-        var id = Base64UrlEncoder.Encode(new JsonWebKey { Kty = "EC", Crv = "P-256", X = x, Y = y }.ComputeJwkThumbprint());
+        PublicKey = PublicKeyOf(key);
+        Credentials = new SigningCredentials(new ECDsaSecurityKey(key) { KeyId = PublicKey.Kid }, SecurityAlgorithms.EcdsaSha256);
 
-        PublicKey = new PublicKey("EC", "P-256", x, y, id, "sig", SecurityAlgorithms.EcdsaSha256);
-        Credentials = new SigningCredentials(new ECDsaSecurityKey(key) { KeyId = id }, SecurityAlgorithms.EcdsaSha256);
+        PublicKeys = [PublicKey];
+        if (!string.IsNullOrEmpty(options.Value.PreviousSigningKey))
+        {
+            if (!TryLoad(options.Value.PreviousSigningKey, out var previous))
+            {
+                throw new InvalidOperationException("Tokens:PreviousSigningKey must be a P-256 private key, PKCS#8 in Base64.");
+            }
+
+            // Only the public half is kept, the private one goes right away.
+            using (previous)
+            {
+                PublicKeys = [PublicKey, PublicKeyOf(previous)];
+            }
+        }
     }
 
     public PublicKey PublicKey { get; }
 
+    // What the key set publishes: the key, and during a change the previous one after it.
+    public IReadOnlyList<PublicKey> PublicKeys { get; }
+
     public SigningCredentials Credentials { get; }
+
+    public static PublicKey PublicKeyOf(ECDsa key)
+    {
+        var q = key.ExportParameters(includePrivateParameters: false).Q;
+        var x = Base64UrlEncoder.Encode(q.X);
+        var y = Base64UrlEncoder.Encode(q.Y);
+        var id = Base64UrlEncoder.Encode(new JsonWebKey { Kty = "EC", Crv = "P-256", X = x, Y = y }.ComputeJwkThumbprint());
+        return new PublicKey("EC", "P-256", x, y, id, "sig", SecurityAlgorithms.EcdsaSha256);
+    }
 
     public static bool TryLoad(string base64, [NotNullWhen(true)] out ECDsa? key)
     {

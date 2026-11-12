@@ -25,6 +25,7 @@ public sealed class StartupTests
     [InlineData("Tokens:UserLifetime", "00:00:00", "Tokens:UserLifetime")]
     [InlineData("Tokens:SigningKey", null, "Tokens:SigningKey")]
     [InlineData("Tokens:SigningKey", "bm90IGEga2V5", "Tokens:SigningKey")]
+    [InlineData("Tokens:PreviousSigningKey", "bm90IGEga2V5", "Tokens:PreviousSigningKey")]
     [InlineData("Tokens:Clients:web:Secret", null, "Tokens:Clients")]
     [InlineData("Tokens:Clients:web:Secret", "too-short", "Tokens:Clients:web:Secret")]
     public async Task IncompleteConfiguration_StopsTheStart(string key, string? value, string message)
@@ -51,6 +52,22 @@ public sealed class StartupTests
         }));
 
         Assert.Contains("Tokens:SigningKey", exception.Message);
+    }
+
+    // #246: the key as its own predecessor would undo the change without anyone noticing.
+    [Fact]
+    public async Task PreviousKeyThatIsTheSigningKey_StopsTheStart()
+    {
+        var key = IdentityFactory.NewSigningKey();
+
+        var exception = await Assert.ThrowsAsync<OptionsValidationException>(() => StartAsync(new Dictionary<string, string?>
+        {
+            ["Tokens:SigningKey"] = key,
+            ["Tokens:PreviousSigningKey"] = key,
+        }));
+
+        Assert.Contains("Tokens:PreviousSigningKey is the same key", exception.Message);
+        Assert.DoesNotContain(key, exception.Message);
     }
 
     // A complete configuration as Identity gets it from appsettings.json and the environment. Changes replace single

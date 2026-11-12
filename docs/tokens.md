@@ -28,6 +28,17 @@ Wird ein Konto gelöscht, gilt sein Token nicht bis zum Ablauf weiter. Jeder Ser
 
 Zwischen dem Löschen und der Ablehnung liegt höchstens eine Minute, solange Broker und Services laufen. Identity legt `UserDeleted` im selben Speichern wie die Löschung in die Outbox, der Dispatcher sendet jede Sekunde, und der Service speichert den gelöschten Nutzer zusammen mit dem Entfernen seiner Daten. Das dauert Sekunden, die Minute lässt Platz für eine erneute Zustellung. Ist der Broker länger weg, endet das Token spätestens mit seinem Ablauf. Belegt ist das mit `TokenOfADeletedAccount_IsRejectedEverywhere_WithinAMinute` in `Edvaniq.EventFlowTests`. Kann ein Service seine Datenbank nicht fragen, antwortet er mit einem Fehler, nie mit 401.
 
+## Schlüssel tauschen
+
+Der Signierschlüssel liegt nur in der Betriebsumgebung (`Tokens__SigningKey`), nie im Repo oder Image, und steht nie im Log. Solange er gleich bleibt, gelten ausgestellte Tokens über Neustarts und Deploys weiter, auch der `kid` bleibt gleich. Muss er wechseln, etwa weil er bekannt geworden sein könnte, geht das ohne Abmeldung aller Nutzer:
+
+1. Einen neuen Schlüssel erzeugen, P-256 als PKCS#8 in Base64, z. B. `openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64 -w0`.
+2. Den bisherigen Wert nach `Tokens__PreviousSigningKey` verschieben, den neuen als `Tokens__SigningKey` eintragen und Identity neu starten.
+3. Ab jetzt signiert Identity nur noch mit dem neuen Schlüssel, das Key-Set nennt beide. Ein Service, der ein Token mit dem neuen `kid` sieht, holt das Key-Set neu, spätestens nach fünf Minuten. Tokens mit dem alten Schlüssel gelten weiter, bis sie ablaufen.
+4. Frühestens nach der Lebensdauer eines Nutzer-Tokens (eine Stunde) `Tokens__PreviousSigningKey` entfernen und Identity noch einmal neu starten. Danach ist jedes Token mit dem alten Schlüssel ungültig.
+
+Ist der alte Schlüssel kompromittiert, fällt Schritt 4 sofort an: Dann sind alle Nutzer abgemeldet und melden sich neu an. Identity startet nicht, wenn `Tokens__PreviousSigningKey` kein gültiger Schlüssel oder derselbe wie `Tokens__SigningKey` ist. Geht der Schlüssel verloren, ist das wie ein Tausch ohne Schritt 2: Mit einem neuen Schlüssel läuft alles weiter, nur die ausgestellten Tokens verfallen. Belegt ist der Ablauf mit `KeyChange_KeepsTokensOfThePreviousKey_UntilItIsTakenOut` in den Tests von Identity.
+
 ## Token holen
 
 Beide Wege laufen über `POST /connect/token` mit einem Formular (`application/x-www-form-urlencoded`) nach RFC 6749. Das Gateway leitet den Endpunkt als `POST /identity/connect/token` weiter, der Browser erreicht ihn nie. Jede Anfrage trägt `client_id` und `client_secret` des Clients.

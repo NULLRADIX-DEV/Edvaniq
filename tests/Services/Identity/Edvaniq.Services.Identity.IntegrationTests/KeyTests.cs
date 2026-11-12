@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 
 using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 
 namespace Edvaniq.Services.Identity.IntegrationTests;
 
@@ -62,6 +63,50 @@ public sealed class KeyTests(IdentityDatabase database) : IClassFixture<Identity
 
         Assert.Equal(new JsonWebToken(await first.GetTokenAsync()).Kid, new JsonWebToken(await second.GetTokenAsync()).Kid);
     }
+
+    // #246, the change of the key as the operator does it: the new key signs, the old one stays in the key set as
+    // previous, so a token from before stays valid until it runs out. Once the previous key is gone, so is that token.
+    [Fact]
+    public async Task KeyChange_KeepsTokensOfThePreviousKey_UntilItIsTakenOut()
+    {
+        var (oldKey, newKey) = (IdentityFactory.NewSigningKey(), IdentityFactory.NewSigningKey());
+        await using var before = new IdentityFactory(new Dictionary<string, string?> { ["Tokens:SigningKey"] = oldKey });
+        await using var during = new IdentityFactory(new Dictionary<string, string?>
+        {
+            ["Tokens:SigningKey"] = newKey,
+            ["Tokens:PreviousSigningKey"] = oldKey,
+        });
+        await using var after = new IdentityFactory(new Dictionary<string, string?> { ["Tokens:SigningKey"] = newKey });
+        var oldToken = await before.GetTokenAsync();
+        var newToken = await during.GetTokenAsync();
+
+        var keysDuring = await KeySetAsync(during);
+        var keysAfter = await KeySetAsync(after);
+
+        Assert.Equal(
+            [new JsonWebToken(newToken).Kid, new JsonWebToken(oldToken).Kid],
+            keysDuring.Keys.Select(key => key.Kid));
+        Assert.All(keysDuring.Keys, key => Assert.Null(key.D));
+        Assert.True(await IsValidAsync(oldToken, keysDuring));
+        Assert.True(await IsValidAsync(newToken, keysDuring));
+        Assert.True(await IsValidAsync(newToken, keysAfter));
+        Assert.False(await IsValidAsync(oldToken, keysAfter));
+    }
+
+    private static async Task<JsonWebKeySet> KeySetAsync(IdentityFactory identity)
+    {
+        using var client = identity.CreateClient();
+        return new JsonWebKeySet(await client.GetStringAsync("/.well-known/jwks", TestContext.Current.CancellationToken));
+    }
+
+    // As a service checks a token: issuer, audience, lifetime and a key from the key set.
+    private static async Task<bool> IsValidAsync(string token, JsonWebKeySet keys) =>
+        (await new JsonWebTokenHandler().ValidateTokenAsync(token, new TokenValidationParameters
+        {
+            ValidIssuer = IdentityFactory.Issuer,
+            ValidAudience = "edvaniq-api",
+            IssuerSigningKeys = keys.GetSigningKeys(),
+        })).IsValid;
 
     [Fact]
     public async Task Health_StillAnswers()
