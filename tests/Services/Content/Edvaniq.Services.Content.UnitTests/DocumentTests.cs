@@ -237,7 +237,7 @@ public class DocumentTests
         document.ReportTopics(Now.AddMinutes(1));
         Assert.Throws<InvalidOperationException>(() => document.ReopenForQuestions(Now));
 
-        document.Fail(Document.QuestionsFailed);
+        document.Fail(DocumentFailures.QuestionsFailed);
         Assert.Throws<InvalidOperationException>(() => document.ReopenForQuestions(Now));
     }
 
