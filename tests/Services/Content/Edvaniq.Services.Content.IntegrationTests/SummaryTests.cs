@@ -73,7 +73,8 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
         foreach (var (length, frame) in lengths.Zip([SummaryLength.Short, SummaryLength.Standard, SummaryLength.Detailed]))
         {
             var summary = await client.GetFromJsonAsync<SummaryDto>($"/topics/{topic}/summaries/{length}", Cancel);
-            var count = TopicSummaryGeneration.WordCount(summary!.Text!);
+            Assert.Equal("ready", summary!.Status);
+            var count = TopicSummaryGeneration.WordCount(summary.Text!);
             Assert.InRange(count, TopicSummaryGeneration.WordsOf(frame).Min, TopicSummaryGeneration.WordsOf(frame).Max);
             words.Add(count);
         }
@@ -86,7 +87,7 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
     public async Task SummaryOfAFile_NamesItsPages()
     {
         var alice = NewUser();
-        var document = Document.Upload(alice, Guid.NewGuid(), "Skript.pdf", Guid.NewGuid(), FileFormat.Pdf, DateTime.UtcNow);
+        var document = Document.Upload(alice, service.Planning.GoalOf(alice), "Skript.pdf", Guid.NewGuid(), FileFormat.Pdf, DateTime.UtcNow);
         var pages = document.TakeText(["# Fotosynthese\nLicht spaltet Wasser in den Blättern.", "Zucker entsteht im Calvin-Zyklus."], DateTime.UtcNow);
         var sections = document.Split();
         await StoreAsync(db =>
@@ -200,7 +201,7 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
     // A pasted document with its sections, and Knowledge naming them as one topic's material.
     private async Task<(Guid Topic, Guid Document, IReadOnlyList<Section> Sections)> TopicAsync(string owner)
     {
-        var document = Document.Paste(owner, Guid.NewGuid(), "Photosynthese", Text, DateTime.UtcNow, usesTestDouble: true);
+        var document = Document.Paste(owner, service.Planning.GoalOf(owner), "Photosynthese", Text, DateTime.UtcNow, usesTestDouble: true);
         var sections = document.Split();
         await StoreAsync(db =>
         {
