@@ -58,6 +58,9 @@ public enum CallResult
     // Too big to get through at all.
     TooLarge,
 
+    // A limit or the pause of the AI holds it up for now. Messages says why and when it goes on, if the service said.
+    Limited,
+
     // There is no such thing for this user, or not any more.
     NotFound,
 

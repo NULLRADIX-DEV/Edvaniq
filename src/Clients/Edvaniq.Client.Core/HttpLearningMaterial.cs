@@ -75,6 +75,10 @@ public sealed class HttpLearningMaterial(HttpClient http) : ILearningMaterial
                 {
                     case HttpStatusCode.Unauthorized:
                         return CallOutcome<T>.SignedOut;
+                    case HttpStatusCode.TooManyRequests:
+                        // Content puts the sentence for the user into the 429 problem's title (#303/#305): why, and
+                        // when it goes on. Without one that passes LimitTitle the page words it itself.
+                        return new CallOutcome<T>(CallResult.Limited, Messages: await LimitTitleAsync(response, cancellationToken) is { } title ? [title] : []);
                     case HttpStatusCode.RequestEntityTooLarge:
                         return new CallOutcome<T>(CallResult.TooLarge, Messages: tooLarge ?? [TextTooLong]);
                     case HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity:
@@ -91,6 +95,33 @@ public sealed class HttpLearningMaterial(HttpClient http) : ILearningMaterial
                     : CallOutcome<T>.Failed();
             },
             cancellationToken);
+
+    // The title of a 429 problem, shown to the user as it is. Only a problem counts, with a title that reads like a
+    // sentence: not empty, at most LimitTitleMaxLength characters, no control characters, and not the bare reason phrase
+    // a framework writes by itself. An HTML page from a proxy or the web host's own limit have none.
+    public const int LimitTitleMaxLength = 300;
+
+    private static async Task<string?> LimitTitleAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (!string.Equals(response.Content.Headers.ContentType?.MediaType, "application/problem+json", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        try
+        {
+            var title = (await response.Content.ReadFromJsonAsync(MaterialJson.Default.LimitProblem, cancellationToken))?.Title?.Trim();
+            return title is { Length: > 0 and <= LimitTitleMaxLength }
+                && !title.Any(char.IsControl)
+                && !string.Equals(title, "Too Many Requests", StringComparison.OrdinalIgnoreCase)
+                    ? title
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     // The messages of a validation problem, meant to be shown as they are, and its trace. Anything else says nothing a
     // user could fix. The body can be read only once.
@@ -121,6 +152,8 @@ internal sealed record PastedText(string? Title, string Text);
 
 internal sealed record ValidationProblem(Dictionary<string, string[]?>? Errors, string? TraceId);
 
+internal sealed record LimitProblem(string? Title = null);
+
 // Source-generated, so trimming the browser app cannot cut away what the serializer needs. An answer without the fields
 // that make a document or a topic fails instead of turning into an empty one.
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, RespectRequiredConstructorParameters = true, UseStringEnumConverter = true)]
@@ -128,6 +161,7 @@ internal sealed record ValidationProblem(Dictionary<string, string[]?>? Errors, 
 [JsonSerializable(typeof(IReadOnlyList<TopicInfo>))]
 [JsonSerializable(typeof(DocumentInfo))]
 [JsonSerializable(typeof(ValidationProblem))]
+[JsonSerializable(typeof(LimitProblem))]
 internal sealed partial class MaterialJson : JsonSerializerContext;
 
 [JsonSerializable(typeof(PastedText))]

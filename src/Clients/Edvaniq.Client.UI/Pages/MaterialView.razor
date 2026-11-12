@@ -46,7 +46,16 @@
             <Notice Kind="NoticeKind.Error" Title="@FeedbackTexts.Material.WithTitle(FeedbackTexts.Material.AnalysisFailed, latest!.Title)" class="material-failed">
                 <p>@(latest.FailureReason ?? FeedbackTexts.Material.AnalysisFailedHint)</p>
             </Notice>
-            @if (retryFailed)
+            @if (retryLimit.Count > 0)
+            {
+                <Notice Kind="NoticeKind.Warning" class="material-retry-limit">
+                    @foreach (var message in retryLimit)
+                    {
+                        <p>@message</p>
+                    }
+                </Notice>
+            }
+            else if (retryFailed)
             {
                 <ConnectionProblem Title="@FeedbackTexts.Retry.NotThrough" TraceId="@retryTrace" />
             }
@@ -117,7 +126,7 @@
             <div role="alert">
                 @if (formMessages.Count > 0)
                 {
-                    <Notice Kind="@(formMessages is [FeedbackTexts.Session.TextBack] ? NoticeKind.Info : NoticeKind.Error)" class="material-form-message">
+                    <Notice Kind="@(formLimited ? NoticeKind.Warning : formMessages is [FeedbackTexts.Session.TextBack] ? NoticeKind.Info : NoticeKind.Error)" class="material-form-message">
                         @foreach (var message in formMessages)
                         {
                             <p>@message</p>
@@ -145,7 +154,7 @@
         <LiveRegion Urgent="true">
             @if (uploadMessages.Count > 0)
             {
-                <Notice Kind="NoticeKind.Error" Title="@uploadMessages[0]">
+                <Notice Kind="@(uploadLimited ? NoticeKind.Warning : NoticeKind.Error)" Title="@uploadMessages[0]" class="material-upload-message">
                     @foreach (var message in uploadMessages.Skip(1))
                     {
                         <p>@message</p>
@@ -185,10 +194,14 @@
     private bool submitting;
     private IReadOnlyList<string> formMessages = [];
     private string? formTrace;
+    private bool formLimited;
 
     private bool retrying;
     private bool retryFailed;
     private string? retryTrace;
+
+    // A limit holds the new try up: why, and when it goes on. The button stays for later.
+    private IReadOnlyList<string> retryLimit = [];
 
     // Checked here only to spare the way up, Content judges the file by its bytes.
     public const long UploadMaxLength = 20L * 1024 * 1024;
@@ -200,6 +213,7 @@
     private bool uploading;
     private IReadOnlyList<string> uploadMessages = [];
     private string? uploadTrace;
+    private bool uploadLimited;
 
     private enum ViewState
     {
@@ -425,6 +439,7 @@
 
         retrying = true;
         retryFailed = false;
+        retryLimit = [];
         try
         {
             var outcome = await Material.RetryAsync(failed.Id, life.Token);
@@ -437,6 +452,9 @@
                 case CallResult.SignedOut:
                     signedOut = true;
                     follow?.Cancel();
+                    break;
+                case CallResult.Limited:
+                    retryLimit = FeedbackTexts.Limit.Or(outcome.Messages);
                     break;
                 default:
                     if (await RefreshAsync(documents: true, life.Token))
@@ -486,6 +504,7 @@
             case CallResult.Ok:
                 latest = outcome.Value!;
                 retryFailed = false;
+                retryLimit = [];
                 title = "";
                 text = "";
                 typing = false;
@@ -498,6 +517,10 @@
                 break;
             case CallResult.Rejected or CallResult.TooLarge:
                 Show(outcome.Messages ?? [NotThrough]);
+                break;
+            case CallResult.Limited:
+                // The text stays in the form for later.
+                Show(FeedbackTexts.Limit.Or(outcome.Messages), limited: true);
                 break;
             default:
                 Show([NotThrough], outcome.TraceId);
@@ -570,22 +593,28 @@
             case CallResult.Rejected when outcome.Messages is { Count: > 0 } messages:
                 ShowUpload(messages);
                 break;
+            case CallResult.Limited:
+                // The file stays chosen for later.
+                ShowUpload(FeedbackTexts.Limit.Or(outcome.Messages), limited: true);
+                break;
             default:
                 ShowUpload([FeedbackTexts.Upload.NotThrough, FeedbackTexts.Connection.Advice], outcome.TraceId);
                 break;
         }
     }
 
-    private void ShowUpload(IReadOnlyList<string> messages, string? trace = null)
+    private void ShowUpload(IReadOnlyList<string> messages, string? trace = null, bool limited = false)
     {
         uploadMessages = messages;
         uploadTrace = trace;
+        uploadLimited = limited;
     }
 
-    private void Show(IReadOnlyList<string> messages, string? trace = null)
+    private void Show(IReadOnlyList<string> messages, string? trace = null, bool limited = false)
     {
         formMessages = messages;
         formTrace = trace;
+        formLimited = limited;
     }
 
     private sealed record PasteDraft(string Title, string Text);
