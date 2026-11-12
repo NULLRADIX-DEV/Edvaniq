@@ -60,9 +60,10 @@ public sealed class QuestionFlowTests(FlowServices services) : IDisposable
         var topics = services.QueryKnowledge(db => db.Topics.IgnoreQueryFilters()
             .Where(topic => topic.DocumentId == documentId).Select(topic => topic.Id).ToList());
         Assert.Equal(4, topics.Count);
-        await WaitForAsync(
+        await FlowServices.WaitForAsync(
             () => Task.FromResult(QuestionTopics(alice).Count == topics.Count),
-            "Assessment did not take the questions of every topic over.");
+            () => $"Assessment did not take the questions of every topic over. {services.QuestionsOf(documentId, alice)}",
+            Timeout);
         Assert.Equal(topics.Order(), QuestionTopics(alice).Order());
 
         // Document, topics and every receiver's topics, those with the questions and the plan among them, belong to the
