@@ -97,6 +97,40 @@ public sealed class LearningGoalCreationTests(ServiceFactory service) : IClassFi
         Assert.Equal(defaultId, await DefaultGoalAsync(alice));
     }
 
+    // #281: the goal that took over the default goal is the one the plan follows, and says so. The others don't.
+    [Fact]
+    public async Task InPlan_MarksOnlyTheGoalThatTookOverTheDefault()
+    {
+        using var alice = ClientFor(NewUser("alice"));
+        var first = await CreateAsync(alice, FreeGoal("Erstes"));
+        var second = await CreateAsync(alice, FreeGoal("Zweites"));
+
+        Assert.Equal([(first.Id, true), (second.Id, false)], (await GetAsync<PlannedGoal[]>(alice, "/learning-goals")).Select(goal => (goal.Id, goal.InPlan)));
+        Assert.True((await GetAsync<PlannedGoal>(alice, $"/learning-goals/{first.Id}")).InPlan);
+        Assert.False((await GetAsync<PlannedGoal>(alice, $"/learning-goals/{second.Id}")).InPlan);
+    }
+
+    // Content reads GET /learning-goals/{id}: inPlan only comes on top, every field it had stays as it was.
+    [Fact]
+    public async Task GoalAnswer_KeepsItsFields_AndAddsInPlan()
+    {
+        using var alice = ClientFor(NewUser("alice"));
+        var created = await CreateAsync(alice, new NewGoal("ExamPreparation", "Bio", "Klausur", InAMonth, "UpperSecondary", "de", "eine 2"));
+
+        using var response = await alice.GetAsync($"/learning-goals/{created.Id}", TestContext.Current.CancellationToken);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            ["id", "kind", "name", "examType", "examDate", "level", "outputLanguage", "goal", "createdAt", "inPlan"],
+            json.RootElement.EnumerateObject().Select(field => field.Name));
+        Assert.Equal(created.Id, json.RootElement.GetProperty("id").GetGuid());
+        Assert.Equal("ExamPreparation", json.RootElement.GetProperty("kind").GetString());
+        Assert.Equal(InAMonth, json.RootElement.GetProperty("examDate").GetString());
+        Assert.Equal("UpperSecondary", json.RootElement.GetProperty("level").GetString());
+        Assert.Equal("de", json.RootElement.GetProperty("outputLanguage").GetString());
+        Assert.True(json.RootElement.GetProperty("inPlan").GetBoolean());
+    }
+
     // Content keeps getting the same default goal, also when the user created a goal before any text came in.
     [Fact]
     public async Task DefaultGoal_AfterAGoalWasCreated_IsThatGoal()
@@ -246,4 +280,6 @@ public sealed class LearningGoalCreationTests(ServiceFactory service) : IClassFi
         Guid Id, string Kind, string Name, string? ExamType, string? ExamDate, string? Level, string OutputLanguage, string? Goal);
 
     private sealed record DefaultGoal(Guid Id);
+
+    private sealed record PlannedGoal(Guid Id, bool InPlan);
 }

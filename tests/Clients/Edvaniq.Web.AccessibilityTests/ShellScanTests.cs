@@ -11,7 +11,7 @@ public sealed class ShellScanTests(WebShell shell)
 
     public static TheoryData<string, int> Pages { get; } = Combine(["/", "/login", "/datenschutz", "/open-source", "/bausteine", NotFound]);
 
-    public static TheoryData<string, int> SignedInPages { get; } = Combine(["/", "/systemstatus", "/themen"]);
+    public static TheoryData<string, int> SignedInPages { get; } = Combine(["/", "/lernziele", "/systemstatus", "/themen"]);
 
     public static TheoryData<string, int> Login { get; } = Combine(["/login"]);
 
@@ -73,6 +73,11 @@ public sealed class ShellScanTests(WebShell shell)
         if (path == "/")
         {
             await Assertions.Expect(page.Locator(".plan-blocks")).ToContainTextAsync("Photosynthese");
+        }
+
+        if (path == "/lernziele")
+        {
+            await Assertions.Expect(page.Locator(".goal-card")).ToHaveCountAsync(2);
         }
 
         if (path == "/themen")

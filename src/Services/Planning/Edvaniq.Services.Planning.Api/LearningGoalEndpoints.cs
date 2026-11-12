@@ -96,6 +96,8 @@ internal sealed record NewLearningGoal(
     string? OutputLanguage,
     string? Goal);
 
+// InPlan marks the goal that plan, sessions and Content follow for now: the one that took over the default goal. Added
+// last, Content reads this answer and leaves unknown fields alone.
 internal sealed record LearningGoalResponse(
     Guid Id,
     string Kind,
@@ -105,7 +107,8 @@ internal sealed record LearningGoalResponse(
     string? Level,
     string OutputLanguage,
     string? Goal,
-    DateTime CreatedAt)
+    DateTime CreatedAt,
+    bool InPlan)
 {
     public static LearningGoalResponse From(LearningGoal goal) =>
         new(
@@ -117,5 +120,6 @@ internal sealed record LearningGoalResponse(
             goal.Level?.ToString(),
             goal.OutputLanguage!,
             goal.Goal,
-            goal.CreatedAt);
+            goal.CreatedAt,
+            goal.Id == LearningGoal.DefaultIdFor(goal.OwnerId));
 }

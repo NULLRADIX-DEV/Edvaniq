@@ -1,0 +1,157 @@
+@using System.Globalization
+@implements IDisposable
+@inject ILearningGoals Goals
+
+@* The server is the only source: back on the page, it asks anew, a goal may have come from another device. *@
+<RefreshOnReturn OnReturn="RefreshAsync" />
+
+@* Names are text from the user, Razor writes them as text. *@
+<div class="goal-list-status" role="status">
+    @switch (state)
+    {
+        case ViewState.Loading:
+            <Loading />
+            break;
+        case ViewState.LoadFailed:
+            <ConnectionProblem Title="@FeedbackTexts.GoalList.LoadFailed" TraceId="@trace" />
+            break;
+        case ViewState.Shown when goals.Count == 0:
+            <EmptyState Title="@FeedbackTexts.GoalList.Empty" Hint="@FeedbackTexts.GoalList.EmptyHint" />
+            break;
+    }
+</div>
+
+@switch (state)
+{
+    case ViewState.LoadFailed:
+        <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="LoadAsync" />
+        break;
+    case ViewState.Shown when goals.Count == 0:
+        <StateActions Href="lernziele/neu" LinkText="@FeedbackTexts.GoalList.Create" />
+        break;
+    case ViewState.Shown:
+        <StateActions Href="lernziele/neu" LinkText="@FeedbackTexts.GoalList.New" />
+        <ul class="goal-list">
+            @foreach (var goal in goals)
+            {
+                <li @key="goal.Id" class="goal-card">
+                    <h2 class="goal-name">@goal.Name</h2>
+                    <p class="goal-kind">@KindOf(goal)</p>
+                    @if (ExamOf(goal) is { } exam)
+                    {
+                        <p class="goal-exam">@exam</p>
+                    }
+                    @if (goal.InPlan)
+                    {
+                        <a class="goal-material" href="themen" aria-label="@($"{FeedbackTexts.GoalList.Material}: {goal.Name}")">
+                            @FeedbackTexts.GoalList.Material
+                        </a>
+                    }
+                    else
+                    {
+                        @* Plan, sessions and texts follow the first goal for now, its topics would be the wrong ones. *@
+                        <p class="goal-not-in-plan">@FeedbackTexts.Goal.NotFirst</p>
+                    }
+                </li>
+            }
+        </ul>
+        break;
+}
+
+@code {
+    private static readonly CultureInfo German = CultureInfo.GetCultureInfo("de-DE");
+
+    private readonly CancellationTokenSource life = new();
+    private ViewState state = ViewState.Loading;
+    private IReadOnlyList<LearningGoalInfo> goals = [];
+    private string? trace;
+    private int loads;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        state = ViewState.Loading;
+        await RefreshAsync();
+    }
+
+    // A list already shown stays until the new one is there, so a return doesn't flash a loading hint. Only the newest
+    // load counts when two overlap.
+    private async Task RefreshAsync()
+    {
+        var load = ++loads;
+        CallOutcome<IReadOnlyList<LearningGoalInfo>> outcome;
+        try
+        {
+            outcome = await Goals.ListAsync(life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (load != loads)
+        {
+            return;
+        }
+
+        switch (outcome.Result)
+        {
+            case CallResult.Ok:
+                goals = outcome.Value!;
+                state = ViewState.Shown;
+                break;
+            case CallResult.SignedOut:
+                // The shell says the login ran out (SessionEndedNotice). A list already shown stays.
+                if (state != ViewState.Shown)
+                {
+                    state = ViewState.SignedOut;
+                }
+
+                break;
+            default:
+                if (state != ViewState.Shown)
+                {
+                    trace = outcome.TraceId;
+                    state = ViewState.LoadFailed;
+                }
+
+                break;
+        }
+    }
+
+    private static string KindOf(LearningGoalInfo goal) => goal.Kind switch
+    {
+        LearningGoalValues.ExamPreparation => FeedbackTexts.Goal.ExamPreparation,
+        LearningGoalValues.FreeLearning => FeedbackTexts.Goal.FreeLearning,
+        _ => goal.Kind,
+    };
+
+    // Exam type and date of an exam, nothing for free learning.
+    private static string? ExamOf(LearningGoalInfo goal)
+    {
+        if (goal.Kind != LearningGoalValues.ExamPreparation)
+        {
+            return null;
+        }
+
+        var type = goal.ExamType is null ? FeedbackTexts.Goal.ExamTypeLabel : FeedbackTexts.Goal.ExamTypes.GetValueOrDefault(goal.ExamType, goal.ExamType);
+        return goal.ExamDate is { } date
+            ? string.Format(German, FeedbackTexts.GoalList.ExamOn, type, date.ToString("d. MMMM yyyy", German))
+            : string.Format(German, FeedbackTexts.GoalList.ExamWithoutDate, type);
+    }
+
+    private enum ViewState
+    {
+        Loading,
+        SignedOut,
+        LoadFailed,
+        Shown,
+    }
+
+    public void Dispose()
+    {
+        life.Cancel();
+        life.Dispose();
+    }
+}

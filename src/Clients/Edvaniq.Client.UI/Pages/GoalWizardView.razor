@@ -37,7 +37,9 @@
 
 @if (saved is not null)
 {
-    <StateActions Href="themen" LinkText="@FeedbackTexts.Goal.SavedLink" />
+    <StateActions Href="themen" LinkText="@FeedbackTexts.Goal.SavedLink">
+        <a href="lernziele">@FeedbackTexts.Goal.ToGoals</a>
+    </StateActions>
 }
 else
 {
@@ -169,8 +171,7 @@ else
     private bool draftBack;
     private LearningGoalInfo? saved;
 
-    // Goals there before this one, if the list came. Unknown means no hint.
-    private Task<int?> existing = Task.FromResult<int?>(null);
+    // Planning says whether the plan follows the new goal (InPlan). Only the first one does for now.
     private bool notFirst;
 
     private ElementReference stepHeading;
@@ -209,8 +210,6 @@ else
                 (draft.Step, draft.Kind, draft.Name, draft.ExamType, draft.ExamDate, draft.Goal, draft.Level, draft.Language);
             draftBack = true;
         }
-
-        existing = CountAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -252,19 +251,6 @@ else
         catch (JSException)
         {
             // The element went away between render and focus, nothing to do.
-        }
-    }
-
-    private async Task<int?> CountAsync()
-    {
-        try
-        {
-            var goals = await Goals.ListAsync(life.Token);
-            return goals is { Result: CallResult.Ok, Value: { } list } ? list.Count : null;
-        }
-        catch (OperationCanceledException)
-        {
-            return null;
         }
     }
 
@@ -382,7 +368,7 @@ else
             case CallResult.Ok:
                 saved = outcome.Value;
                 signedOut = false;
-                notFirst = await existing is > 0;
+                notFirst = !outcome.Value!.InPlan;
                 break;
             case CallResult.SignedOut:
                 signedOut = true;

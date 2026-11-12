@@ -166,6 +166,25 @@ internal static class Material
             }, 201);
         });
 
+    // The overview's list: an exam goal the plan follows, with a name that is one long word, and a free one next to it.
+    public static readonly object[] Goals =
+    [
+        new
+        {
+            id = Guid.NewGuid(), kind = "ExamPreparation", name = $"Biologie-Klausur {LongWord}", examType = "Klausur",
+            examDate = "2027-03-01", level = "UpperSecondary", outputLanguage = "de", goal = (string?)null,
+            createdAt = DateTime.UnixEpoch, inPlan = true,
+        },
+        new
+        {
+            id = Guid.NewGuid(), kind = "FreeLearning", name = "C# lernen", examType = (string?)null, examDate = (string?)null,
+            level = (string?)null, outputLanguage = "en", goal = (string?)null, createdAt = DateTime.UnixEpoch, inPlan = false,
+        },
+    ];
+
+    public static Task AnswerGoalListAsync(IPage page, object[] goals) =>
+        page.RouteAsync("**/api/planning/learning-goals", route => FulfillAsync(route, goals));
+
     private static Task FulfillAsync(IRoute route, object body, int status = 200) =>
         route.FulfillAsync(new RouteFulfillOptions
         {
