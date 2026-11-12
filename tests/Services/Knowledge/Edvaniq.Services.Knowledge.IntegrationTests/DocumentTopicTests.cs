@@ -54,6 +54,27 @@ public sealed class DocumentTopicTests(ServiceFactory service) : IClassFixture<S
         Assert.Equal([new DocumentTopic(nucleus.Id, cell.Id, 1, [fresh])], topics!, DocumentTopic.Comparer);
     }
 
+    // Hiding can be undone, so Content keeps the questions of a hidden topic: its worker still gets the topic's id.
+    [Fact(Timeout = 60_000)]
+    public async Task HiddenTopics_StayInTheAnswer()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        var document = Guid.NewGuid();
+        var (first, second) = (Guid.NewGuid(), Guid.NewGuid());
+        var cell = Topic.Create(alice, Guid.Empty, "Zelle", Seed.Now, document, 0);
+        var nucleus = cell.AddSubtopic("Zellkern", Seed.Now, document, 1);
+        cell.Hide();
+        await AddAsync([cell, nucleus], [cell.AssignSection(document, first), nucleus.AssignSection(document, second)]);
+        using var client = ClientWith(TestTokens.CreateForClient(Content));
+
+        var topics = await client.GetFromJsonAsync<DocumentTopic[]>($"/documents/{document}/topics", TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            [new DocumentTopic(cell.Id, null, 0, [first]), new DocumentTopic(nucleus.Id, cell.Id, 1, [second])],
+            topics!,
+            DocumentTopic.Comparer);
+    }
+
     // Knowledge hasn't taken the analysis over yet, or the document is someone else's that doesn't exist here.
     [Fact(Timeout = 60_000)]
     public async Task UnknownDocument_IsAnEmptyList()

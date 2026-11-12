@@ -119,6 +119,9 @@ namespace Edvaniq.Services.Knowledge.Infrastructure.Migrations
                     b.Property<Guid?>("DocumentId")
                         .HasColumnType("char(36)");
 
+                    b.Property<bool>("Hidden")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<Guid>("LearningGoalId")
                         .HasColumnType("char(36)");
 

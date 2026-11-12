@@ -7,5 +7,6 @@ public interface ITopicState
     Task<IReadOnlyList<TopicInState>> TopicsAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken);
 }
 
-// ParentId is the topic of the upper level, null for a topic of the upper level itself.
-public sealed record TopicInState(Guid Id, Guid? ParentId);
+// ParentId is the topic of the upper level, null for a topic of the upper level itself. Hidden is the topic's own state
+// (Topic.Hidden), not the one it gets from its parent.
+public sealed record TopicInState(Guid Id, Guid? ParentId, bool Hidden = false);

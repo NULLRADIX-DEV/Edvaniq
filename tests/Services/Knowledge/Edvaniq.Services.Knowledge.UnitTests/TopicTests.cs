@@ -65,4 +65,36 @@ public class TopicTests
         Assert.Equal(
             "Der Name ist zu lang. Erlaubt sind höchstens 80 Zeichen.",
             Topic.CheckName(new string('a', Topic.NameMaxLength + 1)));
+
+    [Fact]
+    public void Hide_AndShow_KeepTheId()
+    {
+        var topic = Topic.Create("alice", Goal, "Zelle", Now);
+        var id = topic.Id;
+
+        topic.Hide();
+        Assert.True(topic.Hidden);
+        topic.Show();
+
+        Assert.Equal((id, false), (topic.Id, topic.Hidden));
+    }
+
+    // A subtopic is hidden with its topic, and comes back in its own state when the topic does.
+    [Fact]
+    public void Subtopic_IsHiddenWithItsTopic()
+    {
+        var topic = Topic.Create("alice", Goal, "Zelle", Now);
+        var shown = topic.AddSubtopic("Zellkern", Now);
+        var hidden = topic.AddSubtopic("Mitochondrien", Now);
+        hidden.Hide();
+
+        topic.Hide();
+        Assert.True(topic.IsHiddenUnder(null));
+        Assert.True(shown.IsHiddenUnder(topic));
+        Assert.True(hidden.IsHiddenUnder(topic));
+
+        topic.Show();
+        Assert.False(shown.IsHiddenUnder(topic));
+        Assert.True(hidden.IsHiddenUnder(topic));
+    }
 }

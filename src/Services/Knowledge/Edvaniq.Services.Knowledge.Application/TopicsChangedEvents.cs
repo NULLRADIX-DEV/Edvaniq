@@ -14,7 +14,12 @@ public sealed class TopicsChangedEvents(ITopicState state, IEventOutbox outbox, 
             .Where(topic => topic.ParentId is not null)
             .Select(topic => new TopicParent(topic.Id, topic.ParentId!.Value))
             .ToList();
-        outbox.Add(new TopicsChanged(ownerId, learningGoalId, Now(), [.. topics.Select(topic => topic.Id)], [], parents));
+
+        // A subtopic of a hidden topic goes with it.
+        var hiddenOnes = topics.Where(topic => topic.Hidden).Select(topic => topic.Id).ToHashSet();
+        var hidden = topics.ToLookup(topic => hiddenOnes.Contains(topic.Id) || (topic.ParentId is { } parent && hiddenOnes.Contains(parent)));
+        outbox.Add(new TopicsChanged(
+            ownerId, learningGoalId, Now(), [.. hidden[false].Select(topic => topic.Id)], [.. hidden[true].Select(topic => topic.Id)], parents));
     }
 
     // Whole microseconds, what a datetime(6) column keeps. A receiver compares the value it stored with the next one.
