@@ -74,6 +74,10 @@ public static class FeedbackTexts
     {
         public const string LoadFailed = "Der Stand ließ sich gerade nicht laden.";
 
+        // Under the text field (#312): the text goes to an AI.
+        public const string NoPersonalData =
+            "Gib keine persönlichen Daten ein, etwa Namen, Adressen oder Telefonnummern. Eine KI wertet den Text aus.";
+
         public const string Empty = "Du hast noch keinen Text eingefügt.";
 
         public const string EmptyHint = "Füge unten deinen ersten Text ein, dann erscheinen hier deine Themen.";
@@ -394,6 +398,10 @@ public static class FeedbackTexts
         public const string Label = "Datei auswählen";
 
         public const string Hint = "Dateien mit .pdf, .docx, .txt oder .md, höchstens 20 MB.";
+
+        // Under the file field (#312): the content goes to an AI.
+        public const string NoPersonalData =
+            "Lade nur Dateien ohne persönliche Daten hoch, also ohne Namen, Adressen oder Telefonnummern. Eine KI wertet den Inhalt aus.";
 
         public const string Button = "Hochladen";
 

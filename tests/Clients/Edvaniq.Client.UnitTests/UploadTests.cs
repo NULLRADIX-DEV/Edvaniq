@@ -34,8 +34,19 @@ public sealed class UploadTests : BunitContext
         Assert.Equal(FeedbackTexts.Upload.Label, page.Find("label[for=upload-file]").TextContent);
         var input = page.Find("input#upload-file");
         Assert.Equal("file", input.GetAttribute("type"));
-        Assert.Equal("upload-hint", input.GetAttribute("aria-describedby"));
+        Assert.Equal("upload-hint upload-privacy", input.GetAttribute("aria-describedby"));
         Assert.Equal(FeedbackTexts.Upload.Hint, page.Find("#upload-hint").TextContent);
+    }
+
+    // #312: both free inputs that reach the AI say not to put personal data in, read out with the field.
+    [Fact]
+    public void TextAndFile_AskForNoPersonalData()
+    {
+        var page = RenderPage(new FakeLearningMaterial());
+
+        Assert.Equal("paste-privacy", page.Find("textarea#paste-text").GetAttribute("aria-describedby"));
+        Assert.Equal(FeedbackTexts.Material.NoPersonalData, page.Find("#paste-privacy").TextContent);
+        Assert.Equal(FeedbackTexts.Upload.NoPersonalData, page.Find("#upload-privacy").TextContent);
     }
 
     // Since #282 the worker reads the file, so the page follows it like a pasted text until its topics are there.
