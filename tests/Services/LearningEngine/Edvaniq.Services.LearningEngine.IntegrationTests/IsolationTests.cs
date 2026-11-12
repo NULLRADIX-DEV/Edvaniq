@@ -1,5 +1,7 @@
 using Edvaniq.BuildingBlocks.Application;
+using Edvaniq.Services.LearningEngine.Domain;
 using Edvaniq.Services.LearningEngine.Infrastructure;
+using Edvaniq.Testing;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,9 +9,23 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Edvaniq.Services.LearningEngine.IntegrationTests;
 
 // User A's learning records stay invisible to user B, because the owner filter of ServiceDbContext limits every query
-// to the current user. LearningEngine has no endpoint for its records yet, so the test asks the DbContext as each user.
+// to the current user. Every endpoint with a user's token is listed here (IsolationCheck, #271), the records also through
+// the DbContext as each user.
 public sealed class IsolationTests(ServiceFactory service) : IClassFixture<ServiceFactory>
 {
+    internal static IsolationCheck Check() => new IsolationCheck()
+        .Exempt("GET", "/me", "Only the caller's own id from the token.")
+        .Item("GET", "/mastery/{topicId:guid}")
+        .List("GET", "/mastery")
+        .Exempt("GET", "/mastery/decayed", "Needs a goal, per user: DecayedMasteryTests.OnlyTheAskedGoal_OfTheUserFromTheToken.")
+        .Exempt("GET", "/mastery/weak-and-secure", "Per user and goal: WeakAndSecureTests.EachUser_SeesOnlyTheirOwnTopics.");
+
+    [Fact]
+    public void EveryEndpoint_IsInTheCheck() => Check().AssertCovers(service.Services);
+
+    [Fact]
+    public Task OtherUser_CanNeitherSeeNorChangeTheMastery() => Check().RunAsync(service, SeedAsync);
+
     [Fact]
     public async Task OtherUser_DoesNotSeeTheRecords()
     {
@@ -39,6 +55,19 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
 
         Assert.Equal([record.AnswerId], await AnswerIdsSeenByAsync($"alice-{id}"));
         Assert.Empty(await AnswerIdsSeenByAsync($"Alice-{id}"));
+    }
+
+    // A topic of A with two answers, so it has a mastery to read.
+    private async Task<OwnedResource> SeedAsync(string owner)
+    {
+        var topic = Guid.NewGuid();
+        using var scope = service.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<LearningEngineDbContext>();
+        db.KnownTopics.Add(KnownTopic.Create(owner, topic, Guid.NewGuid(), hidden: false));
+        db.LearningRecords.AddRange(Enumerable.Range(0, 2).Select(index => LearningRecord.Create(
+            Guid.NewGuid(), owner, topic, Guid.NewGuid(), null, true, 2, 4200, null, Mode.Practice, Seed.Now.AddMinutes(index))));
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return new OwnedResource(topic, $"/mastery/{topic}", topic.ToString());
     }
 
     // Every test has its own users, so the tests of this class can share one database.

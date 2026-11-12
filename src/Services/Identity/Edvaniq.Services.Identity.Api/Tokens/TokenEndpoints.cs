@@ -34,6 +34,8 @@ internal static class TokenEndpoints
 
     public static IEndpointRouteBuilder MapTokenEndpoints(this IEndpointRouteBuilder app)
     {
+        // All three are open to anyone by design, without a token: they say so, so a token check added later (#244) keeps
+        // them open, and the isolation check (#271) leaves them out while every new endpoint needs an entry there.
         // The addresses are built from the request, so a service gets back the address it reached Identity under.
         app.MapGet(DiscoveryPath, (HttpRequest request, IOptions<TokenOptions> options) =>
         {
@@ -44,11 +46,11 @@ internal static class TokenEndpoints
                 baseAddress + TokenPath,
                 [ClientCredentials, Password],
                 ["client_secret_post"]);
-        });
+        }).AllowAnonymous();
 
-        app.MapGet(KeySetPath, (SigningKey key) => new KeySet([key.PublicKey]));
+        app.MapGet(KeySetPath, (SigningKey key) => new KeySet([key.PublicKey])).AllowAnonymous();
 
-        app.MapPost(TokenPath, IssueAsync);
+        app.MapPost(TokenPath, IssueAsync).AllowAnonymous();
 
         return app;
     }
