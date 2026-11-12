@@ -992,6 +992,53 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
+    // #326: about 100 pages of text in 30 chapters goes to the AI in parts that each fit the model's context, and the
+    // topics come from the beginning, the middle and the end. In one prompt the simulator, which gives five topics an
+    // answer, would only reach the first chapters.
+    [Fact]
+    public async Task LongDocument_GetsTopicsFromBeginningMiddleAndEnd_InPartsThatFitTheContext()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, LongText(30));
+        Simulated.PromptLimit = TopicBatches.DefaultBatchCharacters + 10_000;
+
+        await AnalyzeAsync(id);
+
+        var chapters = Assert.Single(await ReportedAsync(id)).Topics
+            .Where(topic => topic.Parent is null)
+            .Select(topic => int.Parse(topic.Name.Split(' ')[1], System.Globalization.CultureInfo.InvariantCulture))
+            .ToList();
+        Assert.Equal(1, chapters.Min());
+        Assert.Contains(chapters, chapter => chapter is >= 12 and <= 19);
+        Assert.InRange(chapters.Max(), 27, 30);
+        Assert.InRange(chapters.Count, 1, TopicAnalysis.MaxTopics);
+        Assert.InRange(AttemptsOf(id).Count, 4, 6);
+    }
+
+    // The same document in one prompt passes the context: the provider refuses it, and the document fails as with any
+    // refusal. So the limit of the simulator bites, and only the parts get the long document through.
+    [Fact]
+    public async Task LongDocument_InOnePrompt_PassesTheContext_AndFails()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, LongText(30));
+        Simulated.PromptLimit = TopicBatches.DefaultBatchCharacters + 10_000;
+        await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(id, TestContext.Current.CancellationToken);
+        var analyzer = Analyzer();
+        analyzer.BatchCharacters = int.MaxValue;
+
+        await analyzer.AnalyzeAsync(id, TestContext.Current.CancellationToken);
+
+        var document = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
+        Assert.Equal(("Failed", Document.AiUnavailable), (document!.Status, document.FailureReason));
+    }
+
+    // About 6,000 characters a chapter, each under a heading of its own, in paragraphs the splitter makes sections of.
+    private static string LongText(int chapters) =>
+        string.Join("\n\n", Enumerable.Range(1, chapters).Select(chapter =>
+            $"# Kapitel {chapter}\n\n" + string.Join("\n\n", Enumerable.Range(1, 6).Select(paragraph => string.Concat(
+                Enumerable.Repeat($"Dieser Absatz {paragraph} erklärt im Kapitel {chapter} einen weiteren Gedanken zum Thema mit ganzen Sätzen. ", 10))))));
+
     public void Dispose() => ai.Dispose();
 
     private static async Task<DocumentDto?> RetryAsync(HttpClient client, Guid id, HttpStatusCode expected)

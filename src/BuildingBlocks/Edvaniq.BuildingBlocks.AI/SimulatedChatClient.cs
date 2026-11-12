@@ -17,10 +17,19 @@ public sealed class SimulatedChatClient(IEnumerable<ISimulatedAnswer> answers, S
     // Tests switch it while the process runs.
     public SimulatedFault Fault { get; set; } = fault;
 
+    // The context limit of a model, in characters of all messages together. A longer request fails like a provider that
+    // answers 400 for a prompt that doesn't fit. Null means no limit. Tests set it.
+    public int? PromptLimit { get; set; }
+
     public async Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
         var prompt = new SimulatedPrompt(messages);
+        if (PromptLimit is { } limit && prompt.Messages.Sum(message => message.Text.Length) > limit)
+        {
+            throw new HttpRequestException("The prompt is longer than the simulated context.", null, HttpStatusCode.BadRequest);
+        }
+
         switch (Fault)
         {
             case SimulatedFault.Outage:
