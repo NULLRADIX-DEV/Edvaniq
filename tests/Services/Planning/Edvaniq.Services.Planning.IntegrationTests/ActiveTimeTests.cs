@@ -55,7 +55,7 @@ public sealed class ActiveTimeTests(ActiveTimeTests.ClockedService service) : IC
         var (_, active) = await GetAsync(token, "/sessions/active");
 
         Assert.Equal(DateTimeKind.Utc, stored.LastActivityAt.Kind);
-        Assert.Equal(now.AddTicks(-(now.Ticks % 10)), stored.LastActivityAt);
+        Assert.Equal(Stored(now), stored.LastActivityAt);
         Assert.Equal(90, active!.ActiveSeconds);
     }
 
@@ -95,7 +95,7 @@ public sealed class ActiveTimeTests(ActiveTimeTests.ClockedService service) : IC
         var again = (await secondSessions.FindForChangeAsync(session.Id, Cancel))!;
 
         Assert.Equal((true, false), (firstSaved, secondSaved));
-        Assert.Equal((60, at.AddMinutes(1)), (again.ActiveSeconds, again.LastActivityAt));
+        Assert.Equal((60, Stored(at.AddMinutes(1))), (again.ActiveSeconds, again.LastActivityAt));
     }
 
     [Fact]
@@ -117,6 +117,9 @@ public sealed class ActiveTimeTests(ActiveTimeTests.ClockedService service) : IC
     }
 
     private static CancellationToken Cancel => TestContext.Current.CancellationToken;
+
+    // Whole microseconds, as the database keeps them.
+    private static DateTime Stored(DateTime value) => value.AddTicks(-(value.Ticks % 10));
 
     private string Seed() => Seed(out _);
 
