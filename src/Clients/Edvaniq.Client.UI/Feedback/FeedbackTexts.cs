@@ -311,6 +311,38 @@ public static class FeedbackTexts
         };
     }
 
+    // The settings page. The daily budget holds for all learning goals together (#512).
+    public static class Budget
+    {
+        public const string PageHeading = "Einstellungen";
+
+        public const string Heading = "Tägliche Lernzeit";
+
+        public const string LoadFailed = "Deine Lernzeit ließ sich gerade nicht laden.";
+
+        public const string Label = "Lernzeit pro Tag (Minuten)";
+
+        public const string Hint = "Gilt für jeden Tag und alle Lernziele zusammen. Erlaubt sind 1 bis 720 Minuten.";
+
+        public const string IsDefault = "Das ist die Voreinstellung. Speichere deinen eigenen Wert, wenn du mehr oder weniger Zeit hast.";
+
+        public const string Mixed = "Du hast für einzelne Tage unterschiedliche Zeiten gespeichert. Speichern setzt alle Tage auf diesen Wert.";
+
+        public const string Save = "Speichern";
+
+        public const string Saving = "Wird gespeichert …";
+
+        // {0} is the minutes.
+        public const string Saved = "Gespeichert. Dein Plan für heute rechnet jetzt mit {0} Minuten.";
+
+        public const string ToPlan = "Zum Plan für heute";
+
+        public const string NotThrough = "Die Lernzeit wurde nicht gespeichert. Edvaniq ist gerade nicht erreichbar. Versuch es gleich noch einmal.";
+
+        public static string SavedWith(int minutes) =>
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, Saved, minutes);
+    }
+
     // The overview of the learning goals.
     public static class GoalList
     {
