@@ -123,7 +123,7 @@ public sealed class LeakyServiceFactory(MySqlTestServer mysql) : ServiceFactory(
         builder.ConfigureTestServices(services => services.AddScoped<ITopics, LeakyTopics>());
     }
 
-    private sealed class LeakyTopics(KnowledgeDbContext db) : ITopics
+    private sealed class LeakyTopics(KnowledgeDbContext db, ITopicState state) : ITopics
     {
         public async Task<IReadOnlyList<Topic>> ListAsync(Guid? learningGoalId, CancellationToken cancellationToken) =>
             await db.Topics.AsNoTracking().ToListAsync(cancellationToken);
@@ -140,6 +140,7 @@ public sealed class LeakyServiceFactory(MySqlTestServer mysql) : ServiceFactory(
             }
 
             topic.Rename(name);
+            await state.TouchAsync(topic.OwnerId, topic.LearningGoalId, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
             return TopicResult.Ok(topic);
         }

@@ -9,6 +9,7 @@ public sealed class TopicsChangedEvents(ITopicState state, IEventOutbox outbox, 
 {
     public async Task AnnounceAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken)
     {
+        await state.TouchAsync(ownerId, learningGoalId, cancellationToken);
         var topics = await state.TopicsAsync(ownerId, learningGoalId, cancellationToken);
         var parents = topics
             .Where(topic => topic.ParentId is not null)

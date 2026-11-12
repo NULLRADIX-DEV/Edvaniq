@@ -65,6 +65,7 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         var topic = Topic.Create(user, Guid.NewGuid(), "Zelle", Seed.Now, Guid.NewGuid());
         var subtopic = topic.AddSubtopic("Zellkern", Seed.Now, topic.DocumentId);
         db.Topics.AddRange(topic, subtopic);
+        db.TopicSets.Add(TopicSet.Of(user, topic.LearningGoalId, Seed.Now));
         db.TopicSections.Add(subtopic.AssignSection(topic.DocumentId!.Value, Guid.NewGuid()));
         db.DeletedDocuments.Add(DeletedDocument.Of(user, Guid.NewGuid(), Seed.Now));
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);

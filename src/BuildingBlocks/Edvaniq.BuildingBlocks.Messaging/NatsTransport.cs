@@ -1,3 +1,5 @@
+using Edvaniq.BuildingBlocks.Application;
+
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -104,7 +106,15 @@ internal sealed class NatsTransport : IMessageTransport, IAsyncDisposable, IDisp
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
-                MessagingLog.HandlerFailed(logger, exception, subscription.Consumer, messageId);
+                if (exception is MessageNotReadyException)
+                {
+                    MessagingLog.HandlerNotReady(logger, subscription.Consumer, messageId, exception.Message);
+                }
+                else
+                {
+                    MessagingLog.HandlerFailed(logger, exception, subscription.Consumer, messageId);
+                }
+
                 await message.NakAsync(new AckOpts { NakDelay = RetryDelay }, cancellationToken);
                 continue;
             }

@@ -35,6 +35,9 @@ public enum TopicError
 
     // A subtopic comes back only with its topic.
     ParentHidden,
+
+    // The topics of the learning goal changed again and again while this tried, an analysis keeps running on them.
+    Busy,
 }
 
 public sealed record TopicResult(Topic? Topic, TopicError Error)
