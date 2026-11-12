@@ -11,6 +11,9 @@ public interface IDocuments
     // The file must be stored and its content must have passed FileCheck.
     Task<Document> UploadAsync(LearningGoalInfo learningGoal, string? fileName, Guid fileId, FileFormat format, CancellationToken cancellationToken);
 
+    // How many documents of the user the learning goal holds, whatever their status.
+    Task<int> CountInGoalAsync(Guid learningGoalId, CancellationToken cancellationToken);
+
     // Newest first.
     Task<IReadOnlyList<DocumentSummary>> ListAsync(CancellationToken cancellationToken);
 

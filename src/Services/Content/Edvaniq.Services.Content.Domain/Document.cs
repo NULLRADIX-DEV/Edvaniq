@@ -47,7 +47,14 @@ public sealed class Document : IOwnedByUser
 
     public const string FileTextTooLong = "Die Datei enthält zu viel Text. Erlaubt sind höchstens 200.000 Zeichen, teile sie auf.";
 
-    public const string TooManyPages = "Die Datei hat zu viele Seiten. Erlaubt sind höchstens 300, teile sie auf.";
+    public const string TooManyPages =
+        "Die Datei hat mehr als 100 Seiten. Teile sie in kleinere Dateien auf, etwa nach Kapiteln, und lade sie einzeln hoch.";
+
+    // How many documents a learning goal may hold, every status counts until the document is deleted (#277).
+    public const int MaxDocumentsPerGoal = 10;
+
+    public const string GoalFull =
+        "Dieses Lernziel hat schon 10 Dokumente. Lösche eines, das du nicht mehr brauchst, oder lege ein neues Lernziel an.";
 
     // The worker broke off on the file more than once, it went down while reading it (#318).
     public const string FileNotProcessable =
@@ -57,9 +64,10 @@ public sealed class Document : IOwnedByUser
     // another reason, a file that brings it down every time stops after the second.
     public const int MaxUnfinishedReads = 2;
 
-    // A PDF beyond this many pages is turned away before its pages are read. 300 is more than a school book chapter or a
-    // script needs, and keeps reading one file within seconds and within the worker's memory.
-    public const int MaxPages = 300;
+    // A PDF beyond this many pages is turned away before its pages are read (#277). A file without pages counts each
+    // started 3,000 characters as a page, as the daily quota does, but there the text limit of 200,000 characters (about
+    // 67 pages) comes first.
+    public const int MaxPages = 100;
 
     // How long a document waits after each outage of the AI before the next attempt. After the last one it fails.
     public static readonly IReadOnlyList<TimeSpan> OutageDelays = [TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(8)];
