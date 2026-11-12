@@ -214,6 +214,50 @@ public sealed class TopicEditTests(ServiceFactory service) : IClassFixture<Servi
         Assert.Equal((hidden.Id, true), (Assert.Single(stored).Id, stored[0].Hidden));
     }
 
+    // #317: topics the user entered keep their ids and names when analyses bring them later, under another spelling too.
+    // The analyses only add their sections and their new topics, a second analysis no more than the first.
+    [Fact]
+    public async Task EnteredTopics_AreReusedByLaterAnalyses_WhichOnlyAdd()
+    {
+        var alice = NewUser();
+        var goal = Guid.NewGuid();
+        using var client = ClientFor(alice);
+        var photosynthesis = await AddAsync(client, new { name = "Fotosynthese", learningGoalId = goal });
+        var lightReaction = await AddAsync(client, new { name = "Lichtreaktion", parentId = photosynthesis.Id });
+
+        await AnalyzeAsync(alice, goal, [new("FOTOSYNTHESE", null, [Guid.NewGuid()]), new("lichtreaktion", 0, [Guid.NewGuid()]), new("Zellatmung", null, [Guid.NewGuid()])]);
+        var afterFirst = Query(db => db.Topics.IgnoreQueryFilters().Where(topic => topic.OwnerId == alice).ToList());
+        await AnalyzeAsync(alice, goal, [new("Fotosynthese", null, [Guid.NewGuid()]), new("Zellatmung", null, [Guid.NewGuid()])]);
+
+        var topics = Query(db => db.Topics.IgnoreQueryFilters().Where(topic => topic.OwnerId == alice).ToList()).ToDictionary(topic => topic.Name);
+        Assert.Equal(["Fotosynthese", "Lichtreaktion", "Zellatmung"], topics.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal((photosynthesis.Id, (Guid?)null), (topics["Fotosynthese"].Id, topics["Fotosynthese"].ParentId));
+        Assert.Equal((lightReaction.Id, (Guid?)photosynthesis.Id), (topics["Lichtreaktion"].Id, topics["Lichtreaktion"].ParentId));
+        Assert.Null(topics["Zellatmung"].ParentId);
+        Assert.Equal(afterFirst.Select(topic => topic.Id).Order(), topics.Values.Select(topic => topic.Id).Order());
+        Assert.Equal(2, Query(db => db.TopicSections.IgnoreQueryFilters().Count(section => section.TopicId == photosynthesis.Id)));
+    }
+
+    // Like Content's dispatcher would, and waits until the sections are there.
+    private async Task AnalyzeAsync(string user, Guid goal, IReadOnlyList<TopicSuggestion> topics)
+    {
+        var sections = topics.Sum(topic => topic.SectionIds.Count) + Query(db => db.TopicSections.IgnoreQueryFilters().Count(section => section.OwnerId == user));
+        await service.Services.GetRequiredService<InMemoryTransport>().PublishAsync(
+            new OutgoingMessage(
+                EventRoute.For(typeof(DocumentAnalyzed)).Subject,
+                Guid.NewGuid(),
+                JsonSerializer.Serialize(new DocumentAnalyzed(user, Guid.NewGuid(), topics, goal), JsonSerializerOptions.Web),
+                null),
+            TestContext.Current.CancellationToken);
+
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (Query(db => db.TopicSections.IgnoreQueryFilters().Count(section => section.OwnerId == user)) < sections)
+        {
+            Assert.True(DateTime.UtcNow < deadline, "The analysis was not handled.");
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        }
+    }
+
     private static string NewUser() => $"alice-{Guid.NewGuid():N}";
 
     private HttpClient ClientFor(string userId)
