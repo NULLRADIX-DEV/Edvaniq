@@ -158,19 +158,29 @@ try:
         return plan if plan.get("masteryAvailable") and learn else None
 
     before = wait(step, first_plan)
-    topic = next(block["topicId"] for block in learn_blocks(before) if block["topicId"] in topics)
+    candidates = list(dict.fromkeys(block["topicId"] for block in learn_blocks(before) if block["topicId"] in topics))[:3]
 
     go("question")
 
-    def asked():
-        code, answer = call("POST", "/api/assessment/attempts", {"topicId": topic})
-        if code == 409:
-            return None
-        if code != 201:
-            raise Failed(f"POST /api/assessment/attempts answered {code}: {answer}")
-        return answer
-
-    attempt = wait(step, asked)
+    # 409 means no questions for the topic yet. One that stays without any for 40 s makes way for the next learn block.
+    attempt = None
+    for topic in candidates:
+        until = min(deadline, time.monotonic() + 40)
+        while attempt is None and time.monotonic() < until:
+            code, answer = call("POST", "/api/assessment/attempts", {"topicId": topic})
+            if code == 201:
+                attempt = answer
+            elif code == 409:
+                time.sleep(2)
+            else:
+                raise Failed(f"POST /api/assessment/attempts answered {code}: {answer}")
+        if attempt is not None:
+            break
+    if attempt is None:
+        plan = expect(step, "GET", "/api/planning/plan/today", 200)
+        raise Failed(
+            f"no question for any of {len(candidates)} learn block topics of {len(topics)}, "
+            f"notReadyTopicIds {plan.get('notReadyTopicIds')}")
 
     go("answer")
     # The simulated AI puts the right answer first.
