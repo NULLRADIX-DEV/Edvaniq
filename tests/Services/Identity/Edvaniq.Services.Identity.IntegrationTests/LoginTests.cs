@@ -4,8 +4,14 @@ using System.Security.Cryptography;
 using System.Text.Json;
 
 using Edvaniq.Services.Identity.Api.Tokens;
+using Edvaniq.Services.Identity.Application;
+using Edvaniq.Services.Identity.Domain;
+using Edvaniq.Services.Identity.Infrastructure;
 
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 
 namespace Edvaniq.Services.Identity.IntegrationTests;
 
@@ -193,6 +199,84 @@ public sealed class LoginTests(IdentityDatabase database) : IClassFixture<Identi
         Assert.Equal(marked.Subject, unmarked.Subject);
     }
 
+    // #244: a user account logs in with its address and gets a token of the same contract as a team account: same claims,
+    // its id as sub, nothing of the person in it.
+    [Fact]
+    public async Task UserAccount_LogsInWithItsAddress_AndItsTokenNamesNoPerson()
+    {
+        await using var identity = new IdentityFactory(connectionString: database.ConnectionString);
+        var email = $"anna-{Guid.NewGuid():N}@example.org";
+        var accountId = await AddUserAsync(identity, email, AccountStatus.Active);
+        await CreateAccountAsync(identity, "teammate");
+        var teamToken = new JsonWebToken(await LoginTokenAsync(identity, "teammate"));
+
+        var token = new JsonWebToken(await LoginTokenAsync(identity, " " + email.ToUpperInvariant() + " "));
+
+        Assert.Equal(accountId.ToString(), token.Subject);
+        Assert.Equal(teamToken.Claims.Select(claim => claim.Type).Order(StringComparer.Ordinal), token.Claims.Select(claim => claim.Type).Order(StringComparer.Ordinal));
+        Assert.Equal((teamToken.Issuer, teamToken.Audiences.Single(), teamToken.Kid), (token.Issuer, token.Audiences.Single(), token.Kid));
+        var payload = System.Text.Encoding.UTF8.GetString(Base64UrlEncoder.DecodeBytes(token.EncodedPayload));
+        Assert.DoesNotContain("anna", payload, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("2001", payload, StringComparison.Ordinal);
+    }
+
+    // The reason comes only with the right password, the wrong one gets what an unknown address gets.
+    [Theory]
+    [InlineData(AccountStatus.Unconfirmed, "unconfirmed")]
+    [InlineData(AccountStatus.AwaitingApproval, "awaiting_approval")]
+    public async Task UserAccountNotActive_GetsItsReason_OnlyWithTheRightPassword(AccountStatus status, string reason)
+    {
+        await using var identity = new IdentityFactory(connectionString: database.ConnectionString);
+        var email = $"anna-{Guid.NewGuid():N}@example.org";
+        await AddUserAsync(identity, email, status);
+
+        using var right = await identity.LoginAsync(email, Password);
+        using var wrong = await identity.LoginAsync(email, "the wrong password");
+        using var unknown = await identity.LoginAsync($"nobody-{Guid.NewGuid():N}@example.org", Password);
+
+        var refused = await AssertErrorAsync(right, HttpStatusCode.BadRequest, "invalid_grant");
+        Assert.Equal(reason, refused.GetProperty("reason").GetString());
+        foreach (var other in new[] { wrong, unknown })
+        {
+            var body = await AssertErrorAsync(other, HttpStatusCode.BadRequest, "invalid_grant");
+            Assert.False(body.TryGetProperty("reason", out _));
+        }
+    }
+
+    // Spellings of one address share their attempts, another address keeps its own.
+    [Fact]
+    public async Task TooManyAttempts_AreThrottled_PerAddress()
+    {
+        await using var identity = new IdentityFactory(connectionString: database.ConnectionString);
+        var email = $"throttled-{Guid.NewGuid():N}@example.org";
+        var other = $"bystander-{Guid.NewGuid():N}@example.org";
+        await AddUserAsync(identity, email, AccountStatus.Active);
+        await AddUserAsync(identity, other, AccountStatus.Active);
+
+        for (var attempt = 0; attempt < LoginThrottle.AttemptsPerMinute; attempt++)
+        {
+            using var wrong = await identity.LoginAsync(attempt % 2 == 0 ? email : email.ToUpperInvariant(), "the wrong password");
+        }
+
+        using var throttled = await identity.LoginAsync(email, Password);
+        await AssertErrorAsync(throttled, HttpStatusCode.TooManyRequests, "too_many_attempts");
+        using var bystander = await identity.LoginAsync(other, Password);
+        Assert.Equal(HttpStatusCode.OK, bystander.StatusCode);
+    }
+
+    // There is no registration yet (#249), so the account goes straight into the database.
+    private static async Task<Guid> AddUserAsync(IdentityFactory identity, string email, AccountStatus status)
+    {
+        using var scope = identity.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        var account = Account.CreateUser(AccountEmail.Normalize(email)!, "Anna", 2001, PasswordHasher.Hash(Password), DateTime.UtcNow);
+        db.Accounts.Add(account);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await db.Accounts.Where(item => item.Id == account.Id)
+            .ExecuteUpdateAsync(set => set.SetProperty(item => item.Status, status), TestContext.Current.CancellationToken);
+        return account.Id;
+    }
+
     private static async Task<string> CreateAccountAsync(IdentityFactory identity, string name)
     {
         var (exitCode, output, error) = await identity.SetAccountAsync(name, Password);
@@ -208,11 +292,12 @@ public sealed class LoginTests(IdentityDatabase database) : IClassFixture<Identi
         return body.GetProperty("access_token").GetString()!;
     }
 
-    private static async Task AssertErrorAsync(HttpResponseMessage response, HttpStatusCode status, string error)
+    private static async Task<JsonElement> AssertErrorAsync(HttpResponseMessage response, HttpStatusCode status, string error)
     {
         Assert.Equal(status, response.StatusCode);
         Assert.True(response.Headers.CacheControl?.NoStore);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         Assert.Equal(error, body.GetProperty("error").GetString());
+        return body;
     }
 }

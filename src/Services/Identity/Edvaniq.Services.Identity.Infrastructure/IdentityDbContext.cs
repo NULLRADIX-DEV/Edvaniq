@@ -19,5 +19,13 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
         account.Property(item => item.Name).HasMaxLength(Account.NameMaxLength);
         account.Property(item => item.PasswordHash).HasMaxLength(Account.PasswordHashMaxLength);
         account.HasIndex(item => item.Name).IsUnique();
+
+        // #244: user accounts. Every new column takes a default or null, so the previous release still writes its team
+        // accounts after the migration.
+        account.Property(item => item.Kind).HasConversion<string>().HasMaxLength(16).HasDefaultValue(AccountKind.Team);
+        account.Property(item => item.Status).HasConversion<string>().HasMaxLength(16).HasDefaultValue(AccountStatus.Active);
+        account.Property(item => item.Email).HasMaxLength(AccountEmail.MaxLength);
+        account.Property(item => item.Pseudonym).HasMaxLength(Account.PseudonymMaxLength);
+        account.HasIndex(item => item.Email).IsUnique();
     }
 }

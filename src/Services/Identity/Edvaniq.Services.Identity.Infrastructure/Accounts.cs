@@ -10,6 +10,9 @@ internal sealed class Accounts(IdentityDbContext db) : IAccounts
     public Task<Account?> FindAsync(string name, CancellationToken cancellationToken) =>
         db.Accounts.FirstOrDefaultAsync(account => account.Name == name, cancellationToken);
 
+    public Task<Account?> FindByEmailAsync(string email, CancellationToken cancellationToken) =>
+        db.Accounts.FirstOrDefaultAsync(account => account.Email == email, cancellationToken);
+
     public void Add(Account account) => db.Accounts.Add(account);
 
     public void Remove(Account account) => db.Accounts.Remove(account);

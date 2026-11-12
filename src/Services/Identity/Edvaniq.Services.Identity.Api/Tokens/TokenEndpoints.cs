@@ -97,7 +97,7 @@ internal static class TokenEndpoints
             return TypedResults.Ok(new TokenResponse(issuer.Issue(clientId, client), "Bearer", (int)issuer.Lifetime.TotalSeconds));
         }
 
-        // The login of a team account (RFC 6749, section 4.3), only for a client that may ask for it.
+        // The login of an account (RFC 6749, section 4.3), only for a client that may ask for it.
         if (!client.AllowPassword)
         {
             return Error("unauthorized_client");
@@ -118,16 +118,21 @@ internal static class TokenEndpoints
 
         // Resolved only here: the database comes with it, and a client's own token must not depend on it.
         var accounts = context.RequestServices.GetRequiredService<AccountService>();
-        var account = await accounts.AuthenticateAsync(username, password, cancellationToken);
+        var result = await accounts.AuthenticateAsync(username, password, cancellationToken);
 
-        // A wrong name and a wrong password get the same answer.
-        return account is not null
-            ? TypedResults.Ok(new TokenResponse(
-                issuer.IssueForAccount(account.Id, account.UsesTestDouble, clientId), "Bearer", (int)issuer.UserLifetime.TotalSeconds))
-            : Error("invalid_grant");
+        // A wrong login and a wrong password get the same answer. Why a known account can't log in yet comes as reason,
+        // only after the right password (docs/tokens.md).
+        return result switch
+        {
+            { Refusal: null, Account: { } account } => TypedResults.Ok(new TokenResponse(
+                issuer.IssueForAccount(account.Id, account.UsesTestDouble, clientId), "Bearer", (int)issuer.UserLifetime.TotalSeconds)),
+            { Refusal: LoginRefusal.Unconfirmed } => Error("invalid_grant", "unconfirmed"),
+            { Refusal: LoginRefusal.AwaitingApproval } => Error("invalid_grant", "awaiting_approval"),
+            _ => Error("invalid_grant"),
+        };
     }
 
-    private static IResult Error(string error) => TypedResults.BadRequest(new TokenError(error));
+    private static IResult Error(string error, string? reason = null) => TypedResults.BadRequest(new TokenError(error, reason));
 }
 
 internal sealed record Discovery(
@@ -144,4 +149,6 @@ internal sealed record TokenResponse(
     [property: JsonPropertyName("token_type")] string TokenType,
     [property: JsonPropertyName("expires_in")] int ExpiresIn);
 
-internal sealed record TokenError([property: JsonPropertyName("error")] string Error);
+internal sealed record TokenError(
+    [property: JsonPropertyName("error")] string Error,
+    [property: JsonPropertyName("reason"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Reason = null);
