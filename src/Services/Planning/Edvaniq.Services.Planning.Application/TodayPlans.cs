@@ -72,4 +72,8 @@ public sealed class TodayPlans(
 
 // Blocks: today's blocks with their ids, the done ones first. Plan.Blocks is only the fresh part.
 public sealed record TodayPlanResult(
-    Guid LearningGoalId, TodayPlan Plan, IReadOnlyList<DayBlock> Blocks, bool MasteryAvailable, bool QuestionPoolsAvailable);
+    Guid LearningGoalId, TodayPlan Plan, IReadOnlyList<DayBlock> Blocks, bool MasteryAvailable, bool QuestionPoolsAvailable)
+{
+    // #381: judged on Blocks, so on what the plan shows.
+    public DailyGoalState DailyGoal => Domain.DailyGoal.Of(Blocks);
+}
