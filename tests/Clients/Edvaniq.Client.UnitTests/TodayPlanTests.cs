@@ -111,8 +111,10 @@ public sealed class TodayPlanTests : BunitContext
         var page = Render(new FakeTodayPlan().Answer(Plan() with { Empty = reason }));
 
         var status = page.Find("[role=status]");
-        Assert.Contains(title, status.TextContent);
-        var next = status.QuerySelector("a")!;
+        Assert.Contains(title, status.QuerySelector(".empty-state")!.TextContent);
+        // The step goes below the live region, so its focus doesn't move with the region.
+        Assert.Null(status.QuerySelector("a"));
+        var next = page.Find(".state-actions a.button");
         Assert.Equal(link, next.TextContent);
         Assert.Equal("themen", next.GetAttribute("href"));
         Assert.Empty(page.FindAll(".plan-block"));
@@ -164,6 +166,7 @@ public sealed class TodayPlanTests : BunitContext
         var page = Render(plans);
         Assert.Contains(FeedbackTexts.Plan.LoadFailed, page.Find("[role=status]").TextContent);
         Assert.Contains(TraceId, page.Find("[role=status]").TextContent);
+        Assert.Equal(FeedbackTexts.Connection.Retry, page.Find("button").TextContent);
 
         page.Find("button").Click();
 

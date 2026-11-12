@@ -1,0 +1,27 @@
+@* The next step under a view's live region: a button that tries again or goes on, a link somewhere else, or both. Kept
+   outside the region, a region that changes would take the focus along. A link alone is the step, so it looks like a
+   button; next to a button it stays a plain link. *@
+<div class="state-actions">
+    @if (OnAction.HasDelegate && !string.IsNullOrEmpty(ActionText))
+    {
+        <button type="button" class="button" @onclick="OnAction">@ActionText</button>
+    }
+    @if (!string.IsNullOrEmpty(Href) && !string.IsNullOrEmpty(LinkText))
+    {
+        <a class="@(OnAction.HasDelegate ? null : "button")" href="@Href">@LinkText</a>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string? ActionText { get; set; }
+
+    [Parameter]
+    public EventCallback OnAction { get; set; }
+
+    [Parameter]
+    public string? Href { get; set; }
+
+    [Parameter]
+    public string? LinkText { get; set; }
+}

@@ -16,48 +16,43 @@
     @switch (State)
     {
         case ViewState.Loading:
-            <p>Wird geladen …</p>
+            <Loading />
             break;
         case ViewState.SignedOut:
             @* The shell says that the login ran out and leads to it (SessionEndedNotice). *@
             @if (Unsent)
             {
-                <p class="material-note">@FeedbackTexts.Session.TextKept</p>
+                <Notice Kind="NoticeKind.Info" class="material-kept"><p>@FeedbackTexts.Session.TextKept</p></Notice>
             }
             break;
         case ViewState.LoadFailed:
-            <ConnectionProblem Title="Der Stand ließ sich gerade nicht laden." TraceId="@loadTrace" />
+            <ConnectionProblem Title="@FeedbackTexts.Material.LoadFailed" TraceId="@loadTrace" />
             break;
         case ViewState.Empty:
-            <p class="material-note">
-                <strong>Du hast noch keinen Text eingefügt.</strong> Füge unten deinen ersten Text ein, dann erscheinen hier
-                deine Themen.
-            </p>
+            @* The form right below is the next step. *@
+            <EmptyState Title="@FeedbackTexts.Material.Empty" Hint="@FeedbackTexts.Material.EmptyHint" />
             break;
         case ViewState.Analyzing:
-            <p class="material-note">
-                <strong>„@latest!.Title“ wird analysiert …</strong> Das kann ein paar Minuten dauern. Die Themen erscheinen
-                hier von selbst.
-            </p>
+            <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.Material.WithTitle(FeedbackTexts.Material.Analyzing, latest!.Title)" class="material-analyzing">
+                <p>@FeedbackTexts.Material.AnalyzingHint</p>
+            </Notice>
             break;
         case ViewState.AnalysisSlow:
-            <p class="material-note">
-                <strong>Die Analyse von „@latest!.Title“ dauert länger als gedacht.</strong> Du kannst weiter warten oder
-                später wiederkommen.
-            </p>
+            <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.Material.WithTitle(FeedbackTexts.Material.AnalysisSlow, latest!.Title)" class="material-slow">
+                <p>@FeedbackTexts.Material.AnalysisSlowHint</p>
+            </Notice>
             break;
         case ViewState.Failed:
-            <div class="material-note material-alert">
-                <p><strong>Die Analyse von „@latest!.Title“ hat nicht geklappt.</strong></p>
-                <p>@(latest.FailureReason ?? "Versuch es noch einmal.")</p>
-            </div>
+            <Notice Kind="NoticeKind.Error" Title="@FeedbackTexts.Material.WithTitle(FeedbackTexts.Material.AnalysisFailed, latest!.Title)" class="material-failed">
+                <p>@(latest.FailureReason ?? FeedbackTexts.Material.AnalysisFailedHint)</p>
+            </Notice>
             @if (retryFailed)
             {
                 <ConnectionProblem Title="@FeedbackTexts.Retry.NotThrough" TraceId="@retryTrace" />
             }
             break;
         case ViewState.Ready:
-            <p class="material-note">Die Themen aus „@latest!.Title“ sind da.</p>
+            <Notice Kind="NoticeKind.Success" class="material-ready"><p>@FeedbackTexts.Material.WithTitle(FeedbackTexts.Material.Ready, latest!.Title)</p></Notice>
             break;
     }
 </div>
@@ -65,15 +60,13 @@
 @switch (State)
 {
     case ViewState.LoadFailed:
-        <button type="button" class="button" @onclick="LoadAsync">Erneut laden</button>
+        <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="LoadAsync" />
         break;
     case ViewState.AnalysisSlow:
-        <button type="button" class="button" @onclick="StartFollowing">Weiter warten</button>
+        <StateActions ActionText="@FeedbackTexts.Material.KeepWaiting" OnAction="StartFollowing" />
         break;
     case ViewState.Failed:
-        <button type="button" class="button" @onclick="RetryAnalysisAsync">
-            @(retrying ? FeedbackTexts.Retry.Starting : FeedbackTexts.Retry.Button)
-        </button>
+        <StateActions ActionText="@(retrying ? FeedbackTexts.Retry.Starting : FeedbackTexts.Retry.Button)" OnAction="RetryAnalysisAsync" />
         break;
 }
 
@@ -124,13 +117,13 @@
             <div role="alert">
                 @if (formMessages.Count > 0)
                 {
-                    <div class="material-note material-alert">
+                    <Notice Kind="@(formMessages is [FeedbackTexts.Session.TextBack] ? NoticeKind.Info : NoticeKind.Error)" class="material-form-message">
                         @foreach (var message in formMessages)
                         {
                             <p>@message</p>
                         }
                         <RequestId Value="@formTrace" />
-                    </div>
+                    </Notice>
                 }
             </div>
 
@@ -169,8 +162,7 @@
 }
 
 @code {
-    private const string NotThrough =
-        "Der Text ist nicht angekommen. Edvaniq ist gerade nicht erreichbar. Versuch es in ein paar Sekunden noch einmal.";
+    private const string NotThrough = FeedbackTexts.Material.TextNotThrough;
 
     private readonly CancellationTokenSource life = new();
     private CancellationTokenSource? follow;

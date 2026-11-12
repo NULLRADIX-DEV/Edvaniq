@@ -44,10 +44,19 @@ internal sealed class FakeLearningMaterial : ILearningMaterial
         return this;
     }
 
-    public Task<CallOutcome<IReadOnlyList<DocumentInfo>>> ListDocumentsAsync(CancellationToken cancellationToken = default)
+    // While set, every list of documents waits until the test opens it.
+    public TaskCompletionSource? ListGate { get; set; }
+
+    public async Task<CallOutcome<IReadOnlyList<DocumentInfo>>> ListDocumentsAsync(CancellationToken cancellationToken = default)
     {
         DocumentCalls++;
-        return Task.FromResult(Next(documents, CallOutcome<IReadOnlyList<DocumentInfo>>.Ok([])));
+        var next = Next(documents, CallOutcome<IReadOnlyList<DocumentInfo>>.Ok([]));
+        if (ListGate is not null)
+        {
+            await ListGate.Task;
+        }
+
+        return next;
     }
 
     public Task<CallOutcome<IReadOnlyList<TopicInfo>>> ListTopicsAsync(CancellationToken cancellationToken = default)

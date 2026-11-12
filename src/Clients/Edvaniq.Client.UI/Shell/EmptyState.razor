@@ -1,0 +1,22 @@
+@* A view with nothing to show yet: what is missing and what helps. Put it into the view's live region, the next step
+   itself goes below the region (StateActions). *@
+<Notice Kind="NoticeKind.Info" Title="@Title" class="empty-state">
+    @if (!string.IsNullOrEmpty(Hint))
+    {
+        <p>@Hint</p>
+    }
+    @ChildContent
+</Notice>
+
+@code {
+    // What is missing, from the user's view.
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    // Why, and what to do about it.
+    [Parameter]
+    public string? Hint { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

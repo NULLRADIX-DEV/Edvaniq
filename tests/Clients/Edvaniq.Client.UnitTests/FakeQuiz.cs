@@ -31,10 +31,19 @@ internal sealed class FakeQuiz : IQuiz
 
     public FakeQuiz Answer(GradedAnswer graded) => Answer(CallOutcome<GradedAnswer>.Ok(graded));
 
-    public Task<CallOutcome<AskedQuestion>> AskAsync(Guid topicId, CancellationToken cancellationToken = default)
+    // While set, every ask waits until the test opens it.
+    public TaskCompletionSource? AskGate { get; set; }
+
+    public async Task<CallOutcome<AskedQuestion>> AskAsync(Guid topicId, CancellationToken cancellationToken = default)
     {
         Asked.Add(topicId);
-        return Task.FromResult(Next(asks, CallOutcome<AskedQuestion>.Failed()));
+        var next = Next(asks, CallOutcome<AskedQuestion>.Failed());
+        if (AskGate is not null)
+        {
+            await AskGate.Task;
+        }
+
+        return next;
     }
 
     public async Task<CallOutcome<GradedAnswer>> AnswerAsync(Guid attemptId, int option, int responseTimeMs, CancellationToken cancellationToken = default)
