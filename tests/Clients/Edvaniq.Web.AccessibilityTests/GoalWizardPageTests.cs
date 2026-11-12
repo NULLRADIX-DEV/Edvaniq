@@ -91,7 +91,9 @@ public sealed class GoalWizardPageTests(WebShell shell)
         await page.Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Text einfügen" }).FocusAsync();
         await keys.PressAsync("Enter");
         await Assertions.Expect(page.Page).ToHaveURLAsync(shell.Address + "/themen");
-        await Assertions.Expect(page.Page.GetByText("Zellatmung", new PageGetByTextOptions { Exact = true })).ToHaveCountAsync(1);
+        var listed = page.Page.Locator(".topic-list > li");
+        await Assertions.Expect(listed).ToHaveCountAsync(1);
+        await Assertions.Expect(listed).ToContainTextAsync("Zellatmung");
     }
 
     // An error at its field is as readable as the rest, and the focus goes to the field.
