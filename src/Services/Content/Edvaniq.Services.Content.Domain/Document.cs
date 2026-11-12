@@ -111,6 +111,10 @@ public sealed class Document : IOwnedByUser
     // When the worker may ask the AI again after an outage, UTC. Null means right away.
     public DateTime? NextAttemptAt { get; private set; }
 
+    // The worker asks the simulated AI instead of the real one. Only for documents of a team account the operator marked
+    // for tests (docs/tokens.md), never from a field of the request.
+    public bool UsesTestDouble { get; private set; }
+
     // The topics are reported, the question pool is what's left before the document is ready.
     public bool WaitsForQuestions => Status == DocumentStatus.Analyzing && AnalyzedAt is not null;
 
@@ -164,11 +168,19 @@ public sealed class Document : IOwnedByUser
     // A new document in status Uploaded. Call it only with a text and a title that passed the checks.
     // Level and output language are the goal's at this moment, the prompts of this document keep to them.
     public static Document Paste(
-        string ownerId, Guid learningGoalId, string? title, string text, DateTime createdAt, string? level = null, string? outputLanguage = null) =>
+        string ownerId,
+        Guid learningGoalId,
+        string? title,
+        string text,
+        DateTime createdAt,
+        string? level = null,
+        string? outputLanguage = null,
+        bool usesTestDouble = false) =>
         new(ownerId, learningGoalId, string.IsNullOrWhiteSpace(title) ? FirstLine(text) : title.Trim(), text, createdAt)
         {
             Level = Fitting(level, LevelMaxLength),
             OutputLanguage = Fitting(outputLanguage, OutputLanguageMaxLength),
+            UsesTestDouble = usesTestDouble,
         };
 
     // A new document in status Uploaded from a stored file whose content passed FileCheck. The file's name only gives the
@@ -181,13 +193,15 @@ public sealed class Document : IOwnedByUser
         FileFormat format,
         DateTime createdAt,
         string? level = null,
-        string? outputLanguage = null) =>
+        string? outputLanguage = null,
+        bool usesTestDouble = false) =>
         new(ownerId, learningGoalId, TitleOf(fileName), "", createdAt)
         {
             FileId = fileId,
             FileFormat = format,
             Level = Fitting(level, LevelMaxLength),
             OutputLanguage = Fitting(outputLanguage, OutputLanguageMaxLength),
+            UsesTestDouble = usesTestDouble,
         };
 
     public const string UntitledFile = "Hochgeladene Datei";

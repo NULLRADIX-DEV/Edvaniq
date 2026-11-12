@@ -116,11 +116,12 @@ internal static class TokenEndpoints
 
         // Resolved only here: the database comes with it, and a client's own token must not depend on it.
         var accounts = context.RequestServices.GetRequiredService<AccountService>();
-        var accountId = await accounts.LoginAsync(username, password, cancellationToken);
+        var account = await accounts.AuthenticateAsync(username, password, cancellationToken);
 
         // A wrong name and a wrong password get the same answer.
-        return accountId is { } id
-            ? TypedResults.Ok(new TokenResponse(issuer.IssueForAccount(id, clientId), "Bearer", (int)issuer.UserLifetime.TotalSeconds))
+        return account is not null
+            ? TypedResults.Ok(new TokenResponse(
+                issuer.IssueForAccount(account.Id, account.UsesTestDouble, clientId), "Bearer", (int)issuer.UserLifetime.TotalSeconds))
             : Error("invalid_grant");
     }
 

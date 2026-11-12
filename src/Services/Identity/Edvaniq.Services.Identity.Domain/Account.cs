@@ -26,8 +26,14 @@ public sealed class Account
     // UTC.
     public DateTime CreatedAt { get; private set; }
 
+    // An account for automated tests: its tokens carry test_double, and Content analyses its material with the
+    // simulated AI. Only the operator's account command sets it.
+    public bool UsesTestDouble { get; private set; }
+
     // Call it only with a name from AccountName.Normalize.
     public static Account Create(string name, string passwordHash, DateTime createdAt) => new(name, passwordHash, createdAt);
 
     public void SetPasswordHash(string passwordHash) => PasswordHash = passwordHash;
+
+    public void SetTestDouble(bool usesTestDouble) => UsesTestDouble = usesTestDouble;
 }

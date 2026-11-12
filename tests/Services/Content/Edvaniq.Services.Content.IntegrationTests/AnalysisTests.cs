@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text.Json;
 
 using Edvaniq.BuildingBlocks.AI;
@@ -285,6 +286,34 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
 
         await AssertQuestionsFailedAsync(client, id, Document.AiUnavailable);
         Assert.Equal(1, questions.Calls);
+    }
+
+    // #225: the document of a test account goes to the simulated AI, even while the configured provider is down, and gets
+    // ready with topics and questions. The document of an ordinary account waits for the provider like before, and a
+    // field in the request can't mark it.
+    [Fact]
+    public async Task DocumentOfATestAccount_UsesTheTestDouble_OthersTheProvider()
+    {
+        using var tester = ClientFor($"tester-{Guid.NewGuid():N}", testDouble: true);
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var marked = await PasteAsync(tester, Text);
+        using var claimed = await client.PostAsJsonAsync(
+            "/documents", new { text = Text, usesTestDouble = true, testDouble = true }, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, claimed.StatusCode);
+        var plain = (await claimed.Content.ReadFromJsonAsync<DocumentDto>(TestContext.Current.CancellationToken))!.Id;
+        Simulated.Fault = SimulatedFault.Outage;
+
+        await AnalyzeAsync(marked, withQuestions: true);
+        await AnalyzeAsync(plain);
+
+        Simulated.Fault = SimulatedFault.None;
+        Assert.Equal((true, false), (Stored(marked).UsesTestDouble, Stored(plain).UsesTestDouble));
+        Assert.Equal("Ready", (await tester.GetFromJsonAsync<DocumentDto>($"/documents/{marked}", TestContext.Current.CancellationToken))!.Status);
+        Assert.Single(await ReportedAsync(marked));
+        Assert.NotEmpty(await GeneratedAsync(marked));
+        Assert.Equal(DocumentStatus.Failed, Stored(plain).Status);
+        Assert.Empty(await ReportedAsync(plain));
+        Assert.Equal((1, 0), (Asked(ContentAi.TopicsTask), Asked(ContentAi.QuestionsTask)));
     }
 
     // An outage of the provider postpones the document instead of failing it, each attempt in the cost log. After the
@@ -1104,10 +1133,12 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             $"{topic.Name} {topic.Parent?.ToString() ?? "-"} [{string.Join(',', topic.SectionIds.Select(id => ordinals[id]))}]")];
     }
 
-    private HttpClient ClientFor(string userId)
+    // With testDouble the token is one of a team account marked for tests, as Identity issues it.
+    private HttpClient ClientFor(string userId, bool testDouble = false)
     {
         var client = service.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.Create(userId));
+        Claim[] claims = testDouble ? [new Claim("test_double", "true", ClaimValueTypes.Boolean)] : [];
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.Create(userId, claims: claims));
         return client;
     }
 

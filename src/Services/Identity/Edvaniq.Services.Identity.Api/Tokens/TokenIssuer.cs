@@ -30,13 +30,26 @@ internal sealed class TokenIssuer(IOptions<TokenOptions> options, SigningKey key
     public string Issue(string clientId, TokenClient client) =>
         Issue(clientId, clientId, Lifetime, string.IsNullOrEmpty(client.Audience) ? options.Value.Audience : client.Audience);
 
-    // A login is always for the services.
-    public string IssueForAccount(Guid accountId, string clientId) =>
-        Issue(accountId.ToString("D"), clientId, UserLifetime, options.Value.Audience);
+    // A login is always for the services. Only an account marked for tests gets test_double, the others don't carry it.
+    public string IssueForAccount(Guid accountId, bool usesTestDouble, string clientId) =>
+        Issue(accountId.ToString("D"), clientId, UserLifetime, options.Value.Audience, usesTestDouble);
 
-    private string Issue(string subject, string clientId, TimeSpan lifetime, string audience)
+    public const string TestDoubleClaim = "test_double";
+
+    private string Issue(string subject, string clientId, TimeSpan lifetime, string audience, bool usesTestDouble = false)
     {
         var now = time.GetUtcNow().UtcDateTime;
+        var claims = new Dictionary<string, object>
+        {
+            ["sub"] = subject,
+            ["client_id"] = clientId,
+            ["jti"] = Guid.NewGuid().ToString("N"),
+        };
+        if (usesTestDouble)
+        {
+            claims[TestDoubleClaim] = true;
+        }
+
         return handler.CreateToken(new SecurityTokenDescriptor
         {
             TokenType = "at+jwt",
@@ -45,12 +58,7 @@ internal sealed class TokenIssuer(IOptions<TokenOptions> options, SigningKey key
             IssuedAt = now,
             NotBefore = now,
             Expires = now + lifetime,
-            Claims = new Dictionary<string, object>
-            {
-                ["sub"] = subject,
-                ["client_id"] = clientId,
-                ["jti"] = Guid.NewGuid().ToString("N"),
-            },
+            Claims = claims,
             SigningCredentials = key.Credentials,
         });
     }

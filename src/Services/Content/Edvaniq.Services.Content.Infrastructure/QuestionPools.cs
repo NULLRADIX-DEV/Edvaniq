@@ -22,6 +22,7 @@ namespace Edvaniq.Services.Content.Infrastructure;
 public sealed class QuestionPools(
     IServiceScopeFactory scopes,
     IChatClient ai,
+    TestDoubleAi testDouble,
     AiUsageLog usage,
     TimeProvider time,
     ILogger<QuestionPools> logger) : BackgroundService
@@ -211,7 +212,8 @@ public sealed class QuestionPools(
     private async Task<(List<GeneratedItem>? Items, Exception? Failure)> PoolAsync(
         Document document, IReadOnlyList<Guid> sectionIds, Dictionary<Guid, string> texts, CancellationToken cancellationToken)
     {
-        var answer = await ai.AskAsync(
+        var chat = ContentAi.For(document, ai, testDouble);
+        var answer = await chat.AskAsync(
             [
                 new ChatMessage(ChatRole.System, QuestionGeneration.System(LearnerProfile.Of(document.Level, document.OutputLanguage))),
                 new ChatMessage(ChatRole.User, QuestionGeneration.User(sectionIds.Select(id => texts[id]))),
@@ -221,7 +223,7 @@ public sealed class QuestionPools(
             time,
             cancellationToken);
         await usage.RecordAsync(
-            document, AiAttempt.Questions, QuestionGeneration.PromptVersion, answer.Tries, ContentAi.ModelOf(ai, null), cancellationToken);
+            document, AiAttempt.Questions, QuestionGeneration.PromptVersion, answer.Tries, ContentAi.ModelOf(chat, null), cancellationToken);
         if (answer.Failure is { } failure)
         {
             return (null, failure);
@@ -233,7 +235,7 @@ public sealed class QuestionPools(
             return (null, null);
         }
 
-        var model = ContentAi.ModelOf(ai, answer.ModelId);
+        var model = ContentAi.ModelOf(chat, answer.ModelId);
         return ([.. drafts.Select(draft => new GeneratedItem(
             Guid.NewGuid(), ItemKind.Question, document.Id, draft.SectionId, model, QuestionGeneration.PromptVersion,
             new GeneratedQuestion(draft.Text, draft.Options, draft.Answer, draft.Explanation, draft.Difficulty)))], null);

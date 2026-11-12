@@ -170,6 +170,29 @@ public sealed class LoginTests(IdentityDatabase database) : IClassFixture<Identi
 
     private static string NewPassword() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(18));
 
+    // #225: only an account the operator set with --test-double gets test_double in its tokens. Setting it again
+    // without the option takes the mark away, and an ordinary account never carries the claim.
+    [Fact]
+    public async Task TestDoubleAccount_GetsTheClaim_OnlyWhileMarked()
+    {
+        await using var identity = new IdentityFactory(connectionString: database.ConnectionString);
+        var ordinaryId = await CreateAccountAsync(identity, "ordinary");
+        var (exitCode, output, _) = await identity.SetAccountAsync("tester", Password, testDouble: true);
+
+        var marked = new JsonWebToken(await LoginTokenAsync(identity, "tester"));
+        var ordinary = new JsonWebToken(await LoginTokenAsync(identity, "ordinary"));
+        await identity.SetAccountAsync("tester", Password);
+        var unmarked = new JsonWebToken(await LoginTokenAsync(identity, "tester"));
+
+        Assert.Equal(0, exitCode);
+        Assert.EndsWith(" --test-double", output.Trim(), StringComparison.Ordinal);
+        Assert.True(marked.TryGetPayloadValue<bool>(TokenIssuer.TestDoubleClaim, out var value) && value);
+        Assert.Equal(ordinaryId, ordinary.Subject);
+        Assert.False(ordinary.TryGetPayloadValue<object>(TokenIssuer.TestDoubleClaim, out _));
+        Assert.False(unmarked.TryGetPayloadValue<object>(TokenIssuer.TestDoubleClaim, out _));
+        Assert.Equal(marked.Subject, unmarked.Subject);
+    }
+
     private static async Task<string> CreateAccountAsync(IdentityFactory identity, string name)
     {
         var (exitCode, output, error) = await identity.SetAccountAsync(name, Password);

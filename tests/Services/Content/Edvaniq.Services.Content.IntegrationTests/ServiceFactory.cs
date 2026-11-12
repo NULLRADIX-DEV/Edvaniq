@@ -1,6 +1,7 @@
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Infrastructure;
+using Edvaniq.Services.Content.Infrastructure.Ai;
 using Edvaniq.Testing;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -58,6 +59,7 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
                         options.TokenValidationParameters.IssuerSigningKeys = [TestTokens.SigningKey];
                     });
                 services.AddInMemoryTransport();
+                services.AddContentTestDouble();
                 services.AddSingleton<ILoggerProvider>(Logs);
                 services.AddSingleton<IKnowledgeTopics>(Knowledge);
                 services.AddHttpClient<ILearningGoals, PlanningLearningGoals>().ConfigurePrimaryHttpMessageHandler(() => Planning);

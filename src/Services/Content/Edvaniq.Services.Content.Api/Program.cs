@@ -14,6 +14,7 @@ builder.AddInfrastructure();
 // at the button meanwhile: three tries of 2 s at most, and after 8 s the answer is 503 whatever happens.
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTransient<ForwardUserToken>();
+builder.Services.AddScoped<ITestDoubleCaller, TestDoubleCaller>();
 
 // Swaps the default resilience for shorter limits. Removing it is still marked experimental, the test with a hanging
 // Planning (PlanningDown_AnswersWithin10Seconds) notices if it stops working.

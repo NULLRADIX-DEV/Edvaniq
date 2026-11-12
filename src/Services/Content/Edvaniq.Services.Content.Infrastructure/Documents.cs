@@ -8,12 +8,20 @@ using Microsoft.EntityFrameworkCore;
 namespace Edvaniq.Services.Content.Infrastructure;
 
 // No query here mentions the owner: the filter of ServiceDbContext adds it to every one of them.
-internal sealed class Documents(ContentDbContext db, ICurrentUser currentUser, IEventOutbox outbox, IFiles files, TimeProvider time) : IDocuments
+internal sealed class Documents(
+    ContentDbContext db, ICurrentUser currentUser, ITestDoubleCaller caller, IEventOutbox outbox, IFiles files, TimeProvider time) : IDocuments
 {
     public async Task<Document> PasteAsync(LearningGoalInfo learningGoal, string? title, string text, CancellationToken cancellationToken)
     {
         var document = Document.Paste(
-            currentUser.Id, learningGoal.Id, title, text, time.GetUtcNow().UtcDateTime, learningGoal.Level, learningGoal.OutputLanguage);
+            currentUser.Id,
+            learningGoal.Id,
+            title,
+            text,
+            time.GetUtcNow().UtcDateTime,
+            learningGoal.Level,
+            learningGoal.OutputLanguage,
+            caller.UsesTestDouble);
         db.Documents.Add(document);
         await db.SaveChangesAsync(cancellationToken);
 
@@ -24,7 +32,15 @@ internal sealed class Documents(ContentDbContext db, ICurrentUser currentUser, I
         LearningGoalInfo learningGoal, string? fileName, Guid fileId, FileFormat format, CancellationToken cancellationToken)
     {
         var document = Document.Upload(
-            currentUser.Id, learningGoal.Id, fileName, fileId, format, time.GetUtcNow().UtcDateTime, learningGoal.Level, learningGoal.OutputLanguage);
+            currentUser.Id,
+            learningGoal.Id,
+            fileName,
+            fileId,
+            format,
+            time.GetUtcNow().UtcDateTime,
+            learningGoal.Level,
+            learningGoal.OutputLanguage,
+            caller.UsesTestDouble);
         db.Documents.Add(document);
         try
         {

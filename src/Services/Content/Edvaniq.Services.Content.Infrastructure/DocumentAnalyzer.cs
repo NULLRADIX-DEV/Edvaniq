@@ -21,6 +21,7 @@ namespace Edvaniq.Services.Content.Infrastructure;
 public sealed class DocumentAnalyzer(
     IServiceScopeFactory scopes,
     IChatClient ai,
+    TestDoubleAi testDouble,
     AiUsageLog usage,
     TimeProvider time,
     ILogger<DocumentAnalyzer> logger) : BackgroundService
@@ -130,7 +131,8 @@ public sealed class DocumentAnalyzer(
         Document document, IReadOnlyList<Section> sections, CancellationToken cancellationToken)
     {
         IReadOnlyList<Guid> ids = [.. sections.Select(section => section.Id)];
-        var answer = await ai.AskAsync(
+        var chat = ContentAi.For(document, ai, testDouble);
+        var answer = await chat.AskAsync(
             [
                 new ChatMessage(ChatRole.System, TopicAnalysis.System(LearnerProfile.Of(document.Level, document.OutputLanguage))),
                 new ChatMessage(ChatRole.User, TopicAnalysis.User(sections.Select(section => document.Text.Substring(section.Start, section.Length)))),
@@ -140,7 +142,7 @@ public sealed class DocumentAnalyzer(
             time,
             cancellationToken);
         await usage.RecordAsync(
-            document, AiAttempt.Topics, TopicAnalysis.PromptVersion, answer.Tries, ContentAi.ModelOf(ai, null), cancellationToken);
+            document, AiAttempt.Topics, TopicAnalysis.PromptVersion, answer.Tries, ContentAi.ModelOf(chat, null), cancellationToken);
         if (answer is { Value: null, Failure: null })
         {
             ContentLog.AnalysisAnswerUnusable(logger, document.Id, answer.Attempts);
