@@ -30,9 +30,9 @@ public class SessionAbortTests
     {
         var session = Start(topicIsNew: true);
 
-        Assert.Equal(SessionAdvance.Advanced, session.Advance(2));
-        Assert.Equal(SessionAdvance.Unchanged, session.Advance(1));
-        Assert.Equal(SessionAdvance.Unchanged, session.Advance(2));
+        Assert.Equal(SessionAdvance.Advanced, session.Advance(2, Now));
+        Assert.Equal(SessionAdvance.Unchanged, session.Advance(1, Now));
+        Assert.Equal(SessionAdvance.Unchanged, session.Advance(2, Now));
         Assert.Equal(2, session.CurrentStep);
     }
 
@@ -44,7 +44,7 @@ public class SessionAbortTests
         // Review and quiz only.
         var session = Start(topicIsNew: false);
 
-        Assert.Equal(SessionAdvance.NoSuchStep, session.Advance(step));
+        Assert.Equal(SessionAdvance.NoSuchStep, session.Advance(step, Now));
         Assert.Equal(0, session.CurrentStep);
     }
 
@@ -54,7 +54,7 @@ public class SessionAbortTests
         var session = Start(topicIsNew: true);
         session.Abort(Now);
 
-        Assert.Equal(SessionAdvance.Ended, session.Advance(1));
+        Assert.Equal(SessionAdvance.Ended, session.Advance(1, Now));
         Assert.Equal(0, session.CurrentStep);
     }
 
@@ -63,7 +63,7 @@ public class SessionAbortTests
     public void StartAgain_GoesOnFromTheSessionBrokenOff()
     {
         var previous = Start(topicIsNew: true);
-        previous.Advance(2);
+        previous.Advance(2, Now);
         previous.Abort(Now.AddMinutes(5));
 
         var again = Session.Start(Guid.NewGuid(), "alice", Goal, Today, Block, Now.AddMinutes(10), topicIsNew: false, previous);

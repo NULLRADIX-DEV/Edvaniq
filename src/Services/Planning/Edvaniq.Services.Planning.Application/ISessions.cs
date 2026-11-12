@@ -19,5 +19,7 @@ public interface ISessions
     // False when the user has an active session already, the database lets only one through.
     Task<bool> TryAddAsync(Session session, CancellationToken cancellationToken);
 
-    Task SaveAsync(CancellationToken cancellationToken);
+    // False when another change of the session was stored first (its LastActivityAt moved on). Nothing is stored then,
+    // and FindForChangeAsync reads the session afresh.
+    Task<bool> TrySaveAsync(CancellationToken cancellationToken);
 }

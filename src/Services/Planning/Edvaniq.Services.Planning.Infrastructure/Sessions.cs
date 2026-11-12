@@ -28,7 +28,21 @@ internal sealed class Sessions(PlanningDbContext db) : ISessions
             .ThenByDescending(session => session.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
-    public Task SaveAsync(CancellationToken cancellationToken) => db.SaveChangesAsync(cancellationToken);
+    // LastActivityAt is a concurrency token: the later of two changes updates no row, and the tracker forgets the
+    // session so the next read gets the stored one.
+    public async Task<bool> TrySaveAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            db.ChangeTracker.Clear();
+            return false;
+        }
+    }
 
     public async Task<bool> TryAddAsync(Session session, CancellationToken cancellationToken)
     {

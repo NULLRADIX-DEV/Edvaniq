@@ -303,6 +303,9 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("char(36)");
 
+                    b.Property<long>("ActiveMilliseconds")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("ActiveOwnerId")
                         .HasMaxLength(128)
                         .HasColumnType("varchar(128)")
@@ -321,6 +324,10 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("varchar(16)");
+
+                    b.Property<DateTime>("LastActivityAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("datetime(6)");
 
                     b.Property<Guid>("LearningGoalId")
                         .HasColumnType("char(36)");

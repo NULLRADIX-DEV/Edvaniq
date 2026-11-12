@@ -178,6 +178,22 @@ Im Code: `Session`, die Kennung heißt `sessionId`, das Ende meldet `SessionComp
 
 Nicht: Lernsession, Tagesplan-Eintrag
 
+### Aktive Lernzeit
+
+Die Zeit, die ein Nutzer in einer Session wirklich lernt. Sie zählt nur zwischen Start und Ende der Session und nur zwischen zwei Aktivitätssignalen, die höchstens die Leerlaufgrenze auseinanderliegen. Eine längere Lücke zählt gar nicht, auch nicht bis zur Grenze. Signale sind der Start, jeder Schritt weiter, der Abbruch und die Aktivität, die der Client während eines Schritts meldet. Den Zeitpunkt eines Signals setzt der Server.
+
+Im Code: `ActiveTime`, je Session `ActiveSeconds`
+
+Nicht: Lerndauer, Bildschirmzeit, Konzentrationszeit
+
+### Leerlaufgrenze
+
+Die längste Lücke zwischen zwei Aktivitätssignalen, die noch als aktive Lernzeit zählt: 5 Minuten. Das reicht für eine Antwort und für das Lesen eines Teils der Lerneinheit, eine Pause passt nicht hinein. Der Wert ist fest und für alle Nutzer gleich.
+
+Im Code: `ActiveTime.IdleLimit`
+
+Nicht: Timeout, Inaktivitätsgrenze
+
 ### Lerneinheit „Neues Thema“
 
 Die Einheit, in der ein Nutzer ein Thema kennenlernt: Er liest die Zusammenfassung des Themas und beantwortet danach zwei bis drei Checkfragen. Danach gilt das Thema als eingeführt.
