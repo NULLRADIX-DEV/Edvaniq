@@ -94,7 +94,7 @@ public sealed class DocumentSplitter(
                 .CountAsync(page => page.DocumentId == documentId, cancellationToken);
             pages = PageQuota.PagesOf(document, filePages);
             var state = await quota.StateOfAsync(document.OwnerId, cancellationToken);
-            if (pages > state.Left)
+            if (!state.Allows(pages.Value))
             {
                 ContentLog.PageQuotaExceeded(logger, documentId, pages.Value, state.Left);
                 document.Fail(PageQuota.TooManyPages(pages.Value, state.Left, time.GetUtcNow().UtcDateTime));

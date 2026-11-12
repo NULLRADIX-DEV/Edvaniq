@@ -44,6 +44,21 @@ public sealed class PageQuotaTests
         Assert.All([PageQuota.TooManyPages(999, 0, Now), PageQuota.UsedUp(Now)], message => Assert.InRange(message.Length, 1, 300));
     }
 
+    // What is left, or a document longer than a whole day on a day nothing was used yet. Left never goes below 0.
+    [Theory]
+    [InlineData(200, 0, 200, true)]
+    [InlineData(200, 150, 50, true)]
+    [InlineData(200, 150, 51, false)]
+    [InlineData(200, 0, 300, true)]
+    [InlineData(200, 1, 300, false)]
+    public void Allows_WhatIsLeft_OrABigDocumentOnAFreshDay(int perDay, int used, int pages, bool allowed)
+    {
+        var state = new Application.PageQuotaState(perDay, used, Now);
+
+        Assert.Equal(allowed, state.Allows(pages));
+        Assert.Equal(0, new Application.PageQuotaState(perDay, perDay + 100, Now).Left);
+    }
+
     [Fact]
     public void Charge_CountsOnTheStudyDay()
     {

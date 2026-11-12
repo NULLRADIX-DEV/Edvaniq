@@ -35,7 +35,7 @@ internal static class QuotaEndpoints
         var now = time.GetUtcNow().UtcDateTime;
         var pageState = await pageQuota.StateOfAsync(user.Id, cancellationToken);
         var reason = !askPages ? null
-            : pages is { } needed ? needed > pageState.Left ? PageQuota.TooManyPages(needed, pageState.Left, now) : null
+            : pages is { } needed ? !pageState.Allows(needed) ? PageQuota.TooManyPages(needed, pageState.Left, now) : null
             : pageState.Left == 0 ? PageQuota.UsedUp(now) : null;
         if (reason is null && (await generationQuota.StateOfAsync(user.Id, cancellationToken)).Left == 0)
         {
