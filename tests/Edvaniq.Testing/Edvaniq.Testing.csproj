@@ -5,6 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
     <PackageReference Include="Testcontainers.MySql" />
     <PackageReference Include="Testcontainers.Nats" />
@@ -14,6 +15,11 @@
   <!-- OwnedRows counts the rows of a user in any service's DbContext. -->
   <ItemGroup>
     <ProjectReference Include="..\..\src\BuildingBlocks\Edvaniq.BuildingBlocks.Infrastructure\Edvaniq.BuildingBlocks.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <!-- IsolationCheck leaves out the endpoints for internal tokens. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BuildingBlocks\Edvaniq.BuildingBlocks.Web\Edvaniq.BuildingBlocks.Web.csproj" />
   </ItemGroup>
 
   <!-- The grant of a service's DB user, shared with the AppHost. -->

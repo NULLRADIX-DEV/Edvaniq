@@ -1,57 +1,46 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 
+using Edvaniq.BuildingBlocks.Infrastructure;
+using Edvaniq.Services.Knowledge.Application;
+using Edvaniq.Services.Knowledge.Domain;
+using Edvaniq.Services.Knowledge.Infrastructure;
 using Edvaniq.Testing;
+
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Edvaniq.Services.Knowledge.IntegrationTests;
 
 // User A's data stays invisible to user B, because the owner filter of ServiceDbContext limits every query to the user
-// from the token. Shown with topics, against a real database.
+// from the token. Every endpoint with a user's token is listed here (IsolationCheck), against a real database.
 public sealed class IsolationTests(ServiceFactory service) : IClassFixture<ServiceFactory>
 {
-    [Fact]
-    public async Task OtherUser_DoesNotSeeTheItemsInTheList()
-    {
-        var alice = NewUser("alice");
-        using var aliceClient = ClientFor(alice);
-        using var bob = ClientFor(NewUser("bob"));
-
-        var topic = await service.AddTopicAsync(alice, "Zellbiologie");
-
-        Assert.Contains(await ListAsync(aliceClient), listed => listed.Id == topic.Id);
-        Assert.Empty(await ListAsync(bob));
-    }
+    internal static IsolationCheck Check() => new IsolationCheck()
+        .Exempt("GET", "/me", "Only the caller's own id from the token.")
+        .List("GET", "/topics")
+        .Item("GET", "/topics/{id:guid}")
+        .Item("PATCH", "/topics/{id:guid}", new { name = "Von Bob" });
 
     [Fact]
-    public async Task OtherUser_GetsNotFoundForAForeignItem()
-    {
-        var alice = NewUser("alice");
-        using var aliceClient = ClientFor(alice);
-        using var bob = ClientFor(NewUser("bob"));
-
-        var topic = await service.AddTopicAsync(alice, "Zellbiologie");
-
-        Assert.Equal(HttpStatusCode.OK, await GetStatusAsync(aliceClient, $"/topics/{topic.Id}"));
-        // A foreign item looks exactly like one that does not exist.
-        Assert.Equal(HttpStatusCode.NotFound, await GetStatusAsync(bob, $"/topics/{topic.Id}"));
-        Assert.Equal(HttpStatusCode.NotFound, await GetStatusAsync(bob, $"/topics/{Guid.NewGuid()}"));
-    }
+    public void EveryEndpoint_IsInTheCheck() => Check().AssertCovers(service.Services);
 
     [Fact]
-    public async Task OtherUser_CannotRenameAForeignItem()
+    public Task OtherUser_CanNeitherSeeNorChangeTheTopics() => Check().RunAsync(service, owner => SeedAsync(service, owner));
+
+    // The check itself: an endpoint the list forgets fails it.
+    [Fact]
+    public void Check_FailsForAnEndpointItDoesNotList()
     {
-        var alice = NewUser("alice");
-        using var aliceClient = ClientFor(alice);
-        using var bob = ClientFor(NewUser("bob"));
+        var incomplete = new IsolationCheck()
+            .Exempt("GET", "/me", "Only the caller's own id from the token.")
+            .List("GET", "/topics")
+            .Item("GET", "/topics/{id:guid}");
 
-        var topic = await service.AddTopicAsync(alice, "Zellbiologie");
-
-        using var response = await bob.PatchAsJsonAsync($"/topics/{topic.Id}", new { name = "Von Bob" }, TestContext.Current.CancellationToken);
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        var unchanged = await aliceClient.GetFromJsonAsync<Item>($"/topics/{topic.Id}", TestContext.Current.CancellationToken);
-        Assert.Equal("Zellbiologie", unchanged!.Name);
+        var error = Assert.Throws<IsolationCheckException>(() => incomplete.AssertCovers(service.Services));
+        Assert.Contains("PATCH /topics/{id:guid}", error.Message);
     }
 
     // "Alice" and "alice" are two users, the id is compared byte for byte.
@@ -59,18 +48,19 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
     public async Task OtherUser_WithTheSameNameInOtherCase_DoesNotSeeTheItems()
     {
         var id = Guid.NewGuid().ToString("N");
-        using var lower = ClientFor($"alice-{id}");
         using var upper = ClientFor($"Alice-{id}");
 
         var topic = await service.AddTopicAsync($"alice-{id}", "Zellbiologie");
 
-        Assert.Empty(await ListAsync(upper));
-        Assert.Equal(HttpStatusCode.OK, await GetStatusAsync(lower, $"/topics/{topic.Id}"));
-        Assert.Equal(HttpStatusCode.NotFound, await GetStatusAsync(upper, $"/topics/{topic.Id}"));
+        using var response = await upper.GetAsync($"/topics/{topic.Id}", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    // Every test has its own users, so the tests of this class can share one database.
-    private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
+    internal static async Task<OwnedResource> SeedAsync(ServiceFactory service, string owner)
+    {
+        var topic = await service.AddTopicAsync(owner, $"Zellbiologie {Guid.NewGuid():N}");
+        return new OwnedResource(topic.Id, $"/topics/{topic.Id}", topic.Name);
+    }
 
     private HttpClient ClientFor(string userId)
     {
@@ -78,15 +68,45 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.Create(userId));
         return client;
     }
+}
 
-    private static async Task<Item[]> ListAsync(HttpClient client) =>
-        (await client.GetFromJsonAsync<Item[]>("/topics", TestContext.Current.CancellationToken))!;
-
-    private static async Task<HttpStatusCode> GetStatusAsync(HttpClient client, string path)
+// The proof that the check finds a leak: the same service, but reading and renaming a topic past the owner filter.
+public sealed class IsolationLeakTests(LeakyServiceFactory service) : IClassFixture<LeakyServiceFactory>
+{
+    [Fact]
+    public async Task Check_FailsForATopicReadPastTheOwnerFilter()
     {
-        using var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
-        return response.StatusCode;
+        var error = await Assert.ThrowsAsync<IsolationCheckException>(
+            () => IsolationTests.Check().RunAsync(service, owner => IsolationTests.SeedAsync(service, owner)));
+
+        Assert.Contains("/topics/{id:guid}", error.Message);
+    }
+}
+
+public sealed class LeakyServiceFactory(MySqlTestServer mysql) : ServiceFactory(mysql)
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.ConfigureTestServices(services => services.AddScoped<ITopics, LeakyTopics>());
     }
 
-    private sealed record Item(Guid Id, string Name);
+    private sealed class LeakyTopics(KnowledgeDbContext db) : ITopics
+    {
+        public async Task<IReadOnlyList<Topic>> ListAsync(Guid? learningGoalId, CancellationToken cancellationToken) =>
+            await db.Topics.AsNoTracking().ToListAsync(cancellationToken);
+
+        public Task<Topic?> FindAsync(Guid id, CancellationToken cancellationToken) =>
+            AllTopics().AsNoTracking().FirstOrDefaultAsync(topic => topic.Id == id, cancellationToken);
+
+        public async Task<Topic?> RenameAsync(Guid id, string name, CancellationToken cancellationToken)
+        {
+            var topic = await AllTopics().FirstOrDefaultAsync(topic => topic.Id == id, cancellationToken);
+            topic?.Rename(name);
+            await db.SaveChangesAsync(cancellationToken);
+            return topic;
+        }
+
+        private IQueryable<Topic> AllTopics() => db.Topics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter]);
+    }
 }
