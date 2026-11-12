@@ -23,7 +23,8 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         .Exempt("POST", "/ping", "Writes and reads the caller's own ping.")
         .Exempt("GET", "/daily-budget", "Only the caller's own setting, no id in the request.")
         .Exempt("PUT", "/daily-budget", "Only the caller's own setting, no id in the request.")
-        .Exempt("GET", "/plan/today", "Only the caller's own state, no id in the request: OtherUser_SeesNothingOfAForeignPlanOrSession.");
+        .Exempt("GET", "/plan/today", "Only the caller's own state, no id in the request: OtherUser_SeesNothingOfAForeignPlanOrSession.")
+        .Exempt("GET", "/plan/week", "Only the caller's own state, no id in the request: OtherUser_SeesNothingOfAForeignPlanOrSession.");
 
     private static IsolationCheck Goals(IsolationCheck check) => check
         .List("GET", "/learning-goals")
@@ -68,7 +69,7 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         var goal = await SeedGoalAsync(alice);
         using var bob = ClientFor(NewUser("bob"));
 
-        foreach (var path in new[] { "/sessions/active", "/plan/today" })
+        foreach (var path in new[] { "/sessions/active", "/plan/today", "/plan/week" })
         {
             using var response = await bob.GetAsync(path, TestContext.Current.CancellationToken);
             var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
