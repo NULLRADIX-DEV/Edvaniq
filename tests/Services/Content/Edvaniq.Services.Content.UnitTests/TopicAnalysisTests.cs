@@ -15,6 +15,7 @@ public class TopicAnalysisTests
         ["topics-1"] = "15281c86136864e658f604352b3925b9405000cd160c5f9f33b3c59fa99522ce",
         ["topics-2"] = "c86804ae23b7660eef644059a113bc7a63eeb8763ed76c29a68c26996ab0f0c3",
         ["topics-3"] = "f9299a898edf6559075c8f14ae2a5a25b20e8f0998dfc3b7e88a632fd30157d1",
+        ["topics-4"] = "aff8ede25e8654d1be48dde12c89f80ce9b46f922aa5f7cbcb7806e4d84c13f2",
     };
 
     [Fact]
@@ -138,6 +139,92 @@ public class TopicAnalysisTests
             """;
 
         Assert.Equal(["A - [3]", "A1 0 [0]", "B - [1]", "C - [2]"], Shape(TopicAnalysis.Read(answer, Sections)));
+    }
+
+    // #292: the texts of the four sections, the material the AI saw.
+    private static readonly string[] Texts =
+    [
+        "Photosynthese ist der Vorgang, bei dem Pflanzen aus Licht Zucker herstellen.",
+        "Chlorophyll ist der grüne Farbstoff in den Blättern. Es fängt das Licht ein.",
+        "Zellatmung ist der Abbau von Zucker zu Energie in jeder Zelle.",
+        "Wenn a < b & c gilt, ist die Bedingung erfüllt und die Ungleichung stimmt.",
+    ];
+
+    // A term stays when its section belongs to the topic or a subtopic, it stands there, and the definition is a quote
+    // of that section.
+    [Fact]
+    public void Read_KeepsTermsGroundedInTheMaterial()
+    {
+        const string answer = """
+            {"topics":[
+              {"title":"Photosynthese","sections":[1],"terms":[
+                {"term":"Photosynthese","section":1,"definition":"Photosynthese ist der Vorgang, bei dem Pflanzen aus Licht Zucker herstellen."},
+                {"term":"Chlorophyll","section":2,"definition":"Chlorophyll ist der grüne Farbstoff in den Blättern."}],
+               "subtopics":[{"title":"Farbstoff","sections":[2],"terms":[]}]},
+              {"title":"Zellatmung","sections":[3,4],"terms":[]}
+            ]}
+            """;
+
+        var topics = TopicAnalysis.Read(answer, Sections, Texts)!;
+
+        Assert.Equal(
+            [("Photosynthese", Sections[0]), ("Chlorophyll", Sections[1])],
+            topics[0].Terms!.Select(term => (term.Term, term.SectionId)));
+        Assert.Equal("Chlorophyll ist der grüne Farbstoff in den Blättern.", topics[0].Terms![1].Definition);
+        Assert.Null(topics[1].Terms);
+        Assert.Null(topics[2].Terms);
+    }
+
+    // Invented, misplaced or bent: the term goes, the topics stay.
+    [Theory]
+    [InlineData("""{"term":"Photosynthese","section":1,"definition":"Photosynthese ist die wichtigste Reaktion der Erde überhaupt."}""")]
+    [InlineData("""{"term":"Stärke","section":1,"definition":"Photosynthese ist der Vorgang, bei dem Pflanzen aus Licht Zucker herstellen."}""")]
+    [InlineData("""{"term":"Zellatmung","section":3,"definition":"Zellatmung ist der Abbau von Zucker zu Energie in jeder Zelle."}""")]
+    [InlineData("""{"term":"Photosynthese","section":9,"definition":"Photosynthese ist der Vorgang, bei dem Pflanzen aus Licht Zucker herstellen."}""")]
+    [InlineData("""{"term":"Photosynthese","section":1,"definition":"Photosynthese ist"}""")]
+    [InlineData("""{"term":"Photosynthese","section":"1","definition":"Photosynthese ist der Vorgang, bei dem Pflanzen aus Licht Zucker herstellen."}""")]
+    public void Read_DropsATermNotGroundedInItsSection(string term)
+    {
+        var answer = $$"""{"topics":[{"title":"Photosynthese","sections":[1,2],"terms":[{{term}}]},{"title":"Zellatmung","sections":[3,4]}]}""";
+
+        var topics = TopicAnalysis.Read(answer, Sections, Texts)!;
+
+        Assert.Equal(["Photosynthese - [0,1]", "Zellatmung - [2,3]"], Shape(topics));
+        Assert.Null(topics[0].Terms);
+    }
+
+    // The AI may quote the escaped material it saw or the plain text, both are the same section.
+    [Theory]
+    [InlineData("Wenn a &lt; b &amp; c gilt, ist die Bedingung erfüllt")]
+    [InlineData("Wenn a < b & c gilt, ist die Bedingung erfüllt")]
+    public void Read_MatchesAQuote_WithOrWithoutTheEscapesOfThePrompt(string quote)
+    {
+        var answer = $$"""{"topics":[{"title":"Ungleichung","sections":[1,2,3,4],"terms":[{"term":"Bedingung","section":4,"definition":"{{quote}}"}]}]}""";
+
+        var term = Assert.Single(TopicAnalysis.Read(answer, Sections, Texts)![0].Terms!);
+
+        Assert.Equal(("Bedingung", "Wenn a < b & c gilt, ist die Bedingung erfüllt"), (term.Term, term.Definition));
+    }
+
+    [Fact]
+    public void Read_KeepsThreeTermsAtMost_EachOnce()
+    {
+        const string definition = "Photosynthese ist der Vorgang, bei dem Pflanzen aus Licht Zucker herstellen.";
+        var terms = string.Join(',', new[] { "Photosynthese", "photosynthese", "Vorgang", "Pflanzen", "Licht" }
+            .Select(term => $$"""{"term":"{{term}}","section":1,"definition":"{{definition}}"}"""));
+        var answer = $$"""{"topics":[{"title":"Photosynthese","sections":[1,2,3,4],"terms":[{{terms}}]}]}""";
+
+        var kept = TopicAnalysis.Read(answer, Sections, Texts)![0].Terms!;
+
+        Assert.Equal(["Photosynthese", "Vorgang", "Pflanzen"], kept.Select(term => term.Term));
+    }
+
+    [Fact]
+    public void Read_WithoutTheTexts_KeepsNoTerm()
+    {
+        const string answer = """{"topics":[{"title":"Photosynthese","sections":[1,2,3,4],"terms":[{"term":"Photosynthese","section":1,"definition":"Photosynthese ist der Vorgang, bei dem Pflanzen aus Licht Zucker herstellen."}]}]}""";
+
+        Assert.Null(TopicAnalysis.Read(answer, Sections)![0].Terms);
     }
 
     [Fact]

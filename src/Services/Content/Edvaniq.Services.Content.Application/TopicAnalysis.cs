@@ -14,12 +14,21 @@ public static class TopicAnalysis
 
     // Goes with every AI call of the task. A new prompt needs a new version, TopicAnalysisTests holds them together.
     // The version covers every variant of System, so version and the profile stored at the document give the exact prompt.
-    public const string PromptVersion = "topics-3";
+    public const string PromptVersion = "topics-4";
 
     // Suggestions in all, topics and subtopics. The answer's first ones count, the rest is dropped.
     public const int MaxTopics = 30;
 
     public const int NameMaxLength = 80;
+
+    // Key terms per topic or subtopic (#292), and how long a term and its definition, a quote from the material, may be.
+    public const int MaxTerms = 3;
+
+    public const int TermMaxLength = 80;
+
+    public const int DefinitionMinLength = 20;
+
+    public const int DefinitionMaxLength = 300;
 
     // The level only changes how the names are worded, never how the material splits into topics.
     public static string System(LearnerProfile profile) => $$"""
@@ -32,19 +41,25 @@ public static class TopicAnalysis
         Benenne die Themen kurz auf {{profile.LanguageName}}, auch wenn das Material in einer anderen Sprache ist.
         {{profile.TopicNameInstruction}}
         Fachbegriffe übernimmst du so, wie sie im Material stehen, und übersetzt sie nicht.
+        Nenne zu jedem Thema und Unterthema bis zu {{MaxTerms}} Kernbegriffe, die das Material erklärt. Gib zu jedem Begriff die Nummer des Abschnitts an, in dem er erklärt wird, und als Definition einen Satz, den du wörtlich aus diesem Abschnitt übernimmst.
+        Erfinde keine Definition. Steht keine im Material, lass den Begriff weg.
         Antworte nur mit JSON in dieser Form:
-        {"topics":[{"title":"Thema","sections":[1],"subtopics":[{"title":"Unterthema","sections":[2,3]}]}]}
+        {"topics":[{"title":"Thema","sections":[1],"terms":[{"term":"Begriff","section":1,"definition":"Satz aus Abschnitt 1"}],"subtopics":[{"title":"Unterthema","sections":[2,3],"terms":[]}]}]}
         """;
 
     // The form of the answer as JSON schema, for a provider that can keep to one. Read checks the answer all the same.
     public const string Schema = """
         {"type":"object","additionalProperties":false,"required":["topics"],"properties":{
-          "topics":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["title","sections","subtopics"],"properties":{
+          "topics":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["title","sections","terms","subtopics"],"properties":{
             "title":{"type":"string"},
             "sections":{"type":"array","items":{"type":"integer"}},
-            "subtopics":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["title","sections"],"properties":{
+            "terms":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["term","section","definition"],"properties":{
+              "term":{"type":"string"},"section":{"type":"integer"},"definition":{"type":"string"}}}},
+            "subtopics":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["title","sections","terms"],"properties":{
               "title":{"type":"string"},
-              "sections":{"type":"array","items":{"type":"integer"}}}}}}}}}}
+              "sections":{"type":"array","items":{"type":"integer"}},
+              "terms":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["term","section","definition"],"properties":{
+                "term":{"type":"string"},"section":{"type":"integer"},"definition":{"type":"string"}}}}}}}}}}}}
         """;
 
     // The sections in their order, numbered from 1.
@@ -53,10 +68,12 @@ public static class TopicAnalysis
     // The suggestions of the answer for the sections with these IDs, given in the order of the prompt. Null if the
     // answer is no JSON of the asked form or places no section at all. Otherwise it gets fixed up rather than refused:
     // a number that is no section or was taken already counts nothing, a section without a topic goes to the one of the
-    // section before it (the first ones to the one after), and a topic without sections goes.
-    public static IReadOnlyList<TopicSuggestion>? Read(string answer, IReadOnlyList<Guid> sectionIds)
+    // section before it (the first ones to the one after), and a topic without sections goes. A key term stays only with
+    // the texts of the sections at hand (KeyTerms), so without them there are none.
+    public static IReadOnlyList<TopicSuggestion>? Read(string answer, IReadOnlyList<Guid> sectionIds, IReadOnlyList<string>? sectionTexts = null)
     {
         var topics = new List<(string Name, int? Parent)>();
+        var terms = new List<(int Topic, string Term, int Section, string Definition)>();
         var owner = new int?[sectionIds.Count];
         try
         {
@@ -100,7 +117,7 @@ public static class TopicAnalysis
             last = owner[section] ??= last;
         }
 
-        return Keep(topics, owner, sectionIds);
+        return Keep(topics, owner, sectionIds, KeyTerms(topics, owner, sectionIds, sectionTexts, terms));
 
         // The topic, if the answer gives it a name and there is room, with the sections it claims first.
         int? Add(JsonElement topic, int? parent)
@@ -125,12 +142,28 @@ public static class TopicAnalysis
                 }
             }
 
+            if (topic.TryGetProperty("terms", out var named) && named.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var term in named.EnumerateArray())
+                {
+                    if (term.ValueKind == JsonValueKind.Object
+                        && term.TryGetProperty("term", out var text) && text.ValueKind == JsonValueKind.String
+                        && term.TryGetProperty("section", out var section) && section.ValueKind == JsonValueKind.Number
+                        && section.TryGetInt32(out var number)
+                        && term.TryGetProperty("definition", out var definition) && definition.ValueKind == JsonValueKind.String)
+                    {
+                        terms.Add((topics.Count - 1, text.GetString()!, number, definition.GetString()!));
+                    }
+                }
+            }
+
             return topics.Count - 1;
         }
     }
 
     // The topics that have sections of their own or a subtopic with some, with Parent pointing to the new indexes.
-    private static List<TopicSuggestion> Keep(List<(string Name, int? Parent)> topics, int?[] owner, IReadOnlyList<Guid> sectionIds)
+    private static List<TopicSuggestion> Keep(
+        List<(string Name, int? Parent)> topics, int?[] owner, IReadOnlyList<Guid> sectionIds, List<KeyTermSuggestion>?[] terms)
     {
         var sections = topics.Select(_ => new List<Guid>()).ToList();
         for (var section = 0; section < owner.Length; section++)
@@ -175,10 +208,52 @@ public static class TopicAnalysis
         {
             index[topic] = suggestions.Count;
             suggestions.Add(new TopicSuggestion(
-                topics[topic].Name, topics[topic].Parent is { } parent ? index[parent] : null, sections[topic]));
+                topics[topic].Name, topics[topic].Parent is { } parent ? index[parent] : null, sections[topic], terms[topic]));
         }
 
         return suggestions;
+    }
+
+    // The key terms each topic keeps, null for none. A term stays only if it is grounded in the material: its section is
+    // one of the topic or of its subtopics, the term stands in that section, and the definition is a verbatim excerpt of
+    // it as the AI saw it (PromptMaterial.Seen, so an escape like &lt; in the quote counts as the < it stands for).
+    // Whatever fails goes, the rest of the analysis stays. At most MaxTerms per topic, each term once.
+    private static List<KeyTermSuggestion>?[] KeyTerms(
+        List<(string Name, int? Parent)> topics,
+        int?[] owner,
+        IReadOnlyList<Guid> sectionIds,
+        IReadOnlyList<string>? sectionTexts,
+        List<(int Topic, string Term, int Section, string Definition)> raw)
+    {
+        var kept = new List<KeyTermSuggestion>?[topics.Count];
+        if (sectionTexts is null || sectionTexts.Count != sectionIds.Count)
+        {
+            return kept;
+        }
+
+        var seen = sectionTexts.Select(PromptMaterial.Seen).ToList();
+        foreach (var (topic, rawTerm, number, rawDefinition) in raw)
+        {
+            var term = PromptMaterial.Line(rawTerm);
+            var definition = PromptMaterial.Line(rawDefinition);
+            if (number < 1 || number > seen.Count
+                || owner[number - 1] is not { } of || (of != topic && topics[of].Parent != topic)
+                || term.Length is 0 or > TermMaxLength
+                || definition.Length < DefinitionMinLength || definition.Length > DefinitionMaxLength
+                || !seen[number - 1].Contains(definition, StringComparison.Ordinal)
+                || !seen[number - 1].Contains(term, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var list = kept[topic] ??= [];
+            if (list.Count < MaxTerms && !list.Any(other => string.Equals(other.Term, term, StringComparison.OrdinalIgnoreCase)))
+            {
+                list.Add(new KeyTermSuggestion(term, sectionIds[number - 1], definition));
+            }
+        }
+
+        return kept;
     }
 
     // One line, without the escapes of the prompt, cut to the length a topic name may have.

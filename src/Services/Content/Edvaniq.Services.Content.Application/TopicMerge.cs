@@ -6,7 +6,9 @@ namespace Edvaniq.Services.Content.Application;
 // The topics of a document asked in parts (TopicBatches) as one list, as if the AI had seen it whole: a topic that comes
 // again in a later part, by the same name after TopicKey, takes the sections of it, a subtopic under its topic likewise.
 // Everything else follows in the order it came. Each part keeps only its quota of topics, the sections of a topic that
-// doesn't fit go to its topic or to the topic before it, so no section is lost. Knowledge merges by the same rule.
+// doesn't fit go to its topic or to the topic before it, so no section is lost. Knowledge merges by the same rule. The key
+// terms of a topic (#292) come from all its parts, each term once, TopicAnalysis.MaxTerms at most; a topic that doesn't
+// fit takes its terms with it, they were checked against its own sections.
 public static class TopicMerge
 {
     // sectionOrder holds every section of the document in order, each topic's sections come out in that order.
@@ -21,11 +23,12 @@ public static class TopicMerge
             var inBatch = new Topic[kept.Count];
             for (var index = 0; index < kept.Count; index++)
             {
-                var (name, parent, sections) = kept[index];
+                var (name, parent, sections, terms) = kept[index];
                 if (parent is null)
                 {
                     var topic = topics.Find(candidate => candidate.Key == TopicKey.Of(name)) ?? Add(topics, name);
                     topic.Sections.AddRange(sections);
+                    topic.Terms.AddRange(terms);
                     inBatch[index] = topic;
                 }
                 else
@@ -33,6 +36,7 @@ public static class TopicMerge
                     var owner = inBatch[parent.Value];
                     var subtopic = owner.Subtopics.Find(candidate => candidate.Key == TopicKey.Of(name)) ?? Add(owner.Subtopics, name);
                     subtopic.Sections.AddRange(sections);
+                    subtopic.Terms.AddRange(terms);
                     inBatch[index] = owner;
                 }
             }
@@ -42,8 +46,9 @@ public static class TopicMerge
         foreach (var topic in topics)
         {
             var index = merged.Count;
-            merged.Add(new TopicSuggestion(topic.Name, null, Ordered(topic.Sections, position)));
-            merged.AddRange(topic.Subtopics.Select(subtopic => new TopicSuggestion(subtopic.Name, index, Ordered(subtopic.Sections, position))));
+            merged.Add(new TopicSuggestion(topic.Name, null, Ordered(topic.Sections, position), Terms(topic.Terms)));
+            merged.AddRange(topic.Subtopics.Select(subtopic =>
+                new TopicSuggestion(subtopic.Name, index, Ordered(subtopic.Sections, position), Terms(subtopic.Terms))));
         }
 
         return merged;
@@ -51,9 +56,10 @@ public static class TopicMerge
 
     // The first quota suggestions in the order of the answer (topics, each followed by its subtopics). A dropped
     // subtopic gives its sections to its topic if that stays, any other dropped one to the last topic that stays.
-    internal static List<(string Name, int? Parent, List<Guid> Sections)> Trim(IReadOnlyList<TopicSuggestion> suggestions, int quota)
+    internal static List<(string Name, int? Parent, List<Guid> Sections, IReadOnlyList<KeyTermSuggestion> Terms)> Trim(
+        IReadOnlyList<TopicSuggestion> suggestions, int quota)
     {
-        var kept = new List<(string Name, int? Parent, List<Guid> Sections)>();
+        var kept = new List<(string Name, int? Parent, List<Guid> Sections, IReadOnlyList<KeyTermSuggestion> Terms)>();
         var index = new int?[suggestions.Count];
         var lastTopic = -1;
         for (var at = 0; at < suggestions.Count; at++)
@@ -63,7 +69,7 @@ public static class TopicMerge
             if (kept.Count < quota && (suggestion.Parent is null || parent is not null))
             {
                 index[at] = kept.Count;
-                kept.Add((suggestion.Name, parent, [.. suggestion.SectionIds]));
+                kept.Add((suggestion.Name, parent, [.. suggestion.SectionIds], suggestion.Terms ?? []));
                 if (suggestion.Parent is null)
                 {
                     lastTopic = kept.Count - 1;
@@ -85,6 +91,11 @@ public static class TopicMerge
         return topic;
     }
 
+    private static List<KeyTermSuggestion>? Terms(List<KeyTermSuggestion> terms) =>
+        terms.Count == 0
+            ? null
+            : [.. terms.DistinctBy(term => term.Term, StringComparer.OrdinalIgnoreCase).Take(TopicAnalysis.MaxTerms)];
+
     private static List<Guid> Ordered(List<Guid> sections, Dictionary<Guid, int> position) =>
         [.. sections.Distinct().OrderBy(section => position.GetValueOrDefault(section, int.MaxValue))];
 
@@ -95,6 +106,8 @@ public static class TopicMerge
         public string Key { get; } = key;
 
         public List<Guid> Sections { get; } = [];
+
+        public List<KeyTermSuggestion> Terms { get; } = [];
 
         public List<Topic> Subtopics { get; } = [];
     }
