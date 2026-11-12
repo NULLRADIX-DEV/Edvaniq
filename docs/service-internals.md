@@ -229,6 +229,16 @@ Der Remover geht jede Entity mit `IOwnedByUser` im Modell durch und markiert all
 
 Gespeichert wird wie bei jedem Handler vom Consumer, zusammen mit dem Inbox-Eintrag. Ob ein Service die Daten entfernt hat, zeigen dieser Eintrag für `<name>-UserDeletedHandler` und die Logzeile „Consumer <name>-UserDeletedHandler has handled message <MessageId>“. Die Zeile trägt die `TraceId` der Anfrage, die den Nutzer gelöscht hat, aber nicht seine `UserId`. Mit dieser Kennung findet man die Bestätigung jedes Service ([Ereignis empfangen](#ereignis-empfangen)).
 
+## Dokument löschen (Betreiber)
+
+Ein Nutzer löscht sein Dokument mit `DELETE /documents/{id}`. Das Team kann ein Dokument auch ohne Token des Nutzers löschen, etwa Testdaten, mit einem Befehl im Prozess der Content-Api:
+
+```bash
+dotnet Edvaniq.Services.Content.Api.dll document delete <id>
+```
+
+Der Befehl startet keinen Webserver und hat keinen Weg über HTTP. Er sucht den Eigentümer des Dokuments und löscht dann in dessen Namen, genau wie der Endpunkt: Datei, Abschnitte und Fragenpools gehen mit, und `DocumentDeleted` landet im selben Speichern in der Outbox. Die laufende Content-Api schickt das Ereignis, Knowledge und Assessment entfernen, was aus dem Dokument entstanden ist. Er schreibt nur `deleted <id>` und endet mit 0. Gibt es das Dokument nicht, schreibt er `no document <id>`, schickt nichts und endet ebenfalls mit 0, ein zweiter Lauf ist also harmlos. Fehlt die ID oder ist sie keine GUID, endet er mit 2, bei einem anderen Fehler mit 1.
+
 ## Tests
 
 `ServiceFactory` ist der Prüfstand: Er startet den echten Service, so wie er läuft, mit einer frischen MySQL-Datenbank, auf die alle Migrationen angewendet sind, und vertraut den Tokens aus `Edvaniq.Testing/TestTokens`. Den Broker tauscht er gegen einen im Prozess aus. Eine Testklasse holt ihn sich per `IClassFixture<ServiceFactory>`.

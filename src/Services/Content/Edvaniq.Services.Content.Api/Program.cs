@@ -31,12 +31,27 @@ builder.Services.AddHttpClient<ILearningGoals, PlanningLearningGoals>(client => 
         options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(10);
     });
 
+if (DocumentCommand.Matches(args))
+{
+    DocumentCommand.Register(builder.Services);
+}
+
 var app = builder.Build();
 
 // Migrating is its own step (dotnet <service>.dll migrate). A normal start never changes the database.
 if (args is ["migrate"])
 {
     return app.RunMigrations();
+}
+
+// Deletes a document for the operator on the server. Never starts the web server.
+if (DocumentCommand.Matches(args))
+{
+    // Disposed at the end like the migrate step, so the last log lines get out.
+    await using (app)
+    {
+        return await DocumentCommand.RunAsync(app.Services, args, Console.Out, Console.Error);
+    }
 }
 
 // Errors become problems that name the trace. First, so they wrap health and the token check too.
