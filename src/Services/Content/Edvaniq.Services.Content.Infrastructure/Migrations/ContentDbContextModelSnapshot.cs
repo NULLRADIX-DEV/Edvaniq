@@ -174,6 +174,22 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.ToTable("AiAttempts");
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.AiSwitch", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("Paused")
+                        .HasColumnType("tinyint(1)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AiSwitches");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.AiUsageDay", b =>
                 {
                     b.Property<DateTime>("Day")

@@ -9,6 +9,7 @@ var builder = Host.CreateApplicationBuilder(args);
 builder.AddServiceDefaults();
 builder.AddWorkerInfrastructure();
 builder.AddContentAi();
+builder.AddAiSwitch();
 
 // Knowledge says which ids the topics of an analysis got, asked with the worker's own token.
 builder.Services.AddOptions<InternalTokenOptions>()

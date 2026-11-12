@@ -45,6 +45,19 @@ public static class ContentAi
     internal static IChatClient For(Document document, IChatClient ai, TestDoubleAi testDouble) =>
         document.UsesTestDouble ? testDouble.Client : ai;
 
+    // Puts the operator's emergency stop in front of the configured AI (PausableChatClient), the one place every call
+    // to the provider passes. The test double of a test account calls no provider and stays. Call it after
+    // AddContentAi, in a process with the database.
+    public static TBuilder AddAiSwitch<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
+    {
+        var provider = builder.Services.Last(service => service.ServiceType == typeof(IChatClient));
+        var inner = provider.ImplementationFactory ?? throw new InvalidOperationException("The AI is registered without a factory.");
+        builder.Services.Remove(provider);
+        builder.Services.AddSingleton<IChatClient>(services =>
+            new PausableChatClient((IChatClient)inner(services), services.GetRequiredService<IServiceScopeFactory>()));
+        return builder;
+    }
+
     // The model that answered. Some providers leave it out of the answer, then it is the configured one, never empty.
     internal static string ModelOf(IChatClient ai, string? answered) =>
         new[] { answered, ai.GetService<ChatClientMetadata>()?.DefaultModelId, ai.GetService<ChatClientMetadata>()?.ProviderName }

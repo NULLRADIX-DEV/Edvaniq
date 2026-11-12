@@ -55,6 +55,15 @@ if (DocumentCommand.Matches(args))
     }
 }
 
+// Pauses or resumes every AI call of Content for the operator on the server. Never starts the web server.
+if (AiCommand.Matches(args))
+{
+    await using (app)
+    {
+        return await AiCommand.RunAsync(app.Services, args, Console.Out, Console.Error);
+    }
+}
+
 // Errors become problems that name the trace. First, so they wrap health and the token check too.
 app.UseProblems();
 
