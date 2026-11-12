@@ -24,6 +24,8 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<IQuestions, Questions>();
         builder.Services.AddScoped<IAttempts, Attempts>();
         builder.Services.AddScoped<Quiz>();
+        builder.Services.AddScoped<IBlockQuizzes, BlockQuizzes>();
+        builder.Services.AddScoped<BlockQuizOpener>();
         builder.Services.AddScoped<IQuestionPools, QuestionPools>();
 
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).

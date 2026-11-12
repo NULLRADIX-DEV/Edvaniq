@@ -29,6 +29,8 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
 
     public DbSet<Attempt> Attempts => Set<Attempt>();
 
+    public DbSet<BlockQuiz> BlockQuizzes => Set<BlockQuiz>();
+
     public DbSet<KnownTopic> KnownTopics => Set<KnownTopic>();
 
     public DbSet<TopicsSnapshot> TopicsSnapshots => Set<TopicsSnapshot>();
@@ -67,6 +69,12 @@ public sealed class AssessmentDbContext(DbContextOptions<AssessmentDbContext> op
         // Two answers at once: the later one updates no row and gets the stored answer instead.
         attempt.Property(entry => entry.Answered).IsConcurrencyToken();
         attempt.HasIndex(entry => entry.OwnerId);
+
+        // One quiz per user and block (#393), so two first calls at once leave one. Its attempts go with it.
+        var quiz = modelBuilder.Entity<BlockQuiz>();
+        quiz.Property(entry => entry.Id).ValueGeneratedNever();
+        quiz.HasIndex(entry => new { entry.OwnerId, entry.BlockId }).IsUnique();
+        attempt.HasOne<BlockQuiz>().WithMany().HasForeignKey(entry => entry.QuizId).OnDelete(DeleteBehavior.Cascade);
 
         // Topics of Knowledge, only ids (TopicsChanged).
         var topic = modelBuilder.Entity<KnownTopic>();

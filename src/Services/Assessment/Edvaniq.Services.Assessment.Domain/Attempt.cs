@@ -25,6 +25,9 @@ public sealed class Attempt : IOwnedByUser
     // matches it against the user's own introductions.
     public Guid? SessionId { get; private set; }
 
+    // The block's quiz the question belongs to (#393), null for one asked on its own.
+    public Guid? QuizId { get; private set; }
+
     // UTC.
     public DateTime AskedAt { get; private set; }
 
@@ -56,6 +59,15 @@ public sealed class Attempt : IOwnedByUser
             SessionId = sessionId,
             AskedAt = Stored(askedAt),
         };
+
+    // A question of a block's quiz (#393).
+    public static Attempt AskIn(BlockQuiz quiz, Question question, DateTime askedAt)
+    {
+        ArgumentNullException.ThrowIfNull(quiz);
+        var attempt = Ask(question, quiz.TopicId, askedAt);
+        attempt.QuizId = quiz.Id;
+        return attempt;
+    }
 
     public static bool IsOption(Question question, int option) => option >= 0 && option < question.Options.Count;
 

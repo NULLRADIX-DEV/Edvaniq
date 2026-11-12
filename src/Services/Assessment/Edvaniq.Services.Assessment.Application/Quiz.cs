@@ -22,8 +22,7 @@ public sealed class Quiz(IAttempts attempts, IEventOutbox outbox, TimeProvider t
             return new(AskOutcome.NoQuestions, null, null);
         }
 
-        // Leaving out the questions seen last is not part of this yet.
-        var question = questions[Random.Shared.Next(questions.Count)];
+        var question = QuestionSelection.Pick(questions, 1, Random.Shared)[0];
         var attempt = Attempt.Ask(question, topicId, time.GetUtcNow().UtcDateTime);
         attempts.Add(attempt);
         await attempts.SaveAsync(cancellationToken);
