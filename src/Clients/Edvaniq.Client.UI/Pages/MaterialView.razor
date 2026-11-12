@@ -135,7 +135,8 @@
             </div>
             <div class="paste-field">
                 <label for="paste-text">Text</label>
-                <textarea id="paste-text" name="text" rows="8" required @bind="text"></textarea>
+                <textarea id="paste-text" name="text" rows="8" required aria-describedby="paste-privacy" @bind="text"></textarea>
+                <p id="paste-privacy" class="paste-optional">@FeedbackTexts.Material.NoPersonalData</p>
             </div>
 
             @* Always there, so a screen reader announces each hint. *@
@@ -162,9 +163,10 @@
         <div class="paste-field">
             <label for="upload-file">@FeedbackTexts.Upload.Label</label>
             @* A new key after an upload empties the browser's field. *@
-            <InputFile @key="uploadField" id="upload-file" accept="@string.Join(',', UploadExtensions)" aria-describedby="upload-hint"
+            <InputFile @key="uploadField" id="upload-file" accept="@string.Join(',', UploadExtensions)" aria-describedby="upload-hint upload-privacy"
                        OnChange="FileChosen" />
             <p id="upload-hint" class="paste-optional">@FeedbackTexts.Upload.Hint</p>
+            <p id="upload-privacy" class="paste-optional">@FeedbackTexts.Upload.NoPersonalData</p>
         </div>
 
         <LiveRegion Urgent="true">
