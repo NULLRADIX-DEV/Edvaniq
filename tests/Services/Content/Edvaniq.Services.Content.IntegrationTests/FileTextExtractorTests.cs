@@ -219,7 +219,7 @@ public sealed class FileTextExtractorTests(ServiceFactory service) : IClassFixtu
         var file = new ByteArrayContent(content);
         file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         using var form = new MultipartFormDataContent { { file, "file", name } };
-        using var response = await client.PostAsync("/documents/files", form, Cancel);
+        using var response = await client.PostAsync("/documents/files?confirmation=material-1", form, Cancel);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonElement>(Cancel)).GetProperty("id").GetGuid();
     }

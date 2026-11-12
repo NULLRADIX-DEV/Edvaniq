@@ -282,6 +282,13 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)");
 
+                    b.Property<string>("MaterialConfirmationVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<DateTime?>("MaterialConfirmedAt")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<DateTime?>("NextAttemptAt")
                         .HasColumnType("datetime(6)");
 
@@ -382,7 +389,7 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .HasColumnType("varchar(128)")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
-                    b.Property<DateOnly>("StudyDay")
+                    b.Property<DateTime>("StudyDay")
                         .HasColumnType("date");
 
                     b.Property<Guid>("TopicId")
@@ -421,7 +428,7 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.Property<int>("Pages")
                         .HasColumnType("int");
 
-                    b.Property<DateOnly>("StudyDay")
+                    b.Property<DateTime>("StudyDay")
                         .HasColumnType("date");
 
                     b.HasKey("Id");

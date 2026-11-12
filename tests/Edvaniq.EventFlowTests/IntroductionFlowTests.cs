@@ -136,7 +136,7 @@ public sealed class IntroductionFlowTests(FlowServices services) : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         using var content = Client(services.Content.CreateClient(), token);
-        using var pasted = await content.PostAsJsonAsync("/documents", new { text = Text }, cancellationToken);
+        using var pasted = await content.PostAsJsonAsync("/documents", new { text = Text, confirmation = "material-1" }, cancellationToken);
         Assert.Equal(HttpStatusCode.Created, pasted.StatusCode);
         var documentId = (await pasted.Content.ReadFromJsonAsync<JsonElement>(cancellationToken)).GetProperty("id").GetGuid();
 

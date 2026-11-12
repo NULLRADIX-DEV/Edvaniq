@@ -38,7 +38,7 @@ public sealed class TokenTests(ServiceFactory factory) : IClassFixture<ServiceFa
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.CreateForClient("content"));
 
-        using var documents = await client.PostAsJsonAsync("/documents", new { text = "Licht spaltet Wasser." }, TestContext.Current.CancellationToken);
+        using var documents = await client.PostAsJsonAsync("/documents", new { text = "Licht spaltet Wasser.", confirmation = "material-1" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await GetMeAsync(TestTokens.CreateForClient("content"))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, documents.StatusCode);

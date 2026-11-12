@@ -184,7 +184,7 @@ public sealed class AiSwitchTests(ServiceFactory service) : IClassFixture<Servic
 
     private static async Task<Guid> PasteAsync(HttpClient client)
     {
-        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson }, Cancel);
+        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson, confirmation = "material-1" }, Cancel);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<DocumentDto>(Cancel))!.Id;
     }

@@ -5,11 +5,13 @@ namespace Edvaniq.Services.Content.Application;
 // The documents of the current user. Infrastructure implements it, the owner filter keeps other users' documents out.
 public interface IDocuments
 {
-    // Text and title must have passed Document.CheckText and Document.CheckTitle.
-    Task<Document> PasteAsync(LearningGoalInfo learningGoal, string? title, string text, CancellationToken cancellationToken);
+    // Text and title must have passed Document.CheckText and Document.CheckTitle. The confirmation must have passed
+    // MaterialConfirmation.Check, the document keeps it with the time.
+    Task<Document> PasteAsync(LearningGoalInfo learningGoal, string? title, string text, string confirmation, CancellationToken cancellationToken);
 
     // The file must be stored and its content must have passed FileCheck.
-    Task<Document> UploadAsync(LearningGoalInfo learningGoal, string? fileName, Guid fileId, FileFormat format, CancellationToken cancellationToken);
+    Task<Document> UploadAsync(
+        LearningGoalInfo learningGoal, string? fileName, Guid fileId, FileFormat format, string confirmation, CancellationToken cancellationToken);
 
     // How many documents of the user the learning goal holds, whatever their status.
     Task<int> CountInGoalAsync(Guid learningGoalId, CancellationToken cancellationToken);

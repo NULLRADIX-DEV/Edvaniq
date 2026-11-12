@@ -79,7 +79,7 @@ public sealed class GenerationQuotaTests(GenerationQuotaFactory service) : IClas
         Assert.Equal(3, Query(db => db.GenerationCharges.IgnoreQueryFilters().Count(charge => charge.DocumentId == big)));
         Assert.Equal((0, 2), await QuotaAsync(client));
 
-        using var next = await client.PostAsJsonAsync("/documents", new { text = Topics("Evolution") }, Cancel);
+        using var next = await client.PostAsJsonAsync("/documents", new { text = Topics("Evolution"), confirmation = "material-1" }, Cancel);
         Assert.Equal(HttpStatusCode.TooManyRequests, next.StatusCode);
         var problem = await next.Content.ReadFromJsonAsync<JsonElement>(Cancel);
         Assert.Equal(GenerationQuota.UsedUp(service.Time.GetUtcNow().UtcDateTime), problem.GetProperty("title").GetString());
@@ -148,7 +148,7 @@ public sealed class GenerationQuotaTests(GenerationQuotaFactory service) : IClas
 
     private static async Task<Guid> PasteAsync(HttpClient client, string text)
     {
-        using var response = await client.PostAsJsonAsync("/documents", new { text }, Cancel);
+        using var response = await client.PostAsJsonAsync("/documents", new { text, confirmation = "material-1" }, Cancel);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<JsonElement>(Cancel)).GetProperty("id").GetGuid();
     }

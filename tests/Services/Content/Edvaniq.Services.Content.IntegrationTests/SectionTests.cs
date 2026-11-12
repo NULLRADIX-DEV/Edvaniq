@@ -81,7 +81,7 @@ public sealed class SectionTests(ServiceFactory service) : IClassFixture<Service
 
     private async Task<DocumentDto> PasteAsync(HttpClient client, string text)
     {
-        using var response = await client.PostAsJsonAsync("/documents", new { text }, TestContext.Current.CancellationToken);
+        using var response = await client.PostAsJsonAsync("/documents", new { text, confirmation = "material-1" }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<DocumentDto>(TestContext.Current.CancellationToken))!;
     }

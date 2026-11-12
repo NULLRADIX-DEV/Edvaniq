@@ -152,6 +152,18 @@ public sealed class Document : IOwnedByUser
     // for tests (docs/tokens.md), never from a field of the request.
     public bool UsesTestDouble { get; private set; }
 
+    // When the user confirmed the material is theirs or theirs to use, UTC, and the version of the wording they saw
+    // (MaterialConfirmation). Null for a document from before #278.
+    public DateTime? MaterialConfirmedAt { get; private set; }
+
+    public string? MaterialConfirmationVersion { get; private set; }
+
+    public void ConfirmMaterial(string version, DateTime confirmedAt)
+    {
+        MaterialConfirmationVersion = version;
+        MaterialConfirmedAt = confirmedAt;
+    }
+
     // The topics are reported, the question pool is what's left before the document is ready.
     public bool WaitsForQuestions => Status == DocumentStatus.Analyzing && AnalyzedAt is not null;
 

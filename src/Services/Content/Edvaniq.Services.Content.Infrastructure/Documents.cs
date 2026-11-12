@@ -11,7 +11,8 @@ namespace Edvaniq.Services.Content.Infrastructure;
 internal sealed class Documents(
     ContentDbContext db, ICurrentUser currentUser, ITestDoubleCaller caller, IEventOutbox outbox, IFiles files, TimeProvider time) : IDocuments
 {
-    public async Task<Document> PasteAsync(LearningGoalInfo learningGoal, string? title, string text, CancellationToken cancellationToken)
+    public async Task<Document> PasteAsync(
+        LearningGoalInfo learningGoal, string? title, string text, string confirmation, CancellationToken cancellationToken)
     {
         var document = Document.Paste(
             currentUser.Id,
@@ -20,6 +21,7 @@ internal sealed class Documents(
             text,
             time.GetUtcNow().UtcDateTime,
             caller.UsesTestDouble);
+        document.ConfirmMaterial(confirmation, time.GetUtcNow().UtcDateTime);
         db.Documents.Add(document);
         await db.SaveChangesAsync(cancellationToken);
 
@@ -27,7 +29,7 @@ internal sealed class Documents(
     }
 
     public async Task<Document> UploadAsync(
-        LearningGoalInfo learningGoal, string? fileName, Guid fileId, FileFormat format, CancellationToken cancellationToken)
+        LearningGoalInfo learningGoal, string? fileName, Guid fileId, FileFormat format, string confirmation, CancellationToken cancellationToken)
     {
         var document = Document.Upload(
             currentUser.Id,
@@ -37,6 +39,7 @@ internal sealed class Documents(
             format,
             time.GetUtcNow().UtcDateTime,
             caller.UsesTestDouble);
+        document.ConfirmMaterial(confirmation, time.GetUtcNow().UtcDateTime);
         db.Documents.Add(document);
         try
         {

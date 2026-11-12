@@ -125,7 +125,7 @@ try:
     expect(step, "POST", "/session/login", 204, {"name": account, "password": password})
 
     go("paste")
-    document = expect(step, "POST", "/api/content/documents", 201, {"title": "Durchstich", "text": text})["id"]
+    document = expect(step, "POST", "/api/content/documents", 201, {"title": "Durchstich", "text": text, "confirmation": "material-1"})["id"]
 
     go("analysis")
 

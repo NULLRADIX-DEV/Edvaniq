@@ -328,7 +328,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         using var client = ClientFor($"alice-{Guid.NewGuid():N}");
         var marked = await PasteAsync(tester, Text);
         using var claimed = await client.PostAsJsonAsync(
-            "/documents", new { text = Text, usesTestDouble = true, testDouble = true }, TestContext.Current.CancellationToken);
+            "/documents", new { text = Text, usesTestDouble = true, testDouble = true, confirmation = "material-1" }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, claimed.StatusCode);
         var plain = (await claimed.Content.ReadFromJsonAsync<DocumentDto>(TestContext.Current.CancellationToken))!.Id;
         Simulated.Fault = SimulatedFault.Outage;
@@ -1207,7 +1207,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
 
     private static async Task<Guid> PasteAsync(HttpClient client, string text, string? title = null)
     {
-        using var response = await client.PostAsJsonAsync("/documents", new { text, title }, TestContext.Current.CancellationToken);
+        using var response = await client.PostAsJsonAsync("/documents", new { text, title, confirmation = "material-1" }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<DocumentDto>(TestContext.Current.CancellationToken))!.Id;
     }

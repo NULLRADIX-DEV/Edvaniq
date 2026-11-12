@@ -49,7 +49,7 @@ public sealed class GoalLimitTests(ServiceFactory service) : IClassFixture<Servi
         file.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         using var form = new MultipartFormDataContent { { file, "file", "Notizen.txt" } };
 
-        using var response = await client.PostAsync("/documents/files", form, Cancel);
+        using var response = await client.PostAsync("/documents/files?confirmation=material-1", form, Cancel);
 
         await AssertGoalFullAsync(response);
         Assert.Equal(0, Query(db => db.StoredFiles.IgnoreQueryFilters().Count(stored => stored.OwnerId == user)));
@@ -112,7 +112,7 @@ public sealed class GoalLimitTests(ServiceFactory service) : IClassFixture<Servi
     }
 
     private static Task<HttpResponseMessage> PasteAsync(HttpClient client) =>
-        client.PostAsJsonAsync("/documents", new { text = Text }, Cancel);
+        client.PostAsJsonAsync("/documents", new { text = Text, confirmation = "material-1" }, Cancel);
 
     private int Count(string user) => Query(db => db.Documents.IgnoreQueryFilters().Count(document => document.OwnerId == user));
 

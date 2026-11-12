@@ -182,7 +182,7 @@ public sealed class FileUploadTests(ServiceFactory service) : IClassFixture<Serv
 
         using var form = Form("gross.txt", content);
         HttpContent body = withLength ? form : new ChunkedContent(form);
-        using var response = await client.PostAsync("/documents/files", body, Cancel);
+        using var response = await client.PostAsync("/documents/files?confirmation=material-1", body, Cancel);
 
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
@@ -247,7 +247,7 @@ public sealed class FileUploadTests(ServiceFactory service) : IClassFixture<Serv
         var file = new StreamContent(new BreakingStream(1024 * 1024));
         file.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         form.Add(file, "file", "abgebrochen.txt");
-        await Assert.ThrowsAnyAsync<Exception>(() => client.PostAsync("/documents/files", form, Cancel));
+        await Assert.ThrowsAnyAsync<Exception>(() => client.PostAsync("/documents/files?confirmation=material-1", form, Cancel));
 
         var deadline = DateTime.UtcNow.AddSeconds(10);
         while (Directory.GetFiles(service.FilesDirectory).Except(before).Any() && DateTime.UtcNow < deadline)
@@ -264,7 +264,7 @@ public sealed class FileUploadTests(ServiceFactory service) : IClassFixture<Serv
     {
         using var client = ClientFor(NewUser("alice"));
 
-        using var response = await client.PostAsync("/documents/files", new MultipartFormDataContent { { new StringContent("x"), "note" } }, Cancel);
+        using var response = await client.PostAsync("/documents/files?confirmation=material-1", new MultipartFormDataContent { { new StringContent("x"), "note" } }, Cancel);
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -286,7 +286,7 @@ public sealed class FileUploadTests(ServiceFactory service) : IClassFixture<Serv
     private static Task<HttpResponseMessage> UploadAsync(
         HttpClient client, string name, byte[] content, string contentType = "application/octet-stream", Guid? goal = null) =>
         client.PostAsync(
-            goal is { } id ? $"/documents/files?learningGoalId={id}" : "/documents/files", Form(name, content, contentType), Cancel);
+            goal is { } id ? $"/documents/files?learningGoalId={id}&confirmation=material-1" : "/documents/files?confirmation=material-1", Form(name, content, contentType), Cancel);
 
     private static MultipartFormDataContent Form(string name, byte[] content, string contentType = "application/octet-stream")
     {
