@@ -7,7 +7,7 @@ public class SessionStepsTests
 {
     private static readonly SessionStep EmptyReview = new(SessionStepKind.Review, Empty: true);
     private static readonly SessionStep Unit = new(SessionStepKind.IntroductionUnit);
-    private static readonly SessionStep Quiz = new(SessionStepKind.Quiz);
+    private static readonly SessionStep Quiz = new(SessionStepKind.Quiz, Questions: SessionSteps.QuizQuestions);
     private static readonly Guid Goal = new("00000000-0000-0000-0000-0000000000a0");
     private static readonly Guid Topic = new("00000000-0000-0000-0000-00000000000a");
     private static readonly DateOnly Today = new(2026, 11, 12);

@@ -1,7 +1,8 @@
 namespace Edvaniq.Services.Planning.Domain;
 
 // One step of a session (docs/spec/glossary.md#session). Empty: nothing to do in it, the client skips it (A60).
-public sealed record SessionStep(SessionStepKind Kind, bool Empty = false);
+// Questions: how many questions the quiz has, null for the other steps.
+public sealed record SessionStep(SessionStepKind Kind, bool Empty = false, int? Questions = null);
 
 public enum SessionStepKind
 {
@@ -14,6 +15,10 @@ public enum SessionStepKind
 // not introduced yet, then the quiz. A pure function.
 public static class SessionSteps
 {
+    // The questions of a block's quiz (#393). The client passes it to Assessment as size of POST /quizzes, which keeps
+    // the set it made first, so a later change here only reaches quizzes made after it.
+    public const int QuizQuestions = 5;
+
     public static IReadOnlyList<SessionStep> For(BlockKind kind, bool topicIsNew)
     {
         // The review has no content before cards and wrong answers come in (M4).
@@ -23,7 +28,7 @@ public static class SessionSteps
             steps.Add(new SessionStep(SessionStepKind.IntroductionUnit));
         }
 
-        steps.Add(new SessionStep(SessionStepKind.Quiz));
+        steps.Add(new SessionStep(SessionStepKind.Quiz, Questions: QuizQuestions));
         return steps;
     }
 }

@@ -84,6 +84,7 @@ public sealed class PlanningDbContext(DbContextOptions<PlanningDbContext> option
         session.HasIndex(item => item.ActiveOwnerId).IsUnique();
         session.Property(item => item.Kind).HasConversion<string>().HasMaxLength(16);
         session.Ignore(item => item.Steps);
+        session.Property(item => item.Outcome).HasConversion<string>().HasMaxLength(16);
         session.Property(item => item.StudyDay)
             .HasConversion(new ValueConverter<DateOnly, DateTime>(
                 date => date.ToDateTime(TimeOnly.MinValue),
