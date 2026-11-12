@@ -80,6 +80,10 @@ public sealed class Topic : IOwnedByUser
     // Content's section of the document belongs to this topic.
     public TopicSection AssignSection(Guid documentId, Guid sectionId) => new(OwnerId, Id, documentId, sectionId);
 
+    // A key term of this topic from the section of the document (#292).
+    public KeyTerm KeyTerm(Guid documentId, Guid sectionId, string term, string definition, DateTime createdAt, int position) =>
+        Domain.KeyTerm.Of(this, documentId, sectionId, term, definition, createdAt, position);
+
     // Call it only with a name that passed CheckName.
     public void Rename(string name) => Name = name.Trim();
 

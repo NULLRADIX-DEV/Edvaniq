@@ -182,12 +182,13 @@ public sealed class DocumentAnalyzer(
         Document document, LearnerProfile profile, IChatClient chat, IReadOnlyList<Section> sections, CancellationToken cancellationToken)
     {
         IReadOnlyList<Guid> ids = [.. sections.Select(section => section.Id)];
+        IReadOnlyList<string> texts = [.. sections.Select(section => document.Text.Substring(section.Start, section.Length))];
         var answer = await chat.AskAsync(
             [
                 new ChatMessage(ChatRole.System, TopicAnalysis.System(profile)),
-                new ChatMessage(ChatRole.User, TopicAnalysis.User(sections.Select(section => document.Text.Substring(section.Start, section.Length)))),
+                new ChatMessage(ChatRole.User, TopicAnalysis.User(texts)),
             ],
-            text => TopicAnalysis.Read(text, ids),
+            text => TopicAnalysis.Read(text, ids, texts),
             new StructuredRequest(AiTimeout, ContentAi.TopicsFormat),
             time,
             cancellationToken);

@@ -42,7 +42,7 @@ public sealed class SimulatedAiTests
 
         // The first section has no heading above it, the analysis gives it a topic.
         Assert.Equal(
-            """{"topics":[{"title":"Photosynthese","sections":[],"subtopics":[{"title":"Lichtreaktion","sections":[2]},{"title":"Calvin-Zyklus","sections":[3]}]},{"title":"Zellatmung \u0026 mehr","sections":[4,5],"subtopics":[]}]}""",
+            """{"topics":[{"title":"Photosynthese","sections":[],"terms":[],"subtopics":[{"title":"Lichtreaktion","sections":[2],"terms":[]},{"title":"Calvin-Zyklus","sections":[3],"terms":[]}]},{"title":"Zellatmung \u0026 mehr","sections":[4,5],"terms":[],"subtopics":[]}]}""",
             answer);
     }
 
@@ -56,7 +56,7 @@ public sealed class SimulatedAiTests
             ["## Steigung\nDie Steigung m.", "## Nullstelle\nWo der Graph die x-Achse schneidet.", "Noch mehr dazu."]));
 
         Assert.Equal(
-            """{"topics":[{"title":"Steigung","sections":[1],"subtopics":[]},{"title":"Nullstelle","sections":[2,3],"subtopics":[]}]}""",
+            """{"topics":[{"title":"Steigung","sections":[1],"terms":[],"subtopics":[]},{"title":"Nullstelle","sections":[2,3],"terms":[],"subtopics":[]}]}""",
             answer);
     }
 
@@ -68,7 +68,7 @@ public sealed class SimulatedAiTests
         var answer = await AskAsync(host, ContentAi.TopicsTask, TopicAnalysis.User(["Licht spaltet Wasser in Teile.", "Zucker wird zu Energie."]));
 
         Assert.Equal(
-            """{"topics":[{"title":"Licht spaltet Wasser","sections":[1],"subtopics":[]},{"title":"Zucker wird zu","sections":[2],"subtopics":[]}]}""",
+            """{"topics":[{"title":"Licht spaltet Wasser","sections":[1],"terms":[],"subtopics":[]},{"title":"Zucker wird zu","sections":[2],"terms":[],"subtopics":[]}]}""",
             answer);
     }
 

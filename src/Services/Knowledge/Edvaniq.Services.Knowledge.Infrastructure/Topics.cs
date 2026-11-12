@@ -26,6 +26,21 @@ internal sealed class Topics(KnowledgeDbContext db, TopicsChangedEvents changes,
     public Task<Topic?> FindAsync(Guid id, CancellationToken cancellationToken) =>
         db.Topics.AsNoTracking().FirstOrDefaultAsync(topic => topic.Id == id, cancellationToken);
 
+    public async Task<IReadOnlyList<KeyTerm>?> TermsAsync(Guid topicId, CancellationToken cancellationToken)
+    {
+        if (!await db.Topics.AnyAsync(topic => topic.Id == topicId, cancellationToken))
+        {
+            return null;
+        }
+
+        var terms = await db.KeyTerms.AsNoTracking()
+            .Where(term => term.TopicId == topicId)
+            .OrderBy(term => term.CreatedAt)
+            .ThenBy(term => term.Position)
+            .ToListAsync(cancellationToken);
+        return [.. terms.DistinctBy(term => KeyTerm.KeyOf(term.Term))];
+    }
+
     public async Task<TopicResult> RenameAsync(Guid id, string name, CancellationToken cancellationToken)
     {
         var topic = await db.Topics.FirstOrDefaultAsync(topic => topic.Id == id, cancellationToken);

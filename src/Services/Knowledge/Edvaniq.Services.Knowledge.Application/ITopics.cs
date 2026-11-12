@@ -10,6 +10,10 @@ public interface ITopics
 
     Task<Topic?> FindAsync(Guid id, CancellationToken cancellationToken);
 
+    // The key terms of the topic (#292), each term once in the order they came, null if the user has no such topic. A
+    // hidden topic has its terms too, as GET /topics/{id} still gives the topic itself.
+    Task<IReadOnlyList<KeyTerm>?> TermsAsync(Guid topicId, CancellationToken cancellationToken);
+
     // The names must have passed Topic.CheckName.
     Task<TopicResult> RenameAsync(Guid id, string name, CancellationToken cancellationToken);
 

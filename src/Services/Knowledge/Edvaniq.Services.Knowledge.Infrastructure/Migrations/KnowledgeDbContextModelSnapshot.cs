@@ -123,6 +123,54 @@ namespace Edvaniq.Services.Knowledge.Infrastructure.Migrations
                     b.ToTable("DeletedDocuments");
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Knowledge.Domain.KeyTerm", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Definition")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Term")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("varchar(80)");
+
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("TopicId");
+
+                    b.HasIndex("OwnerId", "DocumentId");
+
+                    b.ToTable("KeyTerms");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Knowledge.Domain.Topic", b =>
                 {
                     b.Property<Guid>("Id")
@@ -225,6 +273,15 @@ namespace Edvaniq.Services.Knowledge.Infrastructure.Migrations
                     b.HasIndex("OwnerId");
 
                     b.ToTable("TopicSets");
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Knowledge.Domain.KeyTerm", b =>
+                {
+                    b.HasOne("Edvaniq.Services.Knowledge.Domain.Topic", null)
+                        .WithMany()
+                        .HasForeignKey("TopicId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Edvaniq.Services.Knowledge.Domain.Topic", b =>

@@ -25,6 +25,9 @@ internal sealed class DeletedDocuments(KnowledgeDbContext db) : IDeletedDocument
             .Where(section => section.OwnerId == ownerId && section.DocumentId == documentId)
             .ToListAsync(cancellationToken);
         db.TopicSections.RemoveRange(sections);
+        db.KeyTerms.RemoveRange(await db.KeyTerms.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .Where(term => term.OwnerId == ownerId && term.DocumentId == documentId)
+            .ToListAsync(cancellationToken));
 
         // The topics in question, and every subtopic of them, since a subtopic that stays keeps its parent.
         var touched = sections.Select(section => section.TopicId).ToHashSet();

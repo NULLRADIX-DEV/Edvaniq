@@ -11,4 +11,9 @@ public sealed record DocumentAnalyzed(
 // A new topic as the analysis suggests it. Parent is the index of another suggestion in the same event, which always
 // comes first, or null for a topic at the top. SectionIds are the sections of the document that belong to it, each
 // section of the document belongs to exactly one suggestion.
-public sealed record TopicSuggestion(string Name, int? Parent, IReadOnlyList<Guid> SectionIds);
+// Terms are its key terms (#292), each with a definition quoted verbatim from one of its sections or those of its
+// subtopics, null when the analysis gave none or came from before.
+public sealed record TopicSuggestion(string Name, int? Parent, IReadOnlyList<Guid> SectionIds, IReadOnlyList<KeyTermSuggestion>? Terms = null);
+
+// A key term of a topic. Definition is a verbatim excerpt of the section SectionId, the analysis checked it there.
+public sealed record KeyTermSuggestion(string Term, Guid SectionId, string Definition);

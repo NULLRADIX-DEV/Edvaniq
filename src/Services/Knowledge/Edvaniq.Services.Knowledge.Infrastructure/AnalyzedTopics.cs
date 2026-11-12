@@ -24,6 +24,12 @@ internal sealed class AnalyzedTopics(KnowledgeDbContext db) : IAnalyzedTopics
         var kept = stored.Select(section => (section.TopicId, section.SectionId)).ToHashSet();
         db.TopicSections.RemoveRange(stored.Where(section => !wanted.Contains((section.TopicId, section.SectionId))));
         db.TopicSections.AddRange(import.Sections.Where(section => !kept.Contains((section.TopicId, section.SectionId))));
+
+        // The terms of the document come new with every analysis of it, the old ones go.
+        db.KeyTerms.RemoveRange(await db.KeyTerms.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .Where(term => term.OwnerId == import.OwnerId && term.DocumentId == import.DocumentId)
+            .ToListAsync(cancellationToken));
+        db.KeyTerms.AddRange(import.Terms ?? []);
     }
 
     public async Task<IReadOnlyList<Topic>> OfGoalAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>

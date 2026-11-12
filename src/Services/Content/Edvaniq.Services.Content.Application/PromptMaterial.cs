@@ -20,6 +20,10 @@ internal static class PromptMaterial
         return text.Append("</material>").ToString();
     }
 
+    // A section as the AI read it, on one line: escaped for the prompt and the escapes read back, so a quote of it matches
+    // whether the AI kept the escapes or not.
+    public static string Seen(string section) => Line(Escape(section));
+
     // One line, without the escapes of the prompt.
     public static string Line(string text) =>
         string.Join(' ', WebUtility.HtmlDecode(text).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));

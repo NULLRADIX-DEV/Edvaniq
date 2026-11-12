@@ -8,8 +8,10 @@ namespace Edvaniq.Services.Knowledge.Application;
 // under the same topic, and its name matches after TopicName.Normalize, the current name or the one the analysis gave
 // first. Then it takes that topic, id and name, and only hangs its sections there. Two equal suggestions in one analysis
 // are one topic too. Content already sends two levels and valid names, but a handler that throws gets the message again
-// and again, so whatever doesn't fit gets fixed up instead.
-public sealed record TopicImport(string OwnerId, Guid DocumentId, IReadOnlyList<Topic> Topics, IReadOnlyList<TopicSection> Sections)
+// and again, so whatever doesn't fit gets fixed up instead. The key terms of the analysis (#292) go to the topic each
+// suggestion resolved to, a term once per topic and document, whatever case it is written in.
+public sealed record TopicImport(
+    string OwnerId, Guid DocumentId, IReadOnlyList<Topic> Topics, IReadOnlyList<TopicSection> Sections, IReadOnlyList<KeyTerm>? Terms = null)
 {
     public const string UnnamedTopic = "Thema ohne Namen";
 
@@ -25,6 +27,7 @@ public sealed record TopicImport(string OwnerId, Guid DocumentId, IReadOnlyList<
         var created = new List<Topic>();
         var resolved = new List<Topic>();
         var sections = new List<TopicSection>();
+        var terms = new List<KeyTerm>();
         foreach (var (suggestion, position) in analysis.Topics.Select((suggestion, position) => (suggestion, position)))
         {
             var name = NameOf(suggestion.Name);
@@ -51,9 +54,18 @@ public sealed record TopicImport(string OwnerId, Guid DocumentId, IReadOnlyList<
                 .Where(section => !sections.Any(assigned => assigned.TopicId == topic.Id && assigned.SectionId == section))
                 .Distinct()
                 .Select(section => topic.AssignSection(analysis.DocumentId, section)));
+            foreach (var term in suggestion.Terms ?? [])
+            {
+                if (!string.IsNullOrWhiteSpace(term.Term) && !string.IsNullOrWhiteSpace(term.Definition)
+                    && !terms.Any(other => other.TopicId == topic.Id
+                        && string.Equals(other.Term, term.Term.Trim(), StringComparison.OrdinalIgnoreCase)))
+                {
+                    terms.Add(topic.KeyTerm(analysis.DocumentId, term.SectionId, term.Term, term.Definition, createdAt, terms.Count));
+                }
+            }
         }
 
-        return new(analysis.UserId, analysis.DocumentId, created, sections);
+        return new(analysis.UserId, analysis.DocumentId, created, sections, terms);
     }
 
     private static string NameOf(string? name)
