@@ -37,7 +37,7 @@ public sealed class TopicDirectoryPageTests(WebShell shell)
         await page.Page.Keyboard.PressAsync("Space");
         await Assertions.Expect(subtopic).ToHaveAttributeAsync("aria-expanded", "true");
 
-        var hidden = page.Page.Locator(".directory-hidden button");
+        var hidden = page.Page.Locator(".directory-hidden > h2 button");
         await hidden.ClickAsync();
         await Assertions.Expect(page.Page.Locator("#hidden-topics")).ToContainTextAsync("Zellatmung");
 

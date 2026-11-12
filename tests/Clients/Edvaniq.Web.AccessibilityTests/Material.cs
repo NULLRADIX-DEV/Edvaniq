@@ -48,8 +48,12 @@ internal static class Material
             route.Request.Method == "POST"
                 ? FulfillAsync(route, pasted ?? Document("Uploaded"))
                 : FulfillAsync(route, documents[Math.Min(Interlocked.Increment(ref documentCalls) - 1, documents.Count - 1)]));
-        await page.RouteAsync("**/api/knowledge/topics", route =>
-            FulfillAsync(route, topics[Math.Min(Interlocked.Increment(ref topicCalls) - 1, topics.Count - 1)]));
+        Task Topics(IRoute route) =>
+            FulfillAsync(route, topics[Math.Min(Interlocked.Increment(ref topicCalls) - 1, topics.Count - 1)]);
+        await page.RouteAsync("**/api/knowledge/topics", Topics);
+
+        // The topic directory asks with the hidden ones (#294), the glob above leaves a query out.
+        await page.RouteAsync("**/api/knowledge/topics?includeHidden=true", Topics);
     }
 
     // Since #278 nothing goes up without the tick. Found by its role and label, so the label has to name it.
