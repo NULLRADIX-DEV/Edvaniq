@@ -79,6 +79,28 @@ public static class FeedbackTexts
         public const string EmptyHint = "Füge unten deinen ersten Text ein, dann erscheinen hier deine Themen.";
 
         public const string KeepWaiting = "Weiter warten";
+
+        public const string TextNotThrough =
+            "Der Text ist nicht angekommen. Edvaniq ist gerade nicht erreichbar. Versuch es in ein paar Sekunden noch einmal.";
+
+        // {0} is the title of the newest text, placed by the view.
+        public const string Analyzing = "„{0}“ wird analysiert …";
+
+        public const string AnalyzingHint = "Das kann ein paar Minuten dauern. Die Themen erscheinen hier von selbst.";
+
+        public const string AnalysisSlow = "Die Analyse von „{0}“ dauert länger als gedacht.";
+
+        public const string AnalysisSlowHint = "Du kannst weiter warten oder später wiederkommen.";
+
+        public const string AnalysisFailed = "Die Analyse von „{0}“ hat nicht geklappt.";
+
+        // When Content names no reason.
+        public const string AnalysisFailedHint = "Versuch es noch einmal.";
+
+        public const string Ready = "Die Themen aus „{0}“ sind da.";
+
+        public static string WithTitle(string text, string title) =>
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, text, title);
     }
 
     // When the login ran out or ended elsewhere. What was not sent yet stays (Shell/Drafts).

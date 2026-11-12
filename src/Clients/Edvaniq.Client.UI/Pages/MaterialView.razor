@@ -33,18 +33,18 @@
             <EmptyState Title="@FeedbackTexts.Material.Empty" Hint="@FeedbackTexts.Material.EmptyHint" />
             break;
         case ViewState.Analyzing:
-            <Notice Kind="NoticeKind.Info" Title="@($"„{latest!.Title}“ wird analysiert …")" class="material-analyzing">
-                <p>Das kann ein paar Minuten dauern. Die Themen erscheinen hier von selbst.</p>
+            <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.Material.WithTitle(FeedbackTexts.Material.Analyzing, latest!.Title)" class="material-analyzing">
+                <p>@FeedbackTexts.Material.AnalyzingHint</p>
             </Notice>
             break;
         case ViewState.AnalysisSlow:
-            <Notice Kind="NoticeKind.Info" Title="@($"Die Analyse von „{latest!.Title}“ dauert länger als gedacht.")" class="material-slow">
-                <p>Du kannst weiter warten oder später wiederkommen.</p>
+            <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.Material.WithTitle(FeedbackTexts.Material.AnalysisSlow, latest!.Title)" class="material-slow">
+                <p>@FeedbackTexts.Material.AnalysisSlowHint</p>
             </Notice>
             break;
         case ViewState.Failed:
-            <Notice Kind="NoticeKind.Error" Title="@($"Die Analyse von „{latest!.Title}“ hat nicht geklappt.")" class="material-failed">
-                <p>@(latest.FailureReason ?? "Versuch es noch einmal.")</p>
+            <Notice Kind="NoticeKind.Error" Title="@FeedbackTexts.Material.WithTitle(FeedbackTexts.Material.AnalysisFailed, latest!.Title)" class="material-failed">
+                <p>@(latest.FailureReason ?? FeedbackTexts.Material.AnalysisFailedHint)</p>
             </Notice>
             @if (retryFailed)
             {
@@ -52,7 +52,7 @@
             }
             break;
         case ViewState.Ready:
-            <Notice Kind="NoticeKind.Success" class="material-ready"><p>Die Themen aus „@latest!.Title“ sind da.</p></Notice>
+            <Notice Kind="NoticeKind.Success" class="material-ready"><p>@FeedbackTexts.Material.WithTitle(FeedbackTexts.Material.Ready, latest!.Title)</p></Notice>
             break;
     }
 </div>
@@ -162,8 +162,7 @@
 }
 
 @code {
-    private const string NotThrough =
-        "Der Text ist nicht angekommen. Edvaniq ist gerade nicht erreichbar. Versuch es in ein paar Sekunden noch einmal.";
+    private const string NotThrough = FeedbackTexts.Material.TextNotThrough;
 
     private readonly CancellationTokenSource life = new();
     private CancellationTokenSource? follow;
