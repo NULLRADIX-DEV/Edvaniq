@@ -26,7 +26,7 @@ internal static partial class AiCommand
         {
             ["ai", "pause" or "resume" or "status"] => true,
             ["ai", "budget", "none"] => true,
-            ["ai", "budget", var amount] => decimal.TryParse(amount, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            ["ai", "budget", var amount] => decimal.TryParse(amount, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var parsed)
                 && parsed > 0 && (budget = parsed) is not null,
             _ => false,
         };
