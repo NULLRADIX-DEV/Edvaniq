@@ -65,6 +65,8 @@ public static class InfrastructureExtensions
         builder.Services.AddHostedService<DocumentSplitter>();
         builder.Services.AddHostedService<DocumentAnalyzer>();
         builder.Services.AddHostedService<QuestionPools>();
+        AnalysisOptions.AddTo(builder.Services);
+        builder.Services.AddHostedService<StuckAnalysisSweep>();
 
         return builder;
     }

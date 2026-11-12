@@ -1,3 +1,5 @@
+using Edvaniq.Services.Content.Domain;
+
 using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.Services.Content.Infrastructure;
@@ -79,6 +81,15 @@ internal static partial class ContentLog
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Read {Pages} pages and {Characters} characters from the file of document {DocumentId} in {DurationMs} ms")]
     public static partial void FileRead(ILogger logger, Guid documentId, int pages, int characters, long durationMs);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Document {DocumentId} was still {Status} after {Timeout}, it is marked as failed")]
+    public static partial void StuckDocumentFailed(ILogger logger, Guid documentId, DocumentStatus status, TimeSpan timeout);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "The sweep marked {Count} documents as failed that took longer than {Timeout}")]
+    public static partial void StuckDocumentsSwept(ILogger logger, int count, TimeSpan timeout);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Looking for stuck documents failed, trying again in {Delay}")]
+    public static partial void SweepRoundFailed(ILogger logger, Exception exception, TimeSpan delay);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Topic {TopicId} has no material in document {DocumentId}, it gets no questions from it")]
     public static partial void TopicWithoutMaterial(ILogger logger, Guid topicId, Guid documentId);

@@ -28,6 +28,8 @@ public sealed class Document : IOwnedByUser
 
     public const string TopicsMissing = "Die Themen kamen nicht an. Versuch es später noch einmal.";
 
+    public const string AnalysisTimedOut = "Die Analyse hat zu lange gedauert. Starte sie neu.";
+
     public const string AiUnavailable = "KI derzeit nicht verfügbar. Versuch es später noch einmal.";
 
     // Planning couldn't say level and output language of the goal. Never guessed, a retry asks again.
