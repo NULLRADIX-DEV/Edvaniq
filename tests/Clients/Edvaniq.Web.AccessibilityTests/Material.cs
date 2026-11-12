@@ -52,6 +52,12 @@ internal static class Material
             FulfillAsync(route, topics[Math.Min(Interlocked.Increment(ref topicCalls) - 1, topics.Count - 1)]));
     }
 
+    // Since #278 nothing goes up without the tick. Found by its role and label, so the label has to name it.
+    public static ILocator Confirmation(IPage page) =>
+        page.GetByRole(AriaRole.Checkbox, new PageGetByRoleOptions { Name = "Ich lade nur eigenes Material hoch" });
+
+    public static Task ConfirmAsync(IPage page) => Confirmation(page).CheckAsync();
+
     public static readonly Guid TopicId = Guid.Parse("5f0c4a3e-1b2d-4c5e-8f9a-0b1c2d3e4f50");
 
     // The attempt every question of AnswerQuizAsync belongs to, so also the answer's id at LearningEngine.

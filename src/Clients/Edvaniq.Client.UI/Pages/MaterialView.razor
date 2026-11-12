@@ -110,6 +110,21 @@
 @* Stays while signed out, so a text typed but not sent doesn't vanish with the login. *@
 @if (State is not ViewState.Loading)
 {
+    @* One confirmation for texts and files alike (#278). Content wants it with each of them and refuses either without. *@
+    <div class="material-section material-confirm">
+        <div class="confirm-field">
+            <input id="material-confirm" type="checkbox" @bind="confirmed" @bind:after="ConfirmChanged"
+                   aria-describedby="material-confirm-message" aria-invalid="@(confirmMessage is null ? null : "true")" />
+            <label for="material-confirm">@MaterialConfirmationValues.Text</label>
+        </div>
+        <div id="material-confirm-message" role="alert">
+            @if (confirmMessage is not null)
+            {
+                <p class="confirm-message">@confirmMessage</p>
+            }
+        </div>
+    </div>
+
     <section class="material-section" aria-labelledby="paste-heading">
         <h2 id="paste-heading">@(latest is null ? "Ersten Text einfügen" : "Weiteren Text einfügen")</h2>
         <form class="paste-form" @onsubmit="SubmitAsync" novalidate>
@@ -195,6 +210,10 @@
     private IReadOnlyList<string> formMessages = [];
     private string? formTrace;
     private bool formLimited;
+
+    // Stays checked after a send, the user confirmed for this visit.
+    private bool confirmed;
+    private string? confirmMessage;
 
     private bool retrying;
     private bool retryFailed;
@@ -418,9 +437,9 @@
             : text.Length > HttpLearningMaterial.TextMaxLength ? HttpLearningMaterial.TextTooLong
             : title.Trim().Length > HttpLearningMaterial.TitleMaxLength ? HttpLearningMaterial.TitleTooLong
             : null;
-        if (problem is not null)
+        Show(problem is null ? [] : [problem]);
+        if (!Confirmed() || problem is not null)
         {
-            Show([problem]);
             return;
         }
 
@@ -516,7 +535,7 @@
                 follow?.Cancel();
                 break;
             case CallResult.Rejected or CallResult.TooLarge:
-                Show(outcome.Messages ?? [NotThrough]);
+                Show(TakeConfirmation(outcome.Messages ?? [NotThrough]));
                 break;
             case CallResult.Limited:
                 // The text stays in the form for later.
@@ -546,9 +565,9 @@
             : chosen.Size > UploadMaxLength ? FeedbackTexts.Upload.TooLarge
             : !UploadExtensions.Contains(Path.GetExtension(chosen.Name).ToLowerInvariant()) ? FeedbackTexts.Upload.Unsupported
             : null;
-        if (problem is not null)
+        ShowUpload(problem is null ? [] : [problem]);
+        if (!Confirmed() || problem is not null)
         {
-            ShowUpload([problem]);
             return;
         }
 
@@ -591,7 +610,7 @@
                 ShowUpload([FeedbackTexts.Upload.TooLarge]);
                 break;
             case CallResult.Rejected when outcome.Messages is { Count: > 0 } messages:
-                ShowUpload(messages);
+                ShowUpload(TakeConfirmation(messages));
                 break;
             case CallResult.Limited:
                 // The file stays chosen for later.
@@ -601,6 +620,32 @@
                 ShowUpload([FeedbackTexts.Upload.NotThrough, FeedbackTexts.Connection.Advice], outcome.TraceId);
                 break;
         }
+    }
+
+    // Says so at the checkbox when it isn't checked. Content's own word on it goes there too, the rest stays where it was.
+    private bool Confirmed()
+    {
+        confirmMessage = confirmed ? null : MaterialConfirmationValues.Missing;
+        return confirmed;
+    }
+
+    private void ConfirmChanged()
+    {
+        if (confirmed)
+        {
+            confirmMessage = null;
+        }
+    }
+
+    private IReadOnlyList<string> TakeConfirmation(IReadOnlyList<string> messages)
+    {
+        if (!messages.Contains(MaterialConfirmationValues.Missing))
+        {
+            return messages;
+        }
+
+        confirmMessage = MaterialConfirmationValues.Missing;
+        return [.. messages.Where(message => message != MaterialConfirmationValues.Missing)];
     }
 
     private void ShowUpload(IReadOnlyList<string> messages, string? trace = null, bool limited = false)

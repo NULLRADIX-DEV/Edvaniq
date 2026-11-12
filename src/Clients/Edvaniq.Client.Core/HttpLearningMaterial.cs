@@ -41,7 +41,7 @@ public sealed class HttpLearningMaterial(HttpClient http) : ILearningMaterial
 
     public Task<CallOutcome<DocumentInfo>> PasteAsync(string? title, string text, CancellationToken cancellationToken = default) =>
         CallAsync(
-            token => http.PostAsync(DocumentsPath, JsonContent.Create(new PastedText(title, text), Relaxed.PastedText), token),
+            token => http.PostAsync(DocumentsPath, JsonContent.Create(new PastedText(title, text, MaterialConfirmationValues.Version), Relaxed.PastedText), token),
             MaterialJson.Default.DocumentInfo,
             cancellationToken);
 
@@ -49,14 +49,15 @@ public sealed class HttpLearningMaterial(HttpClient http) : ILearningMaterial
         CallAsync(token => http.PostAsync($"{DocumentsPath}/{documentId}/retry", content: null, token), MaterialJson.Default.DocumentInfo, cancellationToken);
 
     // The file streams up as it is read, as multipart under the name "file". Content judges it by its bytes. A file too
-    // large comes back as TooLarge without a message, the page words it.
+    // large comes back as TooLarge without a message, the page words it. The confirmation goes in the query, Content
+    // checks it before it reads a byte; a missing one comes back as 422 with its message, Rejected like a 400.
     public Task<CallOutcome<DocumentInfo>> UploadAsync(string fileName, Stream content, CancellationToken cancellationToken = default) =>
         CallAsync(
             async token =>
             {
                 using var form = new MultipartFormDataContent();
                 form.Add(new StreamContent(content), "file", fileName);
-                return await http.PostAsync(FilesPath, form, token);
+                return await http.PostAsync($"{FilesPath}?confirmation={MaterialConfirmationValues.Version}", form, token);
             },
             MaterialJson.Default.DocumentInfo,
             cancellationToken,
@@ -148,7 +149,7 @@ public sealed class HttpLearningMaterial(HttpClient http) : ILearningMaterial
     }
 }
 
-internal sealed record PastedText(string? Title, string Text);
+internal sealed record PastedText(string? Title, string Text, string Confirmation);
 
 internal sealed record ValidationProblem(Dictionary<string, string[]?>? Errors, string? TraceId);
 
