@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Edvaniq.Services.Identity.Infrastructure.Migrations
 {
     [DbContext(typeof(IdentityDbContext))]
-    [Migration("20261112090544_AccountTestDouble")]
+    [Migration("20261112092352_AccountTestDouble")]
     partial class AccountTestDouble
     {
         /// <inheritdoc />
@@ -21,6 +21,26 @@ namespace Edvaniq.Services.Identity.Infrastructure.Migrations
             modelBuilder
                 .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
+
+            modelBuilder.Entity("Edvaniq.BuildingBlocks.Messaging.DeletedUser", b =>
+                {
+                    b.Property<string>("Hash")
+                        .HasMaxLength(64)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("DeletedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("Swept")
+                        .HasColumnType("tinyint(1)");
+
+                    b.HasKey("Hash");
+
+                    b.HasIndex("DeletedAt");
+
+                    b.ToTable("deleted_users", (string)null);
+                });
 
             modelBuilder.Entity("Edvaniq.BuildingBlocks.Messaging.InboxMessage", b =>
                 {
