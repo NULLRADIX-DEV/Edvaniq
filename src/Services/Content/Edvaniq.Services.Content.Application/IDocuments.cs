@@ -21,6 +21,9 @@ public interface IDocuments
 
     Task<Document?> FindAsync(Guid id, CancellationToken cancellationToken);
 
+    // The sections in the order of the text, each with its pages (#294). Null when the user has no such document.
+    Task<IReadOnlyList<SectionPlace>?> SectionsAsync(Guid id, CancellationToken cancellationToken);
+
     // Starts a failed analysis again (Document.Retry). The document is null when the user has none with this id.
     Task<(RetryResult Result, Document? Document)> RetryAsync(Guid id, CancellationToken cancellationToken);
 
@@ -51,6 +54,9 @@ public enum ReopenResult
     // Still in analysis, failed, or changed by someone else meanwhile.
     NotReady,
 }
+
+// Where a section stands: Position counts from 0 in the text, the pages are null for pasted text.
+public sealed record SectionPlace(Guid SectionId, int Position, int? PageFrom, int? PageTo);
 
 // A document without its text.
 public sealed record DocumentSummary(

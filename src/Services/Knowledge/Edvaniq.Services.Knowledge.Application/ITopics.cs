@@ -14,6 +14,10 @@ public interface ITopics
     // hidden topic has its terms too, as GET /topics/{id} still gives the topic itself.
     Task<IReadOnlyList<KeyTerm>?> TermsAsync(Guid topicId, CancellationToken cancellationToken);
 
+    // The sections of Content that are the topic's material (#294), by document, null if the user has no such topic. A
+    // hidden topic has them too, like its terms.
+    Task<IReadOnlyList<TopicSection>?> SectionsAsync(Guid topicId, CancellationToken cancellationToken);
+
     // The names must have passed Topic.CheckName.
     Task<TopicResult> RenameAsync(Guid id, string name, CancellationToken cancellationToken);
 

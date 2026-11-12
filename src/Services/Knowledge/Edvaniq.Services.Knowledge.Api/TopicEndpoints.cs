@@ -28,6 +28,13 @@ internal static class TopicEndpoints
                 ? Results.Ok(terms.Select(term => new KeyTermResponse(term.Term, term.Definition, term.DocumentId, term.SectionId)))
                 : Results.NotFound());
 
+        // The sections that are the topic's material (#294). Where they stand and on which page only Content knows, the
+        // client asks it per document. Hidden like /terms, someone else's or none at all: 404.
+        topics.MapGet("/{id:guid}/sections", async (Guid id, ITopics topics, CancellationToken cancellationToken) =>
+            await topics.SectionsAsync(id, cancellationToken) is { } sections
+                ? Results.Ok(sections.Select(section => new TopicSectionResponse(section.DocumentId, section.SectionId)))
+                : Results.NotFound());
+
         topics.MapPost("/", async (NewTopic request, ITopics topics, IServiceScopeFactory scopes, CancellationToken cancellationToken) =>
         {
             var errors = new Dictionary<string, string[]>();
@@ -105,6 +112,9 @@ internal sealed record RenamedTopic(string? Name);
 
 // SectionId is Content's section of the document DocumentId that the definition quotes.
 internal sealed record KeyTermResponse(string Term, string Definition, Guid DocumentId, Guid SectionId);
+
+// SectionId is Content's section of the document DocumentId.
+internal sealed record TopicSectionResponse(Guid DocumentId, Guid SectionId);
 
 internal sealed record NewTopic(string? Name, Guid? LearningGoalId, Guid? ParentId);
 

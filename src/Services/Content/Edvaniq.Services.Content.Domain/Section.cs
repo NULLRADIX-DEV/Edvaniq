@@ -30,6 +30,17 @@ public sealed class Section : IOwnedByUser
 
     public int Length { get; private set; }
 
+    // The pages of the document the section's first and last character stand on (#294), null for pasted text. A section
+    // starts and ends on text, never between two pages.
+    public (int? From, int? To) PagesIn(IEnumerable<DocumentPage> pages)
+    {
+        var list = pages.ToList();
+        return (PageOf(list, Start), PageOf(list, Start + Length - 1));
+    }
+
+    private static int? PageOf(List<DocumentPage> pages, int index) =>
+        pages.FirstOrDefault(page => index >= page.Start && index < page.Start + page.Length)?.Number;
+
     internal static Section Of(Document document, int ordinal, TextSpan span) =>
         new(document.Id, document.OwnerId, ordinal, span.Start, span.Length);
 }
