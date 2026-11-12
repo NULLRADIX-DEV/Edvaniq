@@ -51,9 +51,10 @@ public sealed class DeletionFlowTests(FlowServices services) : IDisposable
         var deleted = await ReadyAsync(token, Deleted);
         var kept = await ReadyAsync(token, Kept);
         var keptTopics = TopicsOf(kept);
-        await WaitForAsync(
+        await FlowServices.WaitForAsync(
             () => Task.FromResult(QuestionDocuments(alice).Count == 2),
-            "Assessment did not take the questions of both documents over.");
+            () => $"Assessment did not take the questions of both documents over. {services.QuestionsOf(deleted, alice)}{Environment.NewLine}{services.QuestionsOf(kept, alice)}",
+            Timeout);
 
         using (var client = ContentClient(token))
         {
