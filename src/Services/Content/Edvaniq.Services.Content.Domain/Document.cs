@@ -56,6 +56,10 @@ public sealed class Document : IOwnedByUser
     public const string GoalFull =
         "Dieses Lernziel hat schon 10 Dokumente. Lösche eines, das du nicht mehr brauchst, oder lege ein neues Lernziel an.";
 
+    // A file whose text has fewer words than a pasted text needs, as a scan without a text layer (#284).
+    public const string NoTextInFile =
+        "Die Datei enthält keinen lesbaren Text, vermutlich ist sie ein Scan oder Foto. Lade eine Textversion hoch, etwa das Original als PDF mit Text oder als Word-Datei, oder füge den Text ein.";
+
     // The worker broke off on the file more than once, it went down while reading it (#318).
     public const string FileNotProcessable =
         "Die Datei ließ sich nicht verarbeiten. Speichere sie neu oder teile sie in kleinere Dateien auf und lade sie noch einmal hoch.";
@@ -270,6 +274,14 @@ public sealed class Document : IOwnedByUser
         if (text.Length > TextMaxLength)
         {
             Fail(FileTextTooLong);
+            return [];
+        }
+
+        // The rule for pasted text, over the whole file (docs/spec/acceptance.md, A12): a scan or a photo leaves page
+        // numbers and stray marks at most. Nothing of it is kept, and nothing goes to the AI.
+        if (!HasEnoughWords(text.ToString()))
+        {
+            Fail(NoTextInFile);
             return [];
         }
 
