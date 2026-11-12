@@ -11,6 +11,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Edvaniq.Services.Content.Infrastructure;
 
@@ -23,6 +24,7 @@ public sealed class QuestionPools(
     IServiceScopeFactory scopes,
     IChatClient ai,
     TestDoubleAi testDouble,
+    IOptions<AnalysisOptions> options,
     AiUsageLog usage,
     TimeProvider time,
     ILogger<QuestionPools> logger) : BackgroundService
@@ -33,11 +35,11 @@ public sealed class QuestionPools(
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(2);
 
     // How long the AI may take for one answer.
-    public TimeSpan AiTimeout { get; set; } = TimeSpan.FromMinutes(2);
+    public TimeSpan AiTimeout { get; set; } = options.Value.AiTimeout;
 
     // How long after the analysis Knowledge may take for the topics. Usually it's seconds, this covers a restart of
     // Knowledge or the broker. After that the document fails, a retry gives Knowledge the same time again.
-    public TimeSpan TopicsTimeout { get; set; } = TimeSpan.FromMinutes(10);
+    public TimeSpan TopicsTimeout { get; set; } = options.Value.TopicsTimeout;
 
     // How long a document waits after each outage of the AI, the worker goes on with the others meanwhile.
     public IReadOnlyList<TimeSpan> OutageDelays { get; set; } = Document.OutageDelays;

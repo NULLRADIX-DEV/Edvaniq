@@ -11,6 +11,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Edvaniq.Services.Content.Infrastructure;
 
@@ -22,6 +23,7 @@ public sealed class DocumentAnalyzer(
     IServiceScopeFactory scopes,
     IChatClient ai,
     TestDoubleAi testDouble,
+    IOptions<AnalysisOptions> options,
     AiUsageLog usage,
     TimeProvider time,
     ILogger<DocumentAnalyzer> logger) : BackgroundService
@@ -32,7 +34,7 @@ public sealed class DocumentAnalyzer(
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(2);
 
     // How long the AI may take for one document. A provider that hangs fails the document instead of the worker.
-    public TimeSpan AiTimeout { get; set; } = TimeSpan.FromMinutes(2);
+    public TimeSpan AiTimeout { get; set; } = options.Value.AiTimeout;
 
     // How long a document waits after each outage of the AI, the worker goes on with the others meanwhile.
     public IReadOnlyList<TimeSpan> OutageDelays { get; set; } = Document.OutageDelays;
