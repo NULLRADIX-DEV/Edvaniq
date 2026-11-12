@@ -69,7 +69,13 @@ public enum CallResult
 }
 
 // How a call ended. A failed call names the trace of the problem the host answered with, if there was one.
-public sealed record CallOutcome<T>(CallResult Result, T? Value = default, string? TraceId = null, IReadOnlyList<string>? Messages = null)
+// A rejection of a form can name its message per field (FieldErrors, keyed by the field's name as the service has it).
+public sealed record CallOutcome<T>(
+    CallResult Result,
+    T? Value = default,
+    string? TraceId = null,
+    IReadOnlyList<string>? Messages = null,
+    IReadOnlyDictionary<string, string>? FieldErrors = null)
 {
     public static readonly CallOutcome<T> SignedOut = new(CallResult.SignedOut);
 

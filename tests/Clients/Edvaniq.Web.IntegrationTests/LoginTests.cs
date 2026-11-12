@@ -250,6 +250,7 @@ public sealed partial class LoginTests
     [Theory]
     [InlineData("/systemstatus", "/login?returnUrl=%2Fsystemstatus")]
     [InlineData("/systemstatus?x=1", "/login?returnUrl=%2Fsystemstatus%3Fx%3D1")]
+    [InlineData("/lernziele/neu", "/login?returnUrl=%2Flernziele%2Fneu")]
     public async Task ProtectedPage_WithoutLogin_LeadsToTheLogin_AndBack(string path, string login)
     {
         await using var web = new WebFactory("http://127.0.0.1:9");

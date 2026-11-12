@@ -1,0 +1,53 @@
+.goal-status {
+    overflow-wrap: anywhere;
+}
+
+.goal-step h2 {
+    overflow-wrap: anywhere;
+}
+
+.goal-step-count {
+    display: block;
+    font-size: 1rem;
+    font-weight: 400;
+    color: var(--color-ink-muted);
+}
+
+.goal-summary {
+    margin: 0 0 var(--space-4);
+    overflow-wrap: anywhere;
+}
+
+.goal-summary dt {
+    font-weight: 600;
+}
+
+.goal-summary dd {
+    margin: 0 0 var(--space-3);
+}
+
+/* Back on the left, on: the order a keyboard meets them. On a phone they wrap. */
+.goal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4);
+    margin-top: var(--space-4);
+}
+
+.button,
+.goal-back {
+    min-height: 2.75rem;
+}
+
+.goal-back {
+    padding: var(--space-2) var(--space-4);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    border: 2px solid var(--color-ink-muted);
+    font-weight: 600;
+}
+
+.goal-back:hover {
+    border-color: var(--color-ink);
+}

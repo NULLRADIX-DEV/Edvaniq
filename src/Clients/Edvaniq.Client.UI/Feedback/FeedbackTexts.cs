@@ -203,6 +203,112 @@ public static class FeedbackTexts
         public const string NotReady = "Zu diesen Themen entstehen die Fragen noch. Sie kommen in den Plan, sobald die Fragen da sind:";
     }
 
+    // The assistant for a new learning goal. Option texts are keyed by the values in LearningGoalValues.
+    public static class Goal
+    {
+        public const string Heading = "Neues Lernziel";
+
+        // {0} is the step, {1} how many there are.
+        public const string StepOf = "Schritt {0} von {1}";
+
+        public const string KindStep = "Art des Lernziels";
+
+        public const string AboutStep = "Worum es geht";
+
+        public const string LevelStep = "Stufe und Sprache";
+
+        public const string SummaryStep = "Überblick";
+
+        public const string KindLabel = "Wie lernst du?";
+
+        public const string KindHint = "Bei einer Prüfung fragt Edvaniq nach ihrer Art und, wenn du ihn kennst, nach dem Termin.";
+
+        public const string ExamPreparation = "Prüfungsvorbereitung";
+
+        public const string FreeLearning = "Freies Lernen";
+
+        public const string NameLabel = "Name";
+
+        public const string NameHint = "Zum Beispiel: Biologie-Klausur oder C# lernen.";
+
+        public const string ExamTypeLabel = "Art der Prüfung";
+
+        public const string ExamDateLabel = "Prüfungstermin";
+
+        public const string ExamDateHint = "Freiwillig, wenn du ihn schon kennst.";
+
+        public const string GoalLabel = "Dein Ziel";
+
+        public const string GoalHint = "Freiwillig, zum Beispiel: mindestens eine 2.";
+
+        public const string LevelLabel = "Stufe";
+
+        public const string LevelHint = "Danach richten sich Themen und Fragen.";
+
+        public const string OutputLanguageLabel = "Sprache der Themen und Fragen";
+
+        public const string NoAnswer = "Keine Angabe";
+
+        public const string Next = "Weiter";
+
+        public const string Back = "Zurück";
+
+        public const string Save = "Speichern";
+
+        public const string Saving = "Wird gespeichert …";
+
+        public const string Saved = "Dein Lernziel ist gespeichert.";
+
+        public const string SavedHint = "Füge jetzt einen Text ein, aus dem du lernen willst.";
+
+        public const string SavedLink = "Text einfügen";
+
+        // Only goals after the first: plan, sessions and texts stay with the first one for now.
+        public const string NotFirst = "Dein Plan richtet sich vorerst nach deinem ersten Lernziel.";
+
+        public const string SaveFailed = "Dein Lernziel ließ sich gerade nicht speichern.";
+
+        public const string Kept = "Dein Lernziel ist noch nicht gespeichert. Deine Eingaben bleiben hier, bis du dich neu angemeldet hast.";
+
+        public const string DraftBack = "Deine Eingaben von vorhin sind noch da. Prüf sie und speichere das Lernziel.";
+
+        // Same words as Planning's LearningGoalFields, LearningGoalValuesTests checks it.
+        public const string KindMissing = "Wähle, ob du auf eine Prüfung lernst oder frei lernst.";
+
+        public const string NameMissing = "Gib dem Lernziel einen Namen.";
+
+        public const string NameTooLong = "Der Name darf höchstens 80 Zeichen lang sein.";
+
+        public const string ExamTypeMissing = "Wähle die Art der Prüfung.";
+
+        public const string GoalTooLong = "Das Ziel darf höchstens 200 Zeichen lang sein.";
+
+        public static readonly IReadOnlyDictionary<string, string> ExamTypes = new Dictionary<string, string>
+        {
+            ["Ex"] = "Ex (Stegreifaufgabe)",
+            ["Schulaufgabe"] = "Schulaufgabe",
+            ["Klausur"] = "Klausur",
+            ["Ihk"] = "IHK-Prüfung",
+            ["Other"] = "Andere Prüfung",
+        };
+
+        public static readonly IReadOnlyDictionary<string, string> Levels = new Dictionary<string, string>
+        {
+            ["LowerSecondary"] = "Unterstufe",
+            ["MiddleSecondary"] = "Mittelstufe",
+            ["UpperSecondary"] = "Oberstufe",
+            ["Apprenticeship"] = "Ausbildung",
+            ["University"] = "Studium",
+            ["SelfLearner"] = "Selbst lernend",
+        };
+
+        public static readonly IReadOnlyDictionary<string, string> OutputLanguages = new Dictionary<string, string>
+        {
+            ["de"] = "Deutsch",
+            ["en"] = "Englisch",
+        };
+    }
+
     // Starting a failed analysis again on the topics page.
     public static class Retry
     {

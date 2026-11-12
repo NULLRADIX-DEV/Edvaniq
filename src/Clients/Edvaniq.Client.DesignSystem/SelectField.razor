@@ -1,0 +1,85 @@
+@* One of many answers in a list, with its label. The first entry is the empty choice and says what it means, "Bitte
+   wählen" when an answer is needed, "Keine Angabe" when not. Hint and error hang on it like on a TextField. *@
+<div class="field">
+    <label for="@Id">@Label@if (Required)
+        {
+            <span class="field-required"> (Pflichtfeld)</span>
+        }</label>
+    @if (!string.IsNullOrEmpty(Hint))
+    {
+        <p id="@HintId" class="field-hint">@Hint</p>
+    }
+    <select id="@Id" class="field-input" required="@Required" aria-invalid="@Invalid" aria-describedby="@DescribedBy"
+            value="@(Value ?? "")" @onchange="ChangeAsync" @ref="element">
+        <option value="">@Empty</option>
+        @foreach (var option in Options)
+        {
+            <option @key="option.Value" value="@option.Value" selected="@(Value == option.Value)">@option.Text</option>
+        }
+    </select>
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <p id="@ErrorId" class="field-error"><StatusSymbol Kind="NoticeKind.Error" />@Error</p>
+    }
+</div>
+
+@code {
+    private ElementReference element;
+
+    [Parameter, EditorRequired]
+    public string Id { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ChoiceOption> Options { get; set; } = [];
+
+    // Null or empty for no answer.
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> ValueChanged { get; set; }
+
+    [Parameter]
+    public bool Required { get; set; }
+
+    [Parameter]
+    public string? Hint { get; set; }
+
+    [Parameter]
+    public string? Error { get; set; }
+
+    public string HintId => $"{Id}-hint";
+
+    public string ErrorId => $"{Id}-error";
+
+    private string Empty => Required ? "Bitte wählen" : "Keine Angabe";
+
+    private string? Invalid => string.IsNullOrEmpty(Error) ? null : "true";
+
+    private string? DescribedBy
+    {
+        get
+        {
+            var ids = new List<string>(2);
+            if (!string.IsNullOrEmpty(Hint))
+            {
+                ids.Add(HintId);
+            }
+
+            if (!string.IsNullOrEmpty(Error))
+            {
+                ids.Add(ErrorId);
+            }
+
+            return ids.Count == 0 ? null : string.Join(' ', ids);
+        }
+    }
+
+    public ValueTask FocusAsync() => element.FocusAsync();
+
+    private Task ChangeAsync(ChangeEventArgs change) =>
+        ValueChanged.InvokeAsync(change.Value as string is { Length: > 0 } value ? value : null);
+}
