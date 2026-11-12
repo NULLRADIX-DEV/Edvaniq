@@ -258,6 +258,10 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("mediumtext");
 
+                    b.Property<DateTime?>("TextExtractedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("datetime(6)");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(80)
@@ -268,6 +272,40 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.HasIndex("OwnerId");
 
                     b.ToTable("Documents");
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.DocumentPage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("Length")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<int>("Start")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("DocumentId", "Number")
+                        .IsUnique();
+
+                    b.ToTable("DocumentPages");
                 });
 
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.QuestionPool", b =>
@@ -352,6 +390,15 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.HasIndex("OwnerId");
 
                     b.ToTable("StoredFiles");
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.DocumentPage", b =>
+                {
+                    b.HasOne("Edvaniq.Services.Content.Domain.Document", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.QuestionPool", b =>

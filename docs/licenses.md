@@ -67,6 +67,7 @@ Indirekte NuGet-Pakete, also Abhängigkeiten der gelisteten Pakete, stehen nicht
 | `OpenTelemetry.Instrumentation.AspNetCore` | Apache-2.0 | ServiceDefaults |
 | `OpenTelemetry.Instrumentation.Http` | Apache-2.0 | ServiceDefaults |
 | `OpenTelemetry.Instrumentation.Runtime` | Apache-2.0 | ServiceDefaults |
+| `PdfPig` | Apache-2.0 | Liest den Text hochgeladener PDFs im Content-Worker, Seite für Seite in Lesereihenfolge |
 | `Testcontainers.MySql` | MIT | Integrationstests |
 | `Testcontainers.Nats` | MIT | NATS in den Integrationstests |
 | `xunit.v3.extensibility.core` | Apache-2.0 | Tests |

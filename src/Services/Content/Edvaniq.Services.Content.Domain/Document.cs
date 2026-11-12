@@ -30,6 +30,19 @@ public sealed class Document : IOwnedByUser
 
     public const string AiUnavailable = "KI derzeit nicht verfügbar. Versuch es später noch einmal.";
 
+    public const string FileUnreadable = "Die Datei ließ sich nicht lesen. Lade sie noch einmal hoch, zum Beispiel neu gespeichert.";
+
+    public const string FileTextTooLong = "Die Datei enthält zu viel Text. Erlaubt sind höchstens 200.000 Zeichen, teile sie auf.";
+
+    public const string TooManyPages = "Die Datei hat zu viele Seiten. Erlaubt sind höchstens 300, teile sie auf.";
+
+    // Until Word files can be read, a document from one fails with this instead of waiting forever.
+    public const string WordNotYet = "Word-Dateien kann Edvaniq noch nicht lesen. Speichere die Datei als PDF und lade sie noch einmal hoch.";
+
+    // A PDF beyond this many pages is turned away before its pages are read. 300 is more than a school book chapter or a
+    // script needs, and keeps reading one file within seconds and within the worker's memory.
+    public const int MaxPages = 300;
+
     // How long a document waits after each outage of the AI before the next attempt. After the last one it fails.
     public static readonly IReadOnlyList<TimeSpan> OutageDelays = [TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(8)];
 
@@ -70,6 +83,12 @@ public sealed class Document : IOwnedByUser
     public FileFormat? FileFormat { get; private set; }
 
     public bool IsFromFile => FileId is not null;
+
+    // When the worker read the text out of the file, UTC. Null for a pasted text and while the file waits for it.
+    public DateTime? TextExtractedAt { get; private set; }
+
+    // A document from a file that the worker still has to read.
+    public bool WaitsForText => Status == DocumentStatus.Uploaded && IsFromFile && TextExtractedAt is null;
 
     public DocumentStatus Status { get; private set; } = DocumentStatus.Uploaded;
 
@@ -187,6 +206,44 @@ public sealed class Document : IOwnedByUser
         return name.Length == 0 ? UntitledFile : name[..Math.Min(name.Length, TitleMaxLength)].TrimEnd();
     }
 
+    // Takes the text the worker read out of the file, one entry per page from page 1, and returns where each page lies in
+    // it. Pages are joined by a blank line, so a page always ends a paragraph. Too much text fails the document instead,
+    // without pages. The document stays uploaded, the splitter takes it from here.
+    public IReadOnlyList<DocumentPage> TakeText(IReadOnlyList<string> pages, DateTime extractedAt)
+    {
+        if (!WaitsForText)
+        {
+            throw new InvalidOperationException($"Document {Id} waits for no text.");
+        }
+
+        var text = new System.Text.StringBuilder();
+        var spans = new List<DocumentPage>();
+        foreach (var page in pages)
+        {
+            if (spans.Count > 0)
+            {
+                text.Append(PageBreak);
+            }
+
+            var content = page.Trim();
+            spans.Add(DocumentPage.Of(this, spans.Count + 1, text.Length, content.Length));
+            text.Append(content);
+        }
+
+        // Without TextExtractedAt a new attempt reads the file again.
+        if (text.Length > TextMaxLength)
+        {
+            Fail(FileTextTooLong);
+            return [];
+        }
+
+        Text = text.ToString();
+        TextExtractedAt = extractedAt;
+        return spans;
+    }
+
+    public const string PageBreak = "\n\n";
+
     // Cuts the text into sections and moves the document on to the analysis. A text with nothing but white space fails
     // instead and has no sections. Only an uploaded document can be split, and one from a file only once its text is
     // there (#282).
@@ -197,7 +254,7 @@ public sealed class Document : IOwnedByUser
             throw new InvalidOperationException($"Document {Id} is {Status}, only an uploaded document can be split.");
         }
 
-        if (IsFromFile)
+        if (WaitsForText)
         {
             throw new InvalidOperationException($"Document {Id} comes from a file, its text isn't extracted yet.");
         }

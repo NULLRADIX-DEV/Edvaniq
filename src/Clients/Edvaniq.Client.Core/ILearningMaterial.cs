@@ -29,7 +29,7 @@ public enum DocumentStatus
     Failed,
 }
 
-// Source says where it came from. One from a file stays Uploaded until Content can read its text (#282).
+// Source says where it came from. One from a file stays Uploaded until the worker has read its text.
 public sealed record DocumentInfo(
     Guid Id, string Title, DocumentStatus Status, DateTimeOffset CreatedAt, string? FailureReason = null, DocumentSource Source = DocumentSource.Text);
 

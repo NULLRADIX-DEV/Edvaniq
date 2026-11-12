@@ -15,6 +15,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
     public DbSet<Section> Sections => Set<Section>();
 
+    public DbSet<DocumentPage> DocumentPages => Set<DocumentPage>();
+
     public DbSet<QuestionPool> QuestionPools => Set<QuestionPool>();
 
     public DbSet<AiAttempt> AiAttempts => Set<AiAttempt>();
@@ -35,6 +37,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         document.Property(item => item.Status).HasConversion<string>().HasMaxLength(16).IsConcurrencyToken();
         // The topics stay in analysis while the questions follow, so the status alone doesn't tell two analyzers apart.
         document.Property(item => item.AnalyzedAt).IsConcurrencyToken();
+        // Of two workers reading the same file only the first one stores its text.
+        document.Property(item => item.TextExtractedAt).IsConcurrencyToken();
         document.Property(item => item.FailureReason).HasMaxLength(Document.FailureReasonMaxLength);
         document.Property(item => item.Level).HasMaxLength(Document.LevelMaxLength);
         document.Property(item => item.OutputLanguage).HasMaxLength(Document.OutputLanguageMaxLength);
@@ -45,6 +49,11 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         var section = modelBuilder.Entity<Section>();
         section.HasOne<Document>().WithMany().HasForeignKey(item => item.DocumentId).OnDelete(DeleteBehavior.Cascade);
         section.HasIndex(item => new { item.DocumentId, item.Ordinal }).IsUnique();
+
+        // The pages of a document read from a file, each number once.
+        var page = modelBuilder.Entity<DocumentPage>();
+        page.HasOne<Document>().WithMany().HasForeignKey(item => item.DocumentId).OnDelete(DeleteBehavior.Cascade);
+        page.HasIndex(item => new { item.DocumentId, item.Number }).IsUnique();
 
         // One pool per topic. A second worker with the same topic fails at its save instead of sending the questions twice.
         var pool = modelBuilder.Entity<QuestionPool>();

@@ -44,11 +44,64 @@ public sealed class UploadedDocumentTests
         Assert.Equal(Document.TitleMaxLength, Document.TitleOf(new string('a', 300) + ".pdf").Length);
 
     [Fact]
-    public void FileDocument_IsNotSplit()
+    public void FileDocument_IsNotSplit_BeforeItsText()
     {
-        var document = Document.Upload("alice", Guid.NewGuid(), "Skript.pdf", Guid.NewGuid(), FileFormat.Pdf, Now);
+        var document = Upload();
 
+        Assert.True(document.WaitsForText);
         Assert.Throws<InvalidOperationException>(document.Split);
         Assert.Equal(DocumentStatus.Uploaded, document.Status);
     }
+
+    // The pages are joined by a blank line, and each knows where it lies in the text, an empty one too.
+    [Fact]
+    public void TakeText_JoinsThePages_AndKnowsWhereEachLies()
+    {
+        var document = Upload();
+
+        var pages = document.TakeText(["  Erste Seite.\n", "", "Dritte Seite mit mehr Text."], Now);
+
+        Assert.Equal("Erste Seite.\n\n\n\nDritte Seite mit mehr Text.", document.Text);
+        Assert.Equal([(1, 0, 12), (2, 14, 0), (3, 16, 27)], pages.Select(page => (page.Number, page.Start, page.Length)));
+        Assert.All(pages, page => Assert.Equal((document.Id, "alice"), (page.DocumentId, page.OwnerId)));
+        Assert.Equal(["Erste Seite.", "", "Dritte Seite mit mehr Text."], pages.Select(page => document.Text.Substring(page.Start, page.Length)));
+        Assert.Equal((DocumentStatus.Uploaded, (DateTime?)Now, false), (document.Status, document.TextExtractedAt, document.WaitsForText));
+    }
+
+    // From here the document is split like a pasted text, each page ends a section.
+    [Fact]
+    public void FileDocument_WithItsText_IsSplit()
+    {
+        var document = Upload();
+        document.TakeText(["# Fotosynthese\nLicht spaltet Wasser.", "Zucker entsteht im Calvin-Zyklus."], Now);
+
+        var sections = document.Split();
+
+        Assert.Equal(DocumentStatus.Analyzing, document.Status);
+        Assert.NotEmpty(sections);
+    }
+
+    // Too much text fails the document without pages. A new attempt reads the file again.
+    [Fact]
+    public void TakeText_OfTooMuchText_FailsTheDocument()
+    {
+        var document = Upload();
+
+        var pages = document.TakeText([new string('a', Document.TextMaxLength / 2), new string('b', Document.TextMaxLength / 2)], Now);
+
+        Assert.Empty(pages);
+        Assert.Equal((DocumentStatus.Failed, Document.FileTextTooLong, (DateTime?)null), (document.Status, document.FailureReason, document.TextExtractedAt));
+        Assert.Equal("", document.Text);
+    }
+
+    [Fact]
+    public void TakeText_Twice_IsRefused()
+    {
+        var document = Upload();
+        document.TakeText(["Licht spaltet Wasser."], Now);
+
+        Assert.Throws<InvalidOperationException>(() => document.TakeText(["Noch einmal."], Now));
+    }
+
+    private static Document Upload() => Document.Upload("alice", Guid.NewGuid(), "Skript.pdf", Guid.NewGuid(), FileFormat.Pdf, Now);
 }

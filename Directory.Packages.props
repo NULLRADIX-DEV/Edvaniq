@@ -33,6 +33,11 @@
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery.Yarp" Version="10.11.0" />
   </ItemGroup>
 
+  <!-- Content -->
+  <ItemGroup>
+    <PackageVersion Include="PdfPig" Version="0.1.16" />
+  </ItemGroup>
+
   <!-- Gateway -->
   <ItemGroup>
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />

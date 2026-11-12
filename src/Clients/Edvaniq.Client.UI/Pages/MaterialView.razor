@@ -59,11 +59,6 @@
         case ViewState.Ready:
             <p class="material-note">Die Themen aus „@latest!.Title“ sind da.</p>
             break;
-        case ViewState.FileWaits:
-            <Notice Kind="NoticeKind.Info" Title="@($"„{latest!.Title}“ {FeedbackTexts.Upload.WaitsTitle}")">
-                <p>@FeedbackTexts.Upload.WaitsBody</p>
-            </Notice>
-            break;
     }
 </div>
 
@@ -224,7 +219,6 @@
         AnalysisSlow,
         Failed,
         Ready,
-        FileWaits,
     }
 
     private ViewState State => this switch
@@ -234,7 +228,6 @@
         { loadFailed: true } => ViewState.LoadFailed,
         { latest: null } => ViewState.Empty,
         { latest.Status: DocumentStatus.Failed } => ViewState.Failed,
-        { latest: { Source: DocumentSource.File, Status: DocumentStatus.Uploaded } } => ViewState.FileWaits,
         _ when IsAnalyzing => gaveUp ? ViewState.AnalysisSlow : ViewState.Analyzing,
         _ => ViewState.Ready,
     };
@@ -242,9 +235,9 @@
     // Content is ready only once Knowledge has the topics of the document, and RefreshAsync asks for the topics only after
     // the documents. So a Ready document always comes with its topics, also when they are all known from earlier texts and
     // none carries its id.
-    // A file waits for its text to be read (#282), there's nothing to follow until then.
+    // A file is read by the worker first, it counts as in analysis like a pasted text.
     private bool IsAnalyzing =>
-        latest?.Status is DocumentStatus.Analyzing || latest is { Status: DocumentStatus.Uploaded, Source: DocumentSource.Text };
+        latest?.Status is DocumentStatus.Analyzing or DocumentStatus.Uploaded;
 
     // The text binds on change, a binding on input would send a long text across with every key. Until the change comes,
     // TypingWatch tells that something is typed.

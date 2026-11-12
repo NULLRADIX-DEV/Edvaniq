@@ -64,7 +64,7 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
     private async Task SeedEveryTableAsync(string user)
     {
         await CreateItemAsync(user, "Notiz");
-        await SaveFileAsync(user);
+        var fileId = await SaveFileAsync(user);
         await AiUsageSeed.AddAsync(service.Services, user, AiUsageSeed.SomeDay(), (1, 0.25m));
         using var scope = service.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
@@ -72,6 +72,9 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         db.Documents.Add(document);
         db.Sections.AddRange(document.Split());
         db.QuestionPools.Add(QuestionPool.For(document, Guid.NewGuid(), DateTime.UtcNow));
+        var fromFile = Document.Upload(user, Guid.NewGuid(), "Notizen.txt", fileId, FileFormat.Text, DateTime.UtcNow);
+        db.Documents.Add(fromFile);
+        db.DocumentPages.AddRange(fromFile.TakeText(["Licht spaltet Wasser in der Lichtreaktion."], DateTime.UtcNow));
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
