@@ -124,7 +124,20 @@ public sealed class QuestionPools(
         }
 
         var topics = await TopicsAsync(scope.ServiceProvider.GetRequiredService<IKnowledgeTopics>(), documentId, cancellationToken);
-        if (topics.Count == 0)
+        var ids = topics.Select(topic => topic.Id).ToList();
+        var pooled = await db.QuestionPools.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .Where(pool => ids.Contains(pool.TopicId))
+            .Select(pool => pool.TopicId)
+            .ToListAsync(cancellationToken);
+        var sections = await db.Sections.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .Where(section => section.DocumentId == documentId)
+            .ToListAsync(cancellationToken);
+        var texts = sections.ToDictionary(section => section.Id, section => document.Text.Substring(section.Start, section.Length));
+
+        // No topic yet, or topics none of which has material of this document and none a pool: Knowledge hasn't got them
+        // as they will be. Ready with nothing would leave the document without a single question, so it waits like for
+        // missing topics, and fails as such after the limit.
+        if (topics.Count == 0 || (pooled.Count == 0 && topics.All(topic => SectionsOf(topics, topic, texts).Count == 0)))
         {
             if (time.GetUtcNow().UtcDateTime - document.WaitsForTopicsSince < TopicsTimeout)
             {
@@ -136,16 +149,6 @@ public sealed class QuestionPools(
             await WorkerSave.SaveAsync(db, documentId, "questions", logger, cancellationToken);
             return true;
         }
-
-        var ids = topics.Select(topic => topic.Id).ToList();
-        var pooled = await db.QuestionPools.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
-            .Where(pool => ids.Contains(pool.TopicId))
-            .Select(pool => pool.TopicId)
-            .ToListAsync(cancellationToken);
-        var sections = await db.Sections.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
-            .Where(section => section.DocumentId == documentId)
-            .ToListAsync(cancellationToken);
-        var texts = sections.ToDictionary(section => section.Id, section => document.Text.Substring(section.Start, section.Length));
 
         // Every AI call comes before the one save, nothing holds the database meanwhile. A topic without questions fails
         // the document and nothing of the others goes out. An outage postpones it, then all its topics are asked again.

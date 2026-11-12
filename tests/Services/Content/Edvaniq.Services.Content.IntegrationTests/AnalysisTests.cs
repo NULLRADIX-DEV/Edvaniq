@@ -165,6 +165,36 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Empty(await GeneratedAsync(id));
     }
 
+    // #985: Knowledge answered with the topics but without their sections, as a read between its two queries once did.
+    // No topic has material, so the document waits instead of getting ready without a single question; once the sections
+    // are there it gets its questions, and if they never come it fails as missing topics.
+    [Fact]
+    public async Task TopicsWithoutSections_LetTheDocumentWait_NotGetReadyEmpty()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        await AnalyzeAsync(id);
+        var topics = service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
+        service.Knowledge.Give(id, [.. topics.Select(topic => topic with { SectionIds = [] })]);
+
+        Assert.False(await Pools().FinishAsync(id, TestContext.Current.CancellationToken));
+        Assert.Equal(DocumentStatus.Analyzing, Stored(id).Status);
+        Assert.Empty(await GeneratedAsync(id));
+
+        service.Knowledge.Give(id, topics);
+        Assert.True(await Pools().FinishAsync(id, TestContext.Current.CancellationToken));
+        Assert.Equal("Ready", (await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken))!.Status);
+        Assert.Equal(topics.Count, (await GeneratedAsync(id)).Count);
+
+        var never = await PasteAsync(client, Text);
+        await AnalyzeAsync(never);
+        service.Knowledge.Give(never, [.. service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(never))).Select(topic => topic with { SectionIds = [] })]);
+        var late = Pools();
+        late.TopicsTimeout = TimeSpan.Zero;
+        Assert.True(await late.FinishAsync(never, TestContext.Current.CancellationToken));
+        Assert.Equal((DocumentStatus.Failed, Document.TopicsMissing), (Stored(never).Status, Stored(never).FailureReason));
+    }
+
     // A topic that has its pool already is a topic that came again unchanged: it gets no new questions.
     [Fact]
     public async Task TopicWithAPool_GetsNoNewQuestions_TheNewOnesDo()
