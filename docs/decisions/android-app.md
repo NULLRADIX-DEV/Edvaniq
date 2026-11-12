@@ -1,6 +1,6 @@
 # Android-App mit gemeinsamer UI
 
-Die Seiten von Edvaniq entstehen einmal in `Client.UI`. Im Browser hostet sie `Edvaniq.Web.Client`, auf dem Smartphone die App `Edvaniq.App` (MAUI Blazor Hybrid). Für Android war das bisher nur eine Annahme, denn die CI baut die App nicht, und auf einem echten Gerät lief sie noch nie. Ein Spike mit einer Zeitbox von einem Tag sollte zeigen, ob ein Debug-Build auf einem echten Gerät startet und die Shell zeigt. Login, Signierung und Verteilung gehörten nicht dazu.
+Die Seiten von Edvaniq entstehen einmal in `Client.UI`. Im Browser hostet sie `Edvaniq.Web.Client`, auf dem Smartphone die App `Edvaniq.App` (MAUI Blazor Hybrid). Die beiden Hosts enthalten keine eigenen Komponenten, und `Client.UI`, `Client.Core` und `Client.DesignSystem` kennen keinen der beiden, weder als Projekt noch über ein Paket für WebAssembly oder MAUI. Das prüft `SharedViewsTests` in den Architekturtests. Für Android war das bisher nur eine Annahme, denn die CI baut die App nicht, und auf einem echten Gerät lief sie noch nie. Ein Spike mit einer Zeitbox von einem Tag sollte zeigen, ob ein Debug-Build auf einem echten Gerät startet und die Shell zeigt. Login, Signierung und Verteilung gehörten nicht dazu.
 
 ## Ergebnis
 
