@@ -65,6 +65,16 @@ internal static partial class ContentLog
     public static partial void AiUsage(
         ILogger logger, string task, Guid documentId, int attempts, long inputTokens, long outputTokens, decimal cost, int unpricedAttempts, long durationMs, string model);
 
+    // An answer the same user got before for the same request (#306), nothing asked and nothing paid.
+    [LoggerMessage(Level = LogLevel.Information, Message = "AI usage for the {Task} of document {DocumentId}: reused, 0 attempts, 0 input tokens, 0 output tokens, cost 0, prompt {PromptVersion}, model {Model}")]
+    public static partial void AiUsageReused(ILogger logger, string task, Guid documentId, string promptVersion, string model);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "A stored AI answer for document {DocumentId} could not be read, the AI is asked")]
+    public static partial void AiAnswerNotRead(ILogger logger, Exception exception, Guid documentId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "The AI answer for document {DocumentId} was not stored for reuse")]
+    public static partial void AiAnswerNotStored(ILogger logger, Exception exception, Guid documentId);
+
     [LoggerMessage(Level = LogLevel.Warning, Message = "The AI usage for the {Task} of document {DocumentId} could not be stored, the analysis goes on")]
     public static partial void AiUsageNotStored(ILogger logger, Exception exception, string task, Guid documentId);
 

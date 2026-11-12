@@ -25,7 +25,7 @@ public sealed class QuestionPools(
     IChatClient ai,
     TestDoubleAi testDouble,
     IOptions<AnalysisOptions> options,
-    AiUsageLog usage,
+    AiAnswers answers,
     TimeProvider time,
     ILogger<QuestionPools> logger) : BackgroundService
 {
@@ -255,17 +255,18 @@ public sealed class QuestionPools(
         Document document, LearnerProfile profile, IReadOnlyList<Guid> sectionIds, Dictionary<Guid, string> texts, CancellationToken cancellationToken)
     {
         var chat = ContentAi.For(document, ai, testDouble);
-        var answer = await chat.AskAsync(
+        var answer = await answers.AskAsync(
+            document,
+            AiAttempt.Questions,
+            QuestionGeneration.PromptVersion,
+            chat,
             [
                 new ChatMessage(ChatRole.System, QuestionGeneration.System(profile)),
                 new ChatMessage(ChatRole.User, QuestionGeneration.User(sectionIds.Select(id => texts[id]))),
             ],
             text => QuestionGeneration.Read(text, sectionIds) is { Count: > 0 } drafts ? drafts : null,
             new StructuredRequest(AiTimeout, ContentAi.QuestionsFormat),
-            time,
             cancellationToken);
-        await usage.RecordAsync(
-            document, AiAttempt.Questions, QuestionGeneration.PromptVersion, answer.Tries, ContentAi.ModelOf(chat, null), cancellationToken);
         if (answer.Failure is { } failure)
         {
             return (null, failure);
