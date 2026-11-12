@@ -15,4 +15,7 @@ public interface ILearningGoals
     Task<IReadOnlyList<LearningGoal>> ListAsync(CancellationToken cancellationToken);
 
     Task<LearningGoal?> FindAsync(Guid id, CancellationToken cancellationToken);
+
+    // Like FindAsync, but also the default goal nobody took over: Content's documents may belong to it.
+    Task<LearningGoal?> FindWithDefaultAsync(Guid id, CancellationToken cancellationToken);
 }

@@ -22,6 +22,10 @@ builder.Services.AddHttpClient(InternalToken.ClientName, client => client.BaseAd
 builder.Services.AddHttpClient<IKnowledgeTopics, KnowledgeTopics>(client => client.BaseAddress = KnowledgeTopics.Address)
     .AddHttpMessageHandler<InternalTokenHandler>();
 
+// Planning says level and output language of a document's goal before every AI step, asked with the same token.
+builder.Services.AddHttpClient<IGoalProfiles, PlanningGoalProfiles>(client => client.BaseAddress = PlanningGoalProfiles.Address)
+    .AddHttpMessageHandler<InternalTokenHandler>();
+
 var host = builder.Build();
 
 // Asks the configured AI once and stops (dotnet <worker>.dll ai-check), e.g. after a deploy. Analyses nothing.

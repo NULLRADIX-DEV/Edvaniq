@@ -1,3 +1,4 @@
+using Edvaniq.BuildingBlocks.Web;
 using Edvaniq.Services.Planning.Application;
 using Edvaniq.Services.Planning.Domain;
 
@@ -47,8 +48,37 @@ internal static class LearningGoalEndpoints
                 ? Results.Ok(LearningGoalResponse.From(goal))
                 : Results.NotFound());
 
+        // Only what Content needs to take a document into the goal, also for the default goal: nothing to identify the
+        // learner by, no name, no free text. Someone else's goal is 404 as well.
+        goals.MapGet("/{id:guid}/profile", async (Guid id, ILearningGoals goals, CancellationToken cancellationToken) =>
+            await goals.FindWithDefaultAsync(id, cancellationToken) is { } goal
+                ? Results.Ok(LearningGoalProfileResponse.From(goal))
+                : Results.NotFound());
+
+        // Content's worker asks before every AI step of a document, so a change of the goal counts at the next analysis.
+        // Only Content's internal token gets in, no user. No gateway route leads here.
+        app.MapGet("/internal/learning-goals/{id:guid}/profile", async (Guid id, IGoalProfiles profiles, CancellationToken cancellationToken) =>
+                await profiles.FindAsync(id, cancellationToken) is { } goal
+                    ? Results.Ok(InternalGoalProfileResponse.From(goal))
+                    : Results.NotFound())
+            .RequireInternalClient(ContentClient);
+
         return app;
     }
+
+    public const string ContentClient = "content";
+}
+
+// Content reads this (PlanningLearningGoals), keep the fields.
+internal sealed record LearningGoalProfileResponse(Guid Id, string? Level, string? OutputLanguage)
+{
+    public static LearningGoalProfileResponse From(LearningGoal goal) => new(goal.Id, goal.Level?.ToString(), goal.OutputLanguage);
+}
+
+// Content's worker reads this (PlanningGoalProfiles), keep the fields.
+internal sealed record InternalGoalProfileResponse(string? Level, string? OutputLanguage)
+{
+    public static InternalGoalProfileResponse From(LearningGoal goal) => new(goal.Level?.ToString(), goal.OutputLanguage);
 }
 
 internal sealed record DefaultLearningGoalResponse(Guid Id, string? Level, string? OutputLanguage)

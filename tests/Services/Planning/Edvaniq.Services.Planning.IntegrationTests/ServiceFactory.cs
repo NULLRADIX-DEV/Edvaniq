@@ -47,8 +47,7 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
             .UseSetting($"ConnectionStrings:{InfrastructureExtensions.DatabaseName}", ConnectionString)
             .ConfigureTestServices(services =>
             {
-                services.PostConfigure<JwtBearerOptions>(
-                    JwtBearerDefaults.AuthenticationScheme,
+                services.PostConfigureAll<JwtBearerOptions>(
                     options =>
                     {
                         options.TokenValidationParameters.ValidateIssuer = true;

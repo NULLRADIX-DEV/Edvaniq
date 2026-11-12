@@ -82,6 +82,7 @@ AddService<Projects.Edvaniq_Services_Content_Worker>("content-worker", contentDb
     .WithMessaging(nats)
     .WithReference(identityApi)
     .WithReference(knowledgeApi)
+    .WithReference(planningApi)
     .WithEnvironment("InternalToken__ClientSecret", contentClientSecret)
     .WithEnvironment("FileStorage__Directory", contentFiles);
 AddService<Projects.Edvaniq_Services_Notifications_Worker>("notifications-worker", notificationsDb);

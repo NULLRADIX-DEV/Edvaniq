@@ -14,8 +14,8 @@ public interface ILearningGoals
     Task<LearningGoalInfo?> FindAsync(Guid id, CancellationToken cancellationToken);
 }
 
-// Level and output language by Planning's names, null when the goal has none. LearnerProfile decides what they mean.
-public sealed record LearningGoalInfo(Guid Id, string? Level, string? OutputLanguage);
+// Only that the goal is the user's. Level and output language stay with Planning, the worker asks for them (IGoalProfiles).
+public sealed record LearningGoalInfo(Guid Id);
 
 public sealed class LearningGoalUnavailableException(Exception innerException)
     : Exception("Planning could not be asked for the learning goal.", innerException);

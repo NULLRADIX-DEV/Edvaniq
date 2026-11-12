@@ -35,6 +35,20 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         Assert.Equal(HttpStatusCode.NotFound, await GetStatusAsync(bob, $"/examples/{Guid.NewGuid()}"));
     }
 
+    // #323: the profile of a goal, which Content asks for, too.
+    [Fact]
+    public async Task OtherUser_GetsNotFoundForTheProfileOfAForeignGoal()
+    {
+        using var alice = ClientFor(NewUser("alice"));
+        using var bob = ClientFor(NewUser("bob"));
+        using var created = await alice.PostAsJsonAsync("/learning-goals", new { kind = "FreeLearning", name = "Von Alice" }, TestContext.Current.CancellationToken);
+        var goal = (await created.Content.ReadFromJsonAsync<Item>(TestContext.Current.CancellationToken))!.Id;
+
+        Assert.Equal(HttpStatusCode.OK, await GetStatusAsync(alice, $"/learning-goals/{goal}/profile"));
+        Assert.Equal(HttpStatusCode.NotFound, await GetStatusAsync(bob, $"/learning-goals/{goal}/profile"));
+        Assert.Equal(HttpStatusCode.NotFound, await GetStatusAsync(bob, $"/learning-goals/{Guid.NewGuid()}/profile"));
+    }
+
     // "Alice" and "alice" are two users, the id is compared byte for byte.
     [Fact]
     public async Task OtherUser_WithTheSameNameInOtherCase_DoesNotSeeTheItems()

@@ -8,7 +8,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.Services.Content.Infrastructure;
 
-// POST /learning-goals/default and GET /learning-goals/{id} of Planning. The Api hands this client the caller's token,
+// POST /learning-goals/default and GET /learning-goals/{id}/profile of Planning, which say no more of a goal than its id,
+// level and language, and only the id is read. The Api hands this client the caller's token,
 // so Planning answers with that user's goals. The response type is ours, nothing of Planning is referenced (rule 6).
 public sealed partial class PlanningLearningGoals(HttpClient http, ILogger<PlanningLearningGoals> logger) : ILearningGoals
 {
@@ -32,7 +33,7 @@ public sealed partial class PlanningLearningGoals(HttpClient http, ILogger<Plann
         AskAsync<LearningGoalInfo?>(
             async () =>
             {
-                using var response = await http.GetAsync(new Uri($"learning-goals/{id}", UriKind.Relative), cancellationToken);
+                using var response = await http.GetAsync(new Uri($"learning-goals/{id}/profile", UriKind.Relative), cancellationToken);
                 if (response.StatusCode == HttpStatusCode.NotFound)
                 {
                     return null;
@@ -48,7 +49,7 @@ public sealed partial class PlanningLearningGoals(HttpClient http, ILogger<Plann
     {
         var goal = await response.Content.ReadFromJsonAsync<LearningGoal>(JsonSerializerOptions.Web, cancellationToken);
         return goal is { Id: var id } && id != Guid.Empty
-            ? new LearningGoalInfo(id, goal.Level, goal.OutputLanguage)
+            ? new LearningGoalInfo(id)
             : throw new InvalidDataException("Planning answered without a goal.");
     }
 
@@ -69,5 +70,5 @@ public sealed partial class PlanningLearningGoals(HttpClient http, ILogger<Plann
     [LoggerMessage(Level = LogLevel.Warning, Message = "Planning could not be asked for the learning goal ({Error})")]
     private partial void LogUnavailable(string error);
 
-    private sealed record LearningGoal(Guid Id, string? Level, string? OutputLanguage);
+    private sealed record LearningGoal(Guid Id);
 }

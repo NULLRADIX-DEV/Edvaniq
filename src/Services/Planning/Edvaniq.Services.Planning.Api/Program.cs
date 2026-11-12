@@ -8,6 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddTokenValidation();
+builder.AddInternalTokenValidation();
 builder.AddInfrastructure();
 
 // LearningEngine gives the mastery for the plan, Assessment the ready question pools, both asked with the caller's own

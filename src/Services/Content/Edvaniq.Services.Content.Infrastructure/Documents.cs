@@ -19,8 +19,6 @@ internal sealed class Documents(
             title,
             text,
             time.GetUtcNow().UtcDateTime,
-            learningGoal.Level,
-            learningGoal.OutputLanguage,
             caller.UsesTestDouble);
         db.Documents.Add(document);
         await db.SaveChangesAsync(cancellationToken);
@@ -38,8 +36,6 @@ internal sealed class Documents(
             fileId,
             format,
             time.GetUtcNow().UtcDateTime,
-            learningGoal.Level,
-            learningGoal.OutputLanguage,
             caller.UsesTestDouble);
         db.Documents.Add(document);
         try

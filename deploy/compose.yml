@@ -311,6 +311,7 @@ services:
       <<: *messaging-environment
       services__identity-api__http__0: http://identity-api:8080
       services__knowledge-api__http__0: http://knowledge-api:8080
+      services__planning-api__http__0: http://planning-api:8080
       FileStorage__Directory: /files
     healthcheck:
       disable: true

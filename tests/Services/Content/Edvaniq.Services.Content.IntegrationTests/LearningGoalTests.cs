@@ -27,9 +27,9 @@ public sealed class LearningGoalTests(ServiceFactory service) : IClassFixture<Se
         Assert.Equal(service.Planning.GoalOf(alice), (await StoredAsync(alice)).Single(document => document.Id == id).LearningGoalId);
     }
 
-    // The prompts of the text follow the goal's level and output language as they were when it came in.
+    // #323: Content keeps no copy of the goal, level and output language stay with Planning.
     [Fact]
-    public async Task PastedText_KeepsLevelAndOutputLanguageOfTheGoal()
+    public async Task PastedText_KeepsNoCopyOfTheGoal()
     {
         var alice = $"alice-{Guid.NewGuid():N}";
         service.Planning.Profile(alice, "University", "en");
@@ -38,21 +38,53 @@ public sealed class LearningGoalTests(ServiceFactory service) : IClassFixture<Se
         var id = await PasteAsync(client);
 
         var stored = (await StoredAsync(alice)).Single(document => document.Id == id);
-        Assert.Equal(("University", "en"), (stored.Level, stored.OutputLanguage));
-    }
-
-    // A default goal nobody took over has neither, the prompts take their own default then.
-    [Fact]
-    public async Task PastedText_IntoAGoalWithoutLevel_KeepsNone()
-    {
-        var alice = $"alice-{Guid.NewGuid():N}";
-        using var client = ClientFor(alice);
-
-        var id = await PasteAsync(client);
-
-        var stored = (await StoredAsync(alice)).Single(document => document.Id == id);
         Assert.Equal((null, null), (stored.Level, stored.OutputLanguage));
     }
+
+    // #323: a text goes into the goal the user names, if it is theirs. Asked by the profile only, never the whole goal.
+    [Fact]
+    public async Task PastedText_IntoTheUsersOwnGoal_BelongsToIt()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        var goal = service.Planning.GoalOf(alice);
+        using var client = ClientFor(alice);
+
+        using var response = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson, learningGoalId = goal }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(goal, Assert.Single(await StoredAsync(alice)).LearningGoalId);
+        Assert.Contains(service.Planning.Requests, request => request.User == alice && request.Path == $"/learning-goals/{goal}/profile");
+    }
+
+    // Someone else's goal and one that doesn't exist get the same answer, for a pasted text as for an upload, and
+    // nothing is stored.
+    [Fact]
+    public async Task PastedTextAndUpload_IntoAForeignOrUnknownGoal_GetTheSameAnswer()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        var bob = $"bob-{Guid.NewGuid():N}";
+        var foreign = service.Planning.GoalOf(bob);
+        using var client = ClientFor(alice);
+
+        var answers = new List<(HttpStatusCode Status, string Title)>();
+        foreach (var goal in new[] { foreign, Guid.NewGuid() })
+        {
+            using var pasted = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson, learningGoalId = goal }, TestContext.Current.CancellationToken);
+            answers.Add(await AnswerAsync(pasted));
+
+            using var file = new ByteArrayContent("Ein Text mit genug Worten zum Lernen."u8.ToArray());
+            file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+            using var form = new MultipartFormDataContent { { file, "file", "Notizen.txt" } };
+            using var uploaded = await client.PostAsync($"/documents/files?learningGoalId={goal}", form, TestContext.Current.CancellationToken);
+            answers.Add(await AnswerAsync(uploaded));
+        }
+
+        Assert.All(answers, answer => Assert.Equal((HttpStatusCode.NotFound, "Dieses Lernziel gibt es nicht. Wähle eines deiner Lernziele aus."), answer));
+        Assert.Empty(await StoredAsync(alice));
+    }
+
+    private static async Task<(HttpStatusCode Status, string Title)> AnswerAsync(HttpResponseMessage response) =>
+        (response.StatusCode, (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("title").GetString()!);
 
     // Planning gets the caller's token and nothing else of the browser's request, no cookie and no other header.
     [Fact]

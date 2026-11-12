@@ -30,6 +30,11 @@ public sealed class Document : IOwnedByUser
 
     public const string AiUnavailable = "KI derzeit nicht verfügbar. Versuch es später noch einmal.";
 
+    // Planning couldn't say level and output language of the goal. Never guessed, a retry asks again.
+    public const string GoalUnavailable = "Das Lernziel ließ sich gerade nicht abrufen. Versuch es später noch einmal.";
+
+    public const string GoalGone = "Das Lernziel dieses Dokuments gibt es nicht mehr.";
+
     // The operator paused the AI (AiSwitch). A retry works once it runs again.
     public const string AiPaused = "KI derzeit pausiert. Versuch es später noch einmal.";
 
@@ -69,8 +74,8 @@ public sealed class Document : IOwnedByUser
     // goal (#215).
     public Guid? LearningGoalId { get; private set; }
 
-    // Level and output language of the learning goal when the text came in, as Planning names them. Null if the goal had
-    // none or the document is from before #290, the prompts take their default then.
+    // No longer written or read since #323: the goal keeps level and output language, Content keeps no copy. The columns
+    // stay so a rollback to a version that writes them still works, they go with a later migration.
     public string? Level { get; private set; }
 
     public string? OutputLanguage { get; private set; }
@@ -169,20 +174,16 @@ public sealed class Document : IOwnedByUser
         title?.Trim().Length > TitleMaxLength ? "Der Titel ist zu lang. Erlaubt sind höchstens 80 Zeichen." : null;
 
     // A new document in status Uploaded. Call it only with a text and a title that passed the checks.
-    // Level and output language are the goal's at this moment, the prompts of this document keep to them.
+    // Level and output language stay with the goal, the worker asks Planning for them before every AI step (#323).
     public static Document Paste(
         string ownerId,
         Guid learningGoalId,
         string? title,
         string text,
         DateTime createdAt,
-        string? level = null,
-        string? outputLanguage = null,
         bool usesTestDouble = false) =>
         new(ownerId, learningGoalId, string.IsNullOrWhiteSpace(title) ? FirstLine(text) : title.Trim(), text, createdAt)
         {
-            Level = Fitting(level, LevelMaxLength),
-            OutputLanguage = Fitting(outputLanguage, OutputLanguageMaxLength),
             UsesTestDouble = usesTestDouble,
         };
 
@@ -195,15 +196,11 @@ public sealed class Document : IOwnedByUser
         Guid fileId,
         FileFormat format,
         DateTime createdAt,
-        string? level = null,
-        string? outputLanguage = null,
         bool usesTestDouble = false) =>
         new(ownerId, learningGoalId, TitleOf(fileName), "", createdAt)
         {
             FileId = fileId,
             FileFormat = format,
-            Level = Fitting(level, LevelMaxLength),
-            OutputLanguage = Fitting(outputLanguage, OutputLanguageMaxLength),
             UsesTestDouble = usesTestDouble,
         };
 
@@ -375,7 +372,4 @@ public sealed class Document : IOwnedByUser
         var first = text.Split('\n').Select(line => line.Trim()).First(line => line.Length > 0);
         return first[..Math.Min(first.Length, TitleMaxLength)].TrimEnd();
     }
-
-    // A cut name would be no name at all, so one that doesn't fit counts as none.
-    private static string? Fitting(string? value, int maxLength) => value?.Length <= maxLength ? value : null;
 }
