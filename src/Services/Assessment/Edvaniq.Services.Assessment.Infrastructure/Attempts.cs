@@ -16,6 +16,16 @@ internal sealed class Attempts(AssessmentDbContext db) : IAttempts
             .Where(question => question.TopicId == topicId)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyDictionary<Guid, DateTime>> LastAnsweredAsync(IReadOnlyCollection<Guid> topicIds, CancellationToken cancellationToken)
+    {
+        var answered = await db.Attempts.AsNoTracking()
+            .Where(attempt => attempt.Answered && attempt.AnsweredAt != null && topicIds.Contains(attempt.TopicId))
+            .GroupBy(attempt => attempt.QuestionId)
+            .Select(group => new { QuestionId = group.Key, Last = group.Max(attempt => attempt.AnsweredAt!.Value) })
+            .ToListAsync(cancellationToken);
+        return answered.ToDictionary(entry => entry.QuestionId, entry => entry.Last);
+    }
+
     public Task<Question?> FindQuestionAsync(Guid id, CancellationToken cancellationToken) =>
         db.Questions.AsNoTracking().FirstOrDefaultAsync(question => question.Id == id, cancellationToken);
 

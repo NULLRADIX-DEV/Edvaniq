@@ -179,6 +179,9 @@ namespace Edvaniq.Services.Assessment.Infrastructure.Migrations
                         .HasColumnType("varchar(128)")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
+                    b.Property<bool?>("PoolTooSmall")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<Guid>("TopicId")
                         .HasColumnType("char(36)");
 

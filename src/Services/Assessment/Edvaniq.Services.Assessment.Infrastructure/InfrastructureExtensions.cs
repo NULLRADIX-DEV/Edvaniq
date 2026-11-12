@@ -26,6 +26,7 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<Quiz>();
         builder.Services.AddScoped<IBlockQuizzes, BlockQuizzes>();
         builder.Services.AddScoped<BlockQuizOpener>();
+        builder.Services.AddScoped<WeaknessQuiz>();
         builder.Services.AddScoped<IQuestionPools, QuestionPools>();
 
         // Attempts and block quizzes go after AttemptRetention:Days (#962).

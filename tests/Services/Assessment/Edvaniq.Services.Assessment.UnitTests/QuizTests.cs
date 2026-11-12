@@ -234,6 +234,81 @@ public sealed class QuizTests
         Assert.False(attempt.Answered);
     }
 
+    // #387: an answered question stays out while the topic has another, then comes back marked as repeated.
+    [Fact]
+    public async Task Ask_RepeatsAnAnsweredQuestion_OnlyWhenNoOtherIsLeft()
+    {
+        var topicId = Guid.NewGuid();
+        attempts.KnownTopics.Add(topicId);
+        attempts.Questions.AddRange([AttemptTests.Question("alice", topicId), AttemptTests.Question("alice", topicId)]);
+
+        var first = await Quiz.AskAsync(topicId, TestContext.Current.CancellationToken);
+        await Quiz.AnswerAsync(first.Attempt!.Id, 0, 1_000, TestContext.Current.CancellationToken);
+        time.Advance(TimeSpan.FromMinutes(1));
+        var second = await Quiz.AskAsync(topicId, TestContext.Current.CancellationToken);
+        await Quiz.AnswerAsync(second.Attempt!.Id, 0, 1_000, TestContext.Current.CancellationToken);
+        var third = await Quiz.AskAsync(topicId, TestContext.Current.CancellationToken);
+
+        Assert.NotEqual(first.Question!.Id, second.Question!.Id);
+        Assert.False(first.Repeated || second.Repeated);
+        Assert.Equal(first.Question.Id, third.Question!.Id);
+        Assert.True(third.Repeated);
+    }
+
+    [Fact]
+    public async Task WeaknessQuiz_AsksOnlyTheWeaknesses_TheSeverestFirst()
+    {
+        var severest = Guid.NewGuid();
+        var lighter = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        foreach (var topicId in new[] { severest, lighter, other })
+        {
+            attempts.KnownTopics.Add(topicId);
+            attempts.Questions.AddRange([AttemptTests.Question("alice", topicId), AttemptTests.Question("alice", topicId)]);
+        }
+
+        var quiz = await WeaknessQuiz([severest, lighter]).AskAsync(Guid.NewGuid(), 4, TestContext.Current.CancellationToken);
+
+        Assert.Equal(WeaknessQuizOutcome.Ready, quiz.Outcome);
+        Assert.Equal([severest, lighter, severest, lighter], quiz.Questions!.Select(entry => entry.Attempt.TopicId));
+        Assert.Equal(4, attempts.Stored.Count);
+        Assert.False(quiz.PoolTooSmall);
+    }
+
+    [Fact]
+    public async Task WeaknessQuiz_WithFewerQuestionsThanAskedFor_SaysSo()
+    {
+        var weakness = Guid.NewGuid();
+        attempts.KnownTopics.Add(weakness);
+        attempts.Questions.Add(AttemptTests.Question("alice", weakness));
+
+        var quiz = await WeaknessQuiz([weakness]).AskAsync(Guid.NewGuid(), 3, TestContext.Current.CancellationToken);
+
+        Assert.Single(quiz.Questions!);
+        Assert.True(quiz.PoolTooSmall);
+    }
+
+    [Fact]
+    public async Task WeaknessQuiz_WithoutWeaknessesOrQuestionsOrLearningEngine_SaysWhich()
+    {
+        var withoutQuestions = Guid.NewGuid();
+        attempts.KnownTopics.Add(withoutQuestions);
+        var unknown = Guid.NewGuid();
+        attempts.Questions.Add(AttemptTests.Question("alice", unknown));
+
+        Assert.Equal(WeaknessQuizOutcome.NoWeaknesses, (await WeaknessQuiz([]).AskAsync(Guid.NewGuid(), 3, TestContext.Current.CancellationToken)).Outcome);
+        Assert.Equal(WeaknessQuizOutcome.NoQuestions, (await WeaknessQuiz([withoutQuestions, unknown]).AskAsync(Guid.NewGuid(), 3, TestContext.Current.CancellationToken)).Outcome);
+        Assert.Equal(WeaknessQuizOutcome.Unavailable, (await WeaknessQuiz(null).AskAsync(Guid.NewGuid(), 3, TestContext.Current.CancellationToken)).Outcome);
+        Assert.Empty(attempts.Stored);
+    }
+
+    private WeaknessQuiz WeaknessQuiz(IReadOnlyList<Guid>? weaknesses) => new(new FakeWeaknesses(weaknesses), attempts, time);
+
+    private sealed class FakeWeaknesses(IReadOnlyList<Guid>? weaknesses) : IWeaknesses
+    {
+        public Task<IReadOnlyList<Guid>?> OfLearningGoalAsync(Guid learningGoalId, CancellationToken cancellationToken) => Task.FromResult(weaknesses);
+    }
+
     private Question AddTopicWithQuestion(Guid topicId)
     {
         attempts.KnownTopics.Add(topicId);
@@ -287,6 +362,12 @@ public sealed class QuizTests
 
         public Task<IReadOnlyList<Question>> QuestionsOfAsync(Guid topicId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<Question>>([.. Questions.Where(question => question.TopicId == topicId)]);
+
+        public Task<IReadOnlyDictionary<Guid, DateTime>> LastAnsweredAsync(IReadOnlyCollection<Guid> topicIds, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, DateTime>>(Stored
+                .Where(attempt => attempt.Answered && topicIds.Contains(attempt.TopicId))
+                .GroupBy(attempt => attempt.QuestionId)
+                .ToDictionary(group => group.Key, group => group.Max(attempt => attempt.AnsweredAt!.Value)));
 
         public Task<Question?> FindQuestionAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(Questions.FirstOrDefault(question => question.Id == id));

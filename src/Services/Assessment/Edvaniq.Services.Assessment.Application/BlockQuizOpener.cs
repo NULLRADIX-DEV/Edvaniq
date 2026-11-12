@@ -32,8 +32,9 @@ public sealed class BlockQuizOpener(IBlockQuizzes quizzes, IAttempts attempts, I
         }
 
         var now = time.GetUtcNow().UtcDateTime;
-        var quiz = BlockQuiz.Create(currentUser.Id, blockId, topicId, now);
-        var asked = QuestionSelection.Pick(pool, size, Random.Shared).Select(question => Attempt.AskIn(quiz, question, now)).ToList();
+        var selection = QuestionSelection.Pick(pool, await attempts.LastAnsweredAsync([topicId], cancellationToken), size, now, Random.Shared);
+        var quiz = BlockQuiz.Create(currentUser.Id, blockId, topicId, now, selection.PoolTooSmall);
+        var asked = selection.Questions.Select(question => Attempt.AskIn(quiz, question, now)).ToList();
         if (await quizzes.TryAddAsync(quiz, asked, cancellationToken))
         {
             return await OfAsync(quiz, topicId, cancellationToken);
