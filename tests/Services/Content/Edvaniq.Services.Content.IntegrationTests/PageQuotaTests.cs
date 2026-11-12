@@ -135,7 +135,7 @@ public sealed class PageQuotaTests(PageQuotaFactory service) : IClassFixture<Pag
         Assert.Equal(HttpStatusCode.TooManyRequests, next.StatusCode);
     }
 
-    // GET /quota shows the caller's own count only, the generations follow with #302.
+    // GET /quota shows the caller's own counts only, pages and generations (#302).
     [Fact]
     public async Task Quota_ShowsTheCallersOwnCount()
     {
@@ -148,7 +148,7 @@ public sealed class PageQuotaTests(PageQuotaFactory service) : IClassFixture<Pag
         Assert.Equal(
             ["pagesLeftToday", "pagesPerDay", "generationsLeftToday", "generationsPerDay", "resetsAt"],
             quota.EnumerateObject().Select(field => field.Name));
-        Assert.Equal(JsonValueKind.Null, quota.GetProperty("generationsLeftToday").ValueKind);
+        Assert.Equal((GenerationQuota.DefaultGenerationsPerDay, GenerationQuota.DefaultGenerationsPerDay), (quota.GetProperty("generationsLeftToday").GetInt32(), quota.GetProperty("generationsPerDay").GetInt32()));
         Assert.Equal(
             StudyDay.NextStartUtc(service.Time.GetUtcNow().UtcDateTime),
             quota.GetProperty("resetsAt").GetDateTime().ToUniversalTime());
