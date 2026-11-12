@@ -96,6 +96,12 @@ internal static partial class ContentLog
     [LoggerMessage(Level = LogLevel.Warning, Message = "Reading the file of document {DocumentId} broke off too often, it is marked as failed")]
     public static partial void FileGaveUp(ILogger logger, Guid documentId);
 
+    [LoggerMessage(Level = LogLevel.Information, Message = "Reading process ended with {ExitCode} after {ElapsedMs} ms, answer {Bytes} bytes")]
+    public static partial void FileReaderEnded(ILogger logger, int exitCode, int bytes, long elapsedMs);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Reading process killed after {ElapsedMs} ms, it took too long")]
+    public static partial void FileReaderKilled(ILogger logger, long elapsedMs);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Read {Pages} pages and {Characters} characters from the file of document {DocumentId} in {DurationMs} ms")]
     public static partial void FileRead(ILogger logger, Guid documentId, int pages, int characters, long durationMs);
 

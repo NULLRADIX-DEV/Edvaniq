@@ -63,6 +63,8 @@ public static class InfrastructureExtensions
         builder.Services.AddSingleton<AiUsageLog>();
         builder.Services.AddScoped<IAiSwitch, AiSwitches>();
         builder.Services.AddScoped<IAiBudget, AiBudgets>();
+        builder.Services.AddOptions<FileReadingOptions>().BindConfiguration(FileReadingOptions.Section);
+        builder.Services.AddSingleton<FileReader>();
         builder.Services.AddHostedService<FileTextExtractor>();
         builder.Services.AddHostedService<DocumentSplitter>();
         builder.Services.AddHostedService<DocumentAnalyzer>();

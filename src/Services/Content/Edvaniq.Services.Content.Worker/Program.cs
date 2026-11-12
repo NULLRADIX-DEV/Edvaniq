@@ -2,7 +2,15 @@ using Edvaniq.BuildingBlocks.AI;
 using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Infrastructure;
 using Edvaniq.Services.Content.Infrastructure.Ai;
+using Edvaniq.Services.Content.Infrastructure.Files;
 using Edvaniq.Services.Content.Worker;
+
+// The reading process of one file (FileReader), before anything else: no host, no database, no broker, no secret.
+if (args is [FileReadCommand.Name, var path, var format])
+{
+    using var output = Console.OpenStandardOutput();
+    return FileReadCommand.Run(path, format, output);
+}
 
 var builder = Host.CreateApplicationBuilder(args);
 

@@ -206,7 +206,8 @@ public sealed class FileTextExtractorTests(ServiceFactory service) : IClassFixtu
 
     private static Document Stored(ContentDbContext db, Guid id) => db.Documents.IgnoreQueryFilters().Single(document => document.Id == id);
 
-    private FileTextExtractor Extractor() => ActivatorUtilities.CreateInstance<FileTextExtractor>(service.Services);
+    private FileTextExtractor Extractor() =>
+        ActivatorUtilities.CreateInstance<FileTextExtractor>(service.Services, ReadingProcess.Reader(service.Services.GetRequiredService<FileStore>()));
 
     private async Task<Guid> UploadAsync(string user, string name, byte[] content)
     {

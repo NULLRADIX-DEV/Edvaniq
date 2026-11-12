@@ -24,6 +24,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Services\Content\Edvaniq.Services.Content.Api\Edvaniq.Services.Content.Api.csproj" />
+    <!-- Only so the worker lies next to the tests: they start it as the reading process (FileReader). -->
+    <ProjectReference Include="..\..\..\..\src\Services\Content\Edvaniq.Services.Content.Worker\Edvaniq.Services.Content.Worker.csproj" Aliases="worker" />
     <ProjectReference Include="..\..\..\Edvaniq.Testing\Edvaniq.Testing.csproj" />
   </ItemGroup>
 
