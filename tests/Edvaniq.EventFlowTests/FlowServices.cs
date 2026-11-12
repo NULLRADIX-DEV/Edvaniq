@@ -48,13 +48,23 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
     public async ValueTask InitializeAsync()
     {
         Knowledge = await StartAsync<knowledge::Program, KnowledgeInfra.KnowledgeDbContext>(KnowledgeInfra.InfrastructureExtensions.DatabaseName);
-        // Planning asks the LearningEngine below for the mastery, with the token of the user whose plan it is. That host
-        // starts later, so the handler is only made on the first call.
+        // Planning asks the LearningEngine and the Assessment below for the mastery and the ready question pools, with
+        // the token of the user whose plan it is. Those hosts start later, so the handlers are only made on the first
+        // call. Without the pools a plan waited for the resilience timeouts of an address that isn't there (#378).
         var planningHost = await StartAsync<planning::Program, PlanningInfra.PlanningDbContext>(
             PlanningInfra.InfrastructureExtensions.DatabaseName,
-            services => services.AddHttpClient<IMasterySource, PlanningInfra.LearningEngineMastery>()
-                .ConfigurePrimaryHttpMessageHandler(() => learningEngine!.Server.CreateHandler()),
-            new() { ["services:learningengine-api:http:0"] = "http://learningengine-api" });
+            services =>
+            {
+                services.AddHttpClient<IMasterySource, PlanningInfra.LearningEngineMastery>()
+                    .ConfigurePrimaryHttpMessageHandler(() => learningEngine!.Server.CreateHandler());
+                services.AddHttpClient<IQuestionPoolSource, PlanningInfra.AssessmentQuestionPools>()
+                    .ConfigurePrimaryHttpMessageHandler(() => Assessment.Server.CreateHandler());
+            },
+            new()
+            {
+                ["services:learningengine-api:http:0"] = "http://learningengine-api",
+                ["services:assessment-api:http:0"] = "http://assessment-api",
+            });
         var assessmentHost = await StartAsync<assessment::Program, AssessmentInfra.AssessmentDbContext>(AssessmentInfra.InfrastructureExtensions.DatabaseName);
         Assessment = assessmentHost;
 
