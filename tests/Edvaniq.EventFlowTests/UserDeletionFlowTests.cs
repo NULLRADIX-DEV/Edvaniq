@@ -190,9 +190,10 @@ public sealed class UserDeletionFlowTests(FlowServices services) : IDisposable
             "The worker never got the topics from Knowledge.");
 
         var topic = services.QueryKnowledge(db => db.Topics.IgnoreQueryFilters().First(item => item.DocumentId == documentId && item.ParentId == null).Id);
-        await WaitForAsync(
+        await FlowServices.WaitForAsync(
             () => Task.FromResult(services.QueryAssessment(db => db.Questions.IgnoreQueryFilters().Any(question => question.OwnerId == user && question.TopicId == topic))),
-            "Assessment did not take the questions over.");
+            () => $"Assessment did not take the questions over. {services.QuestionsOf(documentId, user)}",
+            Timeout);
         using var assessment = Client(services.Assessment.CreateClient(), token);
         using var asked = await assessment.PostAsJsonAsync("/attempts", new { topicId = topic }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, asked.StatusCode);
