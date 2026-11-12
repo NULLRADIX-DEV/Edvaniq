@@ -259,11 +259,26 @@ dotnet Edvaniq.Services.Content.Api.dll ai resume
 dotnet Edvaniq.Services.Content.Api.dll ai status
 ```
 
-Der Zustand steht in der Datenbank von Content, er gilt also sofort für jeden Prozess und übersteht Neustarts. Der Befehl schreibt `AI paused` oder `AI running` und endet mit 0, bei falschen Argumenten mit 2, bei einem anderen Fehler mit 1. Jede echte Änderung steht als Logzeile im Log der Content-Api.
+Der Zustand steht in der Datenbank von Content, er gilt also sofort für jeden Prozess und übersteht Neustarts. Der Befehl schreibt `AI paused` oder `AI running` mit den Ausgaben des Monats und endet mit 0, bei falschen Argumenten mit 2, bei einem anderen Fehler mit 1. Jede echte Änderung steht als Logzeile im Log der Content-Api.
 
 Pausiert erreicht kein KI-Aufruf von Content den Anbieter, auch `ai-check` nicht. Der Worker lässt jedes Dokument, das die KI bräuchte, mit „KI derzeit pausiert. Versuch es später noch einmal.“ scheitern, auch eines, das nach einem Ausfall gerade wartet. Ein Aufruf, der beim Pausieren schon läuft, darf zu Ende laufen. Nach `ai resume` startet der Nutzer das Dokument neu. Login, Lernziele, Listen und Upload rufen keine KI und laufen weiter.
 
-Der Schalter sitzt vor dem `IChatClient` des Content-Workers (`PausableChatClient`), den jeder KI-Aufruf passiert. Ruft später ein anderer Service eine KI, muss er denselben Schalter beachten.
+### Monatsbudget
+
+Ein Monatsbudget begrenzt, was die KI im Kalendermonat kosten darf. Gezählt wird in UTC, so wie der Anbieter abrechnet, und in seiner Währung, wie die Kosten im Kostenlog. Gesetzt wird es mit demselben Befehl:
+
+```bash
+dotnet Edvaniq.Services.Content.Api.dll ai budget 25.50
+dotnet Edvaniq.Services.Content.Api.dll ai budget none
+```
+
+Ohne Budget gibt es kein Limit, der Worker schreibt dann beim Start eine Warnung ins Log. `ai status` zeigt, was im laufenden Monat schon ausgegeben ist, und das Budget. Beträge stehen nur in dieser Ausgabe, nie im Log. Die Summe beginnt jeden Monat bei 0, weil nur Versuche aus dem laufenden Monat zählen. Versuche ohne Preis zählen 0.
+
+Ist das Budget aufgebraucht, lehnt die Content-Api Einfügen, Upload und Neustart mit 429 und „Das KI-Kontingent für diesen Monat ist aufgebraucht. Versuch es im nächsten Monat noch einmal.“ ab, ohne etwas zu speichern. Der Worker lässt Dokumente, die die KI noch bräuchten, mit derselben Meldung scheitern. Ein Aufruf, der gerade läuft, kann das Budget um seine eigenen Kosten überschreiten.
+
+Der erste KI-Aufruf eines Monats, der 80 % des Budgets verbraucht findet, schreibt einmal eine Warnung ins Log, der erste, der es aufgebraucht findet, einmal einen Fehler. Beide nennen nur den Prozentsatz. Der Betrieb erkennt sie an den Event-Namen `AiBudgetWarning` und `AiBudgetExhausted` und am Anfang „AI budget:“. Beides bleibt so, auch wenn sich der Text ändert. Fehlt das Budget, heißt die Zeile `AiBudgetMissing`.
+
+Schalter und Budget sitzen vor dem `IChatClient` des Content-Workers (`AiGate`), den jeder KI-Aufruf passiert. Die Content-Api fragt mit derselben Summe (`IAiBudget`). Ruft später ein anderer Service eine KI, muss er beides beachten.
 
 ## Tests
 

@@ -35,6 +35,9 @@ public sealed class Document : IOwnedByUser
 
     public const string GoalGone = "Das Lernziel dieses Dokuments gibt es nicht mehr.";
 
+    // The AI cost this month reached the operator's budget (AiSwitch.MonthlyBudget). Names no amount.
+    public const string AiBudgetReached = "Das KI-Kontingent für diesen Monat ist aufgebraucht. Versuch es im nächsten Monat noch einmal.";
+
     // The operator paused the AI (AiSwitch). A retry works once it runs again.
     public const string AiPaused = "KI derzeit pausiert. Versuch es später noch einmal.";
 

@@ -21,6 +21,13 @@ internal static class AiOutage
             return;
         }
 
+        if (failure is AiBudgetExhaustedException)
+        {
+            ContentLog.AiBudgetRefused(logger, task, document.Id);
+            document.Fail(Document.AiBudgetReached);
+            return;
+        }
+
         if (!AiFailure.IsTransient(failure))
         {
             // Most likely the key or the settings, so every document fails like this one. The status only, no body.

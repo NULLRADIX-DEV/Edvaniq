@@ -33,6 +33,7 @@ internal static class FileUploadEndpoint
         ILearningGoals goals,
         IFiles files,
         IDocuments documents,
+        IAiBudget budget,
         CancellationToken cancellationToken)
     {
         var request = context.Request;
@@ -51,6 +52,11 @@ internal static class FileUploadEndpoint
             || HeaderUtilities.RemoveQuotes(type.Boundary).Value is not { Length: > 0 } boundary)
         {
             return Rejected(NoFile);
+        }
+
+        if (await BudgetRefusal.OfAsync(budget, cancellationToken) is { } refused)
+        {
+            return refused;
         }
 
         // The goal before the body: a foreign goal or no Planning, and not a byte is stored.

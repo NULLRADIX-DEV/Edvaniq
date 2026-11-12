@@ -33,6 +33,7 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<AiUsageReport>();
         builder.Services.AddSingleton<AiUsageLog>();
         builder.Services.AddScoped<IAiSwitch, AiSwitches>();
+        builder.Services.AddScoped<IAiBudget, AiBudgets>();
 
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
         builder.Services.AddMessaging<ContentDbContext>(ServiceKey);
@@ -61,6 +62,7 @@ public static class InfrastructureExtensions
         builder.Services.AddMessaging<ContentDbContext>(ServiceKey);
         builder.Services.AddSingleton<AiUsageLog>();
         builder.Services.AddScoped<IAiSwitch, AiSwitches>();
+        builder.Services.AddScoped<IAiBudget, AiBudgets>();
         builder.Services.AddHostedService<FileTextExtractor>();
         builder.Services.AddHostedService<DocumentSplitter>();
         builder.Services.AddHostedService<DocumentAnalyzer>();

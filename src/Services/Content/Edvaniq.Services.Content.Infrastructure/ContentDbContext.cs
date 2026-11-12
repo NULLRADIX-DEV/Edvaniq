@@ -74,7 +74,9 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         attempt.HasIndex(item => item.DocumentId);
         attempt.HasIndex(item => new { item.CallId, item.Attempt }).IsUnique();
 
-        modelBuilder.Entity<AiSwitch>().Property(item => item.Id).ValueGeneratedNever();
+        var aiSwitch = modelBuilder.Entity<AiSwitch>();
+        aiSwitch.Property(item => item.Id).ValueGeneratedNever();
+        aiSwitch.Property(item => item.MonthlyBudget).HasPrecision(18, 6);
 
         var day = modelBuilder.Entity<AiUsageDay>();
         day.HasKey(item => new { item.Day, item.Purpose, item.Model, item.PromptVersion });
