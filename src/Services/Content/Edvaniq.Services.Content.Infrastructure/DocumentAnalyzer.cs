@@ -39,6 +39,9 @@ public sealed class DocumentAnalyzer(
     // How long a document waits after each outage of the AI, the worker goes on with the others meanwhile.
     public IReadOnlyList<TimeSpan> OutageDelays { get; set; } = Document.OutageDelays;
 
+    // How much material goes into one call for the topics, a longer document is asked in parts.
+    public int BatchCharacters { get; set; } = options.Value.TopicBatchCharacters;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
@@ -144,12 +147,41 @@ public sealed class DocumentAnalyzer(
         await WorkerSave.SaveAsync(db, documentId, "analysis", logger, cancellationToken);
     }
 
-    // The answer of the AI with the topics, if any. Every attempt goes into the cost log.
+    // The topics of the document, asked part by part for a long one (TopicBatches) and merged into one list
+    // (TopicMerge). The first part that fails or gives no usable answer ends it, a retry starts over. Every attempt goes
+    // into the cost log.
     private async Task<StructuredAnswer<IReadOnlyList<TopicSuggestion>>> TopicsAsync(
         Document document, LearnerProfile profile, IReadOnlyList<Section> sections, CancellationToken cancellationToken)
     {
-        IReadOnlyList<Guid> ids = [.. sections.Select(section => section.Id)];
         var chat = ContentAi.For(document, ai, testDouble);
+        IReadOnlyList<int> lengths = [.. sections.Select(section => section.Length)];
+        var batches = TopicBatches.Of(lengths, BatchCharacters);
+        var quotas = TopicBatches.Quotas([.. batches.Select(batch => lengths.Take(batch).Sum())], TopicAnalysis.MaxTopics);
+        var parts = new List<IReadOnlyList<TopicSuggestion>>();
+        StructuredAnswer<IReadOnlyList<TopicSuggestion>>? answer = null;
+        foreach (var batch in batches)
+        {
+            answer = await PartAsync(document, profile, chat, sections.Take(batch).ToList(), cancellationToken);
+            if (answer.Value is not { } part)
+            {
+                return answer;
+            }
+
+            parts.Add(part);
+        }
+
+        if (answer is null)
+        {
+            return new StructuredAnswer<IReadOnlyList<TopicSuggestion>>(null, 0, new UsageDetails(), null, null, []);
+        }
+
+        return parts.Count == 1 ? answer : answer with { Value = TopicMerge.Merge(parts, quotas, [.. sections.Select(section => section.Id)]) };
+    }
+
+    private async Task<StructuredAnswer<IReadOnlyList<TopicSuggestion>>> PartAsync(
+        Document document, LearnerProfile profile, IChatClient chat, IReadOnlyList<Section> sections, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<Guid> ids = [.. sections.Select(section => section.Id)];
         var answer = await chat.AskAsync(
             [
                 new ChatMessage(ChatRole.System, TopicAnalysis.System(profile)),
