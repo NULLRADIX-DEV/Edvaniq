@@ -158,23 +158,28 @@ public sealed class PlanFlowTests(FlowServices services) : IDisposable
         var measured = string.Join(", ", times.Select(time => $"{time.TotalMilliseconds:F0}"));
         Assert.True(times.Max() < TimeSpan.FromSeconds(2), $"Q3 allows 2000 ms per recomputation, measured {measured} ms.");
 
-        var learnBefore = LearnMinutes(before, block.TopicId);
-        var learnAfter = LearnMinutes(after, block.TopicId);
-        if (learnAfter >= learnBefore)
-        {
-            // Confirmed only if the planner, with everything else as it is now, gives A the same time at its old mastery.
-            var budget = await BudgetAsync(planning, cancellationToken);
-            var foundations = services.QueryPlanning(db => db.KnownTopics.IgnoreQueryFilters()
-                .Where(topic => topic.OwnerId == carol && topic.IsFoundation).Select(topic => topic.TopicId).ToHashSet());
-            var withOld = new Dictionary<Guid, PlanningDomain.TopicStanding>(standingsAfter) { [block.TopicId] = standingsBefore[block.TopicId] };
-            int PlannedFor(IReadOnlyDictionary<Guid, PlanningDomain.TopicStanding> standings) =>
-                PlanningDomain.TodayPlanner.Plan([.. standings.Keys], standings, budget, DateTime.UtcNow, foundations: foundations).Blocks
-                    .Where(entry => entry.TopicId == block.TopicId && entry.Kind == PlanningDomain.BlockKind.Learn)
-                    .Sum(entry => entry.Minutes);
-            Assert.True(
-                PlannedFor(standingsAfter) == PlannedFor(withOld) && learnAfter == learnBefore,
-                $"A has {learnAfter} learn minutes today after the session, {learnBefore} before, and the planner doesn't confirm them.");
-        }
+        // AC1: the rest of today is what the planner makes of the new mastery, with the done block kept (#375). Whether A
+        // got less time or kept it, the planner's own rule decides: the same inputs with A at its old mastery show which.
+        var budget = await BudgetAsync(planning, cancellationToken);
+        var foundations = services.QueryPlanning(db => db.KnownTopics.IgnoreQueryFilters()
+            .Where(topic => topic.OwnerId == carol && topic.LearningGoalId == goal && !topic.Hidden && topic.IsFoundation).Select(topic => topic.TopicId).ToHashSet());
+        var done = services.QueryPlanning(db => db.DoneBlocks.IgnoreQueryFilters().Where(entry => entry.OwnerId == carol).ToList());
+        var withOld = new Dictionary<Guid, PlanningDomain.TopicStanding>(standingsAfter) { [block.TopicId] = standingsBefore[block.TopicId] };
+        var known = services.QueryPlanning(db => db.KnownTopics.IgnoreQueryFilters()
+            .Where(topic => topic.OwnerId == carol && topic.LearningGoalId == goal && !topic.Hidden).Select(topic => topic.TopicId).ToList());
+        var ready = known.Except(after.NotReadyTopicIds ?? []).ToHashSet();
+        IReadOnlyList<PlanningDomain.Block> Fresh(IReadOnlyDictionary<Guid, PlanningDomain.TopicStanding> standings) =>
+            PlanningDomain.TodayPlanner.Plan(known, standings, budget, DateTime.UtcNow, ready, foundations).Blocks;
+        var fresh = Fresh(standingsAfter);
+        var expected = PlanningDomain.DayBlocks.WithDone(carol, goal, before.StudyDay, fresh, done, budget.MinutesOn(before.StudyDay))
+            .Select(entry => (entry.Id, entry.Block.TopicId, entry.Block.Minutes, Kind: entry.Block.Kind.ToString().ToLowerInvariant(), entry.Done));
+        int LearnOfA(IReadOnlyList<PlanningDomain.Block> blocks) =>
+            blocks.Where(entry => entry.TopicId == block.TopicId && entry.Kind == PlanningDomain.BlockKind.Learn).Sum(entry => entry.Minutes);
+        var verdict = LearnOfA(fresh) < LearnOfA(Fresh(withOld)) ? "changed" : "confirmed";
+        Assert.True(
+            expected.SequenceEqual(after.Blocks.Select(entry => (entry.Id, entry.TopicId, entry.Minutes, entry.Kind, entry.Done))),
+            $"Today's plan doesn't follow the new mastery ({verdict}: A {LearnOfA(Fresh(withOld))} → {LearnOfA(fresh)} learn minutes in a fresh plan).");
+        Assert.True(LearnOfA(fresh) <= LearnOfA(Fresh(withOld)), "A got more time after a session that raised its mastery.");
     }
 
     public void Dispose() => ai.Dispose();
@@ -358,7 +363,7 @@ public sealed class PlanFlowTests(FlowServices services) : IDisposable
         }
     }
 
-    private sealed record Plan(DateOnly StudyDay, List<PlannedBlock> Blocks, bool MasteryAvailable);
+    private sealed record Plan(DateOnly StudyDay, List<PlannedBlock> Blocks, bool MasteryAvailable, List<Guid>? NotReadyTopicIds = null);
 
     private sealed record PlannedBlock(Guid TopicId, int Minutes, string Kind, Guid Id = default, bool Done = false);
 }
