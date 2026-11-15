@@ -109,6 +109,20 @@ button {
     background: var(--color-accent-hover);
 }
 
+/* The step next to the main one: same size, less weight. */
+.button-secondary {
+    min-height: 2.75rem;
+    padding: var(--space-2) var(--space-4);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    border: 2px solid var(--color-ink-muted);
+    font-weight: 600;
+}
+
+.button-secondary:hover {
+    border-color: var(--color-ink);
+}
+
 /* A link that looks like the button: where nothing may depend on the runtime having loaded, a link still works. */
 a.button {
     display: inline-flex;

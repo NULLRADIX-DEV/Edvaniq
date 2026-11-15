@@ -1,7 +1,11 @@
+@using Microsoft.JSInterop
 @implements IDisposable
 @inject ITopicDirectory Directory
+@inject ITopicEntries Entries
+@inject ILearningGoals Goals
 
-@* All topics on two levels, each opens to its key terms and its sources. Hidden ones sit apart at the end. *@
+@* All topics on two levels, each opens to its key terms, its sources and what the user can do with it (#295). Hidden ones
+   sit apart at the end and can come back from there. A new topic goes in at the top. *@
 <div class="directory-status" role="status">
     @switch (state)
     {
@@ -11,10 +15,10 @@
         case ViewState.LoadFailed:
             <ConnectionProblem Title="@FeedbackTexts.TopicDirectory.LoadFailed" TraceId="@trace" />
             break;
-        case ViewState.Shown when topics.Count == 0 && Analyzing:
+        case ViewState.Shown when topics.Count == 0 && hidden.Count == 0 && Analyzing:
             <EmptyState Title="@FeedbackTexts.TopicDirectory.Analyzing" Hint="@FeedbackTexts.TopicDirectory.AnalyzingHint" />
             break;
-        case ViewState.Shown when topics.Count == 0:
+        case ViewState.Shown when topics.Count == 0 && hidden.Count == 0:
             <EmptyState Title="@FeedbackTexts.TopicDirectory.NoMaterial" Hint="@FeedbackTexts.TopicDirectory.NoMaterialHint" />
             break;
     }
@@ -23,9 +27,9 @@
 @switch (state)
 {
     case ViewState.LoadFailed:
-        <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="LoadAsync" />
+        <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="() => LoadAsync(quiet: false)" />
         break;
-    case ViewState.Shown when topics.Count == 0:
+    case ViewState.Shown when topics.Count == 0 && hidden.Count == 0:
         <StateActions Href="themen" LinkText="@(Analyzing ? FeedbackTexts.TopicDirectory.ToMaterial : FeedbackTexts.TopicDirectory.AddMaterial)" />
         break;
 }
@@ -39,24 +43,103 @@
         </Notice>
     }
 
+    <section class="directory-add" aria-labelledby="topic-add-heading">
+        <h2 id="topic-add-heading">@FeedbackTexts.TopicEditing.AddHeading</h2>
+        @if (goals.Count == 0)
+        {
+            <p>@FeedbackTexts.TopicEditing.NoGoal</p>
+            <p><a href="lernziele/neu">@FeedbackTexts.TopicEditing.NoGoalLink</a></p>
+        }
+        else
+        {
+            <form class="directory-add-form" @onsubmit="AddTopicAsync" novalidate>
+                <TextField @ref="addField" Id="topic-add-name" Label="@FeedbackTexts.TopicEditing.NameLabel" Required="true" Immediate="true"
+                           Value="@newName" ValueChanged="value => newName = value" Error="@addError" autocomplete="off" />
+                @if (goals.Count > 1)
+                {
+                    <SelectField @ref="goalField" Id="topic-add-goal" Label="@FeedbackTexts.TopicEditing.GoalLabel" Required="true"
+                                 Options="GoalOptions" Value="@newGoal" ValueChanged="value => newGoal = value" Error="@goalError" />
+                }
+                @* Stays enabled while it saves: a disabled button would lose the keyboard focus. *@
+                <button type="submit" class="button">@FeedbackTexts.TopicEditing.Add</button>
+            </form>
+        }
+    </section>
+
+    @* What a change said, the undo of a hide right after it. The buttons stay outside, they keep the focus. *@
+    <div class="directory-edit-status" role="status">
+        @if (editMessage is not null)
+        {
+            <Notice Kind="NoticeKind.Success" class="directory-edit-done">
+                <p>@editMessage</p>
+                @if (undo is not null)
+                {
+                    <p>@FeedbackTexts.TopicEditing.HiddenWhere</p>
+                }
+            </Notice>
+        }
+        @switch (editProblem)
+        {
+            case CallResult.Failed:
+                <ConnectionProblem Title="@FeedbackTexts.TopicEditing.NotThrough" TraceId="@editTrace" />
+                break;
+            case CallResult.NotFound:
+                <Notice Kind="NoticeKind.Error" class="directory-edit-problem"><p>@FeedbackTexts.TopicEditing.Gone</p></Notice>
+                break;
+            case CallResult.Rejected:
+                <Notice Kind="NoticeKind.Error" class="directory-edit-problem"><p>@editProblemText</p></Notice>
+                break;
+        }
+    </div>
+    @if (undo is not null || retry is not null || editProblem == CallResult.NotFound)
+    {
+        <div class="directory-edit-actions">
+            @if (undo is not null)
+            {
+                <button type="button" class="button" @ref="undoButton" @onclick="UndoAsync">@FeedbackTexts.TopicEditing.Undo</button>
+            }
+            @if (retry is not null)
+            {
+                <button type="button" class="button" @ref="retryButton" @onclick="RetryAsync">@FeedbackTexts.TopicEditing.TryAgain</button>
+            }
+            @if (editProblem == CallResult.NotFound)
+            {
+                <button type="button" class="button" @onclick="() => LoadAsync(quiet: false)">@FeedbackTexts.TopicEditing.Reload</button>
+            }
+        </div>
+    }
+
     @if (topics.Count > 0)
     {
         <ul class="directory-list">
             @foreach (var topic in topics)
             {
                 <li @key="topic.Id">
-                    <TopicEntry TopicId="topic.Id" Name="@topic.Name" Loader="loader" Life="life.Token">
-                        @if (topic.Subtopics.Count > 0)
-                        {
-                            <ul class="directory-list directory-sublist">
-                                @foreach (var subtopic in topic.Subtopics)
-                                {
-                                    <li @key="subtopic.Id">
-                                        <TopicEntry TopicId="subtopic.Id" Name="@subtopic.Name" Level="3" Loader="loader" Life="life.Token" />
-                                    </li>
-                                }
-                            </ul>
-                        }
+                    <TopicEntry @ref="entries[topic.Id]" TopicId="topic.Id" Name="@topic.Name" Loader="loader" Life="life.Token">
+                        <Tools>
+                            <TopicTools TopicId="topic.Id" Name="@topic.Name" CanAddSubtopic="true"
+                                        OnHide="() => HideAsync(topic.Id, topic.Name, topic.Subtopics.Count)"
+                                        OnEdited="EditedAsync" OnReload="() => LoadAsync(quiet: false)" />
+                        </Tools>
+                        <ChildContent>
+                            @if (topic.Subtopics.Count > 0)
+                            {
+                                <ul class="directory-list directory-sublist">
+                                    @foreach (var subtopic in topic.Subtopics)
+                                    {
+                                        <li @key="subtopic.Id">
+                                            <TopicEntry @ref="entries[subtopic.Id]" TopicId="subtopic.Id" Name="@subtopic.Name" Level="3" Loader="loader" Life="life.Token">
+                                                <Tools>
+                                                    <TopicTools TopicId="subtopic.Id" Name="@subtopic.Name"
+                                                                OnHide="() => HideAsync(subtopic.Id, subtopic.Name, 0)"
+                                                                OnEdited="EditedAsync" OnReload="() => LoadAsync(quiet: false)" />
+                                                </Tools>
+                                            </TopicEntry>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </ChildContent>
                     </TopicEntry>
                 </li>
             }
@@ -78,18 +161,30 @@
                     @foreach (var entry in hidden)
                     {
                         <li @key="entry.Id">
-                            <TopicEntry TopicId="entry.Id" Name="@entry.Name" Level="3" Note="@entry.Note" Loader="loader" Life="life.Token">
-                                @if (entry.Subtopics.Count > 0)
-                                {
-                                    <ul class="directory-list directory-sublist">
-                                        @foreach (var subtopic in entry.Subtopics)
-                                        {
-                                            <li @key="subtopic.Id">
-                                                <TopicEntry TopicId="subtopic.Id" Name="@subtopic.Name" Level="4" Loader="loader" Life="life.Token" />
-                                            </li>
-                                        }
-                                    </ul>
-                                }
+                            <TopicEntry @ref="entries[entry.Id]" TopicId="entry.Id" Name="@entry.Name" Level="3" Note="@entry.Note" Loader="loader" Life="life.Token">
+                                <Tools>
+                                    <TopicTools TopicId="entry.Id" Name="@entry.Name" OnShow="() => ShowAsync(entry.Id, entry.Name)"
+                                                OnEdited="EditedAsync" OnReload="() => LoadAsync(quiet: false)" />
+                                </Tools>
+                                <ChildContent>
+                                    @if (entry.Subtopics.Count > 0)
+                                    {
+                                        <ul class="directory-list directory-sublist">
+                                            @foreach (var subtopic in entry.Subtopics)
+                                            {
+                                                @* Comes back only with its topic, so it can be renamed but not shown on its own. *@
+                                                <li @key="subtopic.Id">
+                                                    <TopicEntry @ref="entries[subtopic.Id]" TopicId="subtopic.Id" Name="@subtopic.Name" Level="4" Loader="loader" Life="life.Token">
+                                                        <Tools>
+                                                            <TopicTools TopicId="subtopic.Id" Name="@subtopic.Name"
+                                                                        OnEdited="EditedAsync" OnReload="() => LoadAsync(quiet: false)" />
+                                                        </Tools>
+                                                    </TopicEntry>
+                                                </li>
+                                            }
+                                        </ul>
+                                    }
+                                </ChildContent>
                             </TopicEntry>
                         </li>
                     }
@@ -101,6 +196,7 @@
 
 @code {
     private readonly CancellationTokenSource life = new();
+    private readonly Dictionary<Guid, TopicEntry> entries = [];
     private ViewState state = ViewState.Loading;
     private string? trace;
 
@@ -111,45 +207,85 @@
     private IReadOnlyList<HiddenEntry> hidden = [];
 
     private IReadOnlyList<DocumentInfo> documents = [];
+    private IReadOnlyList<LearningGoalInfo> goals = [];
     private TopicDetailsLoader? loader;
     private bool showHidden;
 
+    private string newName = "";
+    private string? newGoal;
+    private string? addError;
+    private string? goalError;
+    private bool adding;
+    private TextField? addField;
+    private SelectField? goalField;
+
+    // What the last change said, and the way back from a hide.
+    private string? editMessage;
+    private (Guid Id, string Name)? undo;
+    private CallResult? editProblem;
+    private string? editProblemText;
+    private string? editTrace;
+    private Func<Task>? retry;
+    private bool editing;
+    private ElementReference undoButton;
+    private ElementReference retryButton;
+
+    private Focus focusNext;
+    private Guid focusTopic;
+
     private bool Analyzing => documents.Any(document => document.Status is DocumentStatus.Analyzing or DocumentStatus.Uploaded);
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    private IReadOnlyList<ChoiceOption> GoalOptions => [.. goals.Select(goal => new ChoiceOption(goal.Id.ToString(), goal.Name))];
 
-    private async Task LoadAsync()
+    protected override Task OnInitializedAsync() => LoadAsync(quiet: false);
+
+    // Quiet keeps the list on screen while it loads anew after a change, so open topics stay open and the focus stays.
+    private async Task LoadAsync(bool quiet)
     {
-        state = ViewState.Loading;
+        if (!quiet)
+        {
+            state = ViewState.Loading;
+            ClearEdit();
+        }
+
         CallOutcome<IReadOnlyList<TopicInfo>> topicList;
         CallOutcome<IReadOnlyList<DocumentInfo>> documentList;
+        CallOutcome<IReadOnlyList<LearningGoalInfo>> goalList;
         try
         {
             var topicCall = Directory.ListTopicsAsync(life.Token);
             var documentCall = Directory.ListDocumentsAsync(life.Token);
+            var goalCall = Goals.ListAsync(life.Token);
             topicList = await topicCall;
             documentList = await documentCall;
+            goalList = await goalCall;
         }
         catch (OperationCanceledException)
         {
             return;
         }
 
-        if (topicList.Result == CallResult.SignedOut || documentList.Result == CallResult.SignedOut)
+        if (topicList.Result == CallResult.SignedOut || documentList.Result == CallResult.SignedOut || goalList.Result == CallResult.SignedOut)
         {
             // The shell says the login ran out (SessionEndedNotice).
             state = ViewState.SignedOut;
             return;
         }
 
-        if (topicList.Result != CallResult.Ok || documentList.Result != CallResult.Ok)
+        if (topicList.Result != CallResult.Ok || documentList.Result != CallResult.Ok || goalList.Result != CallResult.Ok)
         {
-            trace = topicList.TraceId ?? documentList.TraceId;
+            trace = topicList.TraceId ?? documentList.TraceId ?? goalList.TraceId;
             state = ViewState.LoadFailed;
             return;
         }
 
         documents = documentList.Value!;
+        goals = goalList.Value!;
+        if (newGoal is null || goals.All(goal => goal.Id.ToString() != newGoal))
+        {
+            newGoal = goals.FirstOrDefault(goal => goal.InPlan)?.Id.ToString() ?? goals.FirstOrDefault()?.Id.ToString();
+        }
+
         var all = topicList.Value!;
         topics = [.. all.Where(topic => !topic.Hidden).Select(topic => topic with { Subtopics = [.. topic.Subtopics.Where(subtopic => !subtopic.Hidden)] })];
         hidden =
@@ -160,8 +296,206 @@
                 .Select(subtopic => new HiddenEntry(
                     subtopic.Id, subtopic.Name, string.Format(FeedbackTexts.TopicDirectory.SubtopicOf, topic.Name), []))),
         ];
-        loader = new TopicDetailsLoader(Directory, documents);
+
+        // A new visit asks anew, a quiet one keeps what the open topics already know about their documents.
+        if (!quiet || loader is null)
+        {
+            loader = new TopicDetailsLoader(Directory, documents);
+        }
+
         state = ViewState.Shown;
+    }
+
+    private async Task AddTopicAsync()
+    {
+        if (adding)
+        {
+            return;
+        }
+
+        ClearEdit();
+        var name = newName.Trim();
+        addError = name.Length == 0 ? FeedbackTexts.TopicEditing.NameEmpty
+            : name.Length > TopicValues.NameMaxLength ? FeedbackTexts.Goal.TopicTooLong
+            : null;
+        goalError = Guid.TryParse(newGoal, out var goalId) ? null : FeedbackTexts.TopicEditing.GoalMissing;
+        if (addError is not null || goalError is not null)
+        {
+            focusNext = addError is not null ? Focus.AddName : Focus.AddGoal;
+            return;
+        }
+
+        adding = true;
+        try
+        {
+            var outcome = await Entries.CreateTopicAsync(goalId, name, life.Token);
+            switch (outcome)
+            {
+                case { Result: CallResult.Ok, Value.Topic: { } topic }:
+                    newName = "";
+                    editMessage = TopicEditTexts.With(FeedbackTexts.TopicEditing.Added, topic.Name);
+                    await LoadAsync(quiet: true);
+                    FocusTopic(topic.Id);
+                    break;
+                case { Result: CallResult.Rejected, FieldErrors: { } errors } when errors.TryGetValue("Name", out var error):
+                    addError = error;
+                    focusNext = Focus.AddName;
+                    break;
+                case { Result: CallResult.Rejected, Value.Conflict: TopicConflict.NameTaken }:
+                    addError = FeedbackTexts.TopicEditing.NameTaken;
+                    focusNext = Focus.AddName;
+                    break;
+                default:
+                    Problem(outcome, AddTopicAsync);
+                    break;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            adding = false;
+        }
+    }
+
+    private Task HideAsync(Guid id, string name, int subtopics) =>
+        ChangeAsync(
+            token => Entries.HideAsync(id, token),
+            async () =>
+            {
+                undo = (id, name);
+                editMessage = TopicEditTexts.Hidden(name, subtopics);
+                await LoadAsync(quiet: true);
+                focusNext = Focus.Undo;
+            },
+            () => HideAsync(id, name, subtopics));
+
+    // From the hidden ones, or as the undo of a hide. Its subtopics come back as they were before.
+    private Task ShowAsync(Guid id, string name) =>
+        ChangeAsync(
+            token => Entries.ShowAsync(id, token),
+            async () =>
+            {
+                editMessage = TopicEditTexts.With(FeedbackTexts.TopicEditing.Shown, name);
+                await LoadAsync(quiet: true);
+                FocusTopic(id);
+            },
+            () => ShowAsync(id, name));
+
+    private Task UndoAsync() => undo is { } last ? ShowAsync(last.Id, last.Name) : Task.CompletedTask;
+
+    private Task RetryAsync() => retry?.Invoke() ?? Task.CompletedTask;
+
+    private async Task ChangeAsync(Func<CancellationToken, Task<CallOutcome<TopicEdit>>> change, Func<Task> done, Func<Task> again)
+    {
+        if (editing)
+        {
+            return;
+        }
+
+        editing = true;
+        try
+        {
+            var outcome = await change(life.Token);
+            ClearEdit();
+            if (outcome.Result == CallResult.Ok)
+            {
+                await done();
+            }
+            else
+            {
+                Problem(outcome, again);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            editing = false;
+        }
+    }
+
+    private async Task EditedAsync(TopicEdited edited)
+    {
+        ClearEdit();
+        editMessage = edited.Kind == TopicEditKind.Renamed
+            ? TopicEditTexts.With(FeedbackTexts.TopicEditing.Renamed, edited.Topic.Name)
+            : TopicEditTexts.With(FeedbackTexts.TopicEditing.Added, edited.Topic.Name);
+        await LoadAsync(quiet: true);
+        if (edited.Kind == TopicEditKind.SubtopicAdded)
+        {
+            FocusTopic(edited.Topic.Id);
+        }
+    }
+
+    // A conflict says what it is, a topic gone leads to loading anew, the rest can be tried again.
+    private void Problem(CallOutcome<TopicEdit> outcome, Func<Task> again)
+    {
+        switch (outcome.Result)
+        {
+            case CallResult.SignedOut:
+                // The shell says the login ran out (SessionEndedNotice).
+                return;
+            case CallResult.NotFound:
+                editProblem = CallResult.NotFound;
+                return;
+            case CallResult.Rejected:
+                editProblem = CallResult.Rejected;
+                editProblemText = TopicEditTexts.ForConflict(outcome.Value?.Conflict);
+                retry = outcome.Value?.Conflict == TopicConflict.ParentHidden ? null : again;
+                break;
+            default:
+                editProblem = CallResult.Failed;
+                editTrace = outcome.TraceId;
+                retry = again;
+                break;
+        }
+
+        if (retry is not null)
+        {
+            focusNext = Focus.Retry;
+        }
+    }
+
+    private void ClearEdit() => (editMessage, undo, editProblem, editProblemText, editTrace, retry) = (null, null, null, null, null, null);
+
+    private void FocusTopic(Guid id)
+    {
+        focusTopic = id;
+        focusNext = Focus.Topic;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var target = focusNext;
+        focusNext = Focus.None;
+        try
+        {
+            switch (target)
+            {
+                case Focus.Undo when undo is not null:
+                    await undoButton.FocusAsync();
+                    break;
+                case Focus.Retry when retry is not null:
+                    await retryButton.FocusAsync();
+                    break;
+                case Focus.Topic when entries.TryGetValue(focusTopic, out var entry):
+                    await entry.FocusAsync();
+                    break;
+                case Focus.AddName when addField is not null:
+                    await addField.FocusAsync();
+                    break;
+                case Focus.AddGoal when goalField is not null:
+                    await goalField.FocusAsync();
+                    break;
+            }
+        }
+        catch (JSException)
+        {
+            // The element went away between render and focus, nothing to do.
+        }
     }
 
     private sealed record HiddenEntry(Guid Id, string Name, string? Note, IReadOnlyList<SubtopicInfo> Subtopics);
@@ -172,6 +506,16 @@
         SignedOut,
         LoadFailed,
         Shown,
+    }
+
+    private enum Focus
+    {
+        None,
+        Undo,
+        Retry,
+        Topic,
+        AddName,
+        AddGoal,
     }
 
     public void Dispose()

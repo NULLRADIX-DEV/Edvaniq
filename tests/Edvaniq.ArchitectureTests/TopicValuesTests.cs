@@ -15,6 +15,7 @@ public class TopicValuesTests
         Assert.Equal(Topic.NameMaxLength, TopicValues.NameMaxLength);
         Assert.Equal(FeedbackTexts.Goal.TopicTooLong, Topic.CheckName(new string('a', Topic.NameMaxLength + 1)));
         Assert.Null(Topic.CheckName(new string('a', TopicValues.NameMaxLength)));
+        Assert.Equal(FeedbackTexts.TopicEditing.NameEmpty, Topic.CheckName(" "));
     }
 
     // Where the two could part: umlauts and ß, also first, digits, signs, case, several and other spaces, letters of

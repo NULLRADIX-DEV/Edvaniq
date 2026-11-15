@@ -70,6 +70,28 @@ public sealed class TopicsTests : BunitContext
         Assert.Equal("themen/verzeichnis", page.Find("#topics-heading ~ p a").GetAttribute("href"));
     }
 
+    // #295 AC3: after the analysis the page offers to review the topics, never blocks practising, and can skip it. The hint
+    // names where the review is later, as the shell labels it.
+    [Fact]
+    public void AfterTheAnalysis_TheReviewIsOffered_AndCanBeSkipped()
+    {
+        var material = new FakeLearningMaterial().Documents(Document(DocumentStatus.Ready)).Topics(NewTopic);
+        var page = RenderPage(material);
+
+        Assert.Contains(FeedbackTexts.Material.Review, Status(page));
+        var review = page.Find(".material-review a");
+        Assert.Equal(("themen/verzeichnis", FeedbackTexts.Material.ReviewLink), (review.GetAttribute("href"), review.TextContent));
+        Assert.NotEmpty(page.FindAll(".topic-list a"));
+
+        page.Find(".material-review button").Click();
+
+        Assert.Contains(FeedbackTexts.Material.ReviewSkipped, Status(page));
+        Assert.Contains($"„Themen“ → „{FeedbackTexts.TopicDirectory.Link}“", FeedbackTexts.Material.ReviewSkipped);
+        Assert.Empty(page.FindAll(".material-review"));
+        Assert.Equal(["Photosynthese", "Lichtreaktion"], page.FindAll(".topic-list li").Select(Name));
+        Assert.NotEmpty(page.FindAll(".topic-list a"));
+    }
+
     // Content is Ready only once Knowledge has the topics. A text on known topics only brings no topic with its id (#208),
     // the page still loads the topics once more and is done.
     [Fact]

@@ -97,6 +97,140 @@ public sealed class HttpTopicEntriesTests
         Assert.Equal(CallResult.Failed, outcome.Result);
     }
 
+    // #295: each change of the directory with its method, path and body.
+    [Fact]
+    public async Task Changes_GoToTheirRoutes()
+    {
+        var requests = new List<(HttpRequestMessage Request, string Body)>();
+        var entries = Entries(requests, () => Answer(HttpStatusCode.OK, Edited));
+        var cancel = TestContext.Current.CancellationToken;
+
+        await entries.CreateTopicAsync(GoalId, "Zelle", cancel);
+        await entries.CreateSubtopicAsync(TopicId, "Zellkern", cancel);
+        await entries.RenameAsync(TopicId, "Zellbiologie", cancel);
+        await entries.HideAsync(TopicId, cancel);
+        await entries.ShowAsync(TopicId, cancel);
+
+        Assert.Equal(
+            [
+                ("POST", "/api/knowledge/topics", $$"""{"name":"Zelle","learningGoalId":"{{GoalId}}"}"""),
+                ("POST", "/api/knowledge/topics", $$"""{"name":"Zellkern","parentId":"{{TopicId}}"}"""),
+                ("PATCH", $"/api/knowledge/topics/{TopicId}", """{"name":"Zellbiologie"}"""),
+                ("PUT", $"/api/knowledge/topics/{TopicId}/hidden", ""),
+                ("DELETE", $"/api/knowledge/topics/{TopicId}/hidden", ""),
+            ],
+            requests.Select(sent => (sent.Request.Method.Method, sent.Request.RequestUri!.AbsolutePath, sent.Body)));
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.OK)]
+    [InlineData(HttpStatusCode.Created)]
+    public async Task Change_ThatWentThrough_GivesTheTopic(HttpStatusCode status)
+    {
+        var outcome = await Entries([], () => Answer(status, Edited)).HideAsync(TopicId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(CallResult.Ok, outcome.Result);
+        Assert.Equal(new EditedTopic(TopicId, "Zelle", null, true), outcome.Value!.Topic);
+    }
+
+    // The conflicts by their code only, never by Knowledge's text. Without a known code it is Other.
+    [Theory]
+    [InlineData("nameTaken", TopicConflict.NameTaken)]
+    [InlineData("parentHidden", TopicConflict.ParentHidden)]
+    [InlineData("somethingNew", TopicConflict.Other)]
+    [InlineData(null, TopicConflict.Other)]
+    public async Task Change_Conflict_IsToldApartByItsCode(string? code, TopicConflict conflict)
+    {
+        var outcome = await Entries([], () => Conflict(code)).RenameAsync(TopicId, "Zelle", TestContext.Current.CancellationToken);
+
+        Assert.Equal(CallResult.Rejected, outcome.Result);
+        Assert.Equal(conflict, outcome.Value!.Conflict);
+        Assert.Equal(TraceId, outcome.TraceId);
+    }
+
+    // Busy is tried once more, not again and again.
+    [Fact]
+    public async Task Change_Busy_IsTriedOnceMore()
+    {
+        var requests = new List<(HttpRequestMessage Request, string Body)>();
+
+        var outcome = await Entries(requests, () => Conflict("busy")).ShowAsync(TopicId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, requests.Count);
+        Assert.Equal(TopicConflict.Busy, outcome.Value!.Conflict);
+    }
+
+    [Fact]
+    public async Task Change_BusyOnce_GoesThroughTheSecondTime()
+    {
+        var answers = new Queue<HttpResponseMessage>([Conflict("busy"), Answer(HttpStatusCode.OK, Edited)]);
+
+        var outcome = await Entries([], answers.Dequeue).HideAsync(TopicId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(CallResult.Ok, outcome.Result);
+    }
+
+    [Fact]
+    public async Task Change_RejectedName_SaysWhyAtTheField()
+    {
+        var entries = Entries([], () => new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent(
+                """{"status":400,"errors":{"Name":["Der Name ist leer. Gib dem Thema einen Namen."]}}""", Encoding.UTF8, "application/problem+json"),
+        });
+
+        var outcome = await entries.CreateSubtopicAsync(TopicId, " ", TestContext.Current.CancellationToken);
+
+        Assert.Equal(CallResult.Rejected, outcome.Result);
+        Assert.Equal("Der Name ist leer. Gib dem Thema einen Namen.", outcome.FieldErrors!["Name"]);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.NotFound, CallResult.NotFound)]
+    [InlineData(HttpStatusCode.Unauthorized, CallResult.SignedOut)]
+    [InlineData(HttpStatusCode.ServiceUnavailable, CallResult.Failed)]
+    public async Task Change_OtherAnswers(HttpStatusCode status, CallResult result)
+    {
+        var outcome = await Entries([], () => Problem(status)).RenameAsync(TopicId, "Zelle", TestContext.Current.CancellationToken);
+
+        Assert.Equal(result, outcome.Result);
+    }
+
+    [Fact]
+    public async Task Change_WithoutConnection_Fails()
+    {
+        var entries = new HttpTopicEntries(Client((_, _) => throw new HttpRequestException("gone")), TimeSpan.Zero);
+
+        var outcome = await entries.HideAsync(TopicId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(CallResult.Failed, outcome.Result);
+    }
+
+    private static readonly Guid TopicId = Guid.Parse("6a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d");
+
+    private static string Edited =>
+        $$"""{"id":"{{TopicId}}","learningGoalId":"{{GoalId}}","parentId":null,"name":"Zelle","documentId":null,"position":0,"hidden":true}""";
+
+    private static HttpResponseMessage Conflict(string? code) =>
+        new(HttpStatusCode.Conflict)
+        {
+            Content = new StringContent(
+                code is null
+                    ? $$"""{"status":409,"detail":"Etwas.","traceId":"{{TraceId}}"}"""
+                    : $$"""{"status":409,"detail":"Etwas.","code":"{{code}}","traceId":"{{TraceId}}"}""",
+                Encoding.UTF8,
+                "application/problem+json"),
+        };
+
+    private static HttpTopicEntries Entries(List<(HttpRequestMessage Request, string Body)> requests, Func<HttpResponseMessage> answer) =>
+        new(
+            Client(async (request, cancellationToken) =>
+            {
+                requests.Add((request, request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken)));
+                return answer();
+            }),
+            TimeSpan.Zero);
+
     private static HttpTopicEntries Entries(List<(HttpRequestMessage Request, string Body)> requests, HttpResponseMessage answer) =>
         new(Client(async (request, cancellationToken) =>
         {

@@ -32,3 +32,28 @@
 .directory-hidden-panel {
     padding-bottom: var(--space-4);
 }
+
+.directory-add {
+    margin-bottom: var(--space-6);
+}
+
+.directory-add h2 {
+    margin-top: 0;
+    font-size: 1.125rem;
+}
+
+.directory-add-form .button,
+.directory-edit-actions .button {
+    min-height: 2.75rem;
+}
+
+.directory-edit-status {
+    overflow-wrap: anywhere;
+}
+
+.directory-edit-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+}
