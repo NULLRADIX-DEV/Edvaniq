@@ -1,11 +1,12 @@
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Edvaniq.Services.Content.Application;
 
 // The material of a prompt as data: numbered sections in a block of their own, with every tag inside a text escaped, so
 // no text can close the block and speak as the prompt.
-internal static class PromptMaterial
+internal static partial class PromptMaterial
 {
     // The sections in their order, numbered from 1.
     public static string Of(IEnumerable<string> sections)
@@ -31,6 +32,16 @@ internal static class PromptMaterial
     // A topic name from an earlier answer, escaped and on one line, so it can't end its block either.
     public static string Name(string name) =>
         Escape(string.Join(' ', name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)));
+
+    // The sections of a prompt made by Of, as they were before escaping, in their order.
+    public static IReadOnlyList<string> Sections(string prompt) =>
+        [.. SectionBlock().Matches(prompt).Select(match => match.Groups[1].Value
+            .Replace("&lt;", "<", StringComparison.Ordinal)
+            .Replace("&gt;", ">", StringComparison.Ordinal)
+            .Replace("&amp;", "&", StringComparison.Ordinal))];
+
+    [GeneratedRegex("<section id=\"\\d+\">\n(.*?)\n</section>", RegexOptions.Singleline)]
+    private static partial Regex SectionBlock();
 
     private static string Escape(string text) =>
         text.Replace("&", "&amp;", StringComparison.Ordinal)

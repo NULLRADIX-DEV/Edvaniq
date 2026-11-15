@@ -166,9 +166,10 @@ public sealed class QuestionPools(
             needed.Add((topic, material));
         }
 
-        // The daily quota before the first AI call: every topic that gets a pool is one generation, all or none.
+        // The daily quota before the first AI call: every topic that gets a pool is one generation, all or none. The demo
+        // costs none (#411).
         var quota = scope.ServiceProvider.GetRequiredService<IGenerationQuota>();
-        if (needed.Count > 0 && await quota.StateOfAsync(document.OwnerId, cancellationToken) is var state && !state.Allows(needed.Count))
+        if (needed.Count > 0 && document.Origin != DocumentOrigin.Demo && await quota.StateOfAsync(document.OwnerId, cancellationToken) is var state && !state.Allows(needed.Count))
         {
             ContentLog.GenerationQuotaExceeded(logger, documentId, needed.Count, state.Left);
             document.Fail(DocumentFailures.GenerationsOverQuota(needed.Count, state.Left, time.GetUtcNow().UtcDateTime));
@@ -214,7 +215,10 @@ public sealed class QuestionPools(
         foreach (var (topic, items) in made)
         {
             db.QuestionPools.Add(QuestionPool.For(document, topic.Id, now, QuestionRequests.KeysOf(items)));
-            quota.Charge(document, topic.Id);
+            if (document.Origin != DocumentOrigin.Demo)
+            {
+                quota.Charge(document, topic.Id);
+            }
             outbox.Add(new ItemsGenerated(document.OwnerId, document.Id, topic.Position, items, topic.Id));
         }
 

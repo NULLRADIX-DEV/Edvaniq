@@ -225,10 +225,12 @@ public sealed class Document : IOwnedByUser
         string? title,
         string text,
         DateTime createdAt,
-        bool usesTestDouble = false) =>
+        bool usesTestDouble = false,
+        DocumentOrigin origin = DocumentOrigin.Material) =>
         new(ownerId, learningGoalId, string.IsNullOrWhiteSpace(title) ? FirstLine(text) : title.Trim(), text, createdAt)
         {
             UsesTestDouble = usesTestDouble,
+            Origin = origin,
         };
 
     // A new document in status Uploaded from a stored file whose content passed FileCheck. The file's name only gives the

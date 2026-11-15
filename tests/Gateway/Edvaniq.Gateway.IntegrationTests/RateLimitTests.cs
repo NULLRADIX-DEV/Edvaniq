@@ -23,6 +23,10 @@ public sealed partial class RateLimitTests
         { "content", "POST", $"/content/documents/{Guid.Empty}/retry", "ai" },
         { "content", "POST", $"/content/topics/{Guid.Empty}/summaries/short", "ai" },
         { "content", "DELETE", $"/content/documents/{Guid.Empty}", null },
+
+        // The demo asks no AI, and a user has one (#411).
+        { "content", "POST", "/content/demo", null },
+        { "content", "DELETE", "/content/demo", null },
         { "assessment", "POST", "/assessment/attempts", "answers" },
         { "assessment", "POST", $"/assessment/attempts/{Guid.Empty}/answer", "answers" },
         { "assessment", "POST", "/assessment/check-questions", "answers" },

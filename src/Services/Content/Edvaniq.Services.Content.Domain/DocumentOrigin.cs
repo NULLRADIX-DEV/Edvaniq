@@ -7,4 +7,8 @@ public enum DocumentOrigin
 {
     Material = 0,
     Synthetic = 1,
+
+    // The demo material of the demo learning goal (#411). It has a source like material, and the worker answers its AI
+    // calls from the answers that ship with it, so it costs nothing and needs no provider.
+    Demo = 2,
 }

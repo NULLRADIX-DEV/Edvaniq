@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Demo\*.md" LogicalName="Demo.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Demo\answers.json" LogicalName="DemoAnswers.answers.json" />
   </ItemGroup>
 
   <PropertyGroup>

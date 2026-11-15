@@ -24,6 +24,9 @@ public sealed class LearningMaterialRouteTests
     [InlineData("POST", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/retry", "/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/retry")]
     [InlineData("GET", "/api/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries/standard", "/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries/standard")]
     [InlineData("POST", "/api/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries/short", "/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries/short")]
+    [InlineData("GET", "/api/content/demo", "/content/demo")]
+    [InlineData("POST", "/api/content/demo", "/content/demo")]
+    [InlineData("DELETE", "/api/content/demo", "/content/demo")]
     public async Task AfterLogin_TheCallReachesTheService_WithTheUsersToken(string method, string path, string arrives)
     {
         await using var gateway = await StubService.StartAsync("gateway-stub");
@@ -71,6 +74,9 @@ public sealed class LearningMaterialRouteTests
     [InlineData("POST", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/retry")]
     [InlineData("GET", "/api/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries/standard")]
     [InlineData("POST", "/api/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries/detailed")]
+    [InlineData("GET", "/api/content/demo")]
+    [InlineData("POST", "/api/content/demo")]
+    [InlineData("DELETE", "/api/content/demo")]
     public async Task WithoutLogin_IsRefused_AndNothingIsForwarded(string method, string path)
     {
         await using var gateway = await StubService.StartAsync("gateway-stub");

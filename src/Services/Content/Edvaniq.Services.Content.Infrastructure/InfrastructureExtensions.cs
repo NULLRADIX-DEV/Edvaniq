@@ -25,6 +25,7 @@ public static class InfrastructureExtensions
         builder.Services.AddMySqlDbContext<ContentDbContext>(DatabaseName);
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddScoped<IDocuments, Documents>();
+        builder.Services.AddScoped<IDemo, Demo>();
         builder.Services.AddScoped<ITopicSummaries, TopicSummaries>();
         builder.Services.AddFileStore();
         builder.Services.AddScoped<StoredFiles>();

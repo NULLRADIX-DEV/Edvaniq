@@ -15,7 +15,8 @@ public sealed class AiUsageLog(IServiceScopeFactory scopes, ILogger<AiUsageLog> 
         Document document, string purpose, string promptVersion, AiReference reference, IReadOnlyList<AiTry> tries,
         string fallbackModel, CancellationToken cancellationToken)
     {
-        if (tries.Count == 0)
+        // The demo asks no provider and costs nothing, so the cost log has nothing to say about it (#411, A93).
+        if (tries.Count == 0 || document.Origin == DocumentOrigin.Demo)
         {
             return;
         }
