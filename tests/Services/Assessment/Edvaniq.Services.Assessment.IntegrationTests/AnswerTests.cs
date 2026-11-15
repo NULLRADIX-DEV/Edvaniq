@@ -50,8 +50,8 @@ public sealed class AnswerTests(ServiceFactory service) : IClassFixture<ServiceF
 
         Assert.Equal(["answers"], body.EnumerateObject().Select(property => property.Name));
         Assert.Equal(
-            ["answerId", "answeredAt", "correct", "topicId"],
-            body.GetProperty("answers")[0].EnumerateObject().Select(property => property.Name).Order());
+            new[] { "answerId", "answeredAt", "correct", "topicId" }.Order(StringComparer.Ordinal),
+            body.GetProperty("answers")[0].EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
     }
 
     // A block broken off and started again has several sessions: the block's quiz and the check questions of each
