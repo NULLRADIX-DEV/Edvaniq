@@ -157,6 +157,25 @@ public sealed class AiBudgetTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(HttpStatusCode.Accepted, again.StatusCode);
     }
 
+    // #345: summaries have no quota of their own, the monthly budget is their limit. Used up, a new one is turned away with
+    // the reason, nothing stored.
+    [Fact]
+    public async Task UsedUp_TurnsNewSummariesAway_WithTheReason()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        using var client = ClientFor(alice);
+        await AiUsageSeed.AddAsync(service.Services, alice, DateOnly.FromDateTime(DateTime.UtcNow), (1, 0.5m));
+        await SetBudgetAsync(Math.Round((await StateAsync()).Spent / 2, 6));
+        var topic = Guid.NewGuid();
+
+        using var response = await client.PostAsync($"/topics/{topic}/summaries/short", null, Cancel);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(Cancel);
+        Assert.Equal(Document.AiBudgetReached, problem.GetProperty("title").GetString());
+        Assert.False(Query(db => db.TopicSummaries.IgnoreQueryFilters().Any(summary => summary.TopicId == topic)));
+    }
+
     private async Task<(int ExitCode, string Output)> RunAsync(params string[] args)
     {
         using var output = new StringWriter();

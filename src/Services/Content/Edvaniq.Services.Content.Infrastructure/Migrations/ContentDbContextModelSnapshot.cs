@@ -597,6 +597,10 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)");
 
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
                     b.Property<Guid?>("LearningGoalId")
                         .HasColumnType("char(36)");
 

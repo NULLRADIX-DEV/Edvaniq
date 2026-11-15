@@ -38,9 +38,14 @@ public sealed class TopicSummary : IOwnedByUser
 
     public string? PromptVersion { get; private set; }
 
-    // Set while failed.
+    public const string NoMaterial = "Zu diesem Thema gibt es noch kein Material, aus dem eine Zusammenfassung entstehen kann.";
+
+    public const string Failed = "Die Zusammenfassung ließ sich gerade nicht erstellen. Versuch es noch einmal.";
+
+    // Set while failed, from the fixed list (DocumentFailures). The text goes to the user as it is.
     public FailureCode? FailureCode { get; private set; }
 
+    public string? FailureReason { get; private set; }
 
     // UTC.
     public DateTime CreatedAt { get; private set; }
@@ -91,10 +96,11 @@ public sealed class TopicSummary : IOwnedByUser
         ClearOutages();
     }
 
-    public void Fail(FailureCode code)
+    public void Fail(DocumentFailure failure)
     {
         Status = SummaryStatus.Failed;
-        FailureCode = code;
+        FailureCode = failure.Code;
+        FailureReason = failure.Text[..Math.Min(failure.Text.Length, Document.FailureReasonMaxLength)];
         ClearOutages();
     }
 
@@ -108,6 +114,7 @@ public sealed class TopicSummary : IOwnedByUser
 
         Status = SummaryStatus.Pending;
         FailureCode = null;
+        FailureReason = null;
         return true;
     }
 

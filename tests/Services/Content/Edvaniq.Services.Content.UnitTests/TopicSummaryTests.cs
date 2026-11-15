@@ -39,14 +39,15 @@ public sealed class TopicSummaryTests
     }
 
     [Fact]
-    public void Failed_GoesBackToTheWorker()
+    public void Failed_NamesItsReason_AndGoesBackToTheWorker()
     {
         var summary = Summary(1);
-        summary.Fail(FailureCode.AiUnavailable);
+        summary.Fail(DocumentFailures.AiUnavailable);
+        Assert.Equal((FailureCode.AiUnavailable, Document.AiUnavailable), (summary.FailureCode!.Value, summary.FailureReason));
 
         Assert.True(summary.Retry());
 
-        Assert.Equal((SummaryStatus.Pending, (FailureCode?)null), (summary.Status, summary.FailureCode));
+        Assert.Equal((SummaryStatus.Pending, (FailureCode?)null, (string?)null), (summary.Status, summary.FailureCode, summary.FailureReason));
     }
 
     [Fact]

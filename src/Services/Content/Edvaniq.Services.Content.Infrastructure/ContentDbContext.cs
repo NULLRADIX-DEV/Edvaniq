@@ -128,6 +128,7 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         summary.Property(item => item.Length).HasConversion<string>().HasMaxLength(16);
         summary.Property(item => item.Status).HasConversion<string>().HasMaxLength(16);
         summary.Property(item => item.FailureCode).HasConversion<string>().HasMaxLength(32);
+        summary.Property(item => item.FailureReason).HasMaxLength(Document.FailureReasonMaxLength);
         summary.Property(item => item.Text).HasMaxLength(TopicSummaryGeneration.TextMaxLength);
         summary.Property(item => item.Model).HasMaxLength(AiAttempt.ModelMaxLength);
         summary.Property(item => item.PromptVersion).HasMaxLength(AiAttempt.PromptVersionMaxLength);
