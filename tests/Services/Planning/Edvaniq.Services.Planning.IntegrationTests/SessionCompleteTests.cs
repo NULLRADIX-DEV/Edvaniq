@@ -123,6 +123,28 @@ public sealed class SessionCompleteTests(ServiceFactory service) : IClassFixture
         Assert.Empty(DoneBlocksOf(block.Id));
     }
 
+    // #1040: broken off before the unit's end and started again, both events name the start of the first session as the
+    // unit's start, so LearningEngine counts the answers of both.
+    [Fact]
+    public async Task BrokenOffAndStartedAgain_BothEventsNameTheFirstStart()
+    {
+        var topic = Guid.NewGuid();
+        var (_, token) = SeedTopic(topic, "new", 20);
+        var block = (await PlanAsync(token)).Blocks.First(entry => entry.Kind == "learn");
+        var first = await StartAsync(token, block.Id);
+        await PostAsync(token, $"/sessions/{first.Id}/abort");
+        var second = await StartAsync(token, block.Id);
+        await PostAsync(token, $"/sessions/{second.Id}/complete");
+
+        var started = Query(db => db.Sessions.IgnoreQueryFilters().AsNoTracking().Single(session => session.Id == first.Id).StartedAt);
+        var broken = Assert.Single(EventsOf(first.Id));
+        var finished = Assert.Single(EventsOf(second.Id));
+
+        Assert.Equal((started, started), (broken.UnitStartedAt, finished.UnitStartedAt));
+        Assert.Equal((false, true), (broken.Completed, finished.Completed));
+        Assert.Equal([topic], finished.IntroducedTopicIds);
+    }
+
     // Bob can't finish Alice's session.
     [Fact]
     public async Task ForeignSession_IsNotFound()

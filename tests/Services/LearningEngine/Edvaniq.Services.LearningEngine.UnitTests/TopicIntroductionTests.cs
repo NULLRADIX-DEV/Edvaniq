@@ -43,6 +43,57 @@ public sealed class TopicIntroductionTests
             TopicStates.Assess([before, checkQuestion, after], introduction, now).Mastery);
     }
 
+    // #1040 AC1 to AC3: with the unit's start every answer from then counts, the quiz answers without a session too, and
+    // one sent in later. One from before the unit still doesn't.
+    [Fact]
+    public void WithTheUnitsStart_EveryAnswerFromThenCounts()
+    {
+        var start = Monday.AddMinutes(-20);
+        var before = Answer(true, start.AddMinutes(-1), null);
+        var brokenOffCheck = Answer(true, start.AddMinutes(2), Guid.NewGuid());
+        var quiz = Answer(false, Monday.AddMinutes(-3), null);
+        var late = Answer(true, Monday.AddHours(5), null);
+        var introduction = Introduction(Monday, start);
+        var now = Monday.AddHours(5);
+
+        Assert.Equal(start, introduction.CountsFrom);
+        Assert.False(introduction.Counts(before));
+        Assert.True(introduction.Counts(brokenOffCheck));
+        Assert.True(introduction.Counts(quiz));
+        Assert.True(introduction.Counts(late));
+        Assert.Equal(
+            Mastery.Percent(Mastery.Of([brokenOffCheck, quiz, late], now)),
+            TopicStates.Assess([before, brokenOffCheck, quiz, late], introduction, now).Mastery);
+    }
+
+    // An introduction from an event without the unit's start keeps the rule from before: from the end, and the check
+    // questions of its session.
+    [Fact]
+    public void WithoutTheUnitsStart_CountsFromTheEnd()
+    {
+        var introduction = Introduction(Monday);
+
+        Assert.Equal(Monday, introduction.CountsFrom);
+        Assert.False(introduction.Counts(Answer(true, Monday.AddMinutes(-3), null)));
+        Assert.True(introduction.Counts(Answer(true, Monday.AddMinutes(-3), Unit)));
+    }
+
+    // A start after the end can't be right, the end wins.
+    [Fact]
+    public void UnitStartAfterTheEnd_CountsFromTheEnd() =>
+        Assert.Equal(Monday, Introduction(Monday, Monday.AddMinutes(1)).CountsFrom);
+
+    // The carry of records between the unit's start and its end goes on, as the records would count (#365).
+    [Fact]
+    public void CarryInsideTheUnit_GoesOn()
+    {
+        var fold = new MasteryFold(70, Monday.AddMinutes(-5), true, null);
+        var carry = MasteryCarry.Restore("alice", Guid.Empty, fold, Guid.NewGuid(), Mastery.RuleVersion);
+
+        Assert.Equal(fold, carry.FoldFor(Introduction(Monday, Monday.AddMinutes(-20))));
+        Assert.Null(carry.FoldFor(Introduction(Monday)));
+    }
+
     // Answers given only before the introduction leave the topic at its start value once it's introduced.
     [Fact]
     public void AnswersOnlyBeforeTheIntroduction_LeaveTheStartValue()
@@ -95,7 +146,8 @@ public sealed class TopicIntroductionTests
         Assert.Equal(0, Mastery.Of([], Monday, start: -5));
     }
 
-    private static TopicIntroduction Introduction(DateTime at) => TopicIntroduction.Create("alice", Guid.Empty, Unit, at);
+    private static TopicIntroduction Introduction(DateTime at, DateTime? unitStartedAt = null) =>
+        TopicIntroduction.Create("alice", Guid.Empty, Unit, at, unitStartedAt);
 
     private static LearningRecord Answer(bool correct, DateTime answeredAt, Guid? session) =>
         LearningRecord.Create(

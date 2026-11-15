@@ -38,24 +38,23 @@ public sealed class MasteryChangeTests
         Assert.Equal(after, MasteryChange.At(records, null, To));
     }
 
-    // A learn block of a new topic: nothing before, the introduction at the end counts the check questions of its
-    // session. The quiz answers of that session have no session and come before the end, so they don't count yet:
-    // today's behaviour, #1040 changes it.
+    // A learn block of a new topic: new before, and at the end the introduction counts from the unit's start, the quiz
+    // answers without a session too (#1040).
     [Fact]
-    public void Introduction_CountsAtTheEndOnly()
+    public void Introduction_CountsTheWholeUnit_AtTheEnd()
     {
         var unit = Guid.NewGuid();
         var check = new[] { Record(From.AddMinutes(4), correct: true, session: unit), Record(From.AddMinutes(5), correct: true, session: unit) };
         var quiz = Record(From.AddMinutes(12), correct: false);
-        var introduction = TopicIntroduction.Create(Alice, Topic, unit, To);
+        var introduction = TopicIntroduction.Create(Alice, Topic, unit, To, From);
         List<LearningRecord> records = [.. check, quiz];
 
         var before = MasteryChange.At(records, introduction, From);
         var after = MasteryChange.At(records, introduction, To);
 
         Assert.Equal(new TopicStanding(50, TopicState.New), before);
-        Assert.Equal(TopicStates.Assess(check, introduction, To), after);
-        Assert.NotEqual(TopicState.New, after!.State);
+        Assert.Equal(TopicStates.Assess(records, null, To), after);
+        Assert.NotEqual(TopicStates.Assess(check, null, To), after);
     }
 
     [Fact]

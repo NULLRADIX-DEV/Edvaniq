@@ -69,4 +69,5 @@ Planning.SessionCompleted.Completed: bool
 Planning.SessionCompleted.EndedAt: DateTime
 Planning.SessionCompleted.IntroducedTopicIds: IReadOnlyList<Guid>
 Planning.SessionCompleted.SessionId: Guid
+Planning.SessionCompleted.UnitStartedAt: DateTime?
 Planning.SessionCompleted.UserId: string

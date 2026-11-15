@@ -38,7 +38,7 @@ Jedes Ereignis trägt die `userId` des Nutzers, dem die Änderung gehört, denn 
 | `ItemFlagged` | `userId`, `itemId`, `topicId`, `flaggedAt`. |
 | `AnswerRecorded` | Der [Lern-Nachweis](#lern-nachweis). |
 | `CardReviewed` | Der [Lern-Nachweis](#lern-nachweis) und dazu `rating`, die Bewertung der Karte mit den Werten `Again`, `Hard`, `Good` und `Easy` für Nochmal, Schwer, Gut und Leicht (Vorschlag). |
-| `SessionCompleted` | `userId`, `sessionId`, `endedAt`, `completed` und `introducedTopicIds`. `completed` ist wahr, wenn der Nutzer die Session abgeschlossen hat, und falsch bei einem Abbruch (Vorschlag). `introducedTopicIds` nennt die Themen, deren Lerneinheit „Neues Thema“ in dieser Session abgeschlossen wurde. |
+| `SessionCompleted` | `userId`, `sessionId`, `endedAt`, `completed` und `introducedTopicIds`. `completed` ist wahr, wenn der Nutzer die Session abgeschlossen hat, und falsch bei einem Abbruch (Vorschlag). `introducedTopicIds` nennt die Themen, deren Lerneinheit „Neues Thema“ in dieser Session abgeschlossen wurde. `unitStartedAt` (optional) ist der Start der ersten Session auf demselben Block (abgebrochene eingeschlossen), auch beim Abbruch gesetzt. Ab dann zählen die Antworten eines eingeführten Themas. |
 
 ## Lern-Nachweis
 

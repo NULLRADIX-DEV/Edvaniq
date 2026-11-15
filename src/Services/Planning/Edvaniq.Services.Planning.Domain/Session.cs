@@ -147,6 +147,10 @@ public sealed class Session : IOwnedByUser
         return unit >= 0 && passed ? [TopicId] : [];
     }
 
+    // When the unit on the block started (#1040): the start of the first session on it up to this one, broken off ones
+    // included, as a block broken off and started again is one unit with one quiz (SessionResult.ChainOf).
+    public DateTime UnitStartedAt(IEnumerable<Session> sessionsOnBlock) => SessionResult.ChainOf(this, sessionsOnBlock)[0].StartedAt;
+
     private void End(DateTime endedAt, SessionOutcome outcome)
     {
         Count(endedAt);

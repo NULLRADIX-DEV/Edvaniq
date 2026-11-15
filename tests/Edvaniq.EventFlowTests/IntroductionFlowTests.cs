@@ -83,7 +83,8 @@ public sealed class IntroductionFlowTests(FlowServices services) : IDisposable
 
     // #395 and A25 the whole way: a session on the new topic's block, its check questions under the session's id, and
     // finishing it in Planning. Planning's dispatcher sends SessionCompleted, LearningEngine introduces the topic with
-    // that session, and the block is done in today's plan. The flake point Manager 1 knows ("Assessment did not take the
+    // that session, and the block is done in today's plan. With #1040 the block's quiz is answered too, and its answers
+    // count from the unit's start. The flake point Manager 1 knows ("Assessment did not take the
     // questions of every topic over") sits in TopicsWithQuestionsAsync, shared with the test above.
     [Fact(Timeout = 180_000)]
     public async Task FinishingTheSessionInPlanning_IntroducesTheTopic_AndTheBlockIsDone()
@@ -100,7 +101,8 @@ public sealed class IntroductionFlowTests(FlowServices services) : IDisposable
         var sessionId = session.GetProperty("id").GetGuid();
         await SessionAsync(planning, HttpMethod.Post, $"/sessions/{sessionId}/advance", new { step = 1 }, HttpStatusCode.OK, cancellationToken);
         var answers = await AnswerCheckQuestionsWrongAsync(token, block.TopicId, sessionId, cancellationToken);
-        await WaitForAsync(() => Task.FromResult(Records(alice, block.TopicId) == answers), "LearningEngine did not store the check answers.");
+        answers += await AnswerQuizWrongAsync(token, block.TopicId, block.Id, cancellationToken);
+        await WaitForAsync(() => Task.FromResult(Records(alice, block.TopicId) == answers), "LearningEngine did not store the unit's answers.");
         var completed = await SessionAsync(planning, HttpMethod.Post, $"/sessions/{sessionId}/complete", new { }, HttpStatusCode.OK, cancellationToken);
         Assert.Equal("completed", completed.GetProperty("outcome").GetString());
 
@@ -108,6 +110,13 @@ public sealed class IntroductionFlowTests(FlowServices services) : IDisposable
         var introduction = Assert.Single(Introductions(alice));
         Assert.Equal((block.TopicId, sessionId), (introduction.TopicId, introduction.SessionId));
         Assert.Equal("weakness", (await MasteryAsync(token, block.TopicId, cancellationToken)).State);
+
+        // #1040: the unit's start came with SessionCompleted, so the quiz answers, which carry no session, count too.
+        Assert.Equal(session.GetProperty("startedAt").GetDateTime(), introduction.UnitStartedAt!.Value, TimeSpan.FromMilliseconds(1));
+        var records = services.QueryLearningEngine(db => db.LearningRecords.IgnoreQueryFilters()
+            .Where(record => record.OwnerId == alice && record.TopicId == block.TopicId).ToList());
+        Assert.Contains(records, record => record.SessionId is null);
+        Assert.All(records, record => Assert.True(introduction.Counts(record)));
 
         var plan = await PlanAsync(token, cancellationToken);
         Assert.True(plan.Blocks.Single(entry => entry.Id == block.Id).Done);
@@ -176,6 +185,24 @@ public sealed class IntroductionFlowTests(FlowServices services) : IDisposable
         Assert.Equal("ready", check.GetProperty("status").GetString());
 
         var ids = check.GetProperty("questions").EnumerateArray().Select(question => question.GetProperty("id").GetGuid()).ToList();
+        foreach (var id in ids)
+        {
+            using var graded = await assessment.PostAsJsonAsync($"/attempts/{id}/answer", new { showSolution = true, responseTimeMs = 5000 }, cancellationToken);
+            Assert.Equal(HttpStatusCode.OK, graded.StatusCode);
+        }
+
+        return ids.Count;
+    }
+
+    // Opens the block's quiz and shows every solution, so each counts as a wrong answer without a session.
+    private async Task<int> AnswerQuizWrongAsync(string token, Guid topicId, Guid blockId, CancellationToken cancellationToken)
+    {
+        using var assessment = Client(services.Assessment.CreateClient(), token);
+        using var opened = await assessment.PostAsJsonAsync("/quizzes", new { topicId, blockId, size = 2 }, cancellationToken);
+        Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
+        var quiz = await opened.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+
+        var ids = quiz.GetProperty("questions").EnumerateArray().Select(question => question.GetProperty("id").GetGuid()).ToList();
         foreach (var id in ids)
         {
             using var graded = await assessment.PostAsJsonAsync($"/attempts/{id}/answer", new { showSolution = true, responseTimeMs = 5000 }, cancellationToken);

@@ -44,6 +44,20 @@ public class SessionResultTests
         Assert.Equal(new SessionWindow(Now, Now.AddMinutes(9)), SessionResult.WindowOf(chain, []));
     }
 
+    // #1040: the unit on a block started with its first session, broken off ones included, whatever runs elsewhere.
+    [Fact]
+    public void UnitStartedAt_IsTheFirstSessionOnTheBlock()
+    {
+        var broken = Aborted(Now, Now.AddMinutes(3));
+        var again = Session.Start(Guid.NewGuid(), "alice", Goal, Today, Block, Now.AddMinutes(5), previous: broken);
+        var elsewhere = Session.Start(Guid.NewGuid(), "alice", Goal, Today, OtherBlock, Now.AddMinutes(-30));
+        elsewhere.Abort(Now.AddMinutes(-20));
+
+        Assert.Equal(Now, again.UnitStartedAt([again, broken, elsewhere]));
+        Assert.Equal(Now, broken.UnitStartedAt([broken]));
+        Assert.Equal(Now.AddMinutes(5), Completed(Now.AddMinutes(5), Now.AddMinutes(9)).UnitStartedAt([]));
+    }
+
     // An answer sent again after the end still lies inside, so the mastery after counts it.
     [Fact]
     public void Window_EndsAtTheLastAnswer_WhenThatCameLater()
