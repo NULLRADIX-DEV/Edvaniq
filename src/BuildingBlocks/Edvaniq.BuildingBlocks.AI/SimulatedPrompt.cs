@@ -9,10 +9,11 @@ namespace Edvaniq.BuildingBlocks.AI;
 // The messages of a request as the simulated provider sees them, with a seed that only depends on them.
 public sealed class SimulatedPrompt
 {
-    public SimulatedPrompt(IEnumerable<ChatMessage> messages)
+    public SimulatedPrompt(IEnumerable<ChatMessage> messages, string? task = null)
     {
         Messages = [.. messages];
         Seed = SeedOf(Messages);
+        Task = task;
     }
 
     public IReadOnlyList<ChatMessage> Messages { get; }
@@ -20,6 +21,9 @@ public sealed class SimulatedPrompt
     public string System => TextOf(ChatRole.System);
 
     public string User => TextOf(ChatRole.User);
+
+    // The task the request named (AiRequest.Task), null if none.
+    public string? Task { get; }
 
     // Same messages, same seed, in every process and on every machine.
     public int Seed { get; }

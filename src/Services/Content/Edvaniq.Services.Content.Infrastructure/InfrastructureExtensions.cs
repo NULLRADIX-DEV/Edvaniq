@@ -1,3 +1,4 @@
+using Edvaniq.BuildingBlocks.AI;
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.BuildingBlocks.Messaging;
@@ -6,6 +7,7 @@ using Edvaniq.Services.Content.Infrastructure.Ai;
 using Edvaniq.Services.Content.Infrastructure.Files;
 using Edvaniq.Services.Identity.Contracts;
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -37,6 +39,7 @@ public static class InfrastructureExtensions
         builder.Services.AddSingleton<AiAnswers>();
         builder.Services.AddScoped<IAiSwitch, AiSwitches>();
         builder.Services.AddScoped<IAiBudget, AiBudgets>();
+        builder.Services.AddModeration(builder.Configuration, required: false);
         builder.Services.AddPageQuota();
 
         // Outbox, dispatcher and consumers. They only run when a broker is configured (ConnectionStrings:nats).
@@ -68,6 +71,7 @@ public static class InfrastructureExtensions
         builder.Services.AddSingleton<AiAnswers>();
         builder.Services.AddScoped<IAiSwitch, AiSwitches>();
         builder.Services.AddScoped<IAiBudget, AiBudgets>();
+        builder.Services.AddModeration(builder.Configuration, required: true);
         builder.Services.AddOptions<FileReadingOptions>().BindConfiguration(FileReadingOptions.Section);
         builder.Services.AddSingleton<FileReader>();
         builder.Services.AddPageQuota();
@@ -81,6 +85,23 @@ public static class InfrastructureExtensions
         builder.Services.AddHostedService<StuckAnalysisSweep>();
 
         return builder;
+    }
+
+    // The check of material and output (#298). The worker needs a model for it with a real provider and stops without
+    // one; the API only has it for tests that run the worker's jobs in its process.
+    private static void AddModeration(this IServiceCollection services, IConfiguration configuration, bool required)
+    {
+        var options = services.AddOptions<ModerationOptions>().BindConfiguration(ModerationOptions.Section);
+        if (required)
+        {
+            options
+                .Validate(
+                    moderation => configuration["Ai:Provider"] == SimulatedChatClient.Provider || !string.IsNullOrWhiteSpace(moderation.Model),
+                    $"{ModerationOptions.Section}:Model is missing.")
+                .ValidateOnStart();
+        }
+
+        services.AddSingleton<IModeration, AiModeration>();
     }
 
     // The daily page quota, the same for the Api and the worker. A limit of 0 or less stops the start.

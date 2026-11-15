@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 using Microsoft.Extensions.AI;
 
 namespace Edvaniq.BuildingBlocks.AI;
@@ -24,7 +26,7 @@ public static class StructuredOutput
         ArgumentOutOfRangeException.ThrowIfLessThan(request.MaxAttempts, 1);
         var usage = new UsageDetails();
         var tries = new List<AiTry>();
-        var options = request.ResponseFormat is null ? null : new ChatOptions { ResponseFormat = request.ResponseFormat };
+        var options = request.Options();
         string? model = null;
         while (tries.Count < request.MaxAttempts)
         {
@@ -65,7 +67,41 @@ public static class StructuredOutput
 }
 
 // How to ask: how often at most, how long each answer may take, and the form the provider should keep to, if any.
-public sealed record StructuredRequest(TimeSpan AttemptTimeout, ChatResponseFormat? ResponseFormat = null, int MaxAttempts = StructuredOutput.DefaultAttempts);
+// ModelId and ExtraBody send a request to another model than the configured one, with its own routing (AiRequest).
+// Task names what is asked, for the simulated provider.
+public sealed record StructuredRequest(
+    TimeSpan AttemptTimeout,
+    ChatResponseFormat? ResponseFormat = null,
+    int MaxAttempts = StructuredOutput.DefaultAttempts,
+    string? ModelId = null,
+    JsonObject? ExtraBody = null,
+    string? Task = null)
+{
+    internal ChatOptions? Options()
+    {
+        if (ResponseFormat is null && ModelId is null && ExtraBody is null && Task is null)
+        {
+            return null;
+        }
+
+        var options = new ChatOptions { ResponseFormat = ResponseFormat, ModelId = ModelId };
+        if (ExtraBody is not null || Task is not null)
+        {
+            options.AdditionalProperties = [];
+            if (ExtraBody is not null)
+            {
+                options.AdditionalProperties[AiRequest.ExtraBody] = ExtraBody;
+            }
+
+            if (Task is not null)
+            {
+                options.AdditionalProperties[AiRequest.Task] = Task;
+            }
+        }
+
+        return options;
+    }
+}
 
 // Value is null when no attempt gave a usable answer. Failure is set when the provider failed or took too long, then
 // Attempts includes that attempt.

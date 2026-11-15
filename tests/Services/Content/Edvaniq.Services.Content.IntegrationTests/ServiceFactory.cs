@@ -34,6 +34,10 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
     // Answers the Api's question for the sections of a topic in place of Knowledge (#344).
     public TopicMaterialStub Material { get; } = new();
 
+    // The model of the check of material and output (#298), only a name: the simulated provider ignores it, the
+    // recording provider of PromptPrivacyTests knows the check by it.
+    public const string ModerationModel = "test-moderation";
+
     // The file store of this factory, empty at the start and gone at the end.
     public string FilesDirectory { get; } = Path.Combine(Path.GetTempPath(), "edvaniq-content-files", Guid.NewGuid().ToString("N"));
 
@@ -51,6 +55,7 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
             .UseSetting($"ConnectionStrings:{InfrastructureExtensions.DatabaseName}", ConnectionString)
             .UseSetting("services:planning-api:http:0", "http://planning-api")
             .UseSetting("FileStorage:Directory", FilesDirectory)
+            .UseSetting("Ai:Moderation:Model", ModerationModel)
             .ConfigureTestServices(services =>
             {
                 services.PostConfigure<JwtBearerOptions>(

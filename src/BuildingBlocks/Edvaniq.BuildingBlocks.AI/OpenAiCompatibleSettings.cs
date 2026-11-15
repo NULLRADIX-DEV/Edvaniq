@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 using Microsoft.Extensions.Configuration;
@@ -11,9 +10,6 @@ namespace Edvaniq.BuildingBlocks.AI;
 internal sealed record OpenAiCompatibleSettings(Uri Endpoint, string Model, string ApiKey, JsonObject ExtraBody, bool SchemaOutput = true)
 {
     public const string Section = "Ai:OpenAiCompatible";
-
-    // Fields the client sets itself or that never leave the server.
-    internal static readonly string[] ReservedFields = ["model", "messages", "stream", "user"];
 
     public static OpenAiCompatibleSettings Read(IConfiguration configuration)
     {
@@ -31,7 +27,7 @@ internal sealed record OpenAiCompatibleSettings(Uri Endpoint, string Model, stri
         }
 
         return new OpenAiCompatibleSettings(
-            uri, Required(section, "Model"), Required(section, "ApiKey"), ExtraBodyOf(section["ExtraBody"]), SchemaOutputOf(section["SchemaOutput"]));
+            uri, Required(section, "Model"), Required(section, "ApiKey"), AiRequest.ParseExtraBody(section["ExtraBody"], $"{Section}:ExtraBody"), SchemaOutputOf(section["SchemaOutput"]));
     }
 
     private static string Required(IConfigurationSection section, string key) =>
@@ -44,35 +40,4 @@ internal sealed record OpenAiCompatibleSettings(Uri Endpoint, string Model, stri
         string.IsNullOrWhiteSpace(value) ? true
         : bool.TryParse(value.Trim(), out var on) ? on
         : throw new InvalidOperationException($"{Section}:SchemaOutput must be true or false.");
-
-    private static JsonObject ExtraBodyOf(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return [];
-        }
-
-        JsonNode? node;
-        try
-        {
-            node = JsonNode.Parse(value);
-        }
-        catch (JsonException)
-        {
-            node = null;
-        }
-
-        if (node is not JsonObject extra)
-        {
-            throw new InvalidOperationException($"{Section}:ExtraBody must be a JSON object.");
-        }
-
-        var reserved = extra.Select(field => field.Key).Where(key => ReservedFields.Contains(key, StringComparer.OrdinalIgnoreCase)).ToList();
-        if (reserved.Count > 0)
-        {
-            throw new InvalidOperationException($"{Section}:ExtraBody must not set {string.Join(", ", reserved)}.");
-        }
-
-        return extra;
-    }
 }

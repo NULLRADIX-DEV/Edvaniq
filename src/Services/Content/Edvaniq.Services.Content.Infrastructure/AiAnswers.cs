@@ -37,7 +37,7 @@ public sealed class AiAnswers(IServiceScopeFactory scopes, AiUsageLog usage, Tim
             return await chat.AskAsync(messages, read, request, time, cancellationToken);
         }
 
-        var model = ContentAi.ModelOf(chat, null);
+        var model = request.ModelId ?? ContentAi.ModelOf(chat, null);
         var key = KeyOf(purpose, promptVersion, model, document.UsesTestDouble, messages);
         if (await StoredAsync(document, key, cancellationToken) is { } stored && read(stored.Answer) is { } reused)
         {

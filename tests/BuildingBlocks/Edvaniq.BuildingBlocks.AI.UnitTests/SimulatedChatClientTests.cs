@@ -55,6 +55,19 @@ public class SimulatedChatClientTests
         Assert.Equal(answer.Usage!.InputTokenCount + answer.Usage.OutputTokenCount, answer.Usage.TotalTokenCount);
     }
 
+    // #298: a request that names its task gets the answer for that task, whatever its messages say.
+    [Fact]
+    public async Task NamedTask_ReachesTheAnswer()
+    {
+        var request = new StructuredRequest(TimeSpan.FromSeconds(5), Task: "edvaniq:check");
+
+        var answer = await new SimulatedChatClient([new Check(), new Echo()])
+            .AskAsync(Prompt, text => text, request, TimeProvider.System, TestContext.Current.CancellationToken);
+
+        Assert.Equal("checked", answer.Value);
+        Assert.Null(new SimulatedPrompt(Prompt).Task);
+    }
+
     [Fact]
     public async Task OtherPrompt_GetsItsOwnAnswer()
     {
@@ -131,6 +144,13 @@ public class SimulatedChatClientTests
         var metadata = new SimulatedChatClient([new Echo()]).GetService<ChatClientMetadata>();
 
         Assert.Equal((SimulatedChatClient.Provider, SimulatedChatClient.Provider), (metadata?.ProviderName, metadata?.DefaultModelId));
+    }
+
+    private sealed class Check : ISimulatedAnswer
+    {
+        public bool Answers(SimulatedPrompt prompt) => prompt.Task == "edvaniq:check";
+
+        public string Answer(SimulatedPrompt prompt) => "checked";
     }
 
     // Echoes the user message with a number from the prompt's randomness.

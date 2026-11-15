@@ -113,6 +113,33 @@ public class OpenAiCompatibleChatClientTests
     private static readonly ChatResponseFormat Schema = ChatResponseFormat.ForJsonSchema(
         System.Text.Json.JsonDocument.Parse("""{"type":"object","required":["topics"]}""").RootElement.Clone(), "topics");
 
+    // #298: a request for another model brings its own model and routing, the task stays with us.
+    [Fact]
+    public async Task RequestForAnotherModel_CarriesItsModelAndBody_ButNotItsTask()
+    {
+        var stub = new AiStub().Answer(HttpStatusCode.OK, AiStub.Completion("safe", "check/model-3"));
+        using var host = stub.Host();
+        var request = new StructuredRequest(
+            TimeSpan.FromSeconds(5),
+            ModelId: "check/model-3",
+            ExtraBody: AiRequest.ParseExtraBody("""{"provider":{"only":["two"],"zdr":true}}""", "Test"),
+            Task: "edvaniq:check");
+
+        await AiStub.Client(host).AskAsync(Prompt, text => text, request, TimeProvider.System, TestContext.Current.CancellationToken);
+
+        var body = JsonNode.Parse(Assert.Single(stub.Requests).Body)!.AsObject();
+        Assert.Equal("check/model-3", (string?)body["model"]);
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"only":["two"],"zdr":true}"""), body["provider"]));
+        Assert.DoesNotContain("edvaniq:check", body.ToJsonString(), StringComparison.Ordinal);
+        Assert.Equal(["messages", "model", "provider"], body.Select(field => field.Key).Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("[]", "Test must be a JSON object.")]
+    [InlineData("""{"model":"x"}""", "Test must not set model.")]
+    public void ExtraBodyOfARequest_IsCheckedLikeTheConfiguredOne(string value, string message) =>
+        Assert.Equal(message, Assert.Throws<InvalidOperationException>(() => AiRequest.ParseExtraBody(value, "Test")).Message);
+
     // The model is only configuration: another one goes out without a new build.
     [Fact]
     public async Task Model_ComesFromTheConfiguration()

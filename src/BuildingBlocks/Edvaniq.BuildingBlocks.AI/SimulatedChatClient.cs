@@ -21,16 +21,20 @@ public sealed class SimulatedChatClient(IEnumerable<ISimulatedAnswer> answers, S
     // answers 400 for a prompt that doesn't fit. Null means no limit. Tests set it.
     public int? PromptLimit { get; set; }
 
+    // Which prompts the fault hits, all of them when null. Tests aim an outage at one task with it.
+    public Func<SimulatedPrompt, bool>? FaultWhen { get; set; }
+
     public async Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var prompt = new SimulatedPrompt(messages);
+        var prompt = new SimulatedPrompt(messages, AiRequest.TaskOf(options));
         if (PromptLimit is { } limit && prompt.Messages.Sum(message => message.Text.Length) > limit)
         {
             throw new HttpRequestException("The prompt is longer than the simulated context.", null, HttpStatusCode.BadRequest);
         }
 
-        switch (Fault)
+        var fault = FaultWhen is null || FaultWhen(prompt) ? Fault : SimulatedFault.None;
+        switch (fault)
         {
             case SimulatedFault.Outage:
                 throw new HttpRequestException("The simulated AI provider is unavailable.", null, HttpStatusCode.ServiceUnavailable);
@@ -41,7 +45,7 @@ public sealed class SimulatedChatClient(IEnumerable<ISimulatedAnswer> answers, S
 
         var answer = answers.FirstOrDefault(candidate => candidate.Answers(prompt))?.Answer(prompt)
             ?? throw new InvalidOperationException("No simulated answer fits this prompt. Register an ISimulatedAnswer for it.");
-        if (Fault == SimulatedFault.InvalidOutput)
+        if (fault == SimulatedFault.InvalidOutput)
         {
             answer = answer[..(answer.Length / 2)];
         }

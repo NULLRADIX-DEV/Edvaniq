@@ -63,7 +63,7 @@ internal sealed class OpenAiCompatibleChatClient(IHttpClientFactory httpClients,
 
     private JsonObject Request(IEnumerable<ChatMessage> messages, ChatOptions? options)
     {
-        var request = (JsonObject)settings.ExtraBody.DeepClone();
+        var request = (JsonObject)(AiRequest.ExtraBodyOf(options) ?? settings.ExtraBody).DeepClone();
         request["model"] = options?.ModelId ?? settings.Model;
         request["messages"] = new JsonArray([.. messages.Select(message => (JsonNode)new JsonObject
         {
