@@ -3,9 +3,11 @@ using Edvaniq.Services.LearningEngine.Domain;
 namespace Edvaniq.Services.LearningEngine.Application;
 
 // The mastery and state of the current user's topics. The owner filter keeps other users' topics and records out.
+// The lists leave hidden topics out (#390), the single topic not.
 public interface IMasteries
 {
-    // Null if the user doesn't know the topic (yet): someone else's and an unknown one look the same.
+    // Null if the user doesn't know the topic (yet): someone else's and an unknown one look the same. A hidden one is
+    // there, asked for by its id.
     Task<TopicMastery?> FindAsync(Guid topicId, CancellationToken cancellationToken);
 
     // Every topic the user knows, or those of one learning goal, practised or not, ordered by id. Someone else's
@@ -17,7 +19,7 @@ public interface IMasteries
     Task<IReadOnlyList<DecayedTopicMastery>> DecayedAsync(Guid learningGoalId, CancellationToken cancellationToken);
 
     // The weaknesses, the worst first, and the secure topics of every topic the user knows or those of one learning
-    // goal (WeakAndSecure, #453). Hidden topics are still in, #455 leaves them out.
+    // goal (WeakAndSecure, #453).
     Task<WeakAndSecureTopics> WeakAndSecureAsync(Guid? learningGoalId, CancellationToken cancellationToken);
 
     // How the topics stood at from and at to (MasteryChange, #403), only those the user knows, and how many of the

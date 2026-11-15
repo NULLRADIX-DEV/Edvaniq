@@ -37,6 +37,21 @@ public sealed class MasteryChangeTests(ServiceFactory service) : IClassFixture<S
         Assert.False(change.Introduced);
     }
 
+    // #390: a topic hidden after the session still gives its change, the result tells what happened then.
+    [Fact]
+    public async Task HiddenTopic_StillGivesItsChange()
+    {
+        var alice = NewUser("alice");
+        var topic = Guid.NewGuid();
+        var record = Record(alice, topic, From.AddMinutes(3), correct: true);
+        await SeedAsync([KnownTopic.Create(alice, topic, Guid.NewGuid(), hidden: true)], [record]);
+
+        var changes = await ChangesAsync(alice, Query([topic], [record.AnswerId]));
+
+        Assert.Equal(topic, Assert.Single(changes.Topics).TopicId);
+        Assert.Equal(0, changes.MissingAnswers);
+    }
+
     [Fact]
     public async Task Introduction_IsNamed()
     {

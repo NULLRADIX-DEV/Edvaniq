@@ -38,6 +38,24 @@ public class TopicsChangedHandlerTests
         Assert.Equal(First.AddSeconds(1), Assert.Single(store.Snapshots).ChangedAt);
     }
 
+    // #390: one topic hidden, shown again, then gone. Hidden and shown keep it known, so its records still count.
+    [Fact]
+    public async Task Topic_HiddenThenShownThenGone()
+    {
+        var store = new FakeKnownTopics();
+        var (topic, other) = (Guid.NewGuid(), Guid.NewGuid());
+        await HandleAsync(store, Changed(First, [topic, other]));
+
+        await HandleAsync(store, Changed(First.AddSeconds(1), [other], [topic]));
+        Assert.Equal([(topic, true), (other, false)], store.Topics.Select(known => (known.TopicId, known.Hidden)));
+
+        await HandleAsync(store, Changed(First.AddSeconds(2), [topic, other]));
+        Assert.Equal([(topic, false), (other, false)], store.Topics.Select(known => (known.TopicId, known.Hidden)));
+
+        await HandleAsync(store, Changed(First.AddSeconds(3), [other]));
+        Assert.Equal([(other, false)], store.Topics.Select(known => (known.TopicId, known.Hidden)));
+    }
+
     // The same event under a new message id, and an older state that arrives late.
     [Theory]
     [InlineData(0)]
