@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using Edvaniq.BuildingBlocks.AI;
 using Edvaniq.Services.Content.Application;
+using Edvaniq.Services.Content.Contracts;
 using Edvaniq.Services.Content.Infrastructure.Ai;
 
 using Microsoft.Extensions.AI;
@@ -86,22 +87,43 @@ public sealed class SimulatedAiTests
         Assert.Equal(answer, await AskAsync(other, ContentAi.QuestionsTask, material));
         var questions = JsonDocument.Parse(answer).RootElement.GetProperty("questions").EnumerateArray().ToList();
         Assert.InRange(questions.Count, 15, 20);
-        Assert.All(questions, question =>
-        {
-            Assert.StartsWith("Stimmt das: ", question.GetProperty("text").GetString());
-            Assert.InRange(question.GetProperty("difficulty").GetInt32(), 1, 3);
-            Assert.Equal(0, question.GetProperty("answer").GetInt32());
-        });
+        Assert.All(questions, question => Assert.Equal("[0]", question.GetProperty("answers").GetRawText()));
 
-        // A section per question in turn, named by its heading, the one above it or else its first words.
+        // A section per question in turn, named by its heading, the one above it or else its first words. The types and
+        // the difficulties take turns too.
         Assert.Equal(
             [
-                "Stimmt das: Das Material behandelt Licht spaltet Wasser? 1",
-                "Stimmt das: Das Material behandelt Zucker & Stärke? 2",
-                "Stimmt das: Das Material behandelt Zucker & Stärke? 3",
+                "single 1 Frage 1: Was behandelt das Material? | Licht spaltet Wasser, Nichts aus dem Material | 1",
+                "multiple 2 Frage 2: Was davon behandelt das Material? | Zucker & Stärke, Ein Thema außerhalb des Materials, Gar kein Thema | 2",
+                "truefalse 3 Frage 3: Das Material behandelt Zucker & Stärke. | Wahr, Falsch | 3",
+                "single 1 Frage 4: Was behandelt das Material? | Licht spaltet Wasser, Nichts aus dem Material | 1",
             ],
-            questions.Take(3).Select(question => $"{question.GetProperty("text").GetString()} {question.GetProperty("section").GetInt32()}"));
+            questions.Take(4).Select(question =>
+                $"{question.GetProperty("type").GetString()} {question.GetProperty("difficulty").GetInt32()} {question.GetProperty("text").GetString()}"
+                + $" | {string.Join(", ", question.GetProperty("options").EnumerateArray().Select(option => option.GetString()))}"
+                + $" | {question.GetProperty("section").GetInt32()}"));
         Assert.Equal(questions.Count, QuestionGeneration.Read(answer, [Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()])!.Count);
+    }
+
+    // True/false in the language the prompt asks for (#290), the check reads it the same.
+    [Fact]
+    public async Task Questions_TakeTheTrueFalseOptionsOfTheGoalsLanguage()
+    {
+        using var host = Build();
+        var material = QuestionGeneration.User(["# Licht\nLicht spaltet Wasser."]);
+
+        var english = await AskAsync(host, QuestionGeneration.System(new LearnerProfile(LearnerLevel.University, LearnerProfile.English)), material);
+        var german = await AskAsync(host, QuestionGeneration.System(LearnerProfile.Default), material);
+
+        Assert.Equal(["True", "False"], Assert.Single(TrueFalse(english)));
+        Assert.Equal(["Wahr", "Falsch"], Assert.Single(TrueFalse(german)));
+
+        // The different options of the true/false questions.
+        static List<string[]> TrueFalse(string answer) => [.. QuestionGeneration.Read(answer, [Guid.NewGuid()])!
+            .Where(question => question.Type == QuestionType.TrueFalse)
+            .Select(question => string.Join('\n', question.Options))
+            .Distinct()
+            .Select(options => options.Split('\n'))];
     }
 
     // The double never quotes the material, so an escaped injection can't turn up in a question.

@@ -281,6 +281,8 @@ public sealed class QuestionPools(
         var model = ContentAi.ModelOf(chat, answer.ModelId);
         return ([.. drafts.Select(draft => new GeneratedItem(
             Guid.NewGuid(), ItemKind.Question, document.Id, draft.SectionId, model, QuestionGeneration.PromptVersion,
-            new GeneratedQuestion(draft.Text, draft.Options, draft.Answer, draft.Explanation, draft.Difficulty)))], null);
+            new GeneratedQuestion(
+                draft.Text, draft.Options, draft.Answer, draft.Explanation, draft.Difficulty, draft.Type,
+                draft.Type == QuestionType.MultipleChoice ? draft.Answers : null)))], null);
     }
 }

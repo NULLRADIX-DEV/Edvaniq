@@ -23,7 +23,7 @@ public sealed record GeneratedItem(
 
 // Answer is the index of the one right option. Type null is single choice, true/false has two options. For multiple
 // choice Answers holds every right option and Answer one of them, so a receiver from before still reads a valid question.
-// Type and Answers came later, today the worker sends single choice only.
+// Type and Answers came later, the worker sends all three types since questions-3 and Answer is then the lowest right one.
 public sealed record GeneratedQuestion(
     string Text,
     IReadOnlyList<string> Options,

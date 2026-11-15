@@ -3,13 +3,16 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 
 using Edvaniq.BuildingBlocks.AI;
+using Edvaniq.Services.Content.Application;
 
 namespace Edvaniq.Services.Content.Infrastructure.Ai;
 
-// 15 to 20 true/false questions on what the numbered sections of QuestionGeneration.User are about, by their headings:
-// a section without one takes the heading above it, material without any its first three words. One section after the
-// other and round again when there are fewer. How many and how hard comes from the prompt's randomness. The questions
-// never quote the material's sentences, so text slipped into the material can't turn up in them as such.
+// 15 to 20 questions on what the numbered sections of QuestionGeneration.User are about, by their headings: a section
+// without one takes the heading above it, material without any its first three words. One section after the other and
+// round again when there are fewer, the types single choice, multiple choice and true/false in turn and the difficulty
+// 1 to 3 in turn, so every pool has all of them. How many comes from the prompt's randomness. Each question is numbered,
+// so none repeats another. True/false takes its options in English when the prompt asks for them so. The questions never
+// quote the material's sentences, so text slipped into the material can't turn up in them as such.
 //
 // On purpose this double is gullible, like a model that falls for injection: as soon as the user message holds anything
 // outside the one <material> block, or a tag inside it other than the sections, it does what the material says instead
@@ -32,7 +35,7 @@ internal sealed partial class SimulatedQuestions : ISimulatedAnswer
     {
         if (!Fenced(prompt.User))
         {
-            var hijacked = new { Text = Hijacked, Options = new[] { Hijacked, "Alles erledigt" }, Answer = 0, Explanation = Hijacked, Difficulty = 1, Section = 1 };
+            var hijacked = new Question(QuestionGeneration.SingleChoice, Hijacked, [Hijacked, "Alles erledigt"], [0], Hijacked, 1, 1);
             return JsonSerializer.Serialize(new { questions = new[] { hijacked } }, JsonSerializerOptions.Web);
         }
 
@@ -44,22 +47,37 @@ internal sealed partial class SimulatedQuestions : ISimulatedAnswer
             labels = [(1, "Das Material")];
         }
 
-        var random = prompt.Random();
-        var questions = Enumerable.Range(0, random.Next(15, 21))
-            .Select(index => labels[index % labels.Count])
-            .Select(label => new
-            {
-                Text = $"Stimmt das: Das Material behandelt {label.Text}?",
-                Options = new[] { "Richtig", "Falsch" },
-                Answer = 0,
-                Explanation = $"Ein Abschnitt des Materials gehört zu {label.Text}.",
-                Difficulty = random.Next(1, 4),
-                Section = label.Section,
-            })
+        string[] trueFalse = prompt.System.Contains(EnglishTrueFalse, StringComparison.Ordinal) ? ["True", "False"] : ["Wahr", "Falsch"];
+        var questions = Enumerable.Range(0, prompt.Random().Next(15, 21))
+            .Select(index => QuestionOf(index, labels[index % labels.Count], trueFalse))
             .ToList();
 
         return JsonSerializer.Serialize(new { questions }, JsonSerializerOptions.Web);
     }
+
+    private const string EnglishTrueFalse = "\"True\" und \"False\"";
+
+    private static Question QuestionOf(int index, (int Section, string Text) label, string[] trueFalse)
+    {
+        var number = index + 1;
+        var explanation = $"Ein Abschnitt des Materials gehört zu {label.Text}.";
+        var difficulty = index % 3 + 1;
+        return (index % 3) switch
+        {
+            0 => new(QuestionGeneration.SingleChoice, $"Frage {number}: Was behandelt das Material?",
+                [Option(label.Text), "Nichts aus dem Material"], [0], explanation, difficulty, label.Section),
+            1 => new(QuestionGeneration.MultipleChoice, $"Frage {number}: Was davon behandelt das Material?",
+                [Option(label.Text), "Ein Thema außerhalb des Materials", "Gar kein Thema"], [0], explanation, difficulty, label.Section),
+            _ => new(QuestionGeneration.TrueFalse, $"Frage {number}: Das Material behandelt {label.Text}.",
+                trueFalse, [0], explanation, difficulty, label.Section),
+        };
+    }
+
+    // A label fits a question's text, an option is shorter.
+    private static string Option(string label) => label[..Math.Min(label.Length, QuestionGeneration.OptionMaxLength)].TrimEnd();
+
+    private sealed record Question(
+        string Type, string Text, string[] Options, int[] Answers, string Explanation, int Difficulty, int Section);
 
     // The message is the one block and nothing else, and inside it every '<' belongs to a section tag.
     private static bool Fenced(string user) =>
