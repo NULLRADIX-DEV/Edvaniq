@@ -66,8 +66,30 @@ internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) :
             topics.Records[id], topics.Introductions.GetValueOrDefault(id), now, carry: topics.Carries.GetValueOrDefault(id)))));
     }
 
-    // Four queries however many topics: the topics, then all their records, introductions and carries at once.
-    private async Task<LoadedTopics> LoadAsync(Guid? learningGoalId, CancellationToken cancellationToken)
+    public async Task<MasteryChanges> ChangesAsync(
+        IReadOnlyCollection<Guid> topicIds, DateTime from, DateTime to, IReadOnlyCollection<Guid> answerIds, CancellationToken cancellationToken)
+    {
+        var topics = await LoadAsync(db.KnownTopics.AsNoTracking().Where(topic => topicIds.Contains(topic.TopicId)), cancellationToken);
+        var arrived = answerIds.Count == 0
+            ? 0
+            : await db.LearningRecords.AsNoTracking().CountAsync(record => answerIds.Contains(record.AnswerId), cancellationToken);
+        return new MasteryChanges(
+            [
+                .. topics.Ids.Order().Select(id =>
+                {
+                    var introduction = topics.Introductions.GetValueOrDefault(id);
+                    var carry = topics.Carries.GetValueOrDefault(id);
+                    return new TopicChange(
+                        id,
+                        MasteryChange.At(topics.Records[id], introduction, from, carry),
+                        MasteryChange.At(topics.Records[id], introduction, to, carry),
+                        introduction is not null);
+                }),
+            ],
+            answerIds.Count - arrived);
+    }
+
+    private Task<LoadedTopics> LoadAsync(Guid? learningGoalId, CancellationToken cancellationToken)
     {
         var topics = db.KnownTopics.AsNoTracking();
         if (learningGoalId is { } goal)
@@ -75,6 +97,12 @@ internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) :
             topics = topics.Where(topic => topic.LearningGoalId == goal);
         }
 
+        return LoadAsync(topics, cancellationToken);
+    }
+
+    // Four queries however many topics: the topics, then all their records, introductions and carries at once.
+    private async Task<LoadedTopics> LoadAsync(IQueryable<KnownTopic> topics, CancellationToken cancellationToken)
+    {
         var topicIds = await topics.Select(topic => topic.TopicId).ToListAsync(cancellationToken);
         if (topicIds.Count == 0)
         {

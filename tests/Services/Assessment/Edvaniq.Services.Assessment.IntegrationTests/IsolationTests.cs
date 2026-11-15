@@ -26,7 +26,8 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         .Exempt("POST", "/attempts", "A's topic in the body: OtherUser_CannotUseAForeignTopicInABody.")
         .Exempt("POST", "/check-questions", "A's topic in the body: OtherUser_CannotUseAForeignTopicInABody.")
         .Exempt("POST", "/quizzes", "A's topic in the body: OtherUser_CannotUseAForeignTopicInABody.")
-        .Exempt("POST", "/quizzes/weaknesses", "Topics come from LearningEngine for the caller: WeaknessQuizTests.ForeignWeaknessTopics_GiveNoQuestions.");
+        .Exempt("POST", "/quizzes/weaknesses", "Topics come from LearningEngine for the caller: WeaknessQuizTests.ForeignWeaknessTopics_GiveNoQuestions.")
+        .Exempt("GET", "/answers", "Block and session ids in the query: AnswerTests.ForeignBlockAndSession_GiveNoAnswers.");
 
     private static IsolationCheck Attempts(IsolationCheck check) => check
         .Item("POST", "/attempts/{id:guid}/answer", new { showSolution = true, responseTimeMs = 1000 });

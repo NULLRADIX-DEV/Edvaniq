@@ -28,6 +28,9 @@ internal sealed class Sessions(PlanningDbContext db) : ISessions
             .ThenByDescending(session => session.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Session>> OnBlockAsync(Guid blockId, CancellationToken cancellationToken) =>
+        await db.Sessions.AsNoTracking().Where(session => session.BlockId == blockId).ToListAsync(cancellationToken);
+
     // LastActivityAt is a concurrency token: the later of two changes updates no row, and the tracker forgets the
     // session so the next read gets the stored one. Finishing also inserts the done block (#395): which of the two
     // statements fails first for the later finish is up to EF, the block's key counts as the same lost race.

@@ -59,6 +59,8 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
                 services.AddSingleton<ILoggerProvider>(Logs);
                 services.AddHttpClient<IMasterySource, LearningEngineMastery>().ConfigurePrimaryHttpMessageHandler(LearningEngine.Handler);
                 services.AddHttpClient<IQuestionPoolSource, AssessmentQuestionPools>().ConfigurePrimaryHttpMessageHandler(Assessment.Handler);
+                services.AddHttpClient<IMasteryChanges, LearningEngineMasteryChanges>().ConfigurePrimaryHttpMessageHandler(LearningEngine.Handler);
+                services.AddHttpClient<ISessionAnswers, AssessmentAnswers>().ConfigurePrimaryHttpMessageHandler(Assessment.Handler);
 
                 // Keeps the retries of a LearningEngine or Assessment that is down short.
                 services.ConfigureAll<HttpStandardResilienceOptions>(options => options.Retry.Delay = TimeSpan.FromMilliseconds(1));

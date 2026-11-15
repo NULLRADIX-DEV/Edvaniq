@@ -36,6 +36,7 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
 
     private static IsolationCheck Sessions(IsolationCheck check) => check
         .Item("GET", "/sessions/{id:guid}")
+        .Item("GET", "/sessions/{id:guid}/result")
         .Item("POST", "/sessions/{id:guid}/abort")
         .Item("POST", "/sessions/{id:guid}/complete")
         .Item("POST", "/sessions/{id:guid}/advance", new { step = 1 })

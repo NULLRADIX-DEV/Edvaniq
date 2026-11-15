@@ -11,13 +11,17 @@ builder.AddTokenValidation();
 builder.AddInternalTokenValidation();
 builder.AddInfrastructure();
 
-// LearningEngine gives the mastery for the plan, Assessment the ready question pools, both asked with the caller's own
-// token. Only these two clients hand it on.
+// LearningEngine gives the mastery for the plan and a session's result, Assessment the ready question pools and a
+// block's answers, all asked with the caller's own token. Only these clients hand it on.
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTransient<ForwardUserToken>();
 builder.Services.AddHttpClient<IMasterySource, LearningEngineMastery>(client => client.BaseAddress = LearningEngineMastery.Address)
     .AddHttpMessageHandler<ForwardUserToken>();
 builder.Services.AddHttpClient<IQuestionPoolSource, AssessmentQuestionPools>(client => client.BaseAddress = AssessmentQuestionPools.Address)
+    .AddHttpMessageHandler<ForwardUserToken>();
+builder.Services.AddHttpClient<IMasteryChanges, LearningEngineMasteryChanges>(client => client.BaseAddress = LearningEngineMastery.Address)
+    .AddHttpMessageHandler<ForwardUserToken>();
+builder.Services.AddHttpClient<ISessionAnswers, AssessmentAnswers>(client => client.BaseAddress = AssessmentAnswers.Address)
     .AddHttpMessageHandler<ForwardUserToken>();
 
 var app = builder.Build();

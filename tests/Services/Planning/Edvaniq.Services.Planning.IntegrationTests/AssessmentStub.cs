@@ -13,11 +13,15 @@ public sealed class AssessmentStub(OutgoingCalls calls)
 {
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<Guid, string>> pools = new();
     private readonly ConcurrentDictionary<string, HttpStatusCode?> failures = new();
+    private readonly ConcurrentDictionary<(string Token, Guid BlockId), StubAnswer[]> answers = new();
 
     public ConcurrentQueue<(string? Token, string PathAndQuery)> Requests { get; } = new();
 
     public void Set(string token, Guid topicId, string status = "ready") =>
         pools.GetOrAdd(token, _ => new())[topicId] = status;
+
+    // GET /answers?blockId= gives these for the block, whatever sessions are named.
+    public void SetAnswers(string token, Guid blockId, params StubAnswer[] given) => answers[(token, blockId)] = given;
 
     // Requests with this token can't connect at all.
     public void Unreachable(string token) => failures[token] = null;
@@ -28,6 +32,8 @@ public sealed class AssessmentStub(OutgoingCalls calls)
         [.. Requests.Where(request => request.Token == token)];
 
     public HttpMessageHandler Handler() => new StubHandler(this, calls);
+
+    public sealed record StubAnswer(Guid AnswerId, Guid TopicId, bool Correct, DateTime AnsweredAt);
 
     private sealed class StubHandler(AssessmentStub assessment, OutgoingCalls calls) : HttpMessageHandler
     {
@@ -42,6 +48,17 @@ public sealed class AssessmentStub(OutgoingCalls calls)
                 return failure is { } status
                     ? new HttpResponseMessage(status) { Content = new StringContent("boom", Encoding.UTF8, "text/plain") }
                     : throw new HttpRequestException("Connection refused (assessment-api:8080)");
+            }
+
+            if (request.Method == HttpMethod.Get && request.RequestUri.AbsolutePath == "/answers" && token is not null)
+            {
+                var query = System.Web.HttpUtility.ParseQueryString(request.RequestUri.Query);
+                var block = Guid.Parse(query["blockId"]!);
+                var answers = assessment.answers.TryGetValue((token, block), out var given) ? given : [];
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new { answers }, options: JsonSerializerOptions.Web),
+                };
             }
 
             if (request.Method != HttpMethod.Get || request.RequestUri.AbsolutePath != "/question-pools" || token is null)

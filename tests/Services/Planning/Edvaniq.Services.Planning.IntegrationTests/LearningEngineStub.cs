@@ -13,11 +13,20 @@ public sealed class LearningEngineStub(OutgoingCalls calls)
 {
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<Guid, (int Mastery, string State)>> masteries = new();
     private readonly ConcurrentDictionary<string, Failure> failures = new();
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<Guid, StubChange>> changes = new();
+    private readonly ConcurrentDictionary<string, int> missing = new();
 
     public ConcurrentQueue<(string? Token, string PathAndQuery)> Requests { get; } = new();
 
     public void Set(string token, Guid topicId, int mastery, string state = "building") =>
         masteries.GetOrAdd(token, _ => new())[topicId] = (mastery, state);
+
+    // GET /mastery/changes names the topic with these standings, when it is asked for.
+    public void SetChange(string token, Guid topicId, StubStanding? before, StubStanding? after, bool introduced = false) =>
+        changes.GetOrAdd(token, _ => new())[topicId] = new StubChange(topicId, before, after, introduced);
+
+    // GET /mastery/changes says this many of the answers haven't arrived.
+    public void SetMissing(string token, int count) => missing[token] = count;
 
     // Requests with this token can't connect at all.
     public void Unreachable(string token) => failures[token] = new Failure(null, "");
@@ -32,6 +41,10 @@ public sealed class LearningEngineStub(OutgoingCalls calls)
         [.. Requests.Where(request => request.Token == token)];
 
     public HttpMessageHandler Handler() => new StubHandler(this, calls);
+
+    public sealed record StubStanding(int Mastery, string State);
+
+    private sealed record StubChange(Guid TopicId, StubStanding? Before, StubStanding? After, bool Introduced);
 
     private sealed record Failure(HttpStatusCode? Status, string Body);
 
@@ -53,6 +66,19 @@ public sealed class LearningEngineStub(OutgoingCalls calls)
                 return new HttpResponseMessage(status)
                 {
                     Content = new StringContent(failure.Body, Encoding.UTF8, "text/plain"),
+                };
+            }
+
+            if (request.Method == HttpMethod.Get && request.RequestUri.AbsolutePath == "/mastery/changes" && token is not null)
+            {
+                var asked = System.Web.HttpUtility.ParseQueryString(request.RequestUri.Query).GetValues("topicId") ?? [];
+                var stored = learningEngine.changes.TryGetValue(token, out var set) ? set : new();
+                var topicChanges = asked.Select(Guid.Parse).Where(stored.ContainsKey).Select(id => stored[id]).ToArray();
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(
+                        new { ruleVersion = 3, missingAnswers = learningEngine.missing.GetValueOrDefault(token), topics = topicChanges },
+                        options: JsonSerializerOptions.Web),
                 };
             }
 
