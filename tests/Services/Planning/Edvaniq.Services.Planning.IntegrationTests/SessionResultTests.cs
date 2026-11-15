@@ -2,10 +2,12 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
+using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.Services.Planning.Domain;
 using Edvaniq.Services.Planning.Infrastructure;
 using Edvaniq.Testing;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 using static Edvaniq.Services.Planning.IntegrationTests.AssessmentStub;
@@ -94,7 +96,7 @@ public sealed class SessionResultTests(ServiceFactory service) : IClassFixture<S
         var asked = service.Assessment.RequestsWith(token).Select(request => request.PathAndQuery).Where(path => path.StartsWith("/answers", StringComparison.Ordinal)).Last();
         Assert.Contains($"sessionId={first}", asked, StringComparison.Ordinal);
         Assert.Contains($"sessionId={second}", asked, StringComparison.Ordinal);
-        var started = Query(db => db.Sessions.Single(session => session.Id == first).StartedAt);
+        var started = Query(db => db.Sessions.IgnoreQueryFilters([ServiceDbContext.OwnerFilter]).Single(session => session.Id == first).StartedAt);
         var changes = service.LearningEngine.RequestsWith(token).Select(request => request.PathAndQuery).Last(path => path.StartsWith("/mastery/changes", StringComparison.Ordinal));
         Assert.Contains($"from={Uri.EscapeDataString(started.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}", changes, StringComparison.Ordinal);
     }
