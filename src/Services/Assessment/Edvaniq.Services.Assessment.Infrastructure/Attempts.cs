@@ -8,8 +8,8 @@ namespace Edvaniq.Services.Assessment.Infrastructure;
 // No query here mentions the owner: the filter of ServiceDbContext adds it to every one of them.
 internal sealed class Attempts(AssessmentDbContext db) : IAttempts
 {
-    public Task<bool> KnowsTopicAsync(Guid topicId, CancellationToken cancellationToken) =>
-        db.KnownTopics.AnyAsync(topic => topic.TopicId == topicId, cancellationToken);
+    public Task<bool> AsksTopicAsync(Guid topicId, CancellationToken cancellationToken) =>
+        db.KnownTopics.AnyAsync(topic => topic.TopicId == topicId && !topic.Hidden, cancellationToken);
 
     public async Task<IReadOnlyList<Question>> QuestionsOfAsync(Guid topicId, CancellationToken cancellationToken) =>
         await db.Questions.AsNoTracking()

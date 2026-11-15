@@ -5,8 +5,9 @@ namespace Edvaniq.Services.Assessment.Application;
 // Questions and attempts of the current user. The owner filter keeps everyone else's out.
 public interface IAttempts
 {
-    // Whether the user has the topic, as TopicsChanged told this service.
-    Task<bool> KnowsTopicAsync(Guid topicId, CancellationToken cancellationToken);
+    // Whether the user has the topic, as TopicsChanged told this service, and hasn't hidden it (#389). Questions of a
+    // hidden topic stay, so it asks them again once shown.
+    Task<bool> AsksTopicAsync(Guid topicId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Question>> QuestionsOfAsync(Guid topicId, CancellationToken cancellationToken);
 

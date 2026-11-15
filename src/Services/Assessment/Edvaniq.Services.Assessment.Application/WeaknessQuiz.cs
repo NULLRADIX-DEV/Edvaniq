@@ -34,7 +34,7 @@ public sealed class WeaknessQuiz(IWeaknesses weaknesses, IAttempts attempts, Tim
         var pools = new List<(Guid TopicId, IReadOnlyList<Question> Questions)>();
         foreach (var topicId in topicIds.Distinct())
         {
-            if (await attempts.KnowsTopicAsync(topicId, cancellationToken)
+            if (await attempts.AsksTopicAsync(topicId, cancellationToken)
                 && await attempts.QuestionsOfAsync(topicId, cancellationToken) is { Count: > 0 } questions)
             {
                 pools.Add((topicId, questions));

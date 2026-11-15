@@ -35,10 +35,11 @@ public class TopicsChangedHandlerTests
         Assert.Equal(
             [(kept, false), (hidden, true), (added, false)],
             store.Topics.Select(topic => (topic.TopicId, topic.Hidden)));
+        Assert.Equal([gone], store.RemovedWithQuestions);
         Assert.Equal(First.AddSeconds(1), Assert.Single(store.Snapshots).ChangedAt);
     }
 
-    // The same event under a new message id, and an older state that arrives late.
+    // The same event under a new message id, and an older state that arrives late. Neither deletes a question (#389).
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
@@ -52,6 +53,7 @@ public class TopicsChangedHandlerTests
 
         Assert.Equal([known], store.Topics.Select(topic => topic.TopicId));
         Assert.Equal(First, Assert.Single(store.Snapshots).ChangedAt);
+        Assert.Empty(store.RemovedWithQuestions);
     }
 
     // The column keeps microseconds, so the redelivered event must not count as newer than what was stored.
@@ -79,6 +81,7 @@ public class TopicsChangedHandlerTests
         await HandleAsync(store, Changed(First.AddSeconds(2), [], goal: other));
 
         Assert.Equal(Goal, Assert.Single(store.Topics).LearningGoalId);
+        Assert.Empty(store.RemovedWithQuestions);
     }
 
     [Fact]
@@ -122,6 +125,13 @@ public class TopicsChangedHandlerTests
 
         public void Add(KnownTopic topic) => Topics.Add(topic);
 
-        public void Remove(KnownTopic topic) => Topics.Remove(topic);
+        public List<Guid> RemovedWithQuestions { get; } = [];
+
+        public Task RemoveAsync(KnownTopic topic, CancellationToken cancellationToken)
+        {
+            Topics.Remove(topic);
+            RemovedWithQuestions.Add(topic.TopicId);
+            return Task.CompletedTask;
+        }
     }
 }
