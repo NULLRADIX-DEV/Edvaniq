@@ -1,6 +1,10 @@
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 using Edvaniq.Services.Content.Application;
+using Edvaniq.Services.Content.Contracts;
 using Edvaniq.Services.Content.Domain;
 
 namespace Edvaniq.Services.Content.UnitTests;
@@ -14,11 +18,12 @@ public class QuestionGenerationTests
     {
         ["questions-1"] = "c2532e907cca17f8928dd15d71f5de4fd3e6cba1756bd316a5ee1dfe5099f756",
         ["questions-2"] = "c098d18927eb91d2cfc3e277bbcfbe90a8907aa4c35ac1c92ae5e60f19852e30",
+        ["questions-3"] = "8d3dff6090741b16621f5a803c02bdb839e1efd7301cffd577de0ba830fff2f1",
     };
 
     private static readonly Guid[] Sections = [Guid.NewGuid(), Guid.NewGuid()];
 
-    private const string Valid = """{"text":"Was spaltet Licht?","options":["Wasser","Zucker"],"answer":0,"explanation":"Licht spaltet Wasser.","difficulty":2,"section":2}""";
+    private const string Valid = """{"type":"single","text":"Was spaltet Licht?","options":["Wasser","Zucker"],"answers":[0],"explanation":"Licht spaltet Wasser.","difficulty":2,"section":2}""";
 
     [Fact]
     public void System_StartsWithTheTask() =>
@@ -98,60 +103,179 @@ public class QuestionGenerationTests
             .Replace("&gt;", ">", StringComparison.Ordinal)
             .Replace("&amp;", "&", StringComparison.Ordinal);
 
+
+    // The two options of true/false in the language of the goal (#290), and every type with its rule.
+    [Theory]
+    [InlineData(LearnerProfile.German, "genau die zwei Optionen \"Wahr\" und \"Falsch\"")]
+    [InlineData(LearnerProfile.English, "genau die zwei Optionen \"True\" und \"False\"")]
+    public void System_AsksForAllThreeTypes_WithTrueFalseInTheLanguageOfTheGoal(string language, string trueFalse) =>
+        Assert.All(Enum.GetValues<LearnerLevel>(), level =>
+        {
+            var system = QuestionGeneration.System(new LearnerProfile(level, language));
+            Assert.Contains(trueFalse, system);
+            Assert.Contains("\"single\": 2 bis 6 verschiedene Optionen, genau eine davon richtig.", system);
+            Assert.Contains("\"multiple\": 3 bis 6 verschiedene Optionen, mindestens eine davon richtig.", system);
+            Assert.Contains("Mische die Schwierigkeit von 1 (leicht) bis 3 (schwer)", system);
+        });
+
     [Fact]
     public void Read_GivesAValidQuestion_WithItsSection()
     {
-        var question = Assert.Single(QuestionGeneration.Read($$"""{"questions":[{{Valid}}]}""", Sections)!);
+        var question = Assert.Single(QuestionGeneration.Read(Answer(Valid), Sections)!);
 
         Assert.Equal(
-            (Sections[1], "Was spaltet Licht?", 0, "Licht spaltet Wasser.", 2),
-            (question.SectionId, question.Text, question.Answer, question.Explanation, question.Difficulty));
+            (Sections[1], QuestionType.SingleChoice, "Was spaltet Licht?", 0, "Licht spaltet Wasser.", 2),
+            (question.SectionId, question.Type, question.Text, question.Answer, question.Explanation, question.Difficulty));
         Assert.Equal(["Wasser", "Zucker"], question.Options);
+        Assert.Equal([0], question.Answers);
     }
 
+    // Structure: anything missing, of the wrong kind, out of range or too long drops the question.
     [Theory]
-    [InlineData("answer", "null")]
-    [InlineData("answer", "[0,1]")]
-    [InlineData("answer", "2")]
-    [InlineData("answer", "-1")]
-    [InlineData("answer", "\"0\"")]
+    [InlineData("type", "\"open\"")]
+    [InlineData("type", "1")]
+    [InlineData("answers", "null")]
+    [InlineData("answers", "0")]
+    [InlineData("answers", "[2]")]
+    [InlineData("answers", "[-1]")]
+    [InlineData("answers", "[\"0\"]")]
+    [InlineData("answers", "[0,0]")]
     [InlineData("options", "[\"Wasser\",\" wasser \"]")]
     [InlineData("options", "[\"Wasser\"]")]
     [InlineData("options", "[\"Wasser\",\"\"]")]
+    [InlineData("options", "[\"Wasser\",1]")]
     [InlineData("options", "[\"A\",\"B\",\"C\",\"D\",\"E\",\"F\",\"G\"]")]
     [InlineData("explanation", "\" \"")]
     [InlineData("text", "\"\"")]
     [InlineData("difficulty", "0")]
     [InlineData("difficulty", "4")]
+    [InlineData("difficulty", "1.5")]
     [InlineData("section", "3")]
     [InlineData("section", "0")]
-    public void Read_DropsAQuestion_WithAMissingOrUnclearPart(string field, string value)
-    {
-        var broken = Valid.Replace($"\"{field}\":", $"\"{field}\":{value},\"was\":", StringComparison.Ordinal);
-
-        Assert.Empty(QuestionGeneration.Read($$"""{"questions":[{{broken}}]}""", Sections)!);
-    }
+    public void Read_DropsAQuestion_WithAMissingOrUnclearPart(string field, string value) =>
+        Assert.Empty(QuestionGeneration.Read(Answer(With(Valid, field, value)), Sections)!);
 
     [Theory]
-    [InlineData("answer")]
+    [InlineData("type")]
+    [InlineData("answers")]
     [InlineData("explanation")]
     [InlineData("section")]
     [InlineData("options")]
+    [InlineData("text")]
+    [InlineData("difficulty")]
     public void Read_DropsAQuestion_WithoutAPart(string field)
     {
-        var json = System.Text.Json.Nodes.JsonNode.Parse(Valid)!.AsObject();
+        var json = JsonNode.Parse(Valid)!.AsObject();
         json.Remove(field);
 
-        Assert.Empty(QuestionGeneration.Read($$"""{"questions":[{{json.ToJsonString()}}]}""", Sections)!);
+        Assert.Empty(QuestionGeneration.Read(Answer(json.ToJsonString()), Sections)!);
     }
+
+    [Fact]
+    public void Read_DropsAText_ThatIsTooLong() =>
+        Assert.Empty(QuestionGeneration.Read(
+            Answer(With(Valid, "text", $"\"{new string('a', QuestionGeneration.TextMaxLength + 1)}\"")), Sections)!);
+
+    // Unique solution: single choice and true/false have exactly one right option, multiple choice at least one.
+    [Theory]
+    [InlineData("single", "[\"A\",\"B\",\"C\"]", "[1]", true)]
+    [InlineData("single", "[\"A\",\"B\",\"C\"]", "[]", false)]
+    [InlineData("single", "[\"A\",\"B\",\"C\"]", "[0,2]", false)]
+    [InlineData("truefalse", "[\"Wahr\",\"Falsch\"]", "[1]", true)]
+    [InlineData("truefalse", "[\"True\",\"False\"]", "[0]", true)]
+    [InlineData("truefalse", "[\"Wahr\",\"Falsch\"]", "[]", false)]
+    [InlineData("truefalse", "[\"Wahr\",\"Falsch\"]", "[0,1]", false)]
+    [InlineData("truefalse", "[\"Wahr\",\"Falsch\",\"Vielleicht\"]", "[0]", false)]
+    [InlineData("multiple", "[\"A\",\"B\",\"C\"]", "[2]", true)]
+    [InlineData("multiple", "[\"A\",\"B\",\"C\"]", "[2,0]", true)]
+    [InlineData("multiple", "[\"A\",\"B\",\"C\"]", "[0,1,2]", true)]
+    [InlineData("multiple", "[\"A\",\"B\",\"C\"]", "[]", false)]
+    [InlineData("multiple", "[\"A\",\"B\",\"C\"]", "[0,3]", false)]
+    public void Read_KeepsAQuestion_OnlyWithTheRightOptionsItsTypeAllows(string type, string options, string answers, bool kept)
+    {
+        var question = With(With(With(Valid, "type", $"\"{type}\""), "options", options), "answers", answers);
+
+        Assert.Equal(kept ? 1 : 0, QuestionGeneration.Read(Answer(question), Sections)!.Count);
+    }
+
+    // Multiple choice keeps every right option in order, the lowest is the one Answer a receiver from before reads.
+    [Fact]
+    public void Read_GivesAllRightOptionsOfAMultipleChoice_InOrder()
+    {
+        var question = Assert.Single(QuestionGeneration.Read(
+            Answer(With(With(With(Valid, "type", "\"multiple\""), "options", "[\"A\",\"B\",\"C\",\"D\"]"), "answers", "[3,1]")), Sections)!);
+
+        Assert.Equal((QuestionType.MultipleChoice, 1), (question.Type, question.Answer));
+        Assert.Equal([1, 3], question.Answers);
+    }
+
+    // Duplicates: a question that asks the same as an earlier one of the topic is left out, whatever its type or options.
+    [Fact]
+    public void Read_KeepsOnlyTheFirstOfTwoQuestionsThatAskTheSame()
+    {
+        var again = With(With(With(Valid, "text", "\"  was SPALTET  Licht \""), "type", "\"multiple\""), "options", "[\"Wasser\",\"Luft\",\"Erde\"]");
+        var other = With(Valid, "text", "\"Was spaltet Wasser?\"");
+
+        var questions = QuestionGeneration.Read(Answer(Valid, again, other), Sections)!;
+
+        Assert.Equal(["Was spaltet Licht?", "Was spaltet Wasser?"], questions.Select(question => question.Text));
+        Assert.Equal(QuestionType.SingleChoice, questions[0].Type);
+    }
+
+    // A dropped question doesn't take the place of a valid one asking the same.
+    [Fact]
+    public void Read_KeepsAValidQuestion_AfterABrokenOneAskingTheSame()
+    {
+        var broken = With(Valid, "answers", "[0,1]");
+
+        var question = Assert.Single(QuestionGeneration.Read(Answer(broken, Valid), Sections)!);
+
+        Assert.Equal([0], question.Answers);
+    }
+
+    [Theory]
+    [InlineData("Was spaltet Licht?", "was spaltet licht")]
+    [InlineData("  Was – spaltet\tLicht?! ", "was spaltet licht")]
+    [InlineData("Ist CO2 ein Gas?", "ist co2 ein gas")]
+    [InlineData("Größe & Maß", "größe maß")]
+    public void SameQuestion_IgnoresCasePunctuationAndSpacing(string text, string key) =>
+        Assert.Equal(key, QuestionGeneration.SameQuestion(text));
+
+    [Theory]
+    [InlineData("Was spaltet Licht?", "Was spaltet Wasser?")]
+    [InlineData("Ist CO2 ein Gas?", "Ist CO3 ein Gas?")]
+    [InlineData("Was ist Licht?", "Was ist kein Licht?")]
+    public void SameQuestion_KeepsDifferentQuestionsApart(string one, string other) =>
+        Assert.NotEqual(QuestionGeneration.SameQuestion(one), QuestionGeneration.SameQuestion(other));
 
     [Fact]
     public void Read_KeepsTheValidOnes_AndAtMostTheMaximum()
     {
-        var many = string.Join(',', Enumerable.Repeat(Valid, QuestionGeneration.MaxQuestions + 5));
+        var many = Enumerable.Range(0, QuestionGeneration.MaxQuestions + 5)
+            .Select(number => With(Valid, "text", $"\"Frage {number}\""))
+            .ToArray();
 
-        Assert.Single(QuestionGeneration.Read($$"""{"questions":[{"text":"kaputt"},{{Valid}}]}""", Sections)!);
-        Assert.Equal(QuestionGeneration.MaxQuestions, QuestionGeneration.Read($$"""{"questions":[{{many}}]}""", Sections)!.Count);
+        Assert.Single(QuestionGeneration.Read(Answer("""{"text":"kaputt"}""", Valid), Sections)!);
+        Assert.Equal(QuestionGeneration.MaxQuestions, QuestionGeneration.Read(Answer(many), Sections)!.Count);
+    }
+
+    // The 20 of the acceptance A35: one broken, a single choice without and one with two right options and a repeat
+    // leave exactly 16.
+    [Fact]
+    public void Read_OfTwentyWithFourBadOnes_KeepsSixteen()
+    {
+        var good = Enumerable.Range(0, 16).Select(number => With(Valid, "text", $"\"Frage {number}\"")).ToList();
+        string[] bad =
+        [
+            """{"type":"single","text":"kaputt"}""",
+            With(With(Valid, "text", "\"Ohne Lösung\""), "answers", "[]"),
+            With(With(Valid, "text", "\"Zwei Lösungen\""), "answers", "[0,1]"),
+            With(Valid, "text", "\"frage 3\""),
+        ];
+
+        var questions = QuestionGeneration.Read(Answer([.. good, .. bad]), Sections)!;
+
+        Assert.Equal(Enumerable.Range(0, 16).Select(number => $"Frage {number}"), questions.Select(question => question.Text));
     }
 
     [Theory]
@@ -161,4 +285,14 @@ public class QuestionGenerationTests
     [InlineData("{\"topics\":[]}")]
     public void Read_GivesNull_ForAnAnswerOfAnotherForm(string answer) =>
         Assert.Null(QuestionGeneration.Read(answer, Sections));
+
+    private static string Answer(params string[] questions) => $$"""{"questions":[{{string.Join(',', questions)}}]}""";
+
+    // The question with the field set to the JSON value.
+    private static string With(string question, string field, string value)
+    {
+        var json = JsonNode.Parse(question)!.AsObject();
+        json[field] = JsonNode.Parse(value);
+        return json.ToJsonString(new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+    }
 }

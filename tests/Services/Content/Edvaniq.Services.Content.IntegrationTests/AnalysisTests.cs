@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 using Edvaniq.BuildingBlocks.AI;
 using Edvaniq.BuildingBlocks.Messaging;
@@ -114,7 +115,8 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             var sections = topic.SectionIds.Count > 0
                 ? topic.SectionIds
                 : [.. topics.Where(other => other.ParentId == topic.Id).SelectMany(other => other.SectionIds)];
-            Assert.NotEmpty(pool.Items);
+            // A34: 15 to 20 questions of all three types and more than one difficulty, each with its explanation.
+            Assert.InRange(pool.Items.Count, 15, 20);
             Assert.All(pool.Items, item =>
             {
                 Assert.Equal((ItemKind.Question, id, "Simulated", QuestionGeneration.PromptVersion), (item.Kind, item.DocumentId, item.ModelId, item.PromptVersion));
@@ -122,7 +124,22 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
                 Assert.NotNull(item.Question);
                 Assert.False(string.IsNullOrWhiteSpace(item.Question.Explanation));
                 Assert.InRange(item.Question.Answer, 0, item.Question.Options.Count - 1);
+                Assert.NotNull(item.Question.Type);
+                if (item.Question.Type == QuestionType.MultipleChoice)
+                {
+                    Assert.Contains(item.Question.Answer, item.Question.Answers!);
+                }
+                else
+                {
+                    Assert.Null(item.Question.Answers);
+                }
             });
+            Assert.Equal(
+                [QuestionType.SingleChoice, QuestionType.MultipleChoice, QuestionType.TrueFalse],
+                pool.Items.Select(item => item.Question!.Type!.Value).Distinct().Order());
+            Assert.True(pool.Items.Select(item => item.Question!.Difficulty).Distinct().Count() > 1);
+            Assert.All(pool.Items.Where(item => item.Question!.Type == QuestionType.TrueFalse),
+                item => Assert.Equal(["Wahr", "Falsch"], item.Question!.Options));
         }
 
         Assert.Equal(topics.Select(topic => topic.Id).Order(), PooledTopics(id).Order());
@@ -363,6 +380,31 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(analyzed.Topics.Count + 1, questions.Calls);
         Assert.Equal(analyzed.Topics.Count, (await GeneratedAsync(id)).Count);
         Assert.Equal(analyzed.Topics.Count + 1, UsageOf("questions", id).Attempts);
+    }
+
+    // Fewer than 15 left after the check is no failure today: the pool takes what holds up and the document gets ready.
+    // Topping the pool up to 15 is #339, not a bug here.
+    [Fact]
+    public async Task FewerThanFifteenValidQuestions_StillMakeAPool_ToppingUpComesLater()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        var questions = new BrokenAnswers(failures: int.MaxValue, answer: """
+            {"questions":[
+              {"type":"single","text":"Was?","options":["A","B"],"answers":[0],"explanation":"Weil.","difficulty":1,"section":1},
+              {"type":"single","text":"was","options":["A","B"],"answers":[1],"explanation":"Weil.","difficulty":1,"section":1},
+              {"type":"single","text":"Wie?","options":["A","B"],"answers":[0,1],"explanation":"Weil.","difficulty":1,"section":1},
+              {"type":"multiple","text":"Welche?","options":["A","B","C"],"answers":[0,2],"explanation":"Weil.","difficulty":2,"section":1},
+              {"type":"truefalse","text":"A ist B.","options":["Wahr","Falsch"],"answers":[1],"explanation":"Weil.","difficulty":3,"section":1}]}
+            """);
+
+        await AnalyzeAsync(id, questions, withQuestions: true);
+
+        var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
+        Assert.Equal("Ready", found!.Status);
+        Assert.All(await GeneratedAsync(id), pool => Assert.Equal(
+            [("Was?", QuestionType.SingleChoice, 0), ("Welche?", QuestionType.MultipleChoice, 0), ("A ist B.", QuestionType.TrueFalse, 1)],
+            pool.Items.Select(item => (item.Question!.Text, item.Question.Type!.Value, item.Question.Answer))));
     }
 
     [Fact]
@@ -1429,9 +1471,11 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     // Every ItemsGenerated of the document in the outbox, sent or not.
     private Task<List<ItemsGenerated>> GeneratedAsync(Guid documentId) => OutboxAsync<ItemsGenerated>(documentId);
 
-    // The different question texts of the document, sorted. How many of each the AI gives may change with the material.
+    // The different question texts of the document, sorted. How many of each the AI gives may change with the material,
+    // and with it the numbers the simulated AI puts in front of its questions, so they don't count.
     private async Task<List<string>> QuestionTextsAsync(Guid documentId) =>
-        [.. (await GeneratedAsync(documentId)).SelectMany(generated => generated.Items).Select(item => item.Question!.Text)
+        [.. (await GeneratedAsync(documentId)).SelectMany(generated => generated.Items)
+            .Select(item => Regex.Replace(item.Question!.Text, @"^Frage \d+: ", ""))
             .Distinct().Order(StringComparer.Ordinal)];
 
     private async Task<List<T>> OutboxAsync<T>(Guid documentId)
@@ -1507,7 +1551,8 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     // fails them like a provider that is down. Other tasks go through untouched. One instance counts the calls of
     // analyzer and pools together.
     private sealed class BrokenAnswers(
-        int failures, bool outage = false, string task = ContentAi.QuestionsTask, HttpStatusCode? status = null, TimeSpan? retryAfter = null)
+        int failures, bool outage = false, string task = ContentAi.QuestionsTask, HttpStatusCode? status = null, TimeSpan? retryAfter = null,
+        string? answer = null)
         : IChatClient
     {
         public IChatClient InnerClient { get; set; } = null!;
@@ -1536,7 +1581,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             return outage
                 ? throw new HttpRequestException("The test AI is down.", null, HttpStatusCode.ServiceUnavailable)
                 : new ChatResponse(new ChatMessage(ChatRole.Assistant,
-                    """{"questions":[{"text":"Was?","options":["A","B"],"explanation":"Weil.","difficulty":1,"section":1}]}"""));
+                    answer ?? """{"questions":[{"text":"Was?","options":["A","B"],"explanation":"Weil.","difficulty":1,"section":1}]}"""));
         }
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
