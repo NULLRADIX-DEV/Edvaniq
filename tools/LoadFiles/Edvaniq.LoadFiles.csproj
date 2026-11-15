@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Writes the files for measuring the worker at its limits (#321). Not in Edvaniq.slnx, run by hand (Program.cs).
+       The PDF and the Word file come from the same code as the tests. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PdfPig" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\tests\Services\Content\Edvaniq.Services.Content.IntegrationTests\TestPdfs.cs" Link="TestPdfs.cs" />
+    <Compile Include="..\..\tests\Services\Content\Edvaniq.Services.Content.UnitTests\TestDocx.cs" Link="TestDocx.cs" />
+  </ItemGroup>
+
+</Project>
