@@ -104,10 +104,19 @@ internal sealed record AskedResponse(
     string Text,
     IReadOnlyList<string> Options,
     int Difficulty,
+    QuestionSource Source,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Repeated = null)
 {
     public static AskedResponse From(Attempt attempt, Question question) =>
-        new(attempt.Id, attempt.TopicId, question.Id, AttemptEndpoints.Name(question.Type), question.Text, question.Options, question.Difficulty);
+        new(attempt.Id, attempt.TopicId, question.Id, AttemptEndpoints.Name(question.Type), question.Text, question.Options, question.Difficulty,
+            QuestionSource.Of(question));
+}
+
+// Where a question comes from (#349): Content's document and section, and the model and prompt version that made it.
+// Title, pages and origin are Content's, the client gets them there (GET /documents, GET /documents/{id}/sections).
+internal sealed record QuestionSource(Guid DocumentId, Guid SectionId, string Model, string PromptVersion)
+{
+    public static QuestionSource Of(Question question) => new(question.DocumentId, question.SectionId, question.ModelId, question.PromptVersion);
 }
 
 // Status is ready with two or three questions, or notReady with none.

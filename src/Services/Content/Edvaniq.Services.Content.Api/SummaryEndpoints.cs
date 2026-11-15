@@ -116,9 +116,10 @@ internal sealed record SummaryResponse(
             summary.PromptVersion,
             summary.CreatedAt,
             summary.ReadyAt,
-            [.. view.Sources.Select(source => new SourceResponse(source.DocumentId, source.DocumentTitle, source.PageFrom, source.PageTo))]);
+            [.. view.Sources.Select(source => new SourceResponse(source.DocumentId, source.DocumentTitle, source.PageFrom, source.PageTo, Origins.Name(source.Origin), source.SectionId))]);
     }
 }
 
-// The pages are null for pasted text.
-internal sealed record SourceResponse(Guid DocumentId, string DocumentTitle, int? PageFrom, int? PageTo);
+// The pages are null for pasted text. Origin is material or synthetic (Origins). SectionId is the first section of the
+// document the summary rests on, so a client can open the source of a pasted text at it.
+internal sealed record SourceResponse(Guid DocumentId, string DocumentTitle, int? PageFrom, int? PageTo, string Origin, Guid SectionId);

@@ -60,4 +60,5 @@ public sealed record SectionPlace(Guid SectionId, int Position, int? PageFrom, i
 
 // A document without its text.
 public sealed record DocumentSummary(
-    Guid Id, string Title, DocumentStatus Status, string? FailureReason, FailureCode? FailureCode, DateTime CreatedAt, bool IsFromFile);
+    Guid Id, string Title, DocumentStatus Status, string? FailureReason, FailureCode? FailureCode, DateTime CreatedAt, bool IsFromFile,
+    DocumentOrigin Origin);

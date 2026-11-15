@@ -43,6 +43,23 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
         Assert.Equal((true, 1, question.Explanation), (graded.Correct, graded.Answer, graded.Explanation));
     }
 
+    // #349: every question names its source, Content's document and section, with the model and prompt version that
+    // made it. Title, pages and origin come from Content.
+    [Fact]
+    public async Task Question_NamesItsSource()
+    {
+        var alice = User.New("alice");
+        var (topicId, question) = await AddTopicAsync(alice);
+
+        using var asked = await AskAsync(alice, topicId);
+
+        var source = (await asked.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("source");
+        Assert.Equal(["documentId", "model", "promptVersion", "sectionId"], source.EnumerateObject().Select(property => property.Name).Order());
+        Assert.Equal(
+            (question.DocumentId, question.SectionId, "simulated", "questions-1"),
+            (source.GetProperty("documentId").GetGuid(), source.GetProperty("sectionId").GetGuid(), source.GetProperty("model").GetString(), source.GetProperty("promptVersion").GetString()));
+    }
+
     [Fact]
     public async Task WrongOption_IsGradedWrong_AndShowsTheRightOne()
     {
@@ -136,7 +153,7 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
         var attempt = await asked.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
 
         Assert.Equal(
-            ["difficulty", "id", "options", "questionId", "repeated", "text", "topicId", "type"],
+            ["difficulty", "id", "options", "questionId", "repeated", "source", "text", "topicId", "type"],
             attempt.EnumerateObject().Select(property => property.Name).Order());
         var routes = service.Services.GetServices<EndpointDataSource>()
             .SelectMany(source => source.Endpoints)

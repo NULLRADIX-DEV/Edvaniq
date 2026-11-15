@@ -33,9 +33,12 @@ public sealed class CheckQuestionTests(ServiceFactory service) : IClassFixture<S
         Assert.Equal([1, 1, 2], questions.Select(question => question.GetProperty("difficulty").GetInt32()));
         Assert.Equal(3, questions.Select(question => question.GetProperty("questionId").GetGuid()).Distinct().Count());
         Assert.All(questions, question => Assert.Equal(
-            ["difficulty", "id", "options", "questionId", "text", "topicId", "type"],
+            ["difficulty", "id", "options", "questionId", "source", "text", "topicId", "type"],
             question.EnumerateObject().Select(property => property.Name).Order()));
         Assert.All(questions, question => Assert.False(Stored(question.GetProperty("id").GetGuid()).Answered));
+        Assert.All(questions, question => Assert.Equal(
+            ["documentId", "model", "promptVersion", "sectionId"],
+            question.GetProperty("source").EnumerateObject().Select(property => property.Name).Order()));
     }
 
     [Fact]

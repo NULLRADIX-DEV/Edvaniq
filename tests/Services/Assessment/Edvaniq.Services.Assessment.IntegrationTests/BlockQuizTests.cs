@@ -50,8 +50,11 @@ public sealed class BlockQuizTests(ServiceFactory service) : IClassFixture<Servi
 
         Assert.Equal(["blockId", "id", "poolTooSmall", "questions", "topicId"], body.EnumerateObject().Select(property => property.Name).Order());
         Assert.All(body.GetProperty("questions").EnumerateArray(), question => Assert.Equal(
-            ["answered", "correct", "difficulty", "id", "options", "questionId", "text", "topicId", "type"],
+            ["answered", "correct", "difficulty", "id", "options", "questionId", "source", "text", "topicId", "type"],
             question.EnumerateObject().Select(property => property.Name).Order()));
+        Assert.All(body.GetProperty("questions").EnumerateArray(), question => Assert.Equal(
+            ["documentId", "model", "promptVersion", "sectionId"],
+            question.GetProperty("source").EnumerateObject().Select(property => property.Name).Order()));
     }
 
     // AC1 of #393 (A88): two of five answered, broken off, started again: the same five, two of them answered, so only
