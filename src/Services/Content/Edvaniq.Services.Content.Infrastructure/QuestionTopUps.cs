@@ -27,6 +27,7 @@ public sealed class QuestionTopUps(
     TestDoubleAi testDouble,
     IOptions<AnalysisOptions> options,
     AiAnswers answers,
+    IModeration moderation,
     TimeProvider time,
     ILogger<QuestionTopUps> logger) : BackgroundService
 {
@@ -157,8 +158,8 @@ public sealed class QuestionTopUps(
             return await SaveAsync(db, document, cancellationToken);
         }
 
-        var (items, failure, attempts) = await QuestionRequests.AskAsync(
-            document, QuestionGeneration.System(profile, pool.Questions ?? 0), material, texts, AiAttempt.TopUp, pool.TopicId, ai, testDouble, answers,
+        var (items, failure, attempts, _) = await QuestionRequests.AskAsync(
+            document, QuestionGeneration.System(profile, pool.Questions ?? 0), material, texts, AiAttempt.TopUp, pool.TopicId, ai, testDouble, answers, moderation,
             AiTimeout, cancellationToken);
         now = time.GetUtcNow().UtcDateTime;
         if (failure is not null)

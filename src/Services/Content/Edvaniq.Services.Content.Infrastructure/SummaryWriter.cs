@@ -22,6 +22,7 @@ public sealed partial class SummaryWriter(
     TestDoubleAi testDouble,
     IOptions<AnalysisOptions> options,
     AiAnswers answers,
+    IModeration moderation,
     TimeProvider time,
     ILogger<SummaryWriter> logger) : BackgroundService
 {
@@ -160,6 +161,28 @@ public sealed partial class SummaryWriter(
         {
             LogUnusable(summary.Id, answer.Attempts);
             await FailAsync(db, summary, DocumentFailures.SummaryFailed, cancellationToken);
+            return;
+        }
+
+        // Checked before it is kept (#298). A check that fails waits like an outage, a flagged summary is not kept.
+        var verdict = await moderation.CheckAsync(first, chat, [draft.Text], AiReference.Summary(summary.Id), cancellationToken);
+        if (verdict.Failure is { } checkFailed)
+        {
+            if (Handle(summary, checkFailed) is { } reason)
+            {
+                await FailAsync(db, summary, reason, cancellationToken);
+            }
+            else
+            {
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
+            return;
+        }
+
+        if (verdict.Flagged)
+        {
+            await FailAsync(db, summary, DocumentFailures.SummaryInappropriate, cancellationToken);
             return;
         }
 

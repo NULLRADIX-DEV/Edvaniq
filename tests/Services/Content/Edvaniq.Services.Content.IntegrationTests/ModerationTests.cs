@@ -23,7 +23,7 @@ namespace Edvaniq.Services.Content.IntegrationTests;
 // #298: material is checked before any of it goes to the AI for topics. Unfit material fails with the reason of the
 // fixed list, school material of every subject passes, and a check that fails holds the document back: nothing goes on
 // unchecked. The simulated classifier flags what carries a marker (SimulatedModeration).
-public sealed class ModerationTests(ServiceFactory service) : IClassFixture<ServiceFactory>, IDisposable
+public sealed partial class ModerationTests(ServiceFactory service) : IClassFixture<ServiceFactory>, IDisposable
 {
     private const string Lesson = """
         # Fotosynthese
@@ -36,6 +36,9 @@ public sealed class ModerationTests(ServiceFactory service) : IClassFixture<Serv
     private readonly IHost ai = SimulatedAi();
 
     private readonly List<string> asked = [];
+
+    // The task whose answers get a marker, as if the AI had written something unfit.
+    private string? marking;
 
     private static CancellationToken Cancel => TestContext.Current.CancellationToken;
 
@@ -96,7 +99,8 @@ public sealed class ModerationTests(ServiceFactory service) : IClassFixture<Serv
         await AnalyzeAsync(id);
 
         Assert.Single(await ReportedAsync(id));
-        Assert.Equal([ModerationCheck.Task, ContentAi.TopicsTask], asked);
+        // The material, the topics, then the check of the topics.
+        Assert.Equal([ModerationCheck.Task, ContentAi.TopicsTask, ModerationCheck.Task], asked);
     }
 
     // The local list catches a plain insult before any AI is asked.
@@ -164,7 +168,77 @@ public sealed class ModerationTests(ServiceFactory service) : IClassFixture<Serv
         Assert.Contains(service.Logs.Entries, entry => entry.EventName == "ModerationUnreadable");
     }
 
+    // AC2: topics the AI answers with something unfit are not reported, the document fails.
+    [Fact]
+    public async Task FlaggedTopics_AreNotReported()
+    {
+        using var client = ClientFor(NewUser());
+        var id = await PasteAsync(client, Lesson);
+        marking = ContentAi.TopicsTask;
+
+        await AnalyzeAsync(id);
+
+        Assert.Equal((DocumentStatus.Failed, FailureCode.Inappropriate), (Stored(id).Status, Stored(id).FailureCode));
+        Assert.Empty(await ReportedAsync(id));
+    }
+
+    // AC2: unfit questions never go out, neither does any question of the document.
+    [Fact]
+    public async Task FlaggedQuestions_AreNotSent()
+    {
+        using var client = ClientFor(NewUser());
+        var id = await PasteAsync(client, Lesson);
+        await AnalyzeAsync(id);
+        service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
+        marking = ContentAi.QuestionsTask;
+
+        await Pools().FinishAsync(id, Cancel);
+
+        Assert.Equal((DocumentStatus.Failed, FailureCode.Inappropriate), (Stored(id).Status, Stored(id).FailureCode));
+        Assert.Empty(await OutboxAsync<ItemsGenerated>(id));
+        Assert.Empty(Query(db => db.QuestionPools.IgnoreQueryFilters().Where(pool => pool.DocumentId == id).ToList()));
+    }
+
+    // AC2: an unfit summary is not kept, the user reads why.
+    [Fact]
+    public async Task FlaggedSummary_IsNotKept()
+    {
+        var alice = NewUser();
+        using var client = ClientFor(alice);
+        var id = await PasteAsync(client, Lesson);
+        await AnalyzeAsync(id);
+        var topic = service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id))).First().Id;
+        var sections = Query(db => db.Sections.IgnoreQueryFilters().Where(section => section.DocumentId == id).Select(section => section.Id).ToList());
+        service.Material.Give(alice, topic, [.. sections.Select(section => (id, section))]);
+        using (var requested = await client.PostAsync($"/topics/{topic}/summaries/short", null, Cancel))
+        {
+            Assert.Equal(HttpStatusCode.Accepted, requested.StatusCode);
+        }
+
+        marking = ContentAi.SummaryTask;
+        await ActivatorUtilities.CreateInstance<SummaryWriter>(service.Services, Chat()).WriteWaitingAsync(Cancel);
+
+        var summary = Query(db => db.TopicSummaries.IgnoreQueryFilters().AsNoTracking().Single(item => item.TopicId == topic));
+        Assert.Equal((SummaryStatus.Failed, (string?)null), (summary.Status, summary.Text));
+        Assert.Equal(DocumentFailures.SummaryInappropriate.Text, summary.FailureReason);
+    }
+
     public void Dispose() => ai.Dispose();
+
+    private QuestionPools Pools()
+    {
+        var pools = ActivatorUtilities.CreateInstance<QuestionPools>(service.Services, Chat());
+        pools.OutageDelays = [];
+        return pools;
+    }
+
+    private IChatClient Chat() => new Marking(new Recording(Simulated, asked), () => marking);
+
+    private T Query<T>(Func<ContentDbContext, T> query)
+    {
+        using var scope = service.Services.CreateScope();
+        return query(scope.ServiceProvider.GetRequiredService<ContentDbContext>());
+    }
 
     private async Task AnalyzeAsync(Guid id)
     {
@@ -174,7 +248,7 @@ public sealed class ModerationTests(ServiceFactory service) : IClassFixture<Serv
 
     private DocumentAnalyzer Analyzer(IReadOnlyList<TimeSpan> delays)
     {
-        var analyzer = ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, (IChatClient)new Recording(Simulated, asked));
+        var analyzer = ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, Chat());
         analyzer.OutageDelays = delays;
         return analyzer;
     }
@@ -192,15 +266,17 @@ public sealed class ModerationTests(ServiceFactory service) : IClassFixture<Serv
             .Where(attempt => attempt.DocumentId == id)];
     }
 
-    private async Task<List<DocumentAnalyzed>> ReportedAsync(Guid id)
+    private Task<List<DocumentAnalyzed>> ReportedAsync(Guid id) => OutboxAsync<DocumentAnalyzed>(id);
+
+    private async Task<List<T>> OutboxAsync<T>(Guid id)
     {
         using var scope = service.Services.CreateScope();
-        var subject = EventRoute.For(typeof(DocumentAnalyzed)).Subject;
+        var subject = EventRoute.For(typeof(T)).Subject;
         var payloads = await scope.ServiceProvider.GetRequiredService<ContentDbContext>().Set<OutboxMessage>()
             .Where(message => message.Subject == subject && message.Payload.Contains(id.ToString()))
             .Select(message => message.Payload)
             .ToListAsync(Cancel);
-        return [.. payloads.Select(payload => JsonSerializer.Deserialize<DocumentAnalyzed>(payload, JsonSerializerOptions.Web)!)];
+        return [.. payloads.Select(payload => JsonSerializer.Deserialize<T>(payload, JsonSerializerOptions.Web)!)];
     }
 
     private static async Task<Guid> PasteAsync(HttpClient client, string text)
@@ -225,6 +301,28 @@ public sealed class ModerationTests(ServiceFactory service) : IClassFixture<Serv
         builder.Configuration.AddInMemoryCollection([KeyValuePair.Create("Ai:Provider", (string?)SimulatedChatClient.Provider)]);
         builder.AddContentAi();
         return builder.Build();
+    }
+
+    // Puts the marker of sexual content into the first text of the answers to the task, as if the AI had written it.
+    private sealed partial class Marking(IChatClient inner, Func<string?> task) : DelegatingChatClient(inner)
+    {
+        public override async Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            var list = messages.ToList();
+            var response = await base.GetResponseAsync(list, options, cancellationToken);
+            var system = list.FirstOrDefault(message => message.Role == ChatRole.System)?.Text ?? "";
+            if (task() is not { } marked || !system.StartsWith(marked, StringComparison.Ordinal))
+            {
+                return response;
+            }
+
+            var text = FirstText().Replace(response.Text, $"$1{SimulatedModeration.Marker("S12")} ", 1);
+            return new ChatResponse(new ChatMessage(ChatRole.Assistant, text)) { ModelId = response.ModelId, Usage = response.Usage };
+        }
+
+        [System.Text.RegularExpressions.GeneratedRegex("(\"(?:title|text|summary)\"\\s*:\\s*\")")]
+        private static partial System.Text.RegularExpressions.Regex FirstText();
     }
 
     // Keeps the task of every request: the named one, or the first line of the system prompt.

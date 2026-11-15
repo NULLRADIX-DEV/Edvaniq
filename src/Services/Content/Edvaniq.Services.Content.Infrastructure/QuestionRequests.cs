@@ -18,7 +18,9 @@ internal static class QuestionRequests
     // An answer without a valid question gets asked again, up to StructuredOutput.DefaultAttempts, since a real model
     // may just have had a bad moment. A provider that fails or takes too long ends at once. Every attempt goes into the
     // cost log, under the purpose and the topic. System is the variant of QuestionGeneration.System the caller needs.
-    public static async Task<(List<GeneratedItem>? Items, Exception? Failure, int Attempts)> AskAsync(
+    // The questions are checked before they go anywhere (#298): flagged ones come back as null with Flagged, a check
+    // that fails as null with its failure, so nothing goes out unchecked.
+    public static async Task<(List<GeneratedItem>? Items, Exception? Failure, int Attempts, bool Flagged)> AskAsync(
         Document document,
         string system,
         IReadOnlyList<Guid> sectionIds,
@@ -28,6 +30,7 @@ internal static class QuestionRequests
         IChatClient ai,
         TestDoubleAi testDouble,
         AiAnswers answers,
+        IModeration moderation,
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
@@ -47,12 +50,23 @@ internal static class QuestionRequests
             cancellationToken);
         if (answer.Failure is { } failure)
         {
-            return (null, failure, answer.Attempts);
+            return (null, failure, answer.Attempts, false);
         }
 
         if (answer.Value is not { } drafts)
         {
-            return (null, null, answer.Attempts);
+            return (null, null, answer.Attempts, false);
+        }
+
+        var verdict = await moderation.CheckAsync(
+            document,
+            chat,
+            [.. drafts.Select(draft => string.Join('\n', [draft.Text, .. draft.Options, draft.Explanation]))],
+            AiReference.Topic(topicId),
+            cancellationToken);
+        if (verdict.Failure is not null || verdict.Flagged)
+        {
+            return (null, verdict.Failure, answer.Attempts, verdict.Flagged);
         }
 
         var model = ContentAi.ModelOf(chat, answer.ModelId);
@@ -62,7 +76,7 @@ internal static class QuestionRequests
             Guid.NewGuid(), ItemKind.Question, document.Id, draft.SectionId, model, QuestionGeneration.PromptVersion,
             new GeneratedQuestion(
                 draft.Text, draft.Options, draft.Answer, draft.Explanation, draft.Difficulty, draft.Type,
-                draft.Type == QuestionType.MultipleChoice ? draft.Answers : null)))], null, answer.Attempts);
+                draft.Type == QuestionType.MultipleChoice ? draft.Answers : null)))], null, answer.Attempts, false);
     }
 
     public static List<string> KeysOf(IEnumerable<GeneratedItem> items) =>

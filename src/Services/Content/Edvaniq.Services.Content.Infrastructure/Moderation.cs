@@ -69,6 +69,12 @@ internal sealed class AiModeration : IModeration
     public async Task<ModerationVerdict> CheckAsync(
         Document document, IChatClient chat, IReadOnlyList<string> texts, AiReference reference, CancellationToken cancellationToken)
     {
+        // The demo material is ours and its answers ship with it (#411), there is nothing of a user to check.
+        if (document.Origin == DocumentOrigin.Demo)
+        {
+            return ModerationVerdict.Safe;
+        }
+
         if (texts.Any(ModerationCheck.HitsLocalList))
         {
             ContentLog.ModerationFlagged(logger, document.Id, ModerationCheck.Local);

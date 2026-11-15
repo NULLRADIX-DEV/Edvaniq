@@ -156,8 +156,26 @@ public sealed class DocumentAnalyzer(
         var answer = await TopicsAsync(document, profile, sections, cancellationToken);
         if (answer.Value is { } topics)
         {
-            document.ReportTopics(time.GetUtcNow().UtcDateTime);
-            scope.ServiceProvider.GetRequiredService<IEventOutbox>().Add(new DocumentAnalyzed(document.OwnerId, document.Id, topics, document.LearningGoalId));
+            // The topics with their terms are checked before anything of them goes out (#298).
+            var checkedTopics = await moderation.CheckAsync(
+                document,
+                ContentAi.For(document, ai, testDouble),
+                [.. topics.Select(topic => string.Join('\n', [topic.Name, .. (topic.Terms ?? []).Select(term => $"{term.Term}: {term.Definition}")]))],
+                default,
+                cancellationToken);
+            if (checkedTopics.Failure is { } checkFailed)
+            {
+                AiOutage.Handle(document, AiAttempt.Moderation, checkFailed, time.GetUtcNow().UtcDateTime, OutageDelays, logger);
+            }
+            else if (checkedTopics.Flagged)
+            {
+                document.Fail(DocumentFailures.Inappropriate);
+            }
+            else
+            {
+                document.ReportTopics(time.GetUtcNow().UtcDateTime);
+                scope.ServiceProvider.GetRequiredService<IEventOutbox>().Add(new DocumentAnalyzed(document.OwnerId, document.Id, topics, document.LearningGoalId));
+            }
         }
         else if (answer.Failure is { } failure)
         {

@@ -77,6 +77,10 @@ public static class DocumentFailures
 
     public static readonly DocumentFailure SummaryFailed = new(FailureCode.Unknown, TopicSummary.Failed);
 
+    // #298: the summary the AI wrote is not fit for learning, it is not kept.
+    public static readonly DocumentFailure SummaryInappropriate = new(
+        FailureCode.Inappropriate, "Diese Zusammenfassung eignet sich nicht zum Lernen und wurde nicht gespeichert. Lies stattdessen das Material zu diesem Thema.");
+
     public static readonly DocumentFailure Unknown = new(
         FailureCode.Unknown, "Etwas ist schiefgegangen. Starte die Analyse neu, und wenn es wieder scheitert, lade das Material noch einmal hoch.");
 
@@ -84,7 +88,7 @@ public static class DocumentFailures
     [
         NothingToLearn, NoTextInFile, FileUnreadable, FileNotProcessable, PdfProtected, PackedTooTightly, TakesTooLong,
         FileTextTooLong, TooManyPages, AiBudgetReached, AiUnavailable, AiPaused, Inappropriate, SplitFailed, AnalysisFailed,
-        QuestionsFailed, TopicsMissing, GoalUnavailable, GoalGone, AnalysisTimedOut, SummaryNoMaterial, SummaryFailed, Unknown,
+        QuestionsFailed, TopicsMissing, GoalUnavailable, GoalGone, AnalysisTimedOut, SummaryNoMaterial, SummaryFailed, SummaryInappropriate, Unknown,
     ];
 
     // The daily quotas name numbers and a time, so their texts are built from a template.
