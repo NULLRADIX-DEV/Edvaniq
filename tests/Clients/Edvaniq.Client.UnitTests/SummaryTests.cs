@@ -208,15 +208,6 @@ public sealed class SummaryTests : BunitContext
         Assert.Empty(page.FindAll(".summary-text script"));
     }
 
-    // Room for sources and the AI label (#351) is there but empty.
-    [Fact]
-    public void Meta_IsThereButEmpty()
-    {
-        var page = RenderPage(new FakeTopicSummaries().OnRequest(Ready(SummaryLength.Standard, "Text.")));
-
-        Assert.Equal("", page.Find(".summary-meta").InnerHtml);
-    }
-
     // While a length is asked for, switching away and back doesn't ask it a second time.
     [Fact]
     public async Task SwitchingWhileAsking_DoesNotAskTwice()

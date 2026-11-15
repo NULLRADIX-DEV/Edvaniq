@@ -42,6 +42,54 @@ public static class FeedbackTexts
         public const string RevealedHint = "Schau dir die Erklärung in Ruhe an, so bleibt sie hängen.";
     }
 
+    // Label, hint and source at every question and summary (#351).
+    public static class Sources
+    {
+        public const string NoteLabel = "Hinweis zur KI";
+
+        public const string AiGenerated = "KI-generiert";
+
+        public const string AiFromDemo = "KI-generiert aus Demo-Material";
+
+        public const string AiWithoutMaterial = "KI-generiert, ohne Quellmaterial";
+
+        public const string MayErr = "KI kann Fehler machen.";
+
+        public const string Heading = "Quelle";
+
+        public const string HeadingMany = "Quellen";
+
+        public const string Show = "Stelle ansehen";
+
+        public const string Hide = "Stelle ausblenden";
+
+        public const string Loading = "Quelle wird geladen …";
+
+        public const string Gone = "Quelle nicht mehr vorhanden";
+
+        public const string LoadFailed = "Die Quelle ließ sich gerade nicht laden.";
+
+        public const string OpenOriginal = "Original öffnen";
+
+        public const string Download = "Original herunterladen";
+
+        public const string NewTab = "(öffnet in neuem Tab)";
+
+        public const string Passage = "Textstelle";
+
+        public const string CannotOpen = "Diese Quelle lässt sich hier nicht öffnen.";
+
+        public const string Gap = "…";
+
+        // A section of a pasted text, counted from 1. Numbers without the browser's culture (#1070).
+        public static string Section(int position) => "Abschnitt " + Number(position + 1);
+
+        public static string Pages(int from, int? to) =>
+            to is { } last && last != from ? $"S. {Number(from)}–{Number(last)}" : $"S. {Number(from)}";
+
+        private static string Number(int value) => value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
     // The summary of a topic (#346). Content's own sentences come as they are, these only fill in where it has none.
     public static class Summary
     {

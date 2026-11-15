@@ -1,0 +1,50 @@
+.source {
+    margin: var(--space-2) 0;
+    overflow-wrap: anywhere;
+}
+
+.source-line {
+    margin: 0;
+}
+
+.source-title {
+    font-weight: 600;
+}
+
+.source-toggle {
+    min-height: 2.75rem;
+    margin: var(--space-1) 0;
+    padding: 0 var(--space-3);
+    font: inherit;
+    font-weight: 600;
+    color: var(--color-accent);
+    background: transparent;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+.source-open {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    font-weight: 600;
+}
+
+.source-place {
+    margin: var(--space-2) 0 var(--space-1);
+    color: var(--color-ink-muted);
+}
+
+/* Line breaks of the original stay. */
+.source-window {
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    white-space: pre-wrap;
+    border-left: 3px solid var(--color-line);
+}
+
+.source-gone,
+.source-hint {
+    color: var(--color-ink-muted);
+}

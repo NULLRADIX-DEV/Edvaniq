@@ -95,11 +95,13 @@ internal sealed record SummaryBody(
             Text,
             string.IsNullOrWhiteSpace(FailureReason) ? null : FailureReason.Trim(),
             AiGenerated,
-            [.. (Sources ?? []).Select(source => new SummarySource(source.DocumentId, source.DocumentTitle, source.PageFrom, source.PageTo))]);
+            [.. (Sources ?? []).Select(source => new SummarySource(
+                source.DocumentId, source.DocumentTitle, source.PageFrom, source.PageTo, source.Origin, source.SectionId))]);
     }
 }
 
-internal sealed record SourceBody(Guid DocumentId, string DocumentTitle, int? PageFrom, int? PageTo);
+internal sealed record SourceBody(
+    Guid DocumentId, string DocumentTitle, int? PageFrom, int? PageTo, string? Origin = null, Guid? SectionId = null);
 
 // Source-generated for the trimmed browser app. An answer without topic, length or status fails.
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, RespectRequiredConstructorParameters = true)]

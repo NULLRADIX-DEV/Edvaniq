@@ -90,8 +90,23 @@
                 <p>@paragraph</p>
             }
         </article>
-        @* Room for the sources and the AI label (#351), empty until then. *@
-        <div class="summary-meta"></div>
+        @* Label, hint and the documents the summary rests on (#351). *@
+        <div class="summary-meta">
+            <AiNote WithoutMaterial="WithoutMaterial(Current.Sources)" FromDemo="FromDemo(Current.Sources)" />
+            @if (Current.Sources.Count > 0)
+            {
+                <h2 class="summary-sources-heading">@(Current.Sources.Count == 1 ? FeedbackTexts.Sources.Heading : FeedbackTexts.Sources.HeadingMany)</h2>
+                <ul class="summary-sources">
+                    @foreach (var source in Current.Sources)
+                    {
+                        <li @key="source.DocumentId">
+                            <SourceView Lookup="documents" DocumentId="source.DocumentId" SectionId="source.SectionId"
+                                        PageFrom="source.PageFrom" PageTo="source.PageTo" />
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
         break;
 }
 
@@ -107,6 +122,7 @@
     public Guid TopicId { get; set; }
 
     private readonly CancellationTokenSource life = new();
+    private DocumentLookup documents = default!;
     private CancellationTokenSource? poll;
     private SummaryPolling polling = SummaryPolling.Default;
     private Guid? loadedTopic;
@@ -156,7 +172,18 @@
         },
     };
 
-    protected override void OnInitialized() => polling = Services.GetService<SummaryPolling>() ?? SummaryPolling.Default;
+    protected override void OnInitialized()
+    {
+        polling = Services.GetService<SummaryPolling>() ?? SummaryPolling.Default;
+        documents = new DocumentLookup(Material);
+    }
+
+    // Without any source, or only text the AI wrote itself, nothing backs the summary.
+    private static bool WithoutMaterial(IReadOnlyList<SummarySource> sources) =>
+        sources.All(source => DocumentOrigins.IsSynthetic(source.Origin));
+
+    private static bool FromDemo(IReadOnlyList<SummarySource> sources) =>
+        sources.Any(source => DocumentOrigins.IsDemo(source.Origin));
 
     protected override async Task OnParametersSetAsync()
     {

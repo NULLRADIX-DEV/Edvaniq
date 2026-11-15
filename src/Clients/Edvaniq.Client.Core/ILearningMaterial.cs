@@ -31,9 +31,29 @@ public enum DocumentStatus
     Failed,
 }
 
-// Source says where it came from. One from a file stays Uploaded until the worker has read its text.
+// Source says where it came from. One from a file stays Uploaded until the worker has read its text. Origin is Content's
+// word for what it is made of (DocumentOrigins).
 public sealed record DocumentInfo(
-    Guid Id, string Title, DocumentStatus Status, DateTimeOffset CreatedAt, string? FailureReason = null, DocumentSource Source = DocumentSource.Text);
+    Guid Id,
+    string Title,
+    DocumentStatus Status,
+    DateTimeOffset CreatedAt,
+    string? FailureReason = null,
+    DocumentSource Source = DocumentSource.Text,
+    string? Origin = null);
+
+// As Content names them (#349, #411). Only synthetic is text the AI wrote without material. Demo and anything this app
+// doesn't know yet count as material: they have a real source.
+public static class DocumentOrigins
+{
+    public const string Material = "material";
+    public const string Synthetic = "synthetic";
+    public const string Demo = "demo";
+
+    public static bool IsSynthetic(string? origin) => origin == Synthetic;
+
+    public static bool IsDemo(string? origin) => origin == Demo;
+}
 
 public enum DocumentSource
 {
