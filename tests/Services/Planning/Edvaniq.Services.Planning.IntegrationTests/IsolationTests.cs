@@ -21,10 +21,10 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
     internal static IsolationCheck Check() => Examples(Sessions(Goals(new IsolationCheck())))
         .Exempt("GET", "/me", "Only the caller's own id from the token.")
         .Exempt("POST", "/ping", "Writes and reads the caller's own ping.")
-        .Exempt("GET", "/daily-budget", "Only the caller's own setting, no id in the request.")
-        .Exempt("PUT", "/daily-budget", "Only the caller's own setting, no id in the request.")
-        .Exempt("GET", "/plan/today", "Only the caller's own state, no id in the request: OtherUser_SeesNothingOfAForeignPlanOrSession.")
-        .Exempt("GET", "/plan/week", "Only the caller's own state, no id in the request: OtherUser_SeesNothingOfAForeignPlanOrSession.");
+        .Exempt("GET", "/daily-budget", "Only the caller's own setting, no id in the request.", nameof(DailyBudgetTests.EachUser_ReadsAndChangesOnlyTheirOwnBudget))
+        .Exempt("PUT", "/daily-budget", "Only the caller's own setting, no id in the request.", nameof(DailyBudgetTests.EachUser_ReadsAndChangesOnlyTheirOwnBudget))
+        .Exempt("GET", "/plan/today", "Only the caller's own state, no id in the request.", nameof(OtherUser_SeesNothingOfAForeignPlanOrSession))
+        .Exempt("GET", "/plan/week", "Only the caller's own state, no id in the request.", nameof(OtherUser_SeesNothingOfAForeignPlanOrSession));
 
     private static IsolationCheck Goals(IsolationCheck check) => check
         .List("GET", "/learning-goals")
@@ -41,8 +41,8 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         .Item("POST", "/sessions/{id:guid}/complete")
         .Item("POST", "/sessions/{id:guid}/advance", new { step = 1 })
         .Item("POST", "/sessions/{id:guid}/activity")
-        .Exempt("POST", "/sessions", "A block id in the body: OtherUser_CannotStartAForeignBlock.")
-        .Exempt("GET", "/sessions/active", "Only the caller's own state, no id in the request: OtherUser_SeesNothingOfAForeignPlanOrSession.");
+        .Exempt("POST", "/sessions", "A block id in the body.", nameof(OtherUser_CannotStartAForeignBlock))
+        .Exempt("GET", "/sessions/active", "Only the caller's own state, no id in the request.", nameof(OtherUser_SeesNothingOfAForeignPlanOrSession));
 
     private static IsolationCheck Examples(IsolationCheck check) => check
         .List("GET", "/examples")

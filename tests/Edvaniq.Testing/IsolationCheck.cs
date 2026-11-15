@@ -46,6 +46,18 @@ public sealed partial class IsolationCheck
         return Add(new Entry(Kind.Exempt, method, route, null, reason));
     }
 
+    // An exemption whose isolation another test shows. Pass it as nameof(TheTests.TheTest), then renaming or deleting that
+    // test breaks the build instead of leaving a reason that points nowhere (#424).
+    public IsolationCheck Exempt(string method, string route, string reason, string proof)
+    {
+        if (string.IsNullOrWhiteSpace(proof))
+        {
+            throw new ArgumentException("A proof names the test that shows the isolation.", nameof(proof));
+        }
+
+        return Exempt(method, route, $"{reason} Shown by {proof}.");
+    }
+
     // Every endpoint a user's token reaches is listed, and nothing listed is gone. Endpoints open to anyone (health) and
     // those only for another service's internal token have no user data of a caller and are left out.
     public void AssertCovers(IServiceProvider services)

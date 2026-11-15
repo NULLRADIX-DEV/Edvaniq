@@ -17,9 +17,9 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         .Exempt("GET", "/me", "Only the caller's own id from the token.")
         .Item("GET", "/mastery/{topicId:guid}")
         .List("GET", "/mastery")
-        .Exempt("GET", "/mastery/decayed", "Needs a goal, per user: DecayedMasteryTests.OnlyTheAskedGoal_OfTheUserFromTheToken.")
-        .Exempt("GET", "/mastery/weak-and-secure", "Per user and goal: WeakAndSecureTests.EachUser_SeesOnlyTheirOwnTopics.")
-        .Exempt("GET", "/mastery/changes", "Topic and answer ids in the query: MasteryChangeTests.ForeignTopicsAndAnswers_CountAsUnknown.");
+        .Exempt("GET", "/mastery/decayed", "Needs a goal, per user.", nameof(DecayedMasteryTests.OnlyTheAskedGoal_OfTheUserFromTheToken))
+        .Exempt("GET", "/mastery/weak-and-secure", "Per user and goal.", nameof(WeakAndSecureTests.EachUser_SeesOnlyTheirOwnTopics))
+        .Exempt("GET", "/mastery/changes", "Topic and answer ids in the query.", nameof(MasteryChangeTests.ForeignTopicsAndAnswers_CountAsUnknown));
 
     [Fact]
     public void EveryEndpoint_IsInTheCheck() => Check().AssertCovers(service.Services);
