@@ -153,15 +153,18 @@ internal sealed record SectionResponse(Guid SectionId, int Position, int? PageFr
 // Status goes out by name (Uploaded, Analyzing, Ready, Failed), the client words it. A failed document says why. Source
 // says where it came from, Text or File: one from a file stays Uploaded until its text is extracted (#282). FailureCode
 // names the reason on the fixed list of #283 (Unreadable, NoText, TooLarge, LimitReached, AiUnavailable, Inappropriate,
-// Unknown), so a client can tell reasons apart without reading the text.
+// Unknown), so a client can tell reasons apart without reading the text. Origin is material or synthetic (Origins), what
+// comes from a synthetic document has no material behind it (#349).
 internal sealed record DocumentResponse(
-    Guid Id, string Title, string Status, string? FailureReason, DateTime CreatedAt, string Source, string? FailureCode)
+    Guid Id, string Title, string Status, string? FailureReason, DateTime CreatedAt, string Source, string? FailureCode, string Origin)
 {
     public static DocumentResponse From(Document document) =>
-        new(document.Id, document.Title, document.Status.ToString(), document.FailureReason, document.CreatedAt, SourceOf(document.IsFromFile), document.FailureCode?.ToString());
+        new(document.Id, document.Title, document.Status.ToString(), document.FailureReason, document.CreatedAt, SourceOf(document.IsFromFile), document.FailureCode?.ToString(),
+            Origins.Name(document.Origin));
 
     public static DocumentResponse From(DocumentSummary document) =>
-        new(document.Id, document.Title, document.Status.ToString(), document.FailureReason, document.CreatedAt, SourceOf(document.IsFromFile), document.FailureCode?.ToString());
+        new(document.Id, document.Title, document.Status.ToString(), document.FailureReason, document.CreatedAt, SourceOf(document.IsFromFile), document.FailureCode?.ToString(),
+            Origins.Name(document.Origin));
 
     private static string SourceOf(bool isFromFile) => isFromFile ? "File" : "Text";
 }

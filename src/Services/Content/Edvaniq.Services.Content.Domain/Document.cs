@@ -114,6 +114,9 @@ public sealed class Document : IOwnedByUser
 
     public bool IsFromFile => FileId is not null;
 
+    // Every document is material until synthetic ones come with M5.
+    public DocumentOrigin Origin { get; private set; } = DocumentOrigin.Material;
+
     // When the worker read the text out of the file, UTC. Null for a pasted text and while the file waits for it.
     public DateTime? TextExtractedAt { get; private set; }
 

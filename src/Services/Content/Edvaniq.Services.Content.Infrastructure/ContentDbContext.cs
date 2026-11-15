@@ -45,6 +45,9 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
         // TEXT ends at 64 KB, 200,000 characters of UTF-8 need up to 800 KB.
         document.Property(item => item.Text).HasColumnType("mediumtext");
+
+        // A default in the database, so a document written by the code before #349 is material too.
+        document.Property(item => item.Origin).HasDefaultValue(DocumentOrigin.Material);
         // The status says which job has a document. Whoever saves a new one first wins, a second worker on the same
         // document fails at its save instead of reporting it twice.
         document.Property(item => item.Status).HasConversion<string>().HasMaxLength(16).IsConcurrencyToken();

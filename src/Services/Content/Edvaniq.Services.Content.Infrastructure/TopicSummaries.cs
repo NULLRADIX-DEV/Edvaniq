@@ -85,12 +85,12 @@ internal sealed class TopicSummaries(
         var sections = await db.Sections.AsNoTracking().Where(section => sectionIds.Contains(section.Id)).ToListAsync(cancellationToken);
         var pages = await db.DocumentPages.AsNoTracking().Where(page => documentIds.Contains(page.DocumentId)).ToListAsync(cancellationToken);
         var titles = await db.Documents.AsNoTracking().Where(document => documentIds.Contains(document.Id))
-            .ToDictionaryAsync(document => document.Id, document => document.Title, cancellationToken);
+            .ToDictionaryAsync(document => document.Id, document => (document.Title, document.Origin), cancellationToken);
 
         var sources = new List<SummarySource>();
         foreach (var documentId in used.Select(section => section.DocumentId).Distinct())
         {
-            if (!titles.TryGetValue(documentId, out var title))
+            if (!titles.TryGetValue(documentId, out var document))
             {
                 continue;
             }
@@ -99,7 +99,7 @@ internal sealed class TopicSummaries(
             var ranges = sections.Where(section => section.DocumentId == documentId).Select(section => section.PagesIn(ofDocument)).ToList();
             var from = ranges.Select(range => range.From).Where(page => page is not null).Min();
             var to = ranges.Select(range => range.To).Where(page => page is not null).Max();
-            sources.Add(new SummarySource(documentId, title, from, to));
+            sources.Add(new SummarySource(documentId, document.Title, from, to, document.Origin));
         }
 
         return new SummaryView(summary, sources);

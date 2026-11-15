@@ -347,6 +347,11 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.Property<DateTime?>("NextAttemptAt")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<int>("Origin")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<string>("OutputLanguage")
                         .HasMaxLength(8)
                         .HasColumnType("varchar(8)");

@@ -41,4 +41,4 @@ public enum SummaryRequestResult
 // A summary with its sources: the documents and pages of the sections it rests on, one entry per document.
 public sealed record SummaryView(TopicSummary Summary, IReadOnlyList<SummarySource> Sources);
 
-public sealed record SummarySource(Guid DocumentId, string DocumentTitle, int? PageFrom, int? PageTo);
+public sealed record SummarySource(Guid DocumentId, string DocumentTitle, int? PageFrom, int? PageTo, DocumentOrigin Origin);

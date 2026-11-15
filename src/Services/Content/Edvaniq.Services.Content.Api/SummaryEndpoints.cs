@@ -116,9 +116,9 @@ internal sealed record SummaryResponse(
             summary.PromptVersion,
             summary.CreatedAt,
             summary.ReadyAt,
-            [.. view.Sources.Select(source => new SourceResponse(source.DocumentId, source.DocumentTitle, source.PageFrom, source.PageTo))]);
+            [.. view.Sources.Select(source => new SourceResponse(source.DocumentId, source.DocumentTitle, source.PageFrom, source.PageTo, Origins.Name(source.Origin)))]);
     }
 }
 
-// The pages are null for pasted text.
-internal sealed record SourceResponse(Guid DocumentId, string DocumentTitle, int? PageFrom, int? PageTo);
+// The pages are null for pasted text. Origin is material or synthetic (Origins).
+internal sealed record SourceResponse(Guid DocumentId, string DocumentTitle, int? PageFrom, int? PageTo, string Origin);

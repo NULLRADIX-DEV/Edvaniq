@@ -98,8 +98,9 @@ internal sealed record WeaknessQuizResponse(IReadOnlyList<QuizQuestionResponse> 
 // A question as POST /attempts gives it, without the solution. Answered: the user gave an answer already, Correct says
 // how it was graded, null while it is open.
 internal sealed record QuizQuestionResponse(
-    Guid Id, Guid TopicId, Guid QuestionId, string Type, string Text, IReadOnlyList<string> Options, int Difficulty, bool Answered, bool? Correct)
+    Guid Id, Guid TopicId, Guid QuestionId, string Type, string Text, IReadOnlyList<string> Options, int Difficulty, bool Answered, bool? Correct,
+    QuestionSource Source)
 {
     public static QuizQuestionResponse From(AskedResponse asked, bool? correct) =>
-        new(asked.Id, asked.TopicId, asked.QuestionId, asked.Type, asked.Text, asked.Options, asked.Difficulty, correct is not null, correct);
+        new(asked.Id, asked.TopicId, asked.QuestionId, asked.Type, asked.Text, asked.Options, asked.Difficulty, correct is not null, correct, asked.Source);
 }
