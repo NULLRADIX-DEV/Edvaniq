@@ -9,6 +9,12 @@
 <section class="plan" aria-labelledby="plan-heading">
     <h2 id="plan-heading">Dein Plan für heute</h2>
 
+    @* Minutes, blocks and the exam countdown of the plan shown (#382). A reload replaces the plan, the summary follows. *@
+    @if (state == ViewState.Shown)
+    {
+        <TodaySummary Plan="plan!" />
+    }
+
     @* What the plan is about to say lives in one live region. Topic names come from the analysis, Razor writes them as
        text. *@
     <div class="plan-status" role="status">

@@ -82,6 +82,11 @@ public static class TodayPlanner
     // How many days of the week the list shows (#379): without an exam all of them, with one only the study days before
     // the exam day, as StudyPlanner counts them, and never less than today. The planner itself doesn't weigh the exam
     // yet (#513, #524), so this only cuts the list and today stays as it is.
+    // Days from the study day to the exam (#382): 0 on its day, null without one or once it is over. Only Planning knows
+    // the study day, so the client takes the number as it is.
+    public static int? DaysToExam(DateOnly today, DateOnly? examDay) =>
+        examDay is { } exam && exam >= today ? exam.DayNumber - today.DayNumber : null;
+
     public static int DaysShown(DateOnly today, DateOnly? examDay) =>
         examDay is { } exam ? Math.Clamp(exam.DayNumber - today.DayNumber, 1, StudyPlanner.RollingDays) : StudyPlanner.RollingDays;
 

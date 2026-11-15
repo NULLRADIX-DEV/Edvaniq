@@ -22,7 +22,7 @@ public sealed class HttpTodayPlanTests
             {"studyDay":"2026-11-11","learningGoalId":"00000000-0000-0000-0000-000000000000",
              "blocks":[{"topicId":"{{Review}}","minutes":10,"kind":"review"},{"topicId":"{{Learn}}","minutes":20,"kind":"learn"}],
              "emptyReason":null,"masteryAvailable":false,"shortenedTopicIds":["{{Shortened}}"],"questionPoolsAvailable":true,
-             "notReadyTopicIds":["{{NotReady}}"]}
+             "notReadyTopicIds":["{{NotReady}}"],"examDate":"2027-03-01","daysToExam":110}
             """));
 
         var outcome = await plans.GetAsync(TestContext.Current.CancellationToken);
@@ -40,6 +40,7 @@ public sealed class HttpTodayPlanTests
         Assert.False(plan.MasteryAvailable);
         Assert.Equal([Guid.Parse(Shortened)], plan.ShortenedTopicIds);
         Assert.Equal([Guid.Parse(NotReady)], plan.NotReadyTopicIds);
+        Assert.Equal((new DateOnly(2027, 3, 1), 110), (plan.ExamDate, plan.DaysToExam));
     }
 
     [Theory]
@@ -78,6 +79,7 @@ public sealed class HttpTodayPlanTests
         Assert.Equal([new PlanBlock(Guid.Parse(Learn), 5, null)], outcome.Value!.Blocks);
         Assert.Empty(outcome.Value.ShortenedTopicIds);
         Assert.Empty(outcome.Value.NotReadyTopicIds);
+        Assert.Equal((null, null), (outcome.Value.ExamDate, outcome.Value.DaysToExam));
     }
 
     [Fact]

@@ -213,6 +213,96 @@ public sealed class TodayPlanTests : BunitContext
         Assert.DoesNotContain(FeedbackTexts.Plan.LoadFailed, page.Find("[role=status]").TextContent);
     }
 
+    // #382 AC1: the minutes and blocks above the list are those of the list.
+    [Fact]
+    public void Summary_IsTheMinutesAndBlocksOfThePlan()
+    {
+        var page = Render(new FakeTodayPlan().Answer(Plan(
+            new PlanBlock(Respiration, 5, BlockKind.Review),
+            new PlanBlock(LightReaction, 15, BlockKind.Learn),
+            new PlanBlock(Photosynthesis, 10, BlockKind.Learn))));
+
+        Assert.Equal("Heute: 30 Minuten in 3 Blöcken", page.Find(".today-total").TextContent);
+        Assert.Empty(page.FindAll(".today-exam"));
+    }
+
+    [Fact]
+    public void Summary_OfOneBlock_SaysBlock()
+    {
+        var page = Render(new FakeTodayPlan().Answer(Plan(new PlanBlock(Respiration, 1, BlockKind.Review))));
+
+        Assert.Equal("Heute: 1 Minute in 1 Block", page.Find(".today-total").TextContent);
+    }
+
+    // #382 AC2: the countdown comes with an exam and says the date in German, whatever the culture; without one it is not
+    // there. The number is Planning's, the client counts nothing.
+    [Theory]
+    [InlineData(110, "Noch 110 Tage bis zur Prüfung am 1. März 2027")]
+    [InlineData(1, "Morgen ist die Prüfung, am 1. März 2027")]
+    [InlineData(0, "Heute ist die Prüfung")]
+    public void Countdown_ComesWithAnExam(int days, string says)
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("ja-JP");
+        try
+        {
+            var page = Render(new FakeTodayPlan().Answer(
+                Plan(new PlanBlock(Respiration, 10, BlockKind.Learn)) with { ExamDate = new DateOnly(2027, 3, 1), DaysToExam = days }));
+
+            Assert.Equal(says, page.Find(".today-exam").TextContent);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
+    }
+
+    // Also on a day without blocks, then without a summary of nothing.
+    [Fact]
+    public void Countdown_AlsoOnAnEmptyDay()
+    {
+        var page = Render(new FakeTodayPlan().Answer(
+            Plan() with { Empty = PlanEmpty.AllMastered, ExamDate = new DateOnly(2027, 3, 1), DaysToExam = 3 }));
+
+        Assert.Equal("Noch 3 Tage bis zur Prüfung am 1. März 2027", page.Find(".today-exam").TextContent);
+        Assert.Empty(page.FindAll(".today-total"));
+    }
+
+    // #382 AC3: back on the page the summary follows the new plan.
+    [Fact]
+    public void Return_BringsTheNewSummary()
+    {
+        var plans = new FakeTodayPlan()
+            .Answer(Plan(new PlanBlock(Respiration, 20, BlockKind.Learn)) with { ExamDate = new DateOnly(2027, 3, 1), DaysToExam = 2 })
+            .Answer(Plan(new PlanBlock(Respiration, 20, BlockKind.Learn), new PlanBlock(Photosynthesis, 10, BlockKind.Learn)) with
+            {
+                ExamDate = new DateOnly(2027, 3, 1),
+                DaysToExam = 1,
+            });
+        var page = Render(plans);
+        Assert.Equal("Heute: 20 Minuten in 1 Block", page.Find(".today-total").TextContent);
+
+        signal.Return();
+
+        page.WaitForAssertion(() => Assert.Equal("Heute: 30 Minuten in 2 Blöcken", page.Find(".today-total").TextContent));
+        Assert.Equal("Morgen ist die Prüfung, am 1. März 2027", page.Find(".today-exam").TextContent);
+    }
+
+    // #382 AC4: without a connection there is no summary of an old plan, only the problem and the retry.
+    [Fact]
+    public void Failure_ShowsNoSummary_RetryBringsIt()
+    {
+        var plans = new FakeTodayPlan()
+            .Answer(CallOutcome<TodayPlan>.Failed())
+            .Answer(Plan(new PlanBlock(Photosynthesis, 20, BlockKind.Learn)));
+        var page = Render(plans);
+        Assert.Empty(page.FindAll(".today-summary"));
+
+        page.Find("button").Click();
+
+        page.WaitForAssertion(() => Assert.Equal("Heute: 20 Minuten in 1 Block", page.Find(".today-total").TextContent));
+    }
+
     private IRenderedComponent<TodayPlanView> Render(FakeTodayPlan plans, FakeLearningMaterial? material = null)
     {
         Services.AddSingleton<ITodayPlan>(plans);

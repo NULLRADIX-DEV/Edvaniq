@@ -64,6 +64,17 @@ public class WeekPlanTests
     public void DaysShown_StopBeforeTheExamDay(int? examInDays, int expected) =>
         Assert.Equal(expected, TodayPlanner.DaysShown(Monday, examInDays is { } days ? Monday.AddDays(days) : null));
 
+    // #382: the countdown on Home, from the study day as Planning has it: 0 on the exam day, nothing without an exam or
+    // after it.
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(-1, null)]
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    [InlineData(40, 40)]
+    public void DaysToExam_CountFromTheStudyDay(int? examInDays, int? expected) =>
+        Assert.Equal(expected, TodayPlanner.DaysToExam(Monday, examInDays is { } days ? Monday.AddDays(days) : null));
+
     private static (List<Guid> Topics, Dictionary<Guid, TopicStanding> Standings, DailyBudget Budget, HashSet<Guid>? Ready) Input(string scenario) =>
         scenario switch
         {
