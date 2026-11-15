@@ -48,6 +48,7 @@ public sealed class UserDeletionFlowTests(FlowServices services) : IDisposable
         var bob = $"bob-{Guid.NewGuid():N}";
         await LearnAsync(alice);
         await LearnAsync(bob);
+        await QuietAsync(alice, bob);
         var ofBob = Rows(bob);
         Assert.All(ofBob, service => Assert.True(service.Value > 0, $"{service.Key} has nothing of Bob to keep."));
         Assert.All(Rows(alice), service => Assert.True(service.Value > 0, $"{service.Key} has nothing of Alice to delete."));
@@ -190,8 +191,18 @@ public sealed class UserDeletionFlowTests(FlowServices services) : IDisposable
             "The worker never got the topics from Knowledge.");
 
         var topic = services.QueryKnowledge(db => db.Topics.IgnoreQueryFilters().First(item => item.DocumentId == documentId && item.ParentId == null).Id);
+
+        // Every topic comes with an ItemsGenerated of its own, and Assessment takes each in one save. Only once every
+        // pool has its questions there is all of the user's data in place, before that the rows still grow.
+        var pooled = services.QueryContent(db => db.QuestionPools.IgnoreQueryFilters()
+            .Where(pool => pool.DocumentId == documentId).Select(pool => pool.TopicId).ToList());
+        Assert.Contains(topic, pooled);
         await FlowServices.WaitForAsync(
-            () => Task.FromResult(services.QueryAssessment(db => db.Questions.IgnoreQueryFilters().Any(question => question.OwnerId == user && question.TopicId == topic))),
+            () => Task.FromResult(services.QueryAssessment(db => db.Questions.IgnoreQueryFilters()
+                .Where(question => question.OwnerId == user && question.TopicId != null && pooled.Contains(question.TopicId.Value))
+                .Select(question => question.TopicId)
+                .Distinct()
+                .Count()) == pooled.Count),
             () => $"Assessment did not take the questions over. {services.QuestionsOf(documentId, user)}",
             Timeout);
         using var assessment = Client(services.Assessment.CreateClient(), token);
@@ -242,6 +253,23 @@ public sealed class UserDeletionFlowTests(FlowServices services) : IDisposable
     {
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
+    }
+
+    // No event of the users still on its way: their rows are the same in two reads a second apart. Otherwise a late one
+    // would count as a change by the deletion.
+    private async Task QuietAsync(params string[] users)
+    {
+        var before = string.Join(';', users.Select(user => string.Join(',', Rows(user))));
+        await WaitForAsync(
+            async () =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+                var now = string.Join(';', users.Select(user => string.Join(',', Rows(user))));
+                var quiet = now == before;
+                before = now;
+                return quiet;
+            },
+            "The rows of the users kept changing.");
     }
 
     // Consumers, dispatchers and the worker run in the background.
