@@ -153,7 +153,7 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
         var attempt = await asked.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
 
         Assert.Equal(
-            ["difficulty", "id", "options", "questionId", "repeated", "text", "topicId", "type"],
+            ["difficulty", "id", "options", "questionId", "repeated", "source", "text", "topicId", "type"],
             attempt.EnumerateObject().Select(property => property.Name).Order());
         var routes = service.Services.GetServices<EndpointDataSource>()
             .SelectMany(source => source.Endpoints)
