@@ -227,6 +227,22 @@ public class DocumentTests
         Assert.Equal(Now.AddDays(3), document.WaitsForTopicsSince);
     }
 
+    // #1018: ready before #214 means ready without AnalyzedAt.
+    [Fact]
+    public void Reopen_OfADocumentReadyBeforeAnalyzedAt_WaitsForTheQuestions_NotForTheTopics()
+    {
+        var document = Document.Paste("alice", Goal, null, "Licht spaltet Wasser.", Now);
+        document.Split();
+        document.ReportTopics(Now.AddMinutes(1));
+        document.FinishAnalysis();
+        typeof(Document).GetProperty(nameof(Document.AnalyzedAt))!.SetValue(document, null);
+
+        document.ReopenForQuestions(Now.AddDays(3));
+
+        Assert.Equal((DocumentStatus.Analyzing, true, (DateTime?)Now.AddDays(3)),
+            (document.Status, document.WaitsForQuestions, document.AnalyzedAt));
+    }
+
     [Fact]
     public void Reopen_OfADocumentThatIsNotReady_IsRefused()
     {

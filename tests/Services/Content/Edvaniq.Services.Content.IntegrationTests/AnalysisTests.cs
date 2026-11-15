@@ -268,6 +268,40 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             .IgnoreQueryFilters().Count(charge => charge.DocumentId == id));
     }
 
+    // #1018: a document that got ready before #214 has no AnalyzedAt and no pools. Reopened, it gets its questions and
+    // its topics don't go out a second time.
+    [Fact]
+    public async Task ReopenedDocumentReadyBeforeAnalyzedAt_GetsItsQuestions_WithoutASecondAnalysis()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        await AnalyzeAsync(id);
+        var topics = service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
+        Assert.True(await Pools().FinishAsync(id, TestContext.Current.CancellationToken));
+        Assert.Equal(DocumentStatus.Ready, Stored(id).Status);
+        using (var scope = service.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
+            await db.QuestionPools.IgnoreQueryFilters().Where(pool => pool.DocumentId == id)
+                .ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+            await db.Documents.IgnoreQueryFilters().Where(document => document.Id == id)
+                .ExecuteUpdateAsync(set => set.SetProperty(document => document.AnalyzedAt, (DateTime?)null), TestContext.Current.CancellationToken);
+        }
+
+        await using (var command = service.WithWebHostBuilder(builder => builder.ConfigureTestServices(DocumentCommand.Register)))
+        {
+            Assert.Equal(DocumentCommand.Ok, await DocumentCommand.RunAsync(command.Services, ["document", "reopen", id.ToString()], TextWriter.Null, TextWriter.Null));
+        }
+
+        Assert.True(Stored(id).WaitsForQuestions);
+        await Analyzer().AnalyzeAsync(id, TestContext.Current.CancellationToken);
+        Assert.True(await Pools().FinishAsync(id, TestContext.Current.CancellationToken));
+
+        Assert.Equal(DocumentStatus.Ready, Stored(id).Status);
+        Assert.Single(await ReportedAsync(id));
+        Assert.Equal(topics.Select(topic => topic.Id).Order(), PooledTopics(id).Order());
+    }
+
     [Fact]
     public async Task SecondRun_SendsNoQuestionTwice()
     {
