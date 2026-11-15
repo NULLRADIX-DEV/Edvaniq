@@ -87,7 +87,11 @@ public sealed class LogPrivacyTests(ServiceFactory service) : IClassFixture<Serv
         Assert.Contains("ToppedUp", events);
         Assert.Contains("LogReady", events);
         Assert.Equal(
-            new[] { (AiAttempt.Questions, (Guid?)topic, (Guid?)null), (AiAttempt.TopUp, topic, null), (AiAttempt.Summary, null, summary.Id) },
+            new[]
+            {
+                (AiAttempt.Moderation, (Guid?)null, (Guid?)null), (AiAttempt.Questions, topic, null), (AiAttempt.TopUp, topic, null),
+                (AiAttempt.Summary, null, summary.Id),
+            },
             Query(db => db.AiAttempts.IgnoreQueryFilters().Where(attempt => attempt.DocumentId == id && attempt.Purpose != AiAttempt.Topics)
                 .OrderBy(attempt => attempt.CalledAt)
                 .Select(attempt => new { attempt.Purpose, attempt.TopicId, attempt.SummaryId })

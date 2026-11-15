@@ -1467,11 +1467,12 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             .Select(section => section.Id)];
     }
 
+    // The cost of the analysis. The check of the material in front of it has its own rows, ModerationTests counts them.
     private List<AiAttempt> AttemptsOf(Guid documentId)
     {
         using var scope = service.Services.CreateScope();
         return [.. scope.ServiceProvider.GetRequiredService<ContentDbContext>().AiAttempts.IgnoreQueryFilters()
-            .Where(attempt => attempt.DocumentId == documentId)];
+            .Where(attempt => attempt.DocumentId == documentId && attempt.Purpose != AiAttempt.Moderation)];
     }
 
     // Calls for questions, not attempts: a call may need a second try.
