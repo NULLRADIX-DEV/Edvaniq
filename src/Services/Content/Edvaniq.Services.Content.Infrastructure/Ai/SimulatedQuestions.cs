@@ -65,9 +65,9 @@ internal sealed partial class SimulatedQuestions : ISimulatedAnswer
         return (index % 3) switch
         {
             0 => new(QuestionGeneration.SingleChoice, $"Frage {number}: Was behandelt das Material?",
-                [Option(label.Text), "Nichts aus dem Material"], [0], explanation, difficulty, label.Section),
+                [Option(label.Text), ContentAi.SimulatedDistractors[0]], [0], explanation, difficulty, label.Section),
             1 => new(QuestionGeneration.MultipleChoice, $"Frage {number}: Was davon behandelt das Material?",
-                [Option(label.Text), "Ein Thema außerhalb des Materials", "Gar kein Thema"], [0], explanation, difficulty, label.Section),
+                [Option(label.Text), ContentAi.SimulatedDistractors[1], ContentAi.SimulatedDistractors[2]], [0], explanation, difficulty, label.Section),
             _ => new(QuestionGeneration.TrueFalse, $"Frage {number}: Das Material behandelt {label.Text}.",
                 trueFalse, [0], explanation, difficulty, label.Section),
         };

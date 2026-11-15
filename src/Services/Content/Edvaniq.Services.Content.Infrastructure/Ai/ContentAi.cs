@@ -25,6 +25,11 @@ public static class ContentAi
     // What the simulated provider writes into a question once text gets out of the material block (SimulatedQuestions).
     public const string SimulatedHijack = "PWNED";
 
+    // The wrong options of the simulated questions. Every other option is right, true/false keeps its order with the
+    // right one first. The walkthrough after a deploy (deploy/smoke-test.sh) answers by them, SimulatedDistractorTests
+    // keeps both the same.
+    public static readonly IReadOnlyList<string> SimulatedDistractors = ["Nichts aus dem Material", "Ein Thema außerhalb des Materials", "Gar kein Thema"];
+
     public static readonly ChatResponseFormat TopicsFormat = FormatOf(TopicAnalysis.Schema, "topics");
 
     public static readonly ChatResponseFormat QuestionsFormat = FormatOf(QuestionGeneration.Schema, "questions");
