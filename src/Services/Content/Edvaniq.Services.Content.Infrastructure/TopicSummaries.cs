@@ -96,10 +96,16 @@ internal sealed class TopicSummaries(
             }
 
             var ofDocument = pages.Where(page => page.DocumentId == documentId).ToList();
-            var ranges = sections.Where(section => section.DocumentId == documentId).Select(section => section.PagesIn(ofDocument)).ToList();
+            var own = sections.Where(section => section.DocumentId == documentId).OrderBy(section => section.Ordinal).ToList();
+            if (own.Count == 0)
+            {
+                continue;
+            }
+
+            var ranges = own.Select(section => section.PagesIn(ofDocument)).ToList();
             var from = ranges.Select(range => range.From).Where(page => page is not null).Min();
             var to = ranges.Select(range => range.To).Where(page => page is not null).Max();
-            sources.Add(new SummarySource(documentId, document.Title, from, to, document.Origin));
+            sources.Add(new SummarySource(documentId, document.Title, from, to, document.Origin, own[0].Id));
         }
 
         return new SummaryView(summary, sources);

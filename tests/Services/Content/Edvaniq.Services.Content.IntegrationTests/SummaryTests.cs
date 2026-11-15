@@ -36,7 +36,7 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
     public async Task FirstRequest_MakesTheSummaryOnce_LaterReadsCallNoAi()
     {
         var alice = NewUser();
-        var (topic, document, _) = await TopicAsync(alice);
+        var (topic, document, sections) = await TopicAsync(alice);
         using var client = ClientFor(alice);
 
         var requested = await RequestAsync(client, topic, "short", HttpStatusCode.Accepted);
@@ -51,7 +51,7 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
         Assert.Equal(("ready", true, TopicSummaryGeneration.PromptVersion), (ready!.Status, ready.AiGenerated, ready.PromptVersion));
         Assert.False(string.IsNullOrWhiteSpace(ready.Text));
         Assert.False(string.IsNullOrWhiteSpace(ready.Model));
-        Assert.Equal([new SourceDto(document, "Photosynthese", null, null, "material")], ready.Sources);
+        Assert.Equal([new SourceDto(document, "Photosynthese", null, null, "material", sections[0].Id)], ready.Sources);
         Assert.Equal(ready.Text, later.Text);
         Assert.Equal(1, SummaryCalls(document));
     }
@@ -106,7 +106,7 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
         await WriteAsync();
 
         var summary = await client.GetFromJsonAsync<SummaryDto>($"/topics/{topic}/summaries/short", Cancel);
-        Assert.Equal([new SourceDto(document.Id, "Skript", 1, 2, "material")], summary!.Sources);
+        Assert.Equal([new SourceDto(document.Id, "Skript", 1, 2, "material", sections[0].Id)], summary!.Sources);
     }
 
     [Fact]
@@ -234,7 +234,7 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
     public async Task Origin_IsNamedAtTheDocument_AndAtEverySourceOfASummary()
     {
         var alice = NewUser();
-        var (topic, synthetic, _) = await TopicAsync(alice);
+        var (topic, synthetic, syntheticSections) = await TopicAsync(alice);
         var (_, material, _) = await TopicAsync(alice);
         await StoreAsync(db => db.Documents.IgnoreQueryFilters().Where(document => document.Id == synthetic)
             .ExecuteUpdate(document => document.SetProperty(item => item.Origin, DocumentOrigin.Synthetic)));
@@ -246,7 +246,7 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
         var listed = await client.GetFromJsonAsync<DocumentDto[]>("/documents", Cancel);
         var single = await client.GetFromJsonAsync<DocumentDto>($"/documents/{material}", Cancel);
 
-        Assert.Equal([new SourceDto(synthetic, "Photosynthese", null, null, "synthetic")], summary!.Sources);
+        Assert.Equal([new SourceDto(synthetic, "Photosynthese", null, null, "synthetic", syntheticSections[0].Id)], summary!.Sources);
         Assert.Equal(
             [(synthetic, "synthetic"), (material, "material")],
             listed!.Select(document => (document.Id, document.Origin)).OrderBy(document => document.Origin, StringComparer.Ordinal).Reverse());
@@ -373,7 +373,7 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
         Guid TopicId, string Length, string Status, string? Text, string? FailureCode, string? FailureReason, bool AiGenerated, string? Model,
         string? PromptVersion, DateTime CreatedAt, DateTime? ReadyAt, SourceDto[] Sources);
 
-    private sealed record SourceDto(Guid DocumentId, string DocumentTitle, int? PageFrom, int? PageTo, string Origin);
+    private sealed record SourceDto(Guid DocumentId, string DocumentTitle, int? PageFrom, int? PageTo, string Origin, Guid SectionId);
 
     private sealed record DocumentDto(Guid Id, string Origin);
 
