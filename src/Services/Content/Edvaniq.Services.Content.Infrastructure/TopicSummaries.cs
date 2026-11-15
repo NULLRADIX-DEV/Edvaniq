@@ -11,11 +11,24 @@ namespace Edvaniq.Services.Content.Infrastructure;
 internal sealed class TopicSummaries(
     ContentDbContext db, ITopicMaterial material, ICurrentUser currentUser, TimeProvider time) : ITopicSummaries
 {
+    // The demo needs no AI, it goes on while the AI is paused or out of budget (#413).
+    private static SummaryRequestResult? Refused(AiState ai, bool allDemo) => allDemo ? null : ai switch
+    {
+        AiState.Paused => SummaryRequestResult.AiPaused,
+        AiState.BudgetUsedUp => SummaryRequestResult.BudgetUsedUp,
+        _ => null,
+    };
+
+    private async Task<bool> AllDemoAsync(List<Guid> documentIds, CancellationToken cancellationToken) =>
+        documentIds.Count > 0 && await db.Documents.AsNoTracking()
+            .Where(document => documentIds.Contains(document.Id))
+            .AllAsync(document => document.Origin == DocumentOrigin.Demo, cancellationToken);
+
     public async Task<SummaryView?> FindAsync(Guid topicId, SummaryLength length, CancellationToken cancellationToken) =>
         await LoadAsync(topicId, length, cancellationToken) is { } summary ? await ViewAsync(summary, cancellationToken) : null;
 
     public async Task<(SummaryRequestResult Result, SummaryView? Summary)> RequestAsync(
-        Guid topicId, SummaryLength length, CancellationToken cancellationToken)
+        Guid topicId, SummaryLength length, AiState ai, CancellationToken cancellationToken)
     {
         // Knowledge first, even for a stored summary: only it knows whether the topic is still the user's.
         if (await material.SectionsAsync(topicId, cancellationToken) is not { } named)
@@ -25,11 +38,17 @@ internal sealed class TopicSummaries(
 
         if (await LoadAsync(topicId, length, cancellationToken) is { } stored)
         {
-            if (!stored.Retry())
+            if (stored.Status != SummaryStatus.Failed)
             {
                 return (SummaryRequestResult.Existing, await ViewAsync(stored, cancellationToken));
             }
 
+            if (Refused(ai, await AllDemoAsync([.. stored.Sections.Select(section => section.DocumentId)], cancellationToken)) is { } refused)
+            {
+                return (refused, null);
+            }
+
+            stored.Retry();
             await db.SaveChangesAsync(cancellationToken);
             return (SummaryRequestResult.Retried, await ViewAsync(stored, cancellationToken));
         }
@@ -38,11 +57,16 @@ internal sealed class TopicSummaries(
         var own = await db.Sections.AsNoTracking()
             .Where(section => ids.Contains(section.Id))
             .Join(db.Documents.AsNoTracking(), section => section.DocumentId, document => document.Id,
-                (section, document) => new { section.Id, section.DocumentId, section.Ordinal, document.CreatedAt, document.LearningGoalId })
+                (section, document) => new { section.Id, section.DocumentId, section.Ordinal, document.CreatedAt, document.LearningGoalId, document.Origin })
             .ToListAsync(cancellationToken);
         if (own.Count == 0)
         {
             return (SummaryRequestResult.NoMaterial, null);
+        }
+
+        if (Refused(ai, own.All(item => item.Origin == DocumentOrigin.Demo)) is { } turnedAway)
+        {
+            return (turnedAway, null);
         }
 
         // The documents in the order they came, each in the order of its text.

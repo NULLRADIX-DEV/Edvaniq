@@ -19,9 +19,7 @@ internal static class DemoEndpoints
         var demo = app.MapGroup("/demo");
 
         demo.MapGet("/", async (IDemo demo, CancellationToken cancellationToken) =>
-            await demo.DocumentsAsync(cancellationToken) is { Count: > 0 } documents
-                ? Results.Ok(DemoResponse.From(documents))
-                : Results.NotFound());
+            await demo.FindAsync(cancellationToken) is { } found ? Results.Ok(DemoResponse.From(found)) : Results.NotFound());
 
         demo.MapPost("/", async (
             DemoRequest request,
@@ -32,13 +30,12 @@ internal static class DemoEndpoints
             IConfiguration configuration,
             CancellationToken cancellationToken) =>
         {
-            // Until accounts get the right to it (#414): test accounts and the accounts the operator names.
-            if (!caller.UsesTestDouble && !(configuration.GetSection("Demo:Accounts").Get<string[]>() ?? []).Contains(user.Id, StringComparer.Ordinal))
+            if (!MayUse(caller, user, configuration))
             {
                 return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: NotAllowed);
             }
 
-            if (await demo.DocumentsAsync(cancellationToken) is { Count: > 0 } existing)
+            if (await demo.FindAsync(cancellationToken) is { } existing)
             {
                 return Results.Ok(DemoResponse.From(existing));
             }
@@ -55,7 +52,8 @@ internal static class DemoEndpoints
                     return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: FileUploadEndpoint.GoalNotFound);
                 }
 
-                return Results.Created("/demo", DemoResponse.From(await demo.CreateAsync(goal, cancellationToken)));
+                var (created, made) = await demo.CreateAsync(goal, cancellationToken);
+                return created ? Results.Created("/demo", DemoResponse.From(made)) : Results.Ok(DemoResponse.From(made));
             }
             catch (LearningGoalUnavailableException)
             {
@@ -63,19 +61,19 @@ internal static class DemoEndpoints
             }
         });
 
-        demo.MapDelete("/", async (IDemo demo, IDocuments documents, CancellationToken cancellationToken) =>
-        {
-            var demoDocuments = await demo.DocumentsAsync(cancellationToken);
-            foreach (var document in demoDocuments)
-            {
-                await documents.DeleteAsync(document.Id, cancellationToken);
-            }
-
-            return demoDocuments.Count > 0 ? Results.NoContent() : Results.NotFound();
-        });
+        demo.MapDelete("/", async (
+            IDemo demo, ITestDoubleCaller caller, ICurrentUser user, IConfiguration configuration, CancellationToken cancellationToken) =>
+            !MayUse(caller, user, configuration) ? Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: NotAllowed)
+            : await demo.DeleteAsync(cancellationToken) ? Results.NoContent()
+            : Results.NotFound());
 
         return app;
     }
+
+    // Until accounts get the right to it as a setting of their own: test accounts and the accounts the operator names
+    // under Demo:Accounts (#414). For creating and for resetting alike.
+    private static bool MayUse(ITestDoubleCaller caller, ICurrentUser user, IConfiguration configuration) =>
+        caller.UsesTestDouble || (configuration.GetSection("Demo:Accounts").Get<string[]>() ?? []).Contains(user.Id, StringComparer.Ordinal);
 }
 
 internal sealed record DemoRequest(Guid? LearningGoalId);
@@ -83,6 +81,5 @@ internal sealed record DemoRequest(Guid? LearningGoalId);
 // The goal of the demo and its documents in the order of the material, as GET /documents/{id} has them.
 internal sealed record DemoResponse(Guid LearningGoalId, IReadOnlyList<DocumentResponse> Documents)
 {
-    public static DemoResponse From(IReadOnlyList<Edvaniq.Services.Content.Domain.Document> documents) =>
-        new(documents[0].LearningGoalId!.Value, [.. documents.Select(DocumentResponse.From)]);
+    public static DemoResponse From(DemoState demo) => new(demo.LearningGoalId, [.. demo.Documents.Select(DocumentResponse.From)]);
 }

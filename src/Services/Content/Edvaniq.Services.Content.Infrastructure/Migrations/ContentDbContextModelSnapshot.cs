@@ -305,6 +305,26 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.ToTable("AiUsageDays");
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.DemoGoal", b =>
+                {
+                    b.Property<string>("OwnerId")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("LearningGoalId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("OwnerId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("DemoGoals");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.Document", b =>
                 {
                     b.Property<Guid>("Id")

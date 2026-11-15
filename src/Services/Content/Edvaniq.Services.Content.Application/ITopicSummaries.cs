@@ -22,7 +22,10 @@ public interface ITopicSummaries
 
     // The summary of the topic in this length: the stored one, a failed one asked for again, or a new request for the
     // worker with the material Knowledge names now. The summary is null unless the result is Created, Existing or Retried.
-    Task<(SummaryRequestResult Result, SummaryView? Summary)> RequestAsync(Guid topicId, SummaryLength length, CancellationToken cancellationToken);
+    // ai says whether the AI may take a new job. A paused AI or a used up budget turns a new or retried summary away,
+    // unless all its material is the demo, which needs no AI (#413).
+    Task<(SummaryRequestResult Result, SummaryView? Summary)> RequestAsync(
+        Guid topicId, SummaryLength length, AiState ai, CancellationToken cancellationToken);
 }
 
 public enum SummaryRequestResult
@@ -36,6 +39,18 @@ public enum SummaryRequestResult
 
     // The topic has no section of the user's documents, so there is nothing to sum up.
     NoMaterial,
+
+    // A new or retried summary of material that needs the AI, while it is paused or out of budget.
+    AiPaused,
+    BudgetUsedUp,
+}
+
+// Whether the AI takes new jobs, as the Api found it before the request.
+public enum AiState
+{
+    Running,
+    Paused,
+    BudgetUsedUp,
 }
 
 // A summary with its sources: the documents and pages of the sections it rests on, one entry per document.

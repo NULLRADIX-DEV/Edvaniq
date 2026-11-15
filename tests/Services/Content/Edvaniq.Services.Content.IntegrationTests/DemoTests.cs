@@ -38,14 +38,7 @@ public sealed class DemoTests(ServiceFactory service) : IClassFixture<ServiceFac
         Assert.All(demo.Documents, document => Assert.Equal("demo", document.Origin));
         Assert.Equal(service.Planning.GoalOf(alice), demo.LearningGoalId);
 
-        var topics = new List<KnowledgeTopic>();
-        foreach (var document in demo.Documents)
-        {
-            await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(document.Id, Cancel);
-            await ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, ai).AnalyzeAsync(document.Id, Cancel);
-            topics.AddRange(service.Knowledge.TakeOver(Assert.Single(await OutboxAsync<DocumentAnalyzed>(document.Id))));
-            Assert.True(await ActivatorUtilities.CreateInstance<QuestionPools>(service.Services, ai).FinishAsync(document.Id, Cancel));
-        }
+        var topics = await AnalyzeAsync(demo, ai);
 
         Assert.Equal(DemoReplay.Topics.Count, topics.Count);
         foreach (var document in demo.Documents)
@@ -111,6 +104,54 @@ public sealed class DemoTests(ServiceFactory service) : IClassFixture<ServiceFac
         Assert.Equal(HttpStatusCode.NotFound, otherGoal.StatusCode);
         Assert.Equal(HttpStatusCode.Created, allowed.StatusCode);
         Assert.False(Query(db => db.Documents.IgnoreQueryFilters().Any(document => document.OwnerId == bob)));
+
+        // #414: resetting needs the right as well.
+        using var reset = await plain.DeleteAsync("/demo", Cancel);
+        Assert.Equal(HttpStatusCode.Forbidden, reset.StatusCode);
+    }
+
+    // #414: requests at the same moment make one demo, the others get it back.
+    [Fact]
+    public async Task RequestsAtTheSameTime_MakeOneDemo()
+    {
+        var alice = NewUser();
+        var clients = Enumerable.Range(0, 4).Select(_ => ClientFor(alice, testDouble: true)).ToList();
+
+        var responses = await Task.WhenAll(clients.Select(client =>
+            client.PostAsJsonAsync("/demo", new { learningGoalId = service.Planning.GoalOf(alice) }, Cancel)));
+        var demos = await Task.WhenAll(responses.Select(response => response.Content.ReadFromJsonAsync<DemoDto>(Cancel)));
+
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Created);
+        Assert.All(responses, response => Assert.True(response.StatusCode is HttpStatusCode.Created or HttpStatusCode.OK, response.StatusCode.ToString()));
+        Assert.All(demos, demo => Assert.Equal(demos[0]!.Documents.Select(document => document.Id), demo!.Documents.Select(document => document.Id)));
+        Assert.Equal(DemoMaterial.Documents.Count, Query(db => db.Documents.IgnoreQueryFilters().Count(document => document.OwnerId == alice)));
+        Assert.Equal(1, Query(db => db.DemoGoals.IgnoreQueryFilters().Count(goal => goal.OwnerId == alice)));
+        foreach (var item in responses.Cast<IDisposable>().Concat(clients))
+        {
+            item.Dispose();
+        }
+    }
+
+    // #414: a reset in the same goal makes new documents, which get ready like the first ones did: nothing of the
+    // deleted documents' ids is in the way of the new events.
+    [Fact]
+    public async Task ResetInTheSameGoal_MakesNewDocuments_ThatGetReady()
+    {
+        var alice = NewUser();
+        using var client = ClientFor(alice, testDouble: true);
+        var first = await CreateAsync(client, alice, HttpStatusCode.Created);
+        using (var deleted = await client.DeleteAsync("/demo", Cancel))
+        {
+            Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        }
+
+        var second = await CreateAsync(client, alice, HttpStatusCode.Created);
+        await AnalyzeAsync(second, new NoAi());
+
+        Assert.Equal(first.LearningGoalId, second.LearningGoalId);
+        Assert.Empty(first.Documents.Select(document => document.Id).Intersect(second.Documents.Select(document => document.Id)));
+        Assert.All(second.Documents, document =>
+            Assert.Equal(DocumentStatus.Ready, Query(db => db.Documents.IgnoreQueryFilters().Single(item => item.Id == document.Id)).Status));
     }
 
     // The learning goal stays with Planning until it can be deleted (#519).
@@ -135,6 +176,21 @@ public sealed class DemoTests(ServiceFactory service) : IClassFixture<ServiceFac
         {
             Assert.Single(await OutboxAsync<DocumentDeleted>(document.Id));
         }
+    }
+
+    // The worker's steps for each demo document: split, analyze, Knowledge takes the topics over, the pools follow.
+    private async Task<List<KnowledgeTopic>> AnalyzeAsync(DemoDto demo, NoAi ai)
+    {
+        var topics = new List<KnowledgeTopic>();
+        foreach (var document in demo.Documents)
+        {
+            await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(document.Id, Cancel);
+            await ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, (IChatClient)ai).AnalyzeAsync(document.Id, Cancel);
+            topics.AddRange(service.Knowledge.TakeOver(Assert.Single(await OutboxAsync<DocumentAnalyzed>(document.Id))));
+            Assert.True(await ActivatorUtilities.CreateInstance<QuestionPools>(service.Services, (IChatClient)ai).FinishAsync(document.Id, Cancel));
+        }
+
+        return topics;
     }
 
     private async Task<DemoDto> CreateAsync(HttpClient client, string user, HttpStatusCode status)
