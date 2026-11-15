@@ -51,6 +51,22 @@ public sealed class ReadingProcessTests : IDisposable
         Assert.Equal(["EDVQ\u0001\u0007 und weiter im Text."], read.Pages);
     }
 
+    // #321: a file at the limit, as many pages as a document may have and close to 20 MB, is read whole within the heap
+    // the worker gives its reading process.
+    [Fact]
+    public async Task FileAtTheLimit_IsReadWithinTheHeapOfTheReadingProcess()
+    {
+        var pdf = TestPdfs.AtTheLimit(Document.MaxPages);
+        Assert.InRange(pdf.LongLength, 18L * 1024 * 1024, FileCheck.MaxLength);
+        Assert.Equal(80, new FileReadingOptions().HeapLimitMegabytes);
+
+        var read = await ReadAsync(pdf, FileFormat.Pdf);
+
+        Assert.Null(read.Reason);
+        Assert.Equal(Document.MaxPages, read.Pages!.Count);
+        Assert.Contains($"Seite {Document.MaxPages} Zeile 10", read.Pages[^1]);
+    }
+
     [Fact]
     public async Task ReadingThatTakesTooLong_IsKilled()
     {

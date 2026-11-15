@@ -71,12 +71,15 @@ internal static class TestPdfs
         return builder.Build();
     }
 
+    // A file at the limit of an upload (#321): pages of text and six pictures that bring it close to 20 MB.
+    public static byte[] AtTheLimit(int pages) => Large(pages, pictures: 6, linesPerPage: 10, pictureSize: 1045);
+
     // A large file as a scanned script is one: pages of text and a few big pictures that make up most of its size.
-    public static byte[] Large(int pages, int pictures, int linesPerPage)
+    public static byte[] Large(int pages, int pictures, int linesPerPage, int pictureSize = 1000)
     {
         var builder = new PdfDocumentBuilder();
         var font = builder.AddStandard14Font(Standard14Font.Helvetica);
-        var images = Enumerable.Range(0, pictures).Select(seed => NoisePng(1000, seed)).ToList();
+        var images = Enumerable.Range(0, pictures).Select(seed => NoisePng(pictureSize, seed)).ToList();
         for (var number = 0; number < pages; number++)
         {
             var page = builder.AddPage(PageSize.A4);
