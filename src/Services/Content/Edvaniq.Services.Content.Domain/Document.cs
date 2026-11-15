@@ -439,6 +439,8 @@ public sealed class Document : IOwnedByUser
     // Puts a ready document back to waiting for its questions, for the operator (#1018). Before #989 a document could get
     // ready while some of its topics had no material yet, those never got questions. The worker takes it like any waiting
     // one: topics with a pool stay as they are, the topics stay as Knowledge has them, DocumentAnalyzed doesn't go again.
+    // A document that got ready before #214 has no AnalyzedAt, its topics went out all the same. It gets one now, or the
+    // analyzer would take it for one still waiting for its topics and report them a second time.
     public void ReopenForQuestions(DateTime reopenedAt)
     {
         if (Status != DocumentStatus.Ready)
@@ -447,6 +449,7 @@ public sealed class Document : IOwnedByUser
         }
 
         Status = DocumentStatus.Analyzing;
+        AnalyzedAt ??= reopenedAt;
         RetriedAt = reopenedAt;
         ClearOutages();
     }
