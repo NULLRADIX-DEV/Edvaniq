@@ -16,6 +16,9 @@ public interface ISessions
     // The session broken off last on the block, null if there is none.
     Task<Session?> LastAbortedAsync(Guid blockId, CancellationToken cancellationToken);
 
+    // Every session of the user on the block, running or ended (#403).
+    Task<IReadOnlyList<Session>> OnBlockAsync(Guid blockId, CancellationToken cancellationToken);
+
     // False when the user has an active session already, the database lets only one through.
     Task<bool> TryAddAsync(Session session, CancellationToken cancellationToken);
 

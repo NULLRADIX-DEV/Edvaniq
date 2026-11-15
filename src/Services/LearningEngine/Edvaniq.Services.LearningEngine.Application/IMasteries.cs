@@ -19,7 +19,17 @@ public interface IMasteries
     // The weaknesses, the worst first, and the secure topics of every topic the user knows or those of one learning
     // goal (WeakAndSecure, #453). Hidden topics are still in, #455 leaves them out.
     Task<WeakAndSecureTopics> WeakAndSecureAsync(Guid? learningGoalId, CancellationToken cancellationToken);
+
+    // How the topics stood at from and at to (MasteryChange, #403), only those the user knows, and how many of the
+    // answers have no learning record yet.
+    Task<MasteryChanges> ChangesAsync(
+        IReadOnlyCollection<Guid> topicIds, DateTime from, DateTime to, IReadOnlyCollection<Guid> answerIds, CancellationToken cancellationToken);
 }
+
+// Introduced: the topic has an introduction, whichever session made it.
+public sealed record TopicChange(Guid TopicId, TopicStanding? Before, TopicStanding? After, bool Introduced);
+
+public sealed record MasteryChanges(IReadOnlyList<TopicChange> Topics, int MissingAnswers);
 
 // LastAnswerId: the answer of the newest learning record of the topic, counted or not, null without any.
 public sealed record TopicMastery(Guid TopicId, int Mastery, TopicState State, Guid? LastAnswerId = null);

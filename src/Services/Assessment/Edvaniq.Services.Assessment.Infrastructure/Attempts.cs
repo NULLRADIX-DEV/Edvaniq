@@ -32,6 +32,29 @@ internal sealed class Attempts(AssessmentDbContext db) : IAttempts
     public Task<Attempt?> FindAsync(Guid id, CancellationToken cancellationToken) =>
         db.Attempts.FirstOrDefaultAsync(attempt => attempt.Id == id, cancellationToken);
 
+    public async Task<IReadOnlyList<Attempt>> AnsweredInAsync(
+        Guid? blockId, IReadOnlyCollection<Guid> sessionIds, CancellationToken cancellationToken)
+    {
+        var quizId = blockId is { } block
+            ? await db.BlockQuizzes.AsNoTracking()
+                .Where(quiz => quiz.BlockId == block)
+                .Select(quiz => (Guid?)quiz.Id)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+        if (quizId is null && sessionIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await db.Attempts.AsNoTracking()
+            .Where(attempt => attempt.Answered
+                && ((quizId != null && attempt.QuizId == quizId)
+                    || (attempt.SessionId != null && sessionIds.Contains(attempt.SessionId.Value))))
+            .OrderBy(attempt => attempt.AnsweredAt)
+            .ThenBy(attempt => attempt.Id)
+            .ToListAsync(cancellationToken);
+    }
+
     public void Add(Attempt attempt) => db.Attempts.Add(attempt);
 
     // Answered is a concurrency token, so the later of two answers updates no row. Its transaction rolls back with

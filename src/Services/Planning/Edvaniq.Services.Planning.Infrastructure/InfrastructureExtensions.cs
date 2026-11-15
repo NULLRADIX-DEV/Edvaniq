@@ -49,6 +49,7 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<ISessions, Sessions>();
         builder.Services.AddScoped<SessionStarts>();
         builder.Services.AddScoped<SessionChanges>();
+        builder.Services.AddScoped<SessionResults>();
         builder.Services.AddIntegrationEventHandler<TopicsChanged, TopicsChangedHandler>();
 
         // Stays when the example goes.

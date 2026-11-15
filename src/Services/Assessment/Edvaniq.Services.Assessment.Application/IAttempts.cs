@@ -17,6 +17,10 @@ public interface IAttempts
 
     Task<Attempt?> FindAsync(Guid id, CancellationToken cancellationToken);
 
+    // The answered attempts of the block's quiz and those asked in the sessions (#403), the oldest answer first. Someone
+    // else's block or session gives none.
+    Task<IReadOnlyList<Attempt>> AnsweredInAsync(Guid? blockId, IReadOnlyCollection<Guid> sessionIds, CancellationToken cancellationToken);
+
     void Add(Attempt attempt);
 
     // False if another request answered the attempt first. Nothing of this one is stored then.

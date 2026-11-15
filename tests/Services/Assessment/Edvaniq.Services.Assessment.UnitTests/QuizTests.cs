@@ -375,6 +375,9 @@ public sealed class QuizTests
         public Task<Attempt?> FindAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(Stored.FirstOrDefault(attempt => attempt.Id == id));
 
+        public Task<IReadOnlyList<Attempt>> AnsweredInAsync(Guid? blockId, IReadOnlyCollection<Guid> sessionIds, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public void Add(Attempt attempt) => Stored.Add(attempt);
 
         public int Saves { get; private set; }

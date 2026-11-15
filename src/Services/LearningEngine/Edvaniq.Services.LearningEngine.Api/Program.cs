@@ -102,9 +102,82 @@ app.MapGet("/mastery/weak-and-secure", async (string? learningGoalId, IMasteries
         [.. topics.Secure.Select(topic => new SecureEntry(topic.TopicId, topic.Mastery))]));
 });
 
+// How topics stood at the start and the end of a session and whether its answers have arrived (#403), for Planning's
+// session result. Ids repeat in the query: topicId, answerId. From and to are UTC. Topics the user doesn't know are left
+// out. The limits keep the address short: a block has a quiz of at most 20 questions and a few check questions per
+// session, Planning asks for one block.
+app.MapGet("/mastery/changes", async (HttpRequest request, IMasteries masteries, CancellationToken cancellationToken) =>
+{
+    var errors = new Dictionary<string, string[]>();
+    var topicIds = Guids(request, "topicId", MasteryChangeLimits.Topics, errors);
+    var answerIds = Guids(request, "answerId", MasteryChangeLimits.Answers, errors);
+    var from = Moment(request, "from", errors);
+    var to = Moment(request, "to", errors);
+    if (topicIds is { Count: 0 })
+    {
+        errors["topicId"] = ["Is required."];
+    }
+
+    if (from > to)
+    {
+        errors["to"] = ["Must not be before from."];
+    }
+
+    if (errors.Count > 0)
+    {
+        return Results.ValidationProblem(errors);
+    }
+
+    var changes = await masteries.ChangesAsync(topicIds!, from!.Value, to!.Value, answerIds!, cancellationToken);
+    return Results.Ok(new MasteryChangesResponse(
+        Mastery.RuleVersion,
+        changes.MissingAnswers,
+        [.. changes.Topics.Select(topic => new TopicChangeEntry(
+            topic.TopicId, StandingEntry.Of(topic.Before), StandingEntry.Of(topic.After), topic.Introduced))]));
+});
+
 app.Run();
 
 return 0;
+
+static List<Guid>? Guids(HttpRequest request, string name, int limit, Dictionary<string, string[]> errors)
+{
+    var values = request.Query[name];
+    if (values.Count > limit)
+    {
+        errors[name] = [$"At most {limit}."];
+        return null;
+    }
+
+    var ids = new List<Guid>();
+    foreach (var value in values)
+    {
+        if (!Guid.TryParse(value, out var id))
+        {
+            errors[name] = ["Must be a GUID."];
+            return null;
+        }
+
+        ids.Add(id);
+    }
+
+    return [.. ids.Distinct()];
+}
+
+static DateTime? Moment(HttpRequest request, string name, Dictionary<string, string[]> errors)
+{
+    if (DateTime.TryParse(
+        request.Query[name].ToString(),
+        System.Globalization.CultureInfo.InvariantCulture,
+        System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
+        out var moment))
+    {
+        return moment;
+    }
+
+    errors[name] = [request.Query.ContainsKey(name) ? "Must be a date and time." : "Is required."];
+    return null;
+}
 
 // Whole percent, 0 to 100, the topic state and the version of the rule that worked both out. LastAnswerId names the
 // newest answer LearningEngine has stored for the topic, so a client knows when its answer has arrived (#222).
@@ -127,6 +200,27 @@ internal sealed record WeakAndSecureResponse(int RuleVersion, IReadOnlyList<Weak
 internal sealed record WeaknessEntry(Guid TopicId, int Mastery, string Reason);
 
 internal sealed record SecureEntry(Guid TopicId, int Mastery);
+
+// MissingAnswers: how many of the answers named have no learning record yet. Before is null when the start lies before
+// what the kept records still tell. Introduced: the topic has its introduction (from SessionCompleted).
+internal sealed record MasteryChangesResponse(int RuleVersion, int MissingAnswers, IReadOnlyList<TopicChangeEntry> Topics);
+
+internal sealed record TopicChangeEntry(Guid TopicId, StandingEntry? Before, StandingEntry? After, bool Introduced);
+
+internal sealed record StandingEntry(int Mastery, string State)
+{
+    public static StandingEntry? Of(TopicStanding? standing) =>
+        standing is null ? null : new(standing.Mastery, StateNames.Of(standing.State));
+}
+
+internal static class MasteryChangeLimits
+{
+    public const int Topics = 20;
+
+    // A quiz of at most 20 questions and a few check questions in each session of the block. 100 ids keep the address
+    // below 5 KB.
+    public const int Answers = 100;
+}
 
 // The names on the wire, fixed here so renaming the enum can't change the contract.
 internal static class StateNames

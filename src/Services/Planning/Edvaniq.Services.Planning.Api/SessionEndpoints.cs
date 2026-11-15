@@ -13,6 +13,10 @@ internal static class SessionEndpoints
 
     public const string SessionEnded = "Diese Session ist schon beendet.";
 
+    public const string SessionRunning = "Diese Session läuft noch, ein Ergebnis gibt es erst nach dem Ende.";
+
+    public const string AnswersUnavailable = "Die Antworten können gerade nicht geladen werden. Versuch es gleich noch einmal.";
+
     public static IEndpointRouteBuilder MapSessionEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/sessions");
@@ -40,6 +44,20 @@ internal static class SessionEndpoints
             await sessions.FindAsync(id, cancellationToken) is { } session
                 ? Results.Ok(SessionResponse.From(session, existing: true))
                 : Results.NotFound());
+
+        // What an ended session brought (#403), finished or broken off, counted for its block up to it. 409 while it
+        // runs, 503 when Assessment, which keeps the answers, can't be asked.
+        group.MapGet("/{id:guid}/result", async (Guid id, SessionResults results, CancellationToken cancellationToken) =>
+        {
+            var lookup = await results.OfAsync(id, cancellationToken);
+            return lookup.Status switch
+            {
+                SessionResultStatus.NotFound => Results.NotFound(),
+                SessionResultStatus.Running => Results.Problem(title: SessionRunning, statusCode: StatusCodes.Status409Conflict),
+                SessionResultStatus.AnswersUnavailable => Results.Problem(title: AnswersUnavailable, statusCode: StatusCodes.Status503ServiceUnavailable),
+                _ => Results.Ok(SessionResultResponse.From(lookup)),
+            };
+        });
 
         // Breaking off ends the session, the block stays open and the next start goes on from here. Doing it again
         // gives the session as it is.
@@ -147,3 +165,67 @@ internal sealed record SessionResponse(
 }
 
 internal sealed record StepResponse(string Kind, bool Empty, int? Questions);
+
+// Outcome as in SessionResponse. Answered, Correct, Wrong: the answers on the block up to this session, a shown solution
+// counts as wrong. Complete: LearningEngine has every one of them and the introduction, only then Topics names the
+// mastery before and after, the block's topic first; null otherwise, never an old value (#406). MasteryAvailable: false
+// when LearningEngine couldn't be asked. DailyGoal as in /plan/today. NextStep: kind "block" with the block "Jetzt lernen"
+// goes on with, or "bonusReview" when nothing is open.
+internal sealed record SessionResultResponse(
+    Guid SessionId,
+    string Outcome,
+    int Answered,
+    int Correct,
+    int Wrong,
+    bool Complete,
+    bool MasteryAvailable,
+    IReadOnlyList<TopicChangeResponse>? Topics,
+    string DailyGoal,
+    NextStepResponse NextStep)
+{
+    public static SessionResultResponse From(SessionResultLookup lookup)
+    {
+        var session = lookup.Session!;
+        var result = lookup.Result!;
+        return new(
+            session.Id,
+            session.Outcome == SessionOutcome.Completed ? "completed" : "aborted",
+            result.Answered,
+            result.Correct,
+            result.Wrong,
+            result.Complete,
+            lookup.MasteryAvailable,
+            result.Topics?.Select(topic => new TopicChangeResponse(topic.TopicId, StandingResponse.Of(topic.Before), StandingResponse.Of(topic.After))).ToList(),
+            lookup.DailyGoal switch
+            {
+                DailyGoalState.Reached => "reached",
+                DailyGoalState.Open => "open",
+                _ => "none",
+            },
+            lookup.NextBlock is { } next
+                ? new NextStepResponse("block", next.Id, next.Block.TopicId, next.Block.Kind == BlockKind.Review ? "review" : "learn", next.Block.Minutes)
+                : new NextStepResponse("bonusReview", null, null, null, null));
+    }
+}
+
+// Before null when LearningEngine can't tell the start any more.
+internal sealed record TopicChangeResponse(Guid TopicId, StandingResponse? Before, StandingResponse? After);
+
+// State as LearningEngine names it, null for one Planning doesn't know.
+internal sealed record StandingResponse(int Mastery, string? State)
+{
+    public static StandingResponse? Of(TopicStanding? standing) =>
+        standing is null
+            ? null
+            : new(standing.Mastery, standing.State switch
+            {
+                TopicState.New => "new",
+                TopicState.Weakness => "weakness",
+                TopicState.Building => "building",
+                TopicState.Secure => "secure",
+                _ => null,
+            });
+}
+
+// BlockKind "learn" or "review", the block's fields null for a bonus review.
+internal sealed record NextStepResponse(string Kind, Guid? BlockId, Guid? TopicId, string? BlockKind, int? Minutes);

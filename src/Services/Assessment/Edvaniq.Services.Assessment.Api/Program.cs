@@ -38,6 +38,7 @@ app.MapGet("/me", (ICurrentUser user) => new { user.Id });
 app.MapAttemptEndpoints();
 app.MapQuestionPoolEndpoints();
 app.MapQuizEndpoints();
+app.MapAnswerEndpoints();
 
 app.Run();
 
