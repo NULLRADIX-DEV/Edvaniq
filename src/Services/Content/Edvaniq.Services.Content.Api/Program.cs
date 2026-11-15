@@ -94,6 +94,7 @@ app.MapDocumentEndpoints();
 app.MapQuotaEndpoints();
 app.MapSummaryEndpoints();
 app.MapDemoEndpoints();
+app.MapSourceEndpoints();
 
 app.Run();
 

@@ -4,6 +4,7 @@ using Edvaniq.Testing;
 
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Edvaniq.Web.IntegrationTests;
@@ -12,6 +13,8 @@ namespace Edvaniq.Web.IntegrationTests;
 // loading with them.
 public sealed class SecurityHeaderTests
 {
+    private const string FilePolicy = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'none'";
+
     private static readonly (string Name, string Value)[] Expected =
     [
         ("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"),
@@ -84,6 +87,53 @@ public sealed class SecurityHeaderTests
 
         Assert.False(context.Response.Headers.ContainsKey("X-Frame-Options"));
     }
+
+    // #350: a user's file goes out under a stricter policy of its own, every other answer keeps the shell's, one from the
+    // services included.
+    [Theory]
+    [InlineData("/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/file", FilePolicy)]
+    [InlineData("/api/content/sections/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/original", SecurityHeaders.ShellPolicy)]
+    [InlineData("/api/content/documents", SecurityHeaders.ShellPolicy)]
+    public async Task ARouteWithAPolicy_GetsIt_OthersKeepTheShells(string path, string policy)
+    {
+        await using var gateway = await StubService.StartAsync("gateway-stub");
+        await using var web = new WebFactory(gateway.Address);
+        using var browser = web.CreateBrowser();
+        await LoginTests.LoginCookieAsync(browser);
+
+        using var response = await browser.GetAsync(path, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(policy, Assert.Single(response.Headers.GetValues("Content-Security-Policy")));
+        foreach (var (name, value) in Expected.Where(header => header.Name != "Content-Security-Policy"))
+        {
+            Assert.Equal(value, Assert.Single(response.Headers.GetValues(name)));
+        }
+    }
+
+    // A policy in the configuration that would allow more than the shell's never counts.
+    [Fact]
+    public async Task EveryPolicyOfARoute_IsStricterThanTheShells()
+    {
+        await using var web = new WebFactory("http://127.0.0.1:9");
+        var policies = web.Services.GetRequiredService<IConfiguration>().GetSection("ReverseProxy:Routes").GetChildren()
+            .Select(route => route[$"Metadata:{SecurityHeaders.MetadataKey}"])
+            .OfType<string>()
+            .ToList();
+
+        Assert.Equal([FilePolicy], policies);
+        Assert.All(policies, policy => Assert.True(SecurityHeaders.IsStricter(policy), policy));
+    }
+
+    [Theory]
+    [InlineData(SecurityHeaders.ShellPolicy, true)]
+    [InlineData(FilePolicy, true)]
+    [InlineData("default-src 'none'", false)]
+    [InlineData("frame-ancestors *; base-uri 'self'; object-src 'none'; form-action 'self'", false)]
+    [InlineData("frame-ancestors 'none'; base-uri 'none'; object-src 'none'", false)]
+    [InlineData("FRAME-ANCESTORS 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'none'", true)]
+    public void IsStricter_OnlyForAPolicyThatForbidsAtLeastWhatTheShellDoes(string policy, bool stricter) =>
+        Assert.Equal(stricter, SecurityHeaders.IsStricter(policy));
 
     private static void AssertHeaders(HttpResponseMessage response)
     {

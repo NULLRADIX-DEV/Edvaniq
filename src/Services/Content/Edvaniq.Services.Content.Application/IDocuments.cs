@@ -24,6 +24,9 @@ public interface IDocuments
     // The sections in the order of the text, each with its pages (#294). Null when the user has no such document.
     Task<IReadOnlyList<SectionPlace>?> SectionsAsync(Guid id, CancellationToken cancellationToken);
 
+    // Where a section comes from, to open it at its place (#350). Null when the user has no such section.
+    Task<SectionSource?> SourceAsync(Guid sectionId, CancellationToken cancellationToken);
+
     // Starts a failed analysis again (Document.Retry). The document is null when the user has none with this id.
     Task<(RetryResult Result, Document? Document)> RetryAsync(Guid id, CancellationToken cancellationToken);
 
@@ -62,3 +65,7 @@ public sealed record SectionPlace(Guid SectionId, int Position, int? PageFrom, i
 public sealed record DocumentSummary(
     Guid Id, string Title, DocumentStatus Status, string? FailureReason, FailureCode? FailureCode, DateTime CreatedAt, bool IsFromFile,
     DocumentOrigin Origin);
+
+// A section at its place in the original: a PDF opens at its pages, any other document shows the section in Window.
+public sealed record SectionSource(
+    Guid DocumentId, Guid SectionId, int Position, string Title, FileFormat? Format, bool HasFile, int? PageFrom, int? PageTo, SourceWindow? Window);
