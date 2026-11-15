@@ -183,10 +183,16 @@ try:
             f"notReadyTopicIds {plan.get('notReadyTopicIds')}")
 
     go("answer")
-    # The simulated AI puts the right answer first.
-    graded = expect(step, "POST", f"/api/assessment/attempts/{attempt['id']}/answer", 200, {"option": 0, "responseTimeMs": 5000})
+    # The options come shuffled. Every option of the simulated AI is right except these, true/false keeps its order with
+    # the right one first. ContentAi.SimulatedDistractors holds the same, SimulatedDistractorTests keeps both alike.
+    distractors = ["Nichts aus dem Material", "Ein Thema außerhalb des Materials", "Gar kein Thema"]
+    right = [index for index, option in enumerate(attempt["options"]) if option not in distractors]
+    if not right:
+        raise Failed(f"no option of the {attempt['type']} question is right: {attempt['options']}")
+    choice = {"options": right} if attempt["type"] == "multipleChoice" else {"option": right[0]}
+    graded = expect(step, "POST", f"/api/assessment/attempts/{attempt['id']}/answer", 200, {**choice, "responseTimeMs": 5000})
     if not graded["correct"]:
-        raise Failed(f"the first option was not right, answer {graded['answer']}")
+        raise Failed(f"the {attempt['type']} answer {choice} was not right, answers {graded['answers']}")
 
     go("mastery")
 
