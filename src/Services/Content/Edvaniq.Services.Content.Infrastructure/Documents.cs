@@ -90,6 +90,43 @@ internal sealed class Documents(
         })];
     }
 
+    // A PDF only needs its pages, every other document the window around the section. The document's text is read
+    // only for that window.
+    public async Task<SectionSource?> SourceAsync(Guid sectionId, CancellationToken cancellationToken)
+    {
+        var section = await db.Sections.AsNoTracking().FirstOrDefaultAsync(item => item.Id == sectionId, cancellationToken);
+        if (section is null)
+        {
+            return null;
+        }
+
+        var document = await db.Documents.AsNoTracking()
+            .Where(item => item.Id == section.DocumentId)
+            .Select(item => new { item.Id, item.Title, item.FileFormat, item.FileId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (document is null)
+        {
+            return null;
+        }
+
+        if (document.FileFormat == FileFormat.Pdf)
+        {
+            var pages = await db.DocumentPages.AsNoTracking().Where(page => page.DocumentId == document.Id).ToListAsync(cancellationToken);
+            var (from, to) = section.PagesIn(pages);
+            return new SectionSource(document.Id, section.Id, document.Title, document.FileFormat, document.FileId is not null, from, to, null);
+        }
+
+        var text = await db.Documents.AsNoTracking()
+            .Where(item => item.Id == document.Id)
+            .Select(item => item.Text)
+            .FirstAsync(cancellationToken);
+        var neighbours = await db.Sections.AsNoTracking()
+            .Where(item => item.DocumentId == document.Id && item.Ordinal >= section.Ordinal - 1 && item.Ordinal <= section.Ordinal + 1)
+            .ToListAsync(cancellationToken);
+        return new SectionSource(
+            document.Id, section.Id, document.Title, document.FileFormat, document.FileId is not null, null, null, SourceWindow.Around(text, section, neighbours));
+    }
+
     // The status is a concurrency token: of two retries at once only the first save wins, the second finds the
     // document no longer failed.
     public async Task<(RetryResult Result, Document? Document)> RetryAsync(Guid id, CancellationToken cancellationToken)

@@ -145,6 +145,8 @@ Jede Antwort des Web-Hosts trägt die Header aus der Tabelle, auch Fehlerantwort
 
 Damit lässt sich die Shell in keiner fremden Seite einbetten. Das Basis-Element und Formulare zeigen nur auf die eigene Seite, Plug-in-Inhalte sind gesperrt, und der Browser errät keinen Inhaltstyp. Kamera, Mikrofon und Standort sind für die Seite ausgeschaltet.
 
+Eine Route kann in ihren Metadaten unter `ContentSecurityPolicy` eine eigene Richtlinie nennen. Sie gilt nur, wenn sie jede Richtlinie der Shell mit demselben Wert oder `'none'` enthält, also höchstens strenger ist, sonst bleibt die der Shell. Was ein Service selbst schickt, ersetzt der Web-Host immer. Heute nutzt das nur die Route, die eine hochgeladene Datei zurückgibt ([Original öffnen](#original-öffnen)).
+
 Bis zum Start mit echten Nutzern soll keine Suchmaschine die Shell aufnehmen. Das sagt `X-Robots-Tag`, und jede Seite wiederholt es als `<meta name="robots">`. Eine `robots.txt`, die das Crawlen verbietet, gibt es bewusst nicht: Dann käme der Crawler nie bis zu dieser Bitte und könnte eine verlinkte Adresse trotzdem listen.
 
 ## Barrierefreiheits-Check
@@ -210,6 +212,12 @@ Eine Datei darf höchstens 20 MB groß sein, gezählt wie ein Dateimanager (20 �
 Im Web-Host gilt der Wert nur für die Route zum Hochladen (Metadate `MaxRequestBodySize`), im Gateway für jede Anfrage (`Kestrel:Limits:MaxRequestBodySize`), in Content für den Endpunkt `POST /documents/files` (`FileCheck.MaxBodyLength`). Ein Body, der schon in `Content-Length` zu groß ist, bekommt eine 413 als Problem, bevor ein Byte gelesen oder weitergereicht wird. Einen Body ohne Längenangabe bricht der Server an der Grenze ab. Content prüft beim Speichern zusätzlich die Datei selbst und behält von einer zu großen nichts. Der Nutzer sieht in jedem Fall „Die Datei ist zu groß. Erlaubt sind höchstens 20 MB.“, auch wenn die 413 von einer Stelle ohne diesen Text kommt. Dass alle Stellen denselben Wert und denselben Text haben, prüft `UploadLimitTests`. Wer die Grenze ändert, ändert sie an allen Stellen im selben Pull Request.
 
 Das Hochladen darf dauern: 20 MB brauchen über eine langsame Mobilfunkverbindung einige Minuten. Der Client schickt Dateien deshalb über einen eigenen HttpClient, der bis zu 15 Minuten wartet, alle anderen Aufrufe geben nach 20 Sekunden auf. Wie der Upload über die öffentliche Domain geprüft wird, steht in [Testprotokoll: Upload bis 20 MB](tests/upload-20mb.md).
+
+### Original öffnen
+
+Eine Quellenangabe nennt Dokument und Abschnitt. `GET /sections/{sectionId}/source` sagt dem Client, wie er den Abschnitt im Original zeigt. Bei einer PDF nennt die Antwort die erste und letzte Seite des Abschnitts, der Client öffnet die Datei an dieser Seite. Bei jedem anderen Dokument, auch einem eingefügten Text, kommt ein Ausschnitt mit: der Abschnitt und je ein Nachbarabschnitt davor und danach, dazu Beginn und Länge des Abschnitts in diesem Ausschnitt und ob davor oder danach noch Text steht. So bleibt die Antwort klein, auch bei einem langen Dokument auf dem Handy.
+
+`GET /documents/{id}/file` gibt die hochgeladene Datei so zurück, wie sie ankam. Weil sie vom Nutzer stammt, darf sie im Browser nichts ausführen und nichts nachladen: Sie kommt mit einer eigenen Content-Security-Policy ohne jede Quelle, mit `nosniff` und nur als PDF, Word-Datei oder `text/plain`, auch Markdown. PDF und Text zeigt der Browser an, eine Word-Datei speichert er. Den Dateinamen aus dem Titel setzt das Framework in den Header, so dass Anführungszeichen oder Zeilenumbrüche aus dem Titel ihn nicht verändern. Beide Routen gibt es nur für den Eigentümer, ein fremder Abschnitt und eine fremde Datei sehen aus wie solche, die es nicht gibt, auch bei einer Anfrage nach einem Teil der Datei.
 
 ## Nachrichten
 
