@@ -76,9 +76,11 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         db.Sections.AddRange(sections);
         db.TopicSummaries.Add(TopicSummary.Request(
             user, Guid.NewGuid(), null, SummaryLength.Short, [(document.Id, sections[0].Id)], DateTime.UtcNow));
-        db.QuestionPools.Add(QuestionPool.For(document, Guid.NewGuid(), DateTime.UtcNow));
+        var pooled = Guid.NewGuid();
+        db.QuestionPools.Add(QuestionPool.For(document, pooled, DateTime.UtcNow, [QuestionGeneration.KeyOf("Was spaltet Licht?")]));
         db.PageCharges.Add(PageCharge.For(document, 1, DateTime.UtcNow));
-        db.GenerationCharges.Add(GenerationCharge.For(document, Guid.NewGuid(), DateTime.UtcNow));
+        db.GenerationCharges.Add(GenerationCharge.For(document, pooled, DateTime.UtcNow));
+        db.GenerationCharges.Add(GenerationCharge.For(document, pooled, DateTime.UtcNow, round: 1));
         db.AiAnswers.Add(AiAnswer.Of(document, new string('a', AiAnswer.KeyLength), AiAttempt.Topics, "topics-5", "Simulated", "{\"topics\":[]}", DateTime.UtcNow));
         var fromFile = Document.Upload(user, Guid.NewGuid(), "Notizen.txt", fileId, FileFormat.Text, DateTime.UtcNow);
         db.Documents.Add(fromFile);

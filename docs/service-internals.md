@@ -321,9 +321,9 @@ Die Content-Api lehnt früher ab, wo sie kann, mit 429, der Meldung in `title` u
 
 ## Tageskontingent an Generierungen
 
-Eine Generierung ist ein KI-Auftrag, der Lerninhalt zu einem Thema erzeugt, heute der Fragenpool eines Themas. Später zählen Karten, Zusammenfassungen und das Nachfüllen eines Pools dazu. Die Themenanalyse eines Dokuments zählt nicht, sie gehört zu den verarbeiteten Seiten. Jeder Nutzer hat je Lerntag eine bestimmte Zahl, Standard 20 (`Content:GenerationsPerDay`).
+Eine Generierung ist ein KI-Auftrag, der Lerninhalt zu einem Thema erzeugt, heute der Fragenpool eines Themas und jede Runde, die ihn auffüllt. Später zählen Karten und Zusammenfassungen dazu. Die Themenanalyse eines Dokuments zählt nicht, sie gehört zu den verarbeiteten Seiten. Jeder Nutzer hat je Lerntag eine bestimmte Zahl, Standard 20 (`Content:GenerationsPerDay`).
 
-Bevor der Worker die erste Frage eines Dokuments stellt, zählt er die Themen, die noch einen Pool brauchen. Passen sie nicht in den Rest des Tages, fragt er die KI gar nicht, und das Dokument scheitert mit einer Meldung, die Themen, freie Generierungen und den Zeitpunkt der Rücksetzung nennt. Sonst bucht jedes Thema seine Generierung im selben Speichern wie sein Pool (`GenerationCharges`, eindeutig je Thema). Scheitert die KI, wird nichts gespeichert und nichts gebucht, ein Neustart bucht kein Thema doppelt.
+Bevor der Worker die erste Frage eines Dokuments stellt, zählt er die Themen, die noch einen Pool brauchen. Passen sie nicht in den Rest des Tages, fragt er die KI gar nicht, und das Dokument scheitert mit einer Meldung, die Themen, freie Generierungen und den Zeitpunkt der Rücksetzung nennt. Sonst bucht jedes Thema seine Generierung im selben Speichern wie sein Pool (`GenerationCharges`, eindeutig je Thema und Runde, der Pool ist Runde 0). Scheitert die KI, wird nichts gespeichert und nichts gebucht, ein Neustart bucht kein Thema doppelt.
 
 Ein Dokument kann bis zu 30 Themen haben, mehr als ein ganzer Tag erlaubt. Damit es nicht für immer scheitert, darf ein Dokument mit mehr Themen als dem Tageskontingent an einem Tag starten, an dem noch nichts verbraucht ist. Es bucht dann alle seine Themen, und der Tag ist aufgebraucht. `generationsLeftToday` zeigt dann 0, nie weniger.
 

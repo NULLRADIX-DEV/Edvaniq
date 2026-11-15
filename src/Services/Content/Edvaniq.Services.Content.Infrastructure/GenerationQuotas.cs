@@ -20,6 +20,6 @@ internal sealed class GenerationQuotas(ContentDbContext db, TimeProvider time, I
         return new GenerationQuotaState(options.Value.GenerationsPerDay, used, StudyDay.NextStartUtc(now));
     }
 
-    public void Charge(Document document, Guid topicId) =>
-        db.GenerationCharges.Add(GenerationCharge.For(document, topicId, time.GetUtcNow().UtcDateTime));
+    public void Charge(Document document, Guid topicId, int round = 0) =>
+        db.GenerationCharges.Add(GenerationCharge.For(document, topicId, time.GetUtcNow().UtcDateTime, round));
 }

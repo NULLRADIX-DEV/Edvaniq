@@ -12,13 +12,15 @@ namespace Edvaniq.Services.Content.UnitTests;
 // The prompt keeps the material in its block, and only questions with one clear answer and a known source survive.
 public class QuestionGenerationTests
 {
-    // The hash of the system prompt of each version, since questions-2 over all its variants (PromptHash). A changed
+    // The hash of the system prompt of each version, since questions-2 over all its profiles (PromptHash), since
+    // questions-4 also over every count of a pool (AllCounts). A changed
     // prompt needs a new version and a new line here.
     private static readonly Dictionary<string, string> Prompts = new()
     {
         ["questions-1"] = "c2532e907cca17f8928dd15d71f5de4fd3e6cba1756bd316a5ee1dfe5099f756",
         ["questions-2"] = "c098d18927eb91d2cfc3e277bbcfbe90a8907aa4c35ac1c92ae5e60f19852e30",
         ["questions-3"] = "8d3dff6090741b16621f5a803c02bdb839e1efd7301cffd577de0ba830fff2f1",
+        ["questions-4"] = "25c8cf6f8d7b2ad1c194785a5edf474fa0765b2b6ed51ddd024e5d8a716f511f",
     };
 
     private static readonly Guid[] Sections = [Guid.NewGuid(), Guid.NewGuid()];
@@ -33,7 +35,42 @@ public class QuestionGenerationTests
 
     [Fact]
     public void System_ChangesOnlyWithANewPromptVersion() =>
-        Assert.Equal(Prompts[QuestionGeneration.PromptVersion], PromptHash.Of(QuestionGeneration.System));
+        Assert.Equal(Prompts[QuestionGeneration.PromptVersion], PromptHash.Of(AllCounts));
+
+    // Since questions-4 the hash covers the prompt for every number of questions a pool can have.
+    private static string AllCounts(LearnerProfile profile) =>
+        string.Join("\n\0\n", Enumerable.Range(0, QuestionGeneration.MaxQuestions).Select(have => QuestionGeneration.System(profile, have)));
+
+    // A top-up names how many there are and asks for the rest, a new pool for all of them.
+    [Theory]
+    [InlineData(0, "Schreib 20 Fragen, die sich allein aus dem Material beantworten lassen.")]
+    [InlineData(12, "Zu diesem Thema gibt es schon 12 Fragen. Schreib 8 weitere, die sich allein aus dem Material beantworten lassen und etwas anderes fragen als die bisherigen.")]
+    [InlineData(19, "Zu diesem Thema gibt es schon 19 Fragen. Schreib 1 weitere,")]
+    public void System_AsksForTheMissingQuestions(int have, string text) =>
+        Assert.All(LearnerProfile.All, profile => Assert.Contains(text, QuestionGeneration.System(profile, have)));
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(20)]
+    public void System_RefusesACountOutsideThePool(int have) =>
+        Assert.Throws<ArgumentOutOfRangeException>(() => QuestionGeneration.System(LearnerProfile.Default, have));
+
+    // Every count gives a prompt of its own, so a top-up never gets the stored answer of another round.
+    [Fact]
+    public void System_DiffersForEveryCount() =>
+        Assert.Equal(
+            QuestionGeneration.MaxQuestions,
+            Enumerable.Range(0, QuestionGeneration.MaxQuestions).Select(have => QuestionGeneration.System(LearnerProfile.Default, have)).Distinct().Count());
+
+    [Fact]
+    public void KeyOf_IsAHashPrefix_TheSameForTheSameQuestion()
+    {
+        var key = QuestionGeneration.KeyOf("Was spaltet Licht?");
+
+        Assert.Matches("^[0-9a-f]{16}$", key);
+        Assert.Equal(key, QuestionGeneration.KeyOf("  was SPALTET licht "));
+        Assert.NotEqual(key, QuestionGeneration.KeyOf("Was spaltet Wasser?"));
+    }
 
     // Each level gets an instruction of its own, in both languages: no two levels share a prompt.
     [Theory]

@@ -75,6 +75,13 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         pool.HasKey(item => item.TopicId);
         pool.Property(item => item.TopicId).ValueGeneratedNever();
         pool.HasOne<Document>().WithMany().HasForeignKey(item => item.DocumentId).OnDelete(DeleteBehavior.Cascade);
+        pool.Property(item => item.QuestionKeys).HasMaxLength(QuestionPool.KeysMaxLength);
+
+        // Defaults in the database, so a pool written by the code before #339 gets valid values too.
+        pool.Property(item => item.TopUps).HasDefaultValue(0);
+        pool.Property(item => item.TopUpOutages).HasDefaultValue(0);
+        pool.Property(item => item.TopUpStopped).HasDefaultValue(false);
+        pool.HasIndex(item => new { item.Questions, item.NextTopUpAt });
 
         // No foreign key to the document: what an attempt cost stays when the document goes.
         var attempt = modelBuilder.Entity<AiAttempt>();
@@ -92,9 +99,10 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         charge.HasIndex(item => item.DocumentId).IsUnique();
         charge.HasIndex(item => new { item.OwnerId, item.StudyDay });
 
-        // One charge per topic, a retry takes nothing twice.
+        // One charge per topic and round, a retry takes nothing twice. The default keeps the code before #339 writing.
         var generation = modelBuilder.Entity<GenerationCharge>();
-        generation.HasIndex(item => item.TopicId).IsUnique();
+        generation.Property(item => item.Round).HasDefaultValue(0);
+        generation.HasIndex(item => new { item.TopicId, item.Round }).IsUnique();
         generation.HasIndex(item => new { item.OwnerId, item.StudyDay });
 
         // The answers go with the document that asked for them. One per request and user: of two workers storing the

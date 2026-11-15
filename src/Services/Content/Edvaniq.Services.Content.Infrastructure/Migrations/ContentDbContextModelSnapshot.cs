@@ -444,6 +444,11 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .HasColumnType("varchar(128)")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
+                    b.Property<int>("Round")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<DateTime>("StudyDay")
                         .HasColumnType("date");
 
@@ -454,10 +459,10 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
 
                     b.HasIndex("OwnerId");
 
-                    b.HasIndex("TopicId")
-                        .IsUnique();
-
                     b.HasIndex("OwnerId", "StudyDay");
+
+                    b.HasIndex("TopicId", "Round")
+                        .IsUnique();
 
                     b.ToTable("GenerationCharges");
                 });
@@ -509,17 +514,44 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.Property<Guid>("DocumentId")
                         .HasColumnType("char(36)");
 
+                    b.Property<DateTime?>("NextTopUpAt")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<string>("OwnerId")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("varchar(128)")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
+                    b.Property<string>("QuestionKeys")
+                        .HasMaxLength(340)
+                        .HasColumnType("varchar(340)");
+
+                    b.Property<int?>("Questions")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TopUpOutages")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<bool>("TopUpStopped")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("TopUps")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.HasKey("TopicId");
 
                     b.HasIndex("DocumentId");
 
                     b.HasIndex("OwnerId");
+
+                    b.HasIndex("Questions", "NextTopUpAt");
 
                     b.ToTable("QuestionPools");
                 });

@@ -137,7 +137,7 @@ public sealed class QuestionPools(
         // No topic yet, or topics none of which has material of this document and none a pool: Knowledge hasn't got them
         // as they will be. Ready with nothing would leave the document without a single question, so it waits like for
         // missing topics, and fails as such after the limit.
-        if (topics.Count == 0 || (pooled.Count == 0 && topics.All(topic => SectionsOf(topics, topic, texts).Count == 0)))
+        if (topics.Count == 0 || (pooled.Count == 0 && topics.All(topic => QuestionRequests.SectionsOf(topics, topic, texts).Count == 0)))
         {
             if (time.GetUtcNow().UtcDateTime - document.WaitsForTopicsSince < TopicsTimeout)
             {
@@ -155,7 +155,7 @@ public sealed class QuestionPools(
         var needed = new List<(KnowledgeTopic Topic, List<Guid> Material)>();
         foreach (var topic in topics.Where(topic => !pooled.Contains(topic.Id)))
         {
-            var material = SectionsOf(topics, topic, texts);
+            var material = QuestionRequests.SectionsOf(topics, topic, texts);
             if (material.Count == 0)
             {
                 ContentLog.TopicWithoutMaterial(logger, topic.Id, documentId);
@@ -187,7 +187,8 @@ public sealed class QuestionPools(
                 return true;
             }
 
-            var (items, failure) = await PoolAsync(document, profile, material, texts, cancellationToken);
+            var (items, failure, attempts) = await QuestionRequests.AskAsync(
+                document, profile, material, texts, 0, ai, testDouble, answers, AiTimeout, cancellationToken);
             if (items is null)
             {
                 if (failure is not null)
@@ -196,6 +197,7 @@ public sealed class QuestionPools(
                 }
                 else
                 {
+                    ContentLog.QuestionsAnswerUnusable(logger, document.Id, attempts);
                     document.Fail(DocumentFailures.QuestionsFailed);
                 }
 
@@ -210,7 +212,7 @@ public sealed class QuestionPools(
         var now = time.GetUtcNow().UtcDateTime;
         foreach (var (topic, items) in made)
         {
-            db.QuestionPools.Add(QuestionPool.For(document, topic.Id, now));
+            db.QuestionPools.Add(QuestionPool.For(document, topic.Id, now, QuestionRequests.KeysOf(items)));
             quota.Charge(document, topic.Id);
             outbox.Add(new ItemsGenerated(document.OwnerId, document.Id, topic.Position, items, topic.Id));
         }
@@ -234,55 +236,5 @@ public sealed class QuestionPools(
             ContentLog.KnowledgeUnavailable(logger, documentId, exception.GetType().Name);
             return [];
         }
-    }
-
-    // A topic's own sections of this document. One without any, like the roof of its subtopics, gets theirs. Knowledge
-    // merges topics of the same name across documents (#208), so a topic may have sections only in another document:
-    // filtering before the fallback keeps it from asking the AI about nothing, it simply has no material here.
-    private static List<Guid> SectionsOf(IReadOnlyList<KnowledgeTopic> topics, KnowledgeTopic topic, Dictionary<Guid, string> texts)
-    {
-        List<Guid> own = [.. topic.SectionIds.Where(texts.ContainsKey)];
-        return own.Count > 0
-            ? own
-            : [.. topics.Where(other => other.ParentId == topic.Id).SelectMany(other => other.SectionIds).Where(texts.ContainsKey)];
-    }
-
-    // The questions of one topic, or null if it got none, then with the failure of the provider if that was why. An
-    // answer without a valid question gets asked again, up to StructuredOutput.DefaultAttempts, since a real model may
-    // just have had a bad moment. A provider that fails or takes too long ends at once. Every attempt goes into the cost
-    // log.
-    private async Task<(List<GeneratedItem>? Items, Exception? Failure)> PoolAsync(
-        Document document, LearnerProfile profile, IReadOnlyList<Guid> sectionIds, Dictionary<Guid, string> texts, CancellationToken cancellationToken)
-    {
-        var chat = ContentAi.For(document, ai, testDouble);
-        var answer = await answers.AskAsync(
-            document,
-            AiAttempt.Questions,
-            QuestionGeneration.PromptVersion,
-            chat,
-            [
-                new ChatMessage(ChatRole.System, QuestionGeneration.System(profile)),
-                new ChatMessage(ChatRole.User, QuestionGeneration.User(sectionIds.Select(id => texts[id]))),
-            ],
-            text => QuestionGeneration.Read(text, sectionIds) is { Count: > 0 } drafts ? drafts : null,
-            new StructuredRequest(AiTimeout, ContentAi.QuestionsFormat),
-            cancellationToken);
-        if (answer.Failure is { } failure)
-        {
-            return (null, failure);
-        }
-
-        if (answer.Value is not { } drafts)
-        {
-            ContentLog.QuestionsAnswerUnusable(logger, document.Id, answer.Attempts);
-            return (null, null);
-        }
-
-        var model = ContentAi.ModelOf(chat, answer.ModelId);
-        return ([.. drafts.Select(draft => new GeneratedItem(
-            Guid.NewGuid(), ItemKind.Question, document.Id, draft.SectionId, model, QuestionGeneration.PromptVersion,
-            new GeneratedQuestion(
-                draft.Text, draft.Options, draft.Answer, draft.Explanation, draft.Difficulty, draft.Type,
-                draft.Type == QuestionType.MultipleChoice ? draft.Answers : null)))], null);
     }
 }
