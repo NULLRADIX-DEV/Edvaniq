@@ -27,5 +27,18 @@ internal sealed class KnownTopics(AssessmentDbContext db) : IKnownTopics
 
     public void Add(KnownTopic topic) => db.KnownTopics.Add(topic);
 
-    public void Remove(KnownTopic topic) => db.KnownTopics.Remove(topic);
+    // An open attempt could not be answered without its question, an answered one holds options of a question that is
+    // gone. The learning records stay with LearningEngine.
+    public async Task RemoveAsync(KnownTopic topic, CancellationToken cancellationToken)
+    {
+        db.KnownTopics.Remove(topic);
+        var questions = await db.Questions.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .Where(question => question.OwnerId == topic.OwnerId && question.TopicId == topic.TopicId)
+            .ToListAsync(cancellationToken);
+        var ids = questions.Select(question => question.Id).ToList();
+        db.Attempts.RemoveRange(await db.Attempts.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .Where(attempt => attempt.OwnerId == topic.OwnerId && ids.Contains(attempt.QuestionId))
+            .ToListAsync(cancellationToken));
+        db.Questions.RemoveRange(questions);
+    }
 }

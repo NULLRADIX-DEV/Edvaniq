@@ -38,7 +38,7 @@ public sealed class TopicsChangedHandler(IKnownTopics topics) : IIntegrationEven
             }
             else if (topic.LearningGoalId == goal)
             {
-                topics.Remove(topic);
+                await topics.RemoveAsync(topic, cancellationToken);
             }
         }
 

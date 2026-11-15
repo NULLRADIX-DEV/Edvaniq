@@ -16,5 +16,7 @@ public interface IKnownTopics
 
     void Add(KnownTopic topic);
 
-    void Remove(KnownTopic topic);
+    // Drops a topic that left the learning goal, with its questions and every attempt on them, as a deleted document does
+    // (#389). Only for a newer state, the handler decides that.
+    Task RemoveAsync(KnownTopic topic, CancellationToken cancellationToken);
 }

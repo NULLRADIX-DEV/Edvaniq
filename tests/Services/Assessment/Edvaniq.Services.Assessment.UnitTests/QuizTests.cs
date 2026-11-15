@@ -358,7 +358,7 @@ public sealed class QuizTests
 
         public HashSet<Guid> KnownTopics { get; } = [];
 
-        public Task<bool> KnowsTopicAsync(Guid topicId, CancellationToken cancellationToken) => Task.FromResult(KnownTopics.Contains(topicId));
+        public Task<bool> AsksTopicAsync(Guid topicId, CancellationToken cancellationToken) => Task.FromResult(KnownTopics.Contains(topicId));
 
         public Task<IReadOnlyList<Question>> QuestionsOfAsync(Guid topicId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<Question>>([.. Questions.Where(question => question.TopicId == topicId)]);

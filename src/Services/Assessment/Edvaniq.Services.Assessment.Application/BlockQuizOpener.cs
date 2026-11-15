@@ -15,7 +15,7 @@ public sealed class BlockQuizOpener(IBlockQuizzes quizzes, IAttempts attempts, I
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(size);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(size, MaxSize);
 
-        if (!await attempts.KnowsTopicAsync(topicId, cancellationToken))
+        if (!await attempts.AsksTopicAsync(topicId, cancellationToken))
         {
             return new(QuizOutcome.UnknownTopic);
         }
