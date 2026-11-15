@@ -34,20 +34,20 @@ Unter Linux geht es mit `printf '%%PDF-1.4\n' > upload-20mb.pdf && truncate -s 2
 
 ## Ergebnis
 
-Commit:
-Datum:
-Geprüft von:
-Leitung (Ort, Netz):
+Commit: `319ad55`
+Datum: 16.11.2026
+Geprüft von: Team, mit einem Testkonto
+Leitung (Ort, Netz): Rechenzentrum über die öffentliche Domain, langsame Leitung per `curl --limit-rate`
 
 | Schritt | Datei | Drosselung | Erwartet | Status | Dauer | Meldung | Ok |
 |---|---|---|---|---|---|---|---|
-| 1 | 20 MB | keine | 201 | | | | |
-| 1 | 20 MB + 1 Byte | keine | 413 mit Größenmeldung | | | | |
-| 1 | 25 MB | keine | 413 | | | | |
-| 2 | 20 MB | 100K | 201 | | | | |
-| 2 | 20 MB + 1 Byte | 100K | 413 mit Größenmeldung | | | | |
-| 3 | 20 MB | Browser, 1 Mbit/s | Dokument in der Liste | | | | |
-| 4 | 20 MB + 1 Byte | Browser | Größenmeldung, keine Anfrage | | | | |
-| 5 | echte PDF | keine | bereit oder fachlicher Grund | | | | |
+| 1 | 20 MB | keine | 201 | 201 | 1,4 s | | ja |
+| 1 | 20 MB + 1 Byte | keine | 413 mit Größenmeldung | 413 | 0,8 s | „Die Datei ist zu groß. Erlaubt sind höchstens 20 MB.“ | ja |
+| 1 | 25 MB | keine | 413 | 413 | 0,1 s | 0 Bytes gesendet | ja |
+| 2 | 20 MB | 100K | 201 | 201 | 207 s | | ja |
+| 2 | 20 MB + 1 Byte | 100K | 413 mit Größenmeldung | 413 | 206 s | „Die Datei ist zu groß. Erlaubt sind höchstens 20 MB.“ | ja |
+| 3 | 20 MB | Browser, 1 Mbit/s | Dokument in der Liste | | | | offen |
+| 4 | 20 MB + 1 Byte | Browser | Größenmeldung, keine Anfrage | | | | offen |
+| 5 | echte PDF | keine | bereit oder fachlicher Grund | | | | offen |
 
-Bemerkungen:
+Bemerkungen: Die Testdateien kamen an und scheiterten danach im Worker wie erwartet als nicht lesbar. Bei 25 MB lehnte der Weg die Datei ab, bevor ein Byte gesendet war. Schritte 3 und 4 decken im Repo `HttpLearningMaterialTests.Upload_GoesThroughTheClientForFiles` (Upload ohne die 20-s-Grenze der übrigen Aufrufe) und `UploadTests.FileOver20MB_IsRefusedInTheBrowser_WithoutUpload` ab, die Prüfung am Gerät steht noch aus, ebenso Schritt 5.
