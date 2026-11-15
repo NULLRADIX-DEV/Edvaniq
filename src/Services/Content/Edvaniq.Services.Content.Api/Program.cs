@@ -93,6 +93,7 @@ app.MapGet("/me", (ICurrentUser user) => new { user.Id });
 app.MapDocumentEndpoints();
 app.MapQuotaEndpoints();
 app.MapSummaryEndpoints();
+app.MapDemoEndpoints();
 
 app.Run();
 

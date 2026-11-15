@@ -52,9 +52,10 @@ public static class ContentAi
         return services;
     }
 
-    // The AI for this document: the test double if it uses one, else the configured provider.
+    // The AI for this document: the demo answers for demo material, the test double if it uses one, else the configured
+    // provider.
     internal static IChatClient For(Document document, IChatClient ai, TestDoubleAi testDouble) =>
-        document.UsesTestDouble ? testDouble.Client : ai;
+        document.Origin == DocumentOrigin.Demo ? DemoAi.Client : document.UsesTestDouble ? testDouble.Client : ai;
 
     // Puts the operator's emergency stop and monthly budget in front of the configured AI (AiGate), the one place every call
     // to the provider passes. The test double of a test account calls no provider and stays. Call it after

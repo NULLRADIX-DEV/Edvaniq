@@ -113,7 +113,10 @@ public sealed partial class SummaryWriter(
             return;
         }
 
-        var profile = await ProfileAsync(scope.ServiceProvider.GetRequiredService<IGoalProfiles>(), summary, cancellationToken);
+        // The demo answers were written for the default profile (#411).
+        var profile = documents.Values.All(document => document.Origin == DocumentOrigin.Demo)
+            ? LearnerProfile.Default
+            : await ProfileAsync(scope.ServiceProvider.GetRequiredService<IGoalProfiles>(), summary, cancellationToken);
         if (profile is null)
         {
             await FailAsync(db, summary, DocumentFailures.GoalUnavailable, cancellationToken);

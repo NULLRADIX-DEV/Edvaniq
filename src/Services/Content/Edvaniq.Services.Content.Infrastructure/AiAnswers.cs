@@ -31,6 +31,12 @@ public sealed class AiAnswers(IServiceScopeFactory scopes, AiUsageLog usage, Tim
         CancellationToken cancellationToken)
         where T : class
     {
+        // The demo answers from what ships with it, there is nothing to keep or reuse (#411).
+        if (document.Origin == DocumentOrigin.Demo)
+        {
+            return await chat.AskAsync(messages, read, request, time, cancellationToken);
+        }
+
         var model = ContentAi.ModelOf(chat, null);
         var key = KeyOf(purpose, promptVersion, model, document.UsesTestDouble, messages);
         if (await StoredAsync(document, key, cancellationToken) is { } stored && read(stored.Answer) is { } reused)

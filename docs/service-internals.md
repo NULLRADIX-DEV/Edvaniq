@@ -335,6 +335,12 @@ Ein Dokument kann bis zu 30 Themen haben, mehr als ein ganzer Tag erlaubt. Damit
 
 Einfügen, Upload und Neustart lehnt die Content-Api mit 429 ab, wenn heute keine Generierung mehr frei ist, in derselben Form wie beim Seitenkontingent.
 
+## Demo-Lernziel
+
+Das Demo-Lernziel zeigt den Kernfluss ohne eigenes Material und ohne KI. Der Client fragt `GET /demo`. Kommt 404, legt er in Planning ein Lernziel an (`POST /planning/learning-goals`) und gibt dessen ID an `POST /demo` mit `learningGoalId`. Content prüft bei Planning, ob das Ziel dem Nutzer gehört, und legt die drei Texte aus `DemoMaterial` als Dokumente mit der Herkunft `demo` an. Ein zweiter `POST /demo` gibt das vorhandene Demo zurück, `DELETE /demo` löscht die Demo-Dokumente samt allem, was daraus entstand. Das Lernziel bleibt in Planning, bis es Lernziele löschen kann.
+
+Der Worker analysiert die Demo-Dokumente wie alle anderen, beantwortet ihre KI-Aufrufe aber aus `Demo/answers.json` (`DemoAi`, `DemoReplay`). Themen, Fragen und Zusammenfassungen sind dort für das Material geschrieben. Es fragt keinen Anbieter, nichts landet im Kostenlog, kein Tageskontingent wird verbraucht, und das Demo funktioniert auch, wenn die KI pausiert ist. Erkannt wird ein Prompt an Aufgabe und Abschnitten, nicht am genauen Text. Ändert sich eine Promptversion, werden `DemoReplayTests` rot, bis die Antworten angepasst sind. Bis die Berechtigung kommt, dürfen nur Testkonten und die Konten unter `Demo:Accounts` ein Demo anlegen.
+
 ## Aufbewahrung gestellter Fragen in Assessment
 
 Assessment hält jede gestellte Frage samt Antwort als `Attempt` und jedes Block-Quiz als `BlockQuiz`. Gebraucht werden sie nur, solange ein Quiz offen ist, solange ein Block-Quiz fortgesetzt wird und solange ein Client eine Antwort noch einmal schicken kann. Den Lern-Nachweis hält nach `AnswerRecorded` LearningEngine. Deshalb löscht `AttemptRetention` beides 30 Tage nach dem Stellen (`AttemptRetention:Days`), stündlich und in Portionen, Block-Quizze samt ihren Versuchen zuerst. Ein noch nicht gesendetes `AnswerRecorded` verliert dabei nichts, die Zeile in der Outbox enthält das ganze Ereignis. Wer Antworten in Assessment auswertet, etwa um kürzlich beantwortete Fragen auszulassen, sieht nur diese 30 Tage.

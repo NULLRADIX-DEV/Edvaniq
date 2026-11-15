@@ -26,6 +26,9 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         .Exempt("POST", "/documents/files", "Adds a document of the caller, a foreign goal is Planning's.",
             nameof(LearningGoalTests.PastedTextAndUpload_IntoAForeignOrUnknownGoal_GetTheSameAnswer))
         .Exempt("GET", "/quota", "Only the caller's own count.", nameof(OtherUser_HasTheirOwnQuota))
+        .Exempt("GET", "/demo", "Only the caller's own demo, no id in the request.", nameof(DemoTests.SecondRequest_GivesTheSameDemo_AndGetFindsIt))
+        .Exempt("POST", "/demo", "A goal id in the body, a foreign goal is Planning's.", nameof(DemoTests.OnlyAllowedAccounts_InTheirOwnGoal_GetADemo))
+        .Exempt("DELETE", "/demo", "Only the caller's own demo, no id in the request.", nameof(DemoTests.Delete_TakesTheDemoDocuments_OthersStay))
         .Exempt("GET", "/topics/{topicId:guid}/summaries/{length}", "Two parameters.",
             nameof(SummaryTests.OtherUser_NeitherReadsNorRequestsASummary))
         .Exempt("POST", "/topics/{topicId:guid}/summaries/{length}", "Two parameters.",

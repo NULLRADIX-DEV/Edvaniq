@@ -14,7 +14,8 @@ internal static class GoalContext
         Document document, IGoalProfiles profiles, ILogger logger, CancellationToken cancellationToken)
     {
         // Documents from before learning goals (#215) have none to ask about.
-        if (document.LearningGoalId is not { } goal || goal == Guid.Empty)
+        // The demo answers were written for the default profile, whatever the goal says (#411).
+        if (document.Origin == DocumentOrigin.Demo || document.LearningGoalId is not { } goal || goal == Guid.Empty)
         {
             return LearnerProfile.Default;
         }
