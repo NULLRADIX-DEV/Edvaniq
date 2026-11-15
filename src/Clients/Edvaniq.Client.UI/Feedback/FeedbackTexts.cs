@@ -233,6 +233,23 @@ public static class FeedbackTexts
 
         public const string Minutes = "Minuten";
 
+        // The summary above the blocks (#382): "30 Minuten in 3 Blöcken". {0} and {2} are the numbers, {1} and {3} the words.
+        public const string Summary = "{0} {1} in {2} {3}";
+
+        public const string Block = "Block";
+
+        public const string Blocks = "Blöcken";
+
+        public const string SummaryLabel = "Heute";
+
+        // The countdown to the exam of the goal in the plan. {0} is the days, {1} the date.
+        public const string ExamInDays = "Noch {0} Tage bis zur Prüfung am {1}";
+
+        // {0} is the date.
+        public const string ExamTomorrow = "Morgen ist die Prüfung, am {0}";
+
+        public const string ExamToday = "Heute ist die Prüfung";
+
         // A block whose topic Knowledge doesn't name (yet).
         public const string UnnamedTopic = "Thema ohne Namen";
 

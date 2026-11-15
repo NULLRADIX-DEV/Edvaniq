@@ -1,0 +1,12 @@
+.today-summary {
+    margin-bottom: var(--space-4);
+    overflow-wrap: anywhere;
+}
+
+.today-summary p {
+    margin: 0 0 var(--space-2);
+}
+
+.today-label {
+    font-weight: 600;
+}

@@ -82,7 +82,7 @@ internal static class Material
 
     // Today's plan as Planning answers it: a review of the topic and learn time for both subtopics, one of them the
     // long word. Without blocks it says why with emptyReason.
-    public static object Plan(string? emptyReason = null, bool masteryAvailable = true) => new
+    public static object Plan(string? emptyReason = null, bool masteryAvailable = true, int? daysToExam = null) => new
     {
         studyDay = new DateOnly(2026, 11, 11),
         learningGoalId = Guid.Empty,
@@ -99,6 +99,8 @@ internal static class Material
         shortenedTopicIds = emptyReason is not null ? Array.Empty<Guid>() : [Guid.Parse("7b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e")],
         questionPoolsAvailable = true,
         notReadyTopicIds = Array.Empty<Guid>(),
+        examDate = daysToExam is null ? (DateOnly?)null : new DateOnly(2027, 3, 1),
+        daysToExam,
     };
 
     // Answers the plan and the topics in the browser, each call takes the next plan of the list and the last one stays.

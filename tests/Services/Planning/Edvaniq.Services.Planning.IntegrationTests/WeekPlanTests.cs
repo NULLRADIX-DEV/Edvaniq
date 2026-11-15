@@ -47,6 +47,7 @@ public sealed class WeekPlanTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Null(week.EmptyReason);
         Assert.True(week.MasteryAvailable);
         Assert.Contains(week.Days.Skip(1), day => day.Blocks.Count > 0);
+        Assert.Equal((null, null), (today.ExamDate, today.DaysToExam));
     }
 
     // An exam in 3 days: only the 3 days before it.
@@ -74,6 +75,10 @@ public sealed class WeekPlanTests(ServiceFactory service) : IClassFixture<Servic
         var week = await GetAsync<Week>(client, "/plan/week");
 
         Assert.Equal(3, week.Days.Count);
+
+        // #382: today's plan names the exam and the days to it from its study day.
+        var today = await GetAsync<Today>(client, "/plan/today");
+        Assert.Equal((exam, 3), (today.ExamDate, today.DaysToExam));
         Assert.All(week.Days, day => Assert.True(day.StudyDay < exam));
     }
 
@@ -120,7 +125,8 @@ public sealed class WeekPlanTests(ServiceFactory service) : IClassFixture<Servic
         service.Assessment.Set(token, topic);
     }
 
-    private sealed record Today(DateOnly StudyDay, Guid LearningGoalId, List<Block> Blocks, List<Guid> ShortenedTopicIds);
+    private sealed record Today(
+        DateOnly StudyDay, Guid LearningGoalId, List<Block> Blocks, List<Guid> ShortenedTopicIds, DateOnly? ExamDate = null, int? DaysToExam = null);
 
     private sealed record Week(
         Guid LearningGoalId,

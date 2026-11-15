@@ -1,0 +1,44 @@
+@using System.Globalization
+
+@* The head of "Heute" (#382): today's minutes and blocks as the list below has them, and the days to the exam of the goal
+   in the plan. Later parts of Home (progress ring, cards due, "Jetzt lernen") go in here too. *@
+<div class="today-summary">
+    @if (Plan.Blocks.Count > 0)
+    {
+        <p class="today-total"><span class="today-label">@FeedbackTexts.Plan.SummaryLabel:</span> @Total</p>
+    }
+    @if (Countdown is { } countdown)
+    {
+        <p class="today-exam">@countdown</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public TodayPlan Plan { get; set; } = default!;
+
+    private string Total
+    {
+        get
+        {
+            var minutes = Plan.Blocks.Sum(block => block.Minutes);
+            var blocks = Plan.Blocks.Count;
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                FeedbackTexts.Plan.Summary,
+                minutes,
+                minutes == 1 ? FeedbackTexts.Plan.Minute : FeedbackTexts.Plan.Minutes,
+                blocks,
+                blocks == 1 ? FeedbackTexts.Plan.Block : FeedbackTexts.Plan.Blocks);
+        }
+    }
+
+    // Planning counts the days, the date is only written out.
+    private string? Countdown => (Plan.DaysToExam, Plan.ExamDate) switch
+    {
+        (0, _) => FeedbackTexts.Plan.ExamToday,
+        (1, { } date) => string.Format(CultureInfo.InvariantCulture, FeedbackTexts.Plan.ExamTomorrow, GermanDates.Long(date)),
+        ( > 1 and var days, { } date) => string.Format(CultureInfo.InvariantCulture, FeedbackTexts.Plan.ExamInDays, days, GermanDates.Long(date)),
+        _ => null,
+    };
+}

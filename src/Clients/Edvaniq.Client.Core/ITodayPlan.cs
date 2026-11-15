@@ -10,13 +10,17 @@ public interface ITodayPlan
 // Empty is set only while there are no blocks, and stays null for a reason this client doesn't know yet.
 // MasteryAvailable false: Planning didn't get the mastery, so weaker topics don't come first. Shortened: topics without
 // learn time this week, the time is too short. NotReady: topics left out until their questions are there.
+// ExamDate: the exam of the goal in the plan. DaysToExam: Planning's count from the study day, 0 on the exam day,
+// null without an exam or once it is over (#382).
 public sealed record TodayPlan(
     DateOnly StudyDay,
     IReadOnlyList<PlanBlock> Blocks,
     PlanEmpty? Empty,
     bool MasteryAvailable,
     IReadOnlyList<Guid> ShortenedTopicIds,
-    IReadOnlyList<Guid> NotReadyTopicIds);
+    IReadOnlyList<Guid> NotReadyTopicIds,
+    DateOnly? ExamDate = null,
+    int? DaysToExam = null);
 
 // Kind is null for a kind this client doesn't know yet.
 public sealed record PlanBlock(Guid TopicId, int Minutes, BlockKind? Kind);

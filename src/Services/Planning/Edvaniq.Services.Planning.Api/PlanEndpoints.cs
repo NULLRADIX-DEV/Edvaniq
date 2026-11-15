@@ -9,9 +9,11 @@ internal static class PlanEndpoints
 {
     public static IEndpointRouteBuilder MapPlanEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/plan/today", async (TodayPlans plans, CancellationToken cancellationToken) =>
+        // The exam of the goal in the plan comes with it (#382), the days to it from the plan's study day.
+        app.MapGet("/plan/today", async (TodayPlans plans, ILearningGoals goals, CancellationToken cancellationToken) =>
         {
             var today = await plans.TodayAsync(cancellationToken);
+            var exam = (await goals.FindWithDefaultAsync(today.LearningGoalId, cancellationToken))?.ExamDate;
             return new TodayPlanResponse(
                 today.Plan.StudyDay,
                 today.LearningGoalId,
@@ -27,7 +29,9 @@ internal static class PlanEndpoints
                     DailyGoalState.Open => "open",
                     _ => "none",
                 },
-                today.NextBlockId);
+                today.NextBlockId,
+                exam,
+                TodayPlanner.DaysToExam(today.Plan.StudyDay, exam));
         });
 
         // #379: the days from today on, today exactly as /plan/today.
@@ -72,7 +76,8 @@ internal static class PlanEndpoints
 // because their question pool isn't ready (#374); "questionsPending" when that is all of them. DailyGoal (#381):
 // "reached" when every block is done, "open" while one isn't, "none" on a day without blocks.
 // NextBlockId (#407): the block "Jetzt lernen" goes on with, a started one first. Null with "reached": all done; null
-// with "none": no blocks today.
+// with "none": no blocks today. ExamDate (#382): the exam of the goal in the plan, null without one. DaysToExam: the
+// days from StudyDay to it, 0 on its day, null without an exam or once it is over.
 internal sealed record TodayPlanResponse(
     DateOnly StudyDay,
     Guid LearningGoalId,
@@ -83,7 +88,9 @@ internal sealed record TodayPlanResponse(
     bool QuestionPoolsAvailable,
     IReadOnlyList<Guid> NotReadyTopicIds,
     string DailyGoal,
-    Guid? NextBlockId);
+    Guid? NextBlockId,
+    DateOnly? ExamDate,
+    int? DaysToExam);
 
 // #379: Days from today on, 7 without an exam, with one only those before the exam day, at least today. A day without
 // blocks has an empty list. EmptyReason is null as soon as one day has blocks, the rest as in TodayPlanResponse.

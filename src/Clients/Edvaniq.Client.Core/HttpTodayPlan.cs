@@ -40,7 +40,9 @@ internal sealed record PlanBody(
     bool MasteryAvailable,
     string? EmptyReason = null,
     IReadOnlyList<Guid>? ShortenedTopicIds = null,
-    IReadOnlyList<Guid>? NotReadyTopicIds = null)
+    IReadOnlyList<Guid>? NotReadyTopicIds = null,
+    DateOnly? ExamDate = null,
+    int? DaysToExam = null)
 {
     public TodayPlan ToPlan() => new(
         StudyDay,
@@ -48,7 +50,9 @@ internal sealed record PlanBody(
         Blocks.Count > 0 ? null : EmptyOf(EmptyReason),
         MasteryAvailable,
         ShortenedTopicIds ?? [],
-        NotReadyTopicIds ?? []);
+        NotReadyTopicIds ?? [],
+        ExamDate,
+        DaysToExam);
 
     public static PlanEmpty? EmptyOf(string? reason) => reason switch
     {
