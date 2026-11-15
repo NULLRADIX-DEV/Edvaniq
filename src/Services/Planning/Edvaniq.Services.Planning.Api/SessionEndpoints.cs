@@ -170,7 +170,8 @@ internal sealed record StepResponse(string Kind, bool Empty, int? Questions);
 // counts as wrong. Complete: LearningEngine has every one of them and the introduction, only then Topics names the
 // mastery before and after, the block's topic first; null otherwise, never an old value (#406). MasteryAvailable: false
 // when LearningEngine couldn't be asked. DailyGoal as in /plan/today. NextStep: kind "block" with the block "Jetzt lernen"
-// goes on with, or "bonusReview" when nothing is open.
+// goes on with, or "bonusReview" when nothing is open. TopicRemoved (#406): the topic left the goal since, its mastery
+// will never come, Complete stays false.
 internal sealed record SessionResultResponse(
     Guid SessionId,
     string Outcome,
@@ -181,7 +182,8 @@ internal sealed record SessionResultResponse(
     bool MasteryAvailable,
     IReadOnlyList<TopicChangeResponse>? Topics,
     string DailyGoal,
-    NextStepResponse NextStep)
+    NextStepResponse NextStep,
+    bool TopicRemoved)
 {
     public static SessionResultResponse From(SessionResultLookup lookup)
     {
@@ -204,7 +206,8 @@ internal sealed record SessionResultResponse(
             },
             lookup.NextBlock is { } next
                 ? new NextStepResponse("block", next.Id, next.Block.TopicId, next.Block.Kind == BlockKind.Review ? "review" : "learn", next.Block.Minutes)
-                : new NextStepResponse("bonusReview", null, null, null, null));
+                : new NextStepResponse("bonusReview", null, null, null, null),
+            lookup.TopicRemoved);
     }
 }
 

@@ -8,7 +8,12 @@ namespace Edvaniq.Services.Planning.Application;
 // from LearningEngine, both asked as queries with the caller's token (rule 4), and the daily goal and next block from
 // today's plan as /plan/today shows it.
 public sealed class SessionResults(
-    ISessions sessions, ISessionAnswers answers, IMasteryChanges masteryChanges, TodayPlans plans, ILogger<SessionResults> logger)
+    ISessions sessions,
+    ISessionAnswers answers,
+    IMasteryChanges masteryChanges,
+    TodayPlans plans,
+    IKnownTopics knownTopics,
+    ILogger<SessionResults> logger)
 {
     public async Task<SessionResultLookup> OfAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -24,10 +29,18 @@ public sealed class SessionResults(
 
         var chain = SessionResult.ChainOf(session, await sessions.OnBlockAsync(session.BlockId, cancellationToken));
 
-        // The two queries touch no database, so they run while the plan reads this service's own.
+        // Gone from the goal since (#389, #406): LearningEngine won't name it any more, so no mastery would ever come. A
+        // hidden topic is still known and gives a normal result, it tells what was.
+        var topicRemoved = !(await knownTopics.ListAsync(session.OwnerId, session.LearningGoalId, [session.TopicId], cancellationToken))
+            .Any(topic => topic.TopicId == session.TopicId);
+
+        // The two queries touch no database, so they run while the plan reads this service's own. Both are awaited
+        // together, so neither is left unobserved when the other fails.
         var learnt = LearntAsync(session.BlockId, chain, cancellationToken);
-        var today = await plans.TodayAsync(cancellationToken);
+        var plan = plans.TodayAsync(cancellationToken);
+        await Task.WhenAll(learnt, plan);
         var (result, masteryAvailable) = await learnt;
+        var today = await plan;
         if (result is null)
         {
             PlanningLog.ResultWithoutAnswers(logger, session.Id);
@@ -39,8 +52,13 @@ public sealed class SessionResults(
             PlanningLog.ResultWithoutMastery(logger, session.Id);
         }
 
+        if (topicRemoved)
+        {
+            result = result with { Complete = false, Topics = null };
+        }
+
         var next = today.Blocks.FirstOrDefault(block => block.Id == today.NextBlockId);
-        return new(SessionResultStatus.Ready, session, result, masteryAvailable, today.DailyGoal, next);
+        return new(SessionResultStatus.Ready, session, result, masteryAvailable, today.DailyGoal, next, topicRemoved);
     }
 
     private async Task<(SessionResult? Result, bool MasteryAvailable)> LearntAsync(
@@ -70,10 +88,12 @@ public enum SessionResultStatus
 }
 
 // NextBlock: the block "Jetzt lernen" goes on with, null when nothing is open (then a bonus review comes, #408).
+// TopicRemoved: the session's topic is no longer in the goal, its result has no mastery and won't get one.
 public sealed record SessionResultLookup(
     SessionResultStatus Status,
     Session? Session = null,
     SessionResult? Result = null,
     bool MasteryAvailable = false,
     DailyGoalState DailyGoal = DailyGoalState.None,
-    DayBlock? NextBlock = null);
+    DayBlock? NextBlock = null,
+    bool TopicRemoved = false);

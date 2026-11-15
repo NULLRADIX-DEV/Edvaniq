@@ -59,6 +59,12 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
                     .ConfigurePrimaryHttpMessageHandler(() => learningEngine!.Server.CreateHandler());
                 services.AddHttpClient<IQuestionPoolSource, PlanningInfra.AssessmentQuestionPools>()
                     .ConfigurePrimaryHttpMessageHandler(() => Assessment.Server.CreateHandler());
+
+                // The result of a session (#403, #406) asks the same two.
+                services.AddHttpClient<ISessionAnswers, PlanningInfra.AssessmentAnswers>()
+                    .ConfigurePrimaryHttpMessageHandler(() => Assessment.Server.CreateHandler());
+                services.AddHttpClient<IMasteryChanges, PlanningInfra.LearningEngineMasteryChanges>()
+                    .ConfigurePrimaryHttpMessageHandler(() => learningEngine!.Server.CreateHandler());
             },
             new()
             {

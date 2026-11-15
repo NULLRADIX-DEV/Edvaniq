@@ -122,7 +122,91 @@ public sealed class IntroductionFlowTests(FlowServices services) : IDisposable
         Assert.True(plan.Blocks.Single(entry => entry.Id == block.Id).Done);
     }
 
+    // #406 AC1, AC3 and AC4 the whole way, with a late delivery: Assessment's outbox is held, so LearningEngine doesn't
+    // have the answers when the session ends. The result shows the counts but no mastery. Once the outbox runs again the
+    // result is complete with the answers in it, and the mastery the plan reads is the same. The answers and
+    // SessionCompleted delivered again, in the other order, change nothing. Same flake point as above
+    // (TopicsWithQuestionsAsync).
+    [Fact(Timeout = 180_000)]
+    public async Task LateAnswers_ResultWaits_ThenCountsThemOnce()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        var token = TestTokens.Create(alice);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await TopicsWithQuestionsAsync(token, alice);
+        var block = await BlockToLearnAsync(token, cancellationToken);
+        using var planning = Client(services.Planning.CreateClient(), token);
+        var session = await SessionAsync(planning, HttpMethod.Post, "/sessions", new { blockId = block.Id }, HttpStatusCode.Created, cancellationToken);
+        var sessionId = session.GetProperty("id").GetGuid();
+        await SessionAsync(planning, HttpMethod.Post, $"/sessions/{sessionId}/advance", new { step = 1 }, HttpStatusCode.OK, cancellationToken);
+
+        var dispatcher = services.Assessment.Services.GetServices<IHostedService>().Single(hosted => hosted.GetType().Name == "OutboxDispatcher");
+        await dispatcher.StopAsync(cancellationToken);
+        int answers;
+        JsonElement pending;
+        try
+        {
+            answers = await AnswerCheckQuestionsWrongAsync(token, block.TopicId, sessionId, cancellationToken);
+            answers += await AnswerQuizWrongAsync(token, block.TopicId, block.Id, cancellationToken);
+            await SessionAsync(planning, HttpMethod.Post, $"/sessions/{sessionId}/complete", new { }, HttpStatusCode.OK, cancellationToken);
+            await WaitForAsync(() => Task.FromResult(Introductions(alice).Count == 1), "LearningEngine did not introduce the topic.");
+
+            pending = await SessionAsync(planning, HttpMethod.Get, $"/sessions/{sessionId}/result", new { }, HttpStatusCode.OK, cancellationToken);
+            Assert.Equal(0, Records(alice, block.TopicId));
+        }
+        finally
+        {
+            await dispatcher.StartAsync(CancellationToken.None);
+        }
+
+        Assert.Equal((answers, false), (pending.GetProperty("answered").GetInt32(), pending.GetProperty("complete").GetBoolean()));
+        Assert.Equal(JsonValueKind.Null, pending.GetProperty("topics").ValueKind);
+
+        await WaitForAsync(() => Task.FromResult(Records(alice, block.TopicId) == answers), "LearningEngine did not get the late answers.");
+        var complete = await SessionAsync(planning, HttpMethod.Get, $"/sessions/{sessionId}/result", new { }, HttpStatusCode.OK, cancellationToken);
+        Assert.True(complete.GetProperty("complete").GetBoolean());
+        var change = Assert.Single(complete.GetProperty("topics").EnumerateArray());
+        Assert.Equal("new", change.GetProperty("before").GetProperty("state").GetString());
+        var after = change.GetProperty("after");
+        Assert.Equal((after.GetProperty("mastery").GetInt32(), after.GetProperty("state").GetString()!), await MasteryAsync(token, block.TopicId, cancellationToken));
+        Assert.True((await PlanAsync(token, cancellationToken)).Blocks.Single(entry => entry.Id == block.Id).Done);
+
+        // Everything again, SessionCompleted first, then the answers newest first, each under a new message id.
+        var answered = services.QueryAssessment(db => db.Set<OutboxMessage>().AsNoTracking()
+            .Where(message => message.Subject.EndsWith(".answerrecorded") && message.Payload.Contains(alice))
+            .OrderByDescending(message => message.Id)
+            .ToList());
+        var ended = services.QueryPlanning(db => db.Set<OutboxMessage>().AsNoTracking()
+            .Single(message => message.Subject.EndsWith(".sessioncompleted") && message.Payload.Contains(sessionId.ToString())));
+        Assert.Equal(answers, answered.Count);
+        var again = new List<Guid> { await RepublishAsync("planning", ended, cancellationToken) };
+        foreach (var message in answered)
+        {
+            again.Add(await RepublishAsync("assessment", message, cancellationToken));
+        }
+
+        await WaitForAsync(() => Task.FromResult(again.All(HandledByLearningEngine)), "LearningEngine did not handle the repeated messages.");
+        var repeated = await SessionAsync(planning, HttpMethod.Get, $"/sessions/{sessionId}/result", new { }, HttpStatusCode.OK, cancellationToken);
+        Assert.Equal(answers, Records(alice, block.TopicId));
+        Assert.Single(Introductions(alice));
+        Assert.Equal(complete.GetProperty("topics").GetRawText(), repeated.GetProperty("topics").GetRawText());
+        Assert.Equal(answers, repeated.GetProperty("answered").GetInt32());
+    }
+
     public void Dispose() => ai.Dispose();
+
+    // A message as its sender's dispatcher sent it, under a new id, so the inbox can't drop it as known.
+    private async Task<Guid> RepublishAsync(string service, OutboxMessage message, CancellationToken cancellationToken)
+    {
+        await services.Broker.EnsureStreamAsync(
+            new StreamSpec(EventRoute.StreamOf(service), EventRoute.SubjectsOf(service)), cancellationToken);
+        var messageId = Guid.NewGuid();
+        await services.Broker.PublishAsync(new OutgoingMessage(message.Subject, messageId, message.Payload), cancellationToken);
+        return messageId;
+    }
+
+    private bool HandledByLearningEngine(Guid messageId) =>
+        services.QueryLearningEngine(db => db.Set<InboxMessage>().Any(entry => entry.MessageId == messageId));
 
     // The first learn block of today, on a new topic: every topic is new before its unit.
     private async Task<PlannedBlock> BlockToLearnAsync(string token, CancellationToken cancellationToken) =>

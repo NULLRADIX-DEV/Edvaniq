@@ -126,6 +126,70 @@ public sealed class SessionResultTests(ServiceFactory service) : IClassFixture<S
         Assert.Contains(service.Logs.Entries, entry => entry.EventName == "MasteryChangesUnavailable");
     }
 
+    // #406 AC1 and AC3 with a late delivery: while LearningEngine misses an answer the result has no mastery. Once the
+    // answer has arrived the result is complete, and the plan asked after it asks LearningEngine afresh, so it is made
+    // from the new mastery. Nothing in Planning keeps the old one.
+    [Fact]
+    public async Task LateDelivery_ResultWaits_AndThePlanAfterItUsesTheNewMastery()
+    {
+        var user = $"alice-{Guid.NewGuid():N}";
+        var token = TestTokens.Create(user);
+        var topic = Guid.NewGuid();
+        AddKnownTopic(user, topic);
+        service.Assessment.Set(token, topic);
+        service.LearningEngine.Set(token, topic, 50, "new");
+        var block = (await PlanAsync(token)).Blocks.Single();
+        Assert.Equal("learn", block.Kind);
+        var session = await StartAsync(token, block.Id);
+        await PostAsync(token, $"/sessions/{session}/complete");
+        service.Assessment.SetAnswers(token, block.Id, Answer(topic, true), Answer(topic, true));
+        service.LearningEngine.SetChange(token, topic, new StubStanding(50, "new"), new StubStanding(50, "new"));
+        service.LearningEngine.SetMissing(token, 2);
+
+        var (_, pending) = await ResultAsync(token, session);
+
+        // LearningEngine has the answers and the introduction now.
+        service.LearningEngine.SetMissing(token, 0);
+        service.LearningEngine.SetChange(token, topic, new StubStanding(50, "new"), new StubStanding(72, "building"), introduced: true);
+        service.LearningEngine.Set(token, topic, 72, "building");
+        var (_, complete) = await ResultAsync(token, session);
+        var asked = service.LearningEngine.RequestsWith(token).Count;
+        var planAfter = await PlanAsync(token);
+
+        Assert.Equal((2, false, null), (pending!.Answered, pending.Complete, pending.Topics));
+        Assert.True(complete!.Complete);
+        Assert.Equal([new Change(topic, new(50, "new"), new(72, "building"))], complete.Topics);
+        Assert.Contains(
+            service.LearningEngine.RequestsWith(token).Skip(asked),
+            request => request.PathAndQuery.StartsWith("/mastery?", StringComparison.Ordinal));
+        Assert.True(planAfter.Blocks.Single(entry => entry.Id == block.Id).Done);
+    }
+
+    // #406: a topic gone from the goal since (#389) gives the counts and topicRemoved, never a mastery or an endless wait.
+    // A hidden topic is still known and gives a normal result.
+    [Fact]
+    public async Task RemovedTopic_IsNamed_HiddenTopicGivesANormalResult()
+    {
+        var (token, topics) = Seed(1);
+        var user = Query(db => db.KnownTopics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter]).Single(topic => topic.TopicId == topics[0]).OwnerId);
+        var block = (await PlanAsync(token)).Blocks[0];
+        var session = await StartAsync(token, block.Id);
+        await PostAsync(token, $"/sessions/{session}/complete");
+        service.Assessment.SetAnswers(token, block.Id, Answer(block.TopicId, true));
+        service.LearningEngine.SetChange(token, block.TopicId, Before, After);
+
+        ChangeKnownTopic(user, block.TopicId, topic => topic.Update(topic.LearningGoalId, hidden: true));
+        var (hiddenStatus, hidden) = await ResultAsync(token, session);
+        ChangeKnownTopic(user, block.TopicId, topic => topic.Update(topic.LearningGoalId, hidden: false), remove: true);
+        var (removedStatus, removed) = await ResultAsync(token, session);
+
+        Assert.Equal((HttpStatusCode.OK, HttpStatusCode.OK), (hiddenStatus, removedStatus));
+        Assert.Equal((false, true, 1), (hidden!.TopicRemoved, hidden.Complete, hidden.Answered));
+        Assert.NotNull(hidden.Topics);
+        Assert.Equal((true, false, 1), (removed!.TopicRemoved, removed.Complete, removed.Answered));
+        Assert.Null(removed.Topics);
+    }
+
     [Fact]
     public async Task AssessmentDown_IsServiceUnavailable()
     {
@@ -180,6 +244,29 @@ public sealed class SessionResultTests(ServiceFactory service) : IClassFixture<S
         }
 
         return (token, topics);
+    }
+
+    private void AddKnownTopic(string user, Guid topic)
+    {
+        using var scope = service.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PlanningDbContext>();
+        db.KnownTopics.Add(KnownTopic.Create(user, topic, LearningGoal.DefaultIdFor(user), hidden: false));
+        db.SaveChanges();
+    }
+
+    // As TopicsChanged would: change the topic, or take it out of the goal.
+    private void ChangeKnownTopic(string user, Guid topic, Action<KnownTopic> change, bool remove = false)
+    {
+        using var scope = service.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PlanningDbContext>();
+        var known = db.KnownTopics.IgnoreQueryFilters([ServiceDbContext.OwnerFilter]).Single(entry => entry.OwnerId == user && entry.TopicId == topic);
+        change(known);
+        if (remove)
+        {
+            db.KnownTopics.Remove(known);
+        }
+
+        db.SaveChanges();
     }
 
     private T Query<T>(Func<PlanningDbContext, T> query)
@@ -241,7 +328,8 @@ public sealed class SessionResultTests(ServiceFactory service) : IClassFixture<S
         bool MasteryAvailable,
         List<Change>? Topics,
         string DailyGoal,
-        NextStep NextStep);
+        NextStep NextStep,
+        bool TopicRemoved = false);
 
     private sealed record Change(Guid TopicId, Standing? Before, Standing? After);
 
