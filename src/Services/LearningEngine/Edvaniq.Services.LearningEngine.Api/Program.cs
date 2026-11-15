@@ -30,7 +30,8 @@ app.UseAuthorization();
 // Who the token says the caller is. Smoke test for the token check, ignores any user id in the request.
 app.MapGet("/me", (ICurrentUser user) => new { user.Id });
 
-// Someone else's topic and one this service doesn't know (yet) look the same: 404.
+// Someone else's topic and one this service doesn't know (yet) look the same: 404. A hidden topic still answers: it is
+// asked for by its id, practising it or showing an answer given just before it was hidden must not end in a 404 (#390).
 app.MapGet("/mastery/{topicId:guid}", async (Guid topicId, IMasteries masteries, CancellationToken cancellationToken) =>
     await masteries.FindAsync(topicId, cancellationToken) is { } standing
         ? Results.Ok(new MasteryResponse(topicId, standing.Mastery, StateNames.Of(standing.State), Mastery.RuleVersion, standing.LastAnswerId))

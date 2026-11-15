@@ -89,9 +89,11 @@ internal sealed class Masteries(LearningEngineDbContext db, TimeProvider time) :
             answerIds.Count - arrived);
     }
 
+    // The lists of a goal or of all topics leave a hidden topic out (#390). Its records stay, so it comes back with its
+    // mastery once it is shown again. ChangesAsync isn't filtered: a session's result tells what happened then.
     private Task<LoadedTopics> LoadAsync(Guid? learningGoalId, CancellationToken cancellationToken)
     {
-        var topics = db.KnownTopics.AsNoTracking();
+        var topics = db.KnownTopics.AsNoTracking().Where(topic => !topic.Hidden);
         if (learningGoalId is { } goal)
         {
             topics = topics.Where(topic => topic.LearningGoalId == goal);

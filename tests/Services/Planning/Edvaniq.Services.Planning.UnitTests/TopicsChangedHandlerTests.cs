@@ -182,6 +182,27 @@ public class TopicsChangedHandlerTests
         Assert.Equal((null, 1), (Assert.Single(store.Topics).Rank, store.Topics[0].Size));
     }
 
+    // #391: one topic hidden, shown again, then gone. Only an active one is for the plan.
+    [Fact]
+    public async Task Topic_HiddenThenShownThenGone_IsPlannedOnlyWhileActive()
+    {
+        var store = new FakeKnownTopics();
+        var (topic, other) = (Guid.NewGuid(), Guid.NewGuid());
+        var cancel = TestContext.Current.CancellationToken;
+        await HandleAsync(store, Changed(First, [topic, other]));
+
+        await HandleAsync(store, Changed(First.AddSeconds(1), [other], [topic]));
+        Assert.Equal([other], await store.ActiveAsync("alice", Goal, cancel));
+        Assert.True(store.Topics.Single(known => known.TopicId == topic).Hidden);
+
+        await HandleAsync(store, Changed(First.AddSeconds(2), [topic, other]));
+        Assert.Equal(new[] { topic, other }.Order(), (await store.ActiveAsync("alice", Goal, cancel)).Order());
+
+        await HandleAsync(store, Changed(First.AddSeconds(3), [other]));
+        Assert.Equal([other], await store.ActiveAsync("alice", Goal, cancel));
+        Assert.DoesNotContain(store.Topics, known => known.TopicId == topic);
+    }
+
     private static TopicsChanged Changed(
         DateTime changedAt, Guid[] topicIds, Guid[]? hidden = null, TopicParent[]? parents = null, Guid? goal = null) =>
         new("alice", goal ?? Goal, changedAt, topicIds, hidden ?? [], parents);
