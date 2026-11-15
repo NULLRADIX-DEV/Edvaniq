@@ -2,13 +2,16 @@ using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.Services.Planning.Contracts;
 using Edvaniq.Services.Planning.Domain;
 
+using Microsoft.Extensions.Logging;
+
 namespace Edvaniq.Services.Planning.Application;
 
 // Breaking a session off, moving it on (#393), the user's activity in it (#394) and finishing it (#395). The answers given
 // so far are with Assessment and LearningEngine already, so breaking off only ends the session here: the block stays
 // open and counts as started (#407). Finishing marks the block done. Every change is a signal for the active learning
 // time, its moment comes from the server's clock.
-public sealed class SessionChanges(ISessions sessions, IDoneBlocks doneBlocks, IEventOutbox outbox, TimeProvider time)
+public sealed class SessionChanges(
+    ISessions sessions, IDoneBlocks doneBlocks, IEventOutbox outbox, TimeProvider time, ILogger<SessionChanges> logger)
 {
     // Two signals at once are normal (a heartbeat while the user moves on). The one stored second goes again on the
     // session as stored, a few times at most.
@@ -19,7 +22,8 @@ public sealed class SessionChanges(ISessions sessions, IDoneBlocks doneBlocks, I
     public async Task<Session?> AbortAsync(Guid id, CancellationToken cancellationToken)
     {
         var unitStartedAt = await UnitStartedAtAsync(id, cancellationToken);
-        var (_, session) = await ChangeAsync(id, session => Ended(session, session.Abort(Now()), unitStartedAt), cancellationToken);
+        var (ended, session) = await ChangeAsync(id, session => Ended(session, session.Abort(Now()), unitStartedAt), cancellationToken);
+        LogEnd(ended, session);
         return session;
     }
 
@@ -28,7 +32,7 @@ public sealed class SessionChanges(ISessions sessions, IDoneBlocks doneBlocks, I
     public async Task<Session?> CompleteAsync(Guid id, CancellationToken cancellationToken)
     {
         var unitStartedAt = await UnitStartedAtAsync(id, cancellationToken);
-        var (_, session) = await ChangeAsync(
+        var (ended, session) = await ChangeAsync(
             id,
             session =>
             {
@@ -41,6 +45,7 @@ public sealed class SessionChanges(ISessions sessions, IDoneBlocks doneBlocks, I
                 return Ended(session, true, unitStartedAt);
             },
             cancellationToken);
+        LogEnd(ended, session);
         return session;
     }
 
@@ -96,8 +101,31 @@ public sealed class SessionChanges(ISessions sessions, IDoneBlocks doneBlocks, I
 
             if (attempt == Attempts)
             {
+                PlanningLog.ChangeGaveUp(logger, id, Attempts);
                 throw new InvalidOperationException($"Session {id} kept changing under {Attempts} attempts to store a signal.");
             }
+
+            PlanningLog.ChangeConflict(logger, id, attempt);
+        }
+    }
+
+    // Only once the end is stored. One that ended before (a second finish, or a finish after breaking off) says so.
+    private void LogEnd(bool ended, Session? session)
+    {
+        if (session is null)
+        {
+            return;
+        }
+
+        var outcome = session.Outcome == SessionOutcome.Completed ? "completed" : "aborted";
+        if (ended)
+        {
+            var duration = (long)(session.EndedAt!.Value - session.StartedAt).TotalSeconds;
+            PlanningLog.SessionEnded(logger, session.Id, outcome, duration, session.ActiveSeconds);
+        }
+        else if (!session.IsActive)
+        {
+            PlanningLog.SessionEndedAlready(logger, session.Id, outcome);
         }
     }
 

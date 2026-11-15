@@ -1,15 +1,40 @@
 using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.Services.Planning.Domain;
 
+using Microsoft.Extensions.Logging;
+
 namespace Edvaniq.Services.Planning.Application;
 
 // Starts a session on a block of today's plan (#376). Topic, kind and minutes come from the plan, never from the
 // caller. A user with an active session gets that one back, whichever block they asked for (docs/spec/acceptance.md
 // A88), also when two starts come at once.
 public sealed class SessionStarts(
-    ISessions sessions, TodayPlans plans, ILearningGoals goals, ICurrentUser currentUser, TimeProvider time)
+    ISessions sessions, TodayPlans plans, ILearningGoals goals, ICurrentUser currentUser, TimeProvider time, ILogger<SessionStarts> logger)
 {
     public async Task<SessionStart> StartAsync(Guid blockId, CancellationToken cancellationToken)
+    {
+        var start = await TryStartAsync(blockId, cancellationToken);
+        switch (start.Result)
+        {
+            case SessionStartResult.Started:
+                var session = start.Session!;
+                PlanningLog.SessionStarted(logger, session.Id, session.BlockId, session.Kind == BlockKind.Review ? "review" : "learn", session.Minutes);
+                break;
+            case SessionStartResult.Existing:
+                PlanningLog.SessionGoesOn(logger, start.Session!.Id);
+                break;
+            case SessionStartResult.BlockDone:
+                PlanningLog.BlockDone(logger, blockId);
+                break;
+            default:
+                PlanningLog.BlockGone(logger, blockId);
+                break;
+        }
+
+        return start;
+    }
+
+    private async Task<SessionStart> TryStartAsync(Guid blockId, CancellationToken cancellationToken)
     {
         if (await sessions.ActiveAsync(cancellationToken) is { } active)
         {

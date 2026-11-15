@@ -133,6 +133,9 @@ public class TopicsChangedHandlerTests
             Task.FromResult<IReadOnlyList<KnownTopic>>(
                 [.. Topics.Where(topic => topic.OwnerId == ownerId && (topic.LearningGoalId == learningGoalId || topicIds.Contains(topic.TopicId)))]);
 
+        public Task<IReadOnlySet<Guid>> KnownAsync(string ownerId, IReadOnlyCollection<Guid> topicIds, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlySet<Guid>>(Topics.Where(topic => topic.OwnerId == ownerId && topicIds.Contains(topic.TopicId)).Select(topic => topic.TopicId).ToHashSet());
+
         public void Add(TopicsSnapshot snapshot) => Snapshots.Add(snapshot);
 
         public void Add(KnownTopic topic) => Topics.Add(topic);

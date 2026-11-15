@@ -69,6 +69,12 @@ public sealed class SessionStartTests(ServiceFactory service) : IClassFixture<Se
         Assert.Equal(first with { Existing = true }, other);
         Assert.Equal(1, SessionsOf(alice));
         Assert.Equal(first.Id, (await GetAsync<Session>(token, "/sessions/active"))!.Id);
+
+        // #417: the start and both returns in the log, with the session's id and never the user.
+        var lines = service.Logs.Entries.Where(entry => entry.Message.Contains(first.Id.ToString(), StringComparison.Ordinal)).ToList();
+        Assert.Single(lines, entry => entry.EventName == "SessionStarted" && entry.Message.Contains(plan.Blocks[0].Id.ToString(), StringComparison.Ordinal));
+        Assert.Equal(2, lines.Count(entry => entry.EventName == "SessionGoesOn"));
+        Assert.Empty(service.Logs.Containing(alice));
     }
 
     // AC1 on two devices at once: the database lets one start through, all get the same session.

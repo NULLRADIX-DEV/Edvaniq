@@ -9,6 +9,7 @@ using Edvaniq.Testing;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 using static Edvaniq.Services.Planning.IntegrationTests.AssessmentStub;
 using static Edvaniq.Services.Planning.IntegrationTests.LearningEngineStub;
@@ -120,6 +121,9 @@ public sealed class SessionResultTests(ServiceFactory service) : IClassFixture<S
         Assert.Equal((1, false, true, null), (pending!.Answered, pending.Complete, pending.MasteryAvailable, pending.Topics));
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal((1, false, false, null), (down!.Answered, down.Complete, down.MasteryAvailable, down.Topics));
+        var entry = Assert.Single(service.Logs.Entries, entry => entry.EventName == "SessionResultWithoutMastery" && entry.Message.Contains(session.ToString(), StringComparison.Ordinal));
+        Assert.Equal(LogLevel.Warning, entry.Level);
+        Assert.Contains(service.Logs.Entries, entry => entry.EventName == "MasteryChangesUnavailable");
     }
 
     [Fact]
@@ -134,6 +138,8 @@ public sealed class SessionResultTests(ServiceFactory service) : IClassFixture<S
         var (status, _) = await ResultAsync(token, session);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
+        var entry = Assert.Single(service.Logs.Entries, entry => entry.EventName == "SessionResultWithoutAnswers" && entry.Message.Contains(session.ToString(), StringComparison.Ordinal));
+        Assert.Equal(LogLevel.Warning, entry.Level);
     }
 
     [Fact]

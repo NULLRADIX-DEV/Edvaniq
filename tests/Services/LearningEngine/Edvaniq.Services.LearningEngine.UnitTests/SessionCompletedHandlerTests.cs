@@ -1,6 +1,9 @@
 using Edvaniq.Services.LearningEngine.Application;
 using Edvaniq.Services.LearningEngine.Domain;
 using Edvaniq.Services.Planning.Contracts;
+using Edvaniq.Testing;
+
+using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.Services.LearningEngine.UnitTests;
 
@@ -16,7 +19,7 @@ public sealed class SessionCompletedHandlerTests
         var session = new SessionCompleted("alice", Guid.NewGuid(), EndedAt, true, [first, second, first]);
         var introductions = new FakeIntroductions();
 
-        await new SessionCompletedHandler(introductions).HandleAsync(session, TestContext.Current.CancellationToken);
+        await Handler(introductions).HandleAsync(session, TestContext.Current.CancellationToken);
 
         Assert.Equal([first, second], introductions.Added.Select(item => item.TopicId));
         Assert.All(introductions.Added, item =>
@@ -30,7 +33,7 @@ public sealed class SessionCompletedHandlerTests
     {
         var (withStart, withoutStart) = (Guid.NewGuid(), Guid.NewGuid());
         var introductions = new FakeIntroductions();
-        var handler = new SessionCompletedHandler(introductions);
+        var handler = Handler(introductions);
 
         await handler.HandleAsync(
             new SessionCompleted("alice", Guid.NewGuid(), EndedAt, true, [withStart], EndedAt.AddMinutes(-30)), TestContext.Current.CancellationToken);
@@ -48,7 +51,7 @@ public sealed class SessionCompletedHandlerTests
         var (known, fresh) = (Guid.NewGuid(), Guid.NewGuid());
         var introductions = new FakeIntroductions { Known = [known] };
 
-        await new SessionCompletedHandler(introductions).HandleAsync(
+        await Handler(introductions).HandleAsync(
             new SessionCompleted("alice", Guid.NewGuid(), EndedAt, true, [known, fresh]), TestContext.Current.CancellationToken);
 
         Assert.Equal(fresh, Assert.Single(introductions.Added).TopicId);
@@ -60,7 +63,7 @@ public sealed class SessionCompletedHandlerTests
     {
         var introductions = new FakeIntroductions();
 
-        await new SessionCompletedHandler(introductions).HandleAsync(
+        await Handler(introductions).HandleAsync(
             new SessionCompleted("alice", Guid.NewGuid(), EndedAt, false, [Guid.NewGuid()]), TestContext.Current.CancellationToken);
 
         Assert.Single(introductions.Added);
@@ -71,11 +74,71 @@ public sealed class SessionCompletedHandlerTests
     {
         var introductions = new FakeIntroductions();
 
-        await new SessionCompletedHandler(introductions).HandleAsync(
+        await Handler(introductions).HandleAsync(
             new SessionCompleted("alice", Guid.NewGuid(), EndedAt, true, []), TestContext.Current.CancellationToken);
 
         Assert.Empty(introductions.Added);
         Assert.Null(introductions.AskedFor);
+    }
+
+    // #417: the session and how many topics it introduced, a topic not known yet on its own line. Ids only, never the
+    // user.
+    [Fact]
+    public async Task Introductions_AreLogged_WithTheSession_AndTopicsNotKnownYet()
+    {
+        var (known, unknown) = (Guid.NewGuid(), Guid.NewGuid());
+        var user = $"alice-{Guid.NewGuid():N}";
+        var session = new SessionCompleted(user, Guid.NewGuid(), EndedAt, true, [known, unknown]);
+
+        await Handler(new FakeIntroductions(), [known]).HandleAsync(session, TestContext.Current.CancellationToken);
+
+        var introduced = Assert.Single(logs.Entries, entry => entry.EventName == "SessionIntroducedTopics");
+        Assert.Equal(LogLevel.Information, introduced.Level);
+        Assert.Contains(session.SessionId.ToString(), introduced.Message, StringComparison.Ordinal);
+        Assert.Contains("2 topics", introduced.Message, StringComparison.Ordinal);
+        var notKnown = Assert.Single(logs.Entries, entry => entry.EventName == "IntroducedTopicNotKnownYet");
+        Assert.Contains(unknown.ToString(), notKnown.Message, StringComparison.Ordinal);
+        Assert.Contains(session.SessionId.ToString(), notKnown.Message, StringComparison.Ordinal);
+        Assert.Empty(logs.Containing(user));
+    }
+
+    // Nothing new introduced, nothing to say.
+    [Fact]
+    public async Task NoNewIntroduction_LogsNothing()
+    {
+        var topic = Guid.NewGuid();
+
+        await Handler(new FakeIntroductions { Known = [topic] }, [topic]).HandleAsync(
+            new SessionCompleted("alice", Guid.NewGuid(), EndedAt, true, [topic]), TestContext.Current.CancellationToken);
+
+        Assert.Empty(logs.Entries);
+    }
+
+    private readonly TestLogs logs = new();
+
+    private SessionCompletedHandler Handler(FakeIntroductions introductions, IReadOnlyCollection<Guid>? knownTopics = null)
+    {
+        using var factory = LoggerFactory.Create(builder => builder.AddProvider(logs));
+        return new SessionCompletedHandler(introductions, new FakeKnownTopics(knownTopics ?? []), factory.CreateLogger<SessionCompletedHandler>());
+    }
+
+    private sealed class FakeKnownTopics(IReadOnlyCollection<Guid> known) : IKnownTopics
+    {
+        public Task<IReadOnlySet<Guid>> KnownAsync(string ownerId, IReadOnlyCollection<Guid> topicIds, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlySet<Guid>>(known.Intersect(topicIds).ToHashSet());
+
+        public Task<TopicsSnapshot?> SnapshotAsync(string ownerId, Guid learningGoalId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<KnownTopic>> ListAsync(
+            string ownerId, Guid learningGoalId, IReadOnlyCollection<Guid> topicIds, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public void Add(TopicsSnapshot snapshot) => throw new NotSupportedException();
+
+        public void Add(KnownTopic topic) => throw new NotSupportedException();
+
+        public void Remove(KnownTopic topic) => throw new NotSupportedException();
     }
 
     private sealed class FakeIntroductions : ITopicIntroductions

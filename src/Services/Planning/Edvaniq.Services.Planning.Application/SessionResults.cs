@@ -1,11 +1,14 @@
 using Edvaniq.Services.Planning.Domain;
 
+using Microsoft.Extensions.Logging;
+
 namespace Edvaniq.Services.Planning.Application;
 
 // The result of an ended session of the current user (#403): the answers from Assessment, the mastery before and after
 // from LearningEngine, both asked as queries with the caller's token (rule 4), and the daily goal and next block from
 // today's plan as /plan/today shows it.
-public sealed class SessionResults(ISessions sessions, ISessionAnswers answers, IMasteryChanges masteryChanges, TodayPlans plans)
+public sealed class SessionResults(
+    ISessions sessions, ISessionAnswers answers, IMasteryChanges masteryChanges, TodayPlans plans, ILogger<SessionResults> logger)
 {
     public async Task<SessionResultLookup> OfAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -27,7 +30,13 @@ public sealed class SessionResults(ISessions sessions, ISessionAnswers answers, 
         var (result, masteryAvailable) = await learnt;
         if (result is null)
         {
+            PlanningLog.ResultWithoutAnswers(logger, session.Id);
             return new(SessionResultStatus.AnswersUnavailable, session);
+        }
+
+        if (!masteryAvailable)
+        {
+            PlanningLog.ResultWithoutMastery(logger, session.Id);
         }
 
         var next = today.Blocks.FirstOrDefault(block => block.Id == today.NextBlockId);
