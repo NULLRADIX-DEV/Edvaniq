@@ -46,7 +46,12 @@ public static class MauiProgram
 			BaseAddress = host,
 			Timeout = TimeSpan.FromSeconds(20),
 		}));
-		builder.Services.AddScoped<ILearningMaterial>(services => new HttpLearningMaterial(Watched(services)));
+		builder.Services.AddScoped<ILearningMaterial>(services =>
+		{
+			var files = Watched(services);
+			files.Timeout = HttpLearningMaterial.FileTimeout;
+			return new HttpLearningMaterial(Watched(services), files);
+		});
 		builder.Services.AddScoped<IMaterialQuota>(services => new HttpMaterialQuota(Watched(services)));
 		builder.Services.AddScoped<ITopicDirectory>(services => new HttpTopicDirectory(Watched(services)));
 		builder.Services.AddScoped<IQuiz>(services => new HttpQuiz(Watched(services)));

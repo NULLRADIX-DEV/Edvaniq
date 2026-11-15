@@ -120,6 +120,28 @@ public sealed class HttpLearningMaterialTests
         Assert.Equal(CallResult.Ok, outcome.Result);
     }
 
+    // #319: a file goes up through its own client, so the short timeout of the other calls doesn't cut off 20 MB on a
+    // slow line.
+    [Fact]
+    public async Task Upload_GoesThroughTheClientForFiles()
+    {
+        var uploads = new List<HttpRequestMessage>();
+        var material = new HttpLearningMaterial(
+            Client(NeverAsync, timeout: TimeSpan.FromMilliseconds(100)),
+            Client((request, _) =>
+            {
+                uploads.Add(request);
+                return Task.FromResult(Created(DocumentJson));
+            }));
+
+        using var file = new MemoryStream([1, 2, 3]);
+        var outcome = await material.UploadAsync("Skript.pdf", file, TestContext.Current.CancellationToken);
+
+        Assert.Equal(CallResult.Ok, outcome.Result);
+        Assert.Equal(new Uri("https://edvaniq.test/api/content/documents/files?confirmation=material-1"), Assert.Single(uploads).RequestUri);
+        Assert.Equal(CallResult.Failed, (await material.ListDocumentsAsync(TestContext.Current.CancellationToken)).Result);
+    }
+
     // Content refuses a missing or outdated confirmation: 400 for a text, 422 for a file, both with its message.
     [Fact]
     public async Task ConfirmationRefused_GivesContentsMessage_ForTextAndFile()

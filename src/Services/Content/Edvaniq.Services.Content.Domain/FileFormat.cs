@@ -19,6 +19,10 @@ public static class FileCheck
     // 20 MB as the user counts them: what a file manager shows as 20 MB still passes.
     public const long MaxLength = 20L * 1024 * 1024;
 
+    // The whole upload: the file plus room for the multipart frame around it. The web host and the gateway take no larger
+    // body either (UploadLimitTests), docs/architecture.md, "Upload-Grenze".
+    public const long MaxBodyLength = MaxLength + (64 * 1024);
+
     public const string TooLarge = "Die Datei ist zu groß. Erlaubt sind höchstens 20 MB.";
 
     public const string Unsupported =

@@ -12,8 +12,7 @@ namespace Edvaniq.Services.Content.Api;
 // memory or in a temp folder. What the content turns out not to be is deleted again before the answer goes out.
 internal static class FileUploadEndpoint
 {
-    // The file plus room for the multipart frame around it.
-    public const long MaxBodyLength = FileCheck.MaxLength + (64 * 1024);
+    public const long MaxBodyLength = FileCheck.MaxBodyLength;
 
     public const string NoFile = "Es ist keine Datei angekommen. Wähle eine Datei aus und lade sie noch einmal hoch.";
 
