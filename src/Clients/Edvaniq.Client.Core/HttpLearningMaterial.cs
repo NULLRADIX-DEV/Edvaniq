@@ -10,11 +10,17 @@ namespace Edvaniq.Client.Core;
 // Talks to Content and Knowledge through the web host, which wants a login for both. The HttpClient carries the base
 // address of the host and has to keep the session cookie, as the browser does. Its timeout has to be longer than the
 // host's own wait for the gateway, so the host's error answer gets through instead of a timeout here.
-public sealed class HttpLearningMaterial(HttpClient http) : ILearningMaterial
+// A file goes up through its own client: 20 MB over a slow mobile line take minutes, far longer than any other call
+// may. Without one the file shares the timeout of the others.
+public sealed class HttpLearningMaterial(HttpClient http, HttpClient? files = null) : ILearningMaterial
 {
     public const string DocumentsPath = "api/content/documents";
     public const string TopicsPath = "api/knowledge/topics";
     public const string FilesPath = "api/content/documents/files";
+
+    // How long the client for files waits at most, for the whole upload and the answer. Only a brake for a line that
+    // stalls for good, the page can break off sooner.
+    public static readonly TimeSpan FileTimeout = TimeSpan.FromMinutes(15);
 
     // The most Content takes, counted like .NET and the browser count a string's length.
     public const int TextMaxLength = 200_000;
@@ -58,7 +64,7 @@ public sealed class HttpLearningMaterial(HttpClient http) : ILearningMaterial
             {
                 using var form = new MultipartFormDataContent();
                 form.Add(new StreamContent(content), "file", fileName);
-                return await http.PostAsync($"{FilesPath}?confirmation={MaterialConfirmationValues.Version}", form, token);
+                return await (files ?? http).PostAsync($"{FilesPath}?confirmation={MaterialConfirmationValues.Version}", form, token);
             },
             MaterialJson.Default.DocumentInfo,
             cancellationToken,

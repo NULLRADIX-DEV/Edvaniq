@@ -26,6 +26,9 @@ var app = builder.Build();
 // An exception of the gateway itself becomes a bare 500 problem, without message or stack trace.
 app.UseExceptionHandler();
 
+// Before the token: a body too large is turned away without anything else being done for it.
+app.UseBodyLimit();
+
 app.MapDefaultEndpoints();
 
 // After the health endpoints, which are middleware outside Development and would need a token otherwise.
