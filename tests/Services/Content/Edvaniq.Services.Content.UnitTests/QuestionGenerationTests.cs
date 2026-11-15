@@ -13,14 +13,14 @@ namespace Edvaniq.Services.Content.UnitTests;
 public class QuestionGenerationTests
 {
     // The hash of the system prompt of each version, since questions-2 over all its profiles (PromptHash), since
-    // questions-4 also over every count of a pool (AllCounts). A changed
-    // prompt needs a new version and a new line here.
+    // questions-4 also over every count of a pool (AllCounts). A changed prompt needs a new version and a new line here.
     private static readonly Dictionary<string, string> Prompts = new()
     {
         ["questions-1"] = "c2532e907cca17f8928dd15d71f5de4fd3e6cba1756bd316a5ee1dfe5099f756",
         ["questions-2"] = "c098d18927eb91d2cfc3e277bbcfbe90a8907aa4c35ac1c92ae5e60f19852e30",
         ["questions-3"] = "8d3dff6090741b16621f5a803c02bdb839e1efd7301cffd577de0ba830fff2f1",
         ["questions-4"] = "25c8cf6f8d7b2ad1c194785a5edf474fa0765b2b6ed51ddd024e5d8a716f511f",
+        ["questions-5"] = "9d65c8528b48b05089186f559eb5fd082f102bb7b8c12952384c6fe56cf25c0c",
     };
 
     private static readonly Guid[] Sections = [Guid.NewGuid(), Guid.NewGuid()];
@@ -36,6 +36,16 @@ public class QuestionGenerationTests
     [Fact]
     public void System_ChangesOnlyWithANewPromptVersion() =>
         Assert.Equal(Prompts[QuestionGeneration.PromptVersion], PromptHash.Of(AllCounts));
+
+    // The options get shuffled (#1046): none may point at another one or its place, nor may an explanation.
+    [Fact]
+    public void System_KeepsOptionsAndExplanationsFreeOfPlaces() =>
+        Assert.All(LearnerProfile.All, profile =>
+        {
+            var system = QuestionGeneration.System(profile);
+            Assert.Contains("Keine Option bezieht sich deshalb auf andere Optionen oder ihre Stelle", system);
+            Assert.Contains("Die Erklärung nennt die Lösung bei ihrem Inhalt, nie bei Buchstabe, Nummer oder Stelle einer Option.", system);
+        });
 
     // Since questions-4 the hash covers the prompt for every number of questions a pool can have.
     private static string AllCounts(LearnerProfile profile) =>

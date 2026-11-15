@@ -17,7 +17,7 @@ public static class QuestionGeneration
     // Goes with every question. A new prompt needs a new version, QuestionGenerationTests holds them together.
     // The version covers every variant of System, so version, the profile stored at the document and the number of
     // questions the pool had give the exact prompt.
-    public const string PromptVersion = "questions-4";
+    public const string PromptVersion = "questions-5";
 
     // As many as the prompt asks for. Fewer may be left after the check, QuestionTopUps tops the pool up (#339).
     public const int MaxQuestions = 20;
@@ -63,7 +63,9 @@ public static class QuestionGeneration
         Schreib Fragen, Optionen und Erklärungen auf {{profile.LanguageName}}, auch wenn das Material in einer anderen Sprache ist.
         Fachbegriffe übernimmst du so, wie sie im Material stehen. Ist das Material in einer anderen Sprache, darfst du die Übersetzung in Klammern dahinter setzen.
         {{profile.LevelInstruction}}
+        Die Optionen werden später gemischt. Keine Option bezieht sich deshalb auf andere Optionen oder ihre Stelle, also nichts wie „alle genannten“, „keine davon“ oder „A und B“.
         Jede Frage hat ihre Art, eine kurze Erklärung der Lösung, eine Schwierigkeit und die Nummer des Abschnitts, aus dem sie stammt.
+        Die Erklärung nennt die Lösung bei ihrem Inhalt, nie bei Buchstabe, Nummer oder Stelle einer Option. Bei Wahr/Falsch sagt sie, ob die Aussage stimmt und warum.
         "answers" nennt die Stellen aller richtigen Optionen, ab 0 gezählt.
         Antworte nur mit JSON in dieser Form:
         {"questions":[{"type":"{{SingleChoice}}","text":"Frage","options":["A","B"],"answers":[0],"explanation":"Erklärung","difficulty":1,"section":1}]}
@@ -265,4 +267,24 @@ public sealed record QuestionDraft(
 {
     // The lowest right option, the one a receiver from before multiple choice reads.
     public int Answer => Answers[0];
+
+    // The options of a single or multiple choice in a random order, the right ones moved along (#1046). Models like to
+    // put the answer first, a learner who notices guesses instead of learning. True/false keeps its fixed order.
+    public QuestionDraft Shuffled(Random random)
+    {
+        ArgumentNullException.ThrowIfNull(random);
+        if (Type == QuestionType.TrueFalse)
+        {
+            return this;
+        }
+
+        // order[i] is the old place of the option that goes to place i.
+        var order = Enumerable.Range(0, Options.Count).ToArray();
+        random.Shuffle(order);
+        return this with
+        {
+            Options = [.. order.Select(old => Options[old])],
+            Answers = [.. Answers.Select(right => Array.IndexOf(order, right)).Order()],
+        };
+    }
 }
