@@ -233,6 +233,9 @@ namespace Edvaniq.Services.LearningEngine.Infrastructure.Migrations
                     b.Property<Guid>("SessionId")
                         .HasColumnType("char(36)");
 
+                    b.Property<DateTime?>("UnitStartedAt")
+                        .HasColumnType("datetime(6)");
+
                     b.HasKey("OwnerId", "TopicId");
 
                     b.HasIndex("OwnerId");

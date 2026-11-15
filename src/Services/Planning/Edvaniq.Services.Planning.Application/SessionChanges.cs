@@ -18,7 +18,8 @@ public sealed class SessionChanges(ISessions sessions, IDoneBlocks doneBlocks, I
     // nothing is sent again.
     public async Task<Session?> AbortAsync(Guid id, CancellationToken cancellationToken)
     {
-        var (_, session) = await ChangeAsync(id, session => Ended(session, session.Abort(Now())), cancellationToken);
+        var unitStartedAt = await UnitStartedAtAsync(id, cancellationToken);
+        var (_, session) = await ChangeAsync(id, session => Ended(session, session.Abort(Now()), unitStartedAt), cancellationToken);
         return session;
     }
 
@@ -26,6 +27,7 @@ public sealed class SessionChanges(ISessions sessions, IDoneBlocks doneBlocks, I
     // at once only one gets through (LastActivityAt, the block's key) and the event goes out exactly once.
     public async Task<Session?> CompleteAsync(Guid id, CancellationToken cancellationToken)
     {
+        var unitStartedAt = await UnitStartedAtAsync(id, cancellationToken);
         var (_, session) = await ChangeAsync(
             id,
             session =>
@@ -36,7 +38,7 @@ public sealed class SessionChanges(ISessions sessions, IDoneBlocks doneBlocks, I
                 }
 
                 doneBlocks.Add(session.ToDoneBlock());
-                return Ended(session, true);
+                return Ended(session, true, unitStartedAt);
             },
             cancellationToken);
         return session;
@@ -52,8 +54,9 @@ public sealed class SessionChanges(ISessions sessions, IDoneBlocks doneBlocks, I
         return session is null ? null : recorded;
     }
 
-    // A session that just ended tells LearningEngine which topic it introduced, also when broken off past the unit.
-    private bool Ended(Session session, bool ended)
+    // A session that just ended tells LearningEngine which topic it introduced, also when broken off past the unit, and
+    // when the unit started (#1040).
+    private bool Ended(Session session, bool ended, DateTime? unitStartedAt)
     {
         if (ended)
         {
@@ -62,11 +65,19 @@ public sealed class SessionChanges(ISessions sessions, IDoneBlocks doneBlocks, I
                 session.Id,
                 session.EndedAt!.Value,
                 session.Outcome == SessionOutcome.Completed,
-                session.IntroducedTopicIds()));
+                session.IntroducedTopicIds(),
+                unitStartedAt ?? session.StartedAt));
         }
 
         return ended;
     }
+
+    // The start of the first session on the block (Session.UnitStartedAt). Read before the change: the sessions on a
+    // block only grow by a start, which can't happen while this one runs.
+    private async Task<DateTime?> UnitStartedAtAsync(Guid id, CancellationToken cancellationToken) =>
+        await sessions.FindAsync(id, cancellationToken) is { } session
+            ? session.UnitStartedAt(await sessions.OnBlockAsync(session.BlockId, cancellationToken))
+            : null;
 
     private async Task<(T? Result, Session? Session)> ChangeAsync<T>(Guid id, Func<Session, T> change, CancellationToken cancellationToken)
     {

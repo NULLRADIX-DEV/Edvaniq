@@ -35,8 +35,8 @@ public sealed class MasteryCarry : IOwnedByUser
 
     public int Version { get; private set; }
 
-    // The fold to go on from, or null. An introduction after the carry means none of its records count, as they
-    // wouldn't if they were still there.
+    // The fold to go on from, or null. An introduction counting from after the carry means none of its records count,
+    // as they wouldn't if they were still there.
     public MasteryFold? FoldFor(TopicIntroduction? introduction)
     {
         if (Value is not { } value || At is not { } at || LastCorrect is not { } lastCorrect)
@@ -44,7 +44,7 @@ public sealed class MasteryCarry : IOwnedByUser
             return null;
         }
 
-        return introduction is not null && introduction.IntroducedAt > at ? null : new MasteryFold(value, at, lastCorrect, PreviousCorrect);
+        return introduction is not null && introduction.CountsFrom > at ? null : new MasteryFold(value, at, lastCorrect, PreviousCorrect);
     }
 
     // Folds the expired records of the topic into the carry, starting a new one for the first. Records are those to

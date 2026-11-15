@@ -78,6 +78,33 @@ public sealed class IntroductionTests(ServiceFactory service) : IClassFixture<Se
         Assert.Equal(first.SessionId, introduction.SessionId);
     }
 
+    // #1040: with the unit's start the quiz answers of the unit count, they carry no session, and so does one sent in
+    // later. One from before the unit doesn't, and the event again with another start changes nothing.
+    [Fact]
+    public async Task UnitStart_CountsTheQuizAndLateAnswers_Once()
+    {
+        var alice = NewUser("alice");
+        var topic = await KnowAsync(alice);
+        var startedAt = DateTime.UtcNow.AddMinutes(-30);
+        await DeliverAsync(Answer(alice, topic, null, TimeSpan.FromMinutes(40)));
+
+        var completed = new SessionCompleted(alice, Guid.NewGuid(), DateTime.UtcNow.AddMinutes(-5), true, [topic], startedAt);
+        await DeliverAsync(completed);
+        Assert.Equal(50, await MasteryAsync(alice, topic));
+
+        await DeliverAsync(Answer(alice, topic, null, TimeSpan.FromMinutes(20)));
+        Assert.Equal(62, await MasteryAsync(alice, topic));
+
+        await DeliverAsync(Answer(alice, topic, null, TimeSpan.Zero));
+        var withLate = await MasteryAsync(alice, topic);
+        Assert.True(withLate > 62, $"{withLate}");
+
+        await DeliverAsync(completed with { UnitStartedAt = startedAt.AddHours(-2) });
+        Assert.Equal(withLate, await MasteryAsync(alice, topic));
+        var introduction = Assert.Single(Query(db => db.TopicIntroductions.IgnoreQueryFilters().Where(item => item.TopicId == topic).ToList()));
+        Assert.Equal(startedAt, introduction.UnitStartedAt!.Value, TimeSpan.FromMilliseconds(1));
+    }
+
     // Bob's session names Alice's topic id, that introduces nothing for her.
     [Fact]
     public async Task OtherUsersSession_DoesNotIntroduceTheTopic()
@@ -125,7 +152,7 @@ public sealed class IntroductionTests(ServiceFactory service) : IClassFixture<Se
 
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
 
-    private static AnswerRecorded Answer(string user, Guid topic, Guid session, TimeSpan ago) =>
+    private static AnswerRecorded Answer(string user, Guid topic, Guid? session, TimeSpan ago) =>
         new(AnswerRecorded.CurrentVersion, user, topic, Guid.NewGuid(), session, Guid.NewGuid(), true, 2, 4200, null,
             Mode.Practice, DateTime.UtcNow - ago);
 

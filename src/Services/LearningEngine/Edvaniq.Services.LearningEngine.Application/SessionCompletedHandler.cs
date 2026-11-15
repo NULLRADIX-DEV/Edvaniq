@@ -22,7 +22,7 @@ public sealed class SessionCompletedHandler(ITopicIntroductions introductions) :
         foreach (var topic in topics.Where(topic => !known.Contains(topic)))
         {
             introductions.Add(TopicIntroduction.Create(
-                integrationEvent.UserId, topic, integrationEvent.SessionId, integrationEvent.EndedAt));
+                integrationEvent.UserId, topic, integrationEvent.SessionId, integrationEvent.EndedAt, integrationEvent.UnitStartedAt));
         }
     }
 }

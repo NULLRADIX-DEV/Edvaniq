@@ -44,7 +44,7 @@ public sealed class LearningEngineStub
             Content = JsonContent.Create(
                 new
                 {
-                    ruleVersion = 3,
+                    ruleVersion = 4,
                     weaknesses = topics.Select((topicId, index) => new { topicId, mastery = 10 + index, reason = "mastery" }).ToArray(),
                     secure = Array.Empty<object>(),
                 },

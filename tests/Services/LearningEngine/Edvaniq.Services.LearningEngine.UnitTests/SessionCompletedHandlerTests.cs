@@ -24,6 +24,23 @@ public sealed class SessionCompletedHandlerTests
         Assert.Equal(("alice", 2), (introductions.AskedFor, introductions.AskedTopics));
     }
 
+    // #1040: the introduction keeps when the unit started, an event from before without it leaves it empty.
+    [Fact]
+    public async Task UnitStart_GoesIntoTheIntroduction()
+    {
+        var (withStart, withoutStart) = (Guid.NewGuid(), Guid.NewGuid());
+        var introductions = new FakeIntroductions();
+        var handler = new SessionCompletedHandler(introductions);
+
+        await handler.HandleAsync(
+            new SessionCompleted("alice", Guid.NewGuid(), EndedAt, true, [withStart], EndedAt.AddMinutes(-30)), TestContext.Current.CancellationToken);
+        await handler.HandleAsync(
+            new SessionCompleted("alice", Guid.NewGuid(), EndedAt, true, [withoutStart]), TestContext.Current.CancellationToken);
+
+        Assert.Equal(EndedAt.AddMinutes(-30), introductions.Added[0].UnitStartedAt);
+        Assert.Null(introductions.Added[1].UnitStartedAt);
+    }
+
     // The same session again, or a later one, doesn't introduce a topic a second time.
     [Fact]
     public async Task TopicIntroducedBefore_KeepsItsFirstIntroduction()
