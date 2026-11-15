@@ -48,6 +48,59 @@ public sealed class QuizPageTests(WebShell shell)
         await Assertions.Expect(page.Page.Locator(".quiz-feedback")).ToHaveCountAsync(0);
     }
 
+    // #357: a multiple choice question only with the keyboard. Space ticks a box, Tab goes on, all ticks go up together,
+    // and each option says what it was.
+    [Fact]
+    public async Task MultipleChoice_OnAPhone_WithTheKeyboardOnly()
+    {
+        var sent = new List<string>();
+        await using var page = await shell.OpenSignedInAsync(Path, WebShell.PhoneWidth, prepare: browser => Material.AnswerMultipleChoiceAsync(browser, sent));
+        await Assertions.Expect(page.Page.Locator("legend")).ToHaveTextAsync("Was braucht die Photosynthese?");
+        await Assertions.Expect(page.Page.Locator("#quiz-several")).ToHaveTextAsync("Mehrere Antworten können richtig sein.");
+        await Assertions.Expect(page.Page.GetByRole(AriaRole.Group, new PageGetByRoleOptions { Name = "Was braucht die Photosynthese?" }))
+            .ToHaveAccessibleDescriptionAsync("Mehrere Antworten können richtig sein.");
+        await AssertLargeEnoughAsync(page.Page.Locator("label[for=option-0]"));
+        await AssertNoSidewaysScrollAsync(page.Page);
+        await AxeScan.AssertNoViolationsAsync(page.Page, $"{Path} with a multiple choice question at {WebShell.PhoneWidth} px");
+
+        await TabToAsync(page.Page, "#option-0");
+        await page.Page.Keyboard.PressAsync("Space");
+        await page.Page.Keyboard.PressAsync("Tab");
+        await page.Page.Keyboard.PressAsync("Tab");
+        await Assertions.Expect(page.Page.Locator("#option-2")).ToBeFocusedAsync();
+        await page.Page.Keyboard.PressAsync("Space");
+        await Assertions.Expect(page.Page.GetByLabel("Licht", new PageGetByLabelOptions { Exact = true })).ToBeCheckedAsync();
+        await Assertions.Expect(page.Page.GetByLabel("Wasser")).ToBeCheckedAsync();
+        await Assertions.Expect(page.Page.GetByLabel("Sauerstoff")).Not.ToBeCheckedAsync();
+        await TabToAsync(page.Page, "button[type=submit]");
+        await page.Page.Keyboard.PressAsync("Enter");
+
+        await Assertions.Expect(page.Page.Locator("#feedback-heading")).ToContainTextAsync("Richtig! Gut gemacht.");
+        await Assertions.Expect(page.Page.Locator("#feedback-heading")).ToBeFocusedAsync();
+        Assert.Equal("""{"options":[0,2],"responseTimeMs":""", sent.Single()[..34]);
+        await Assertions.Expect(page.Page.Locator(".quiz-options li").Nth(0)).ToContainTextAsync("Richtig gewählt");
+        await Assertions.Expect(page.Page.Locator(".quiz-options li").Nth(2)).ToContainTextAsync("Richtig gewählt");
+        await Assertions.Expect(page.Page.Locator(".quiz-right-list li")).ToHaveTextAsync(["Licht", "Wasser"]);
+        await AssertNoSidewaysScrollAsync(page.Page);
+        await AxeScan.AssertNoViolationsAsync(page.Page, $"{Path} multiple choice answered at {WebShell.PhoneWidth} px");
+    }
+
+    // Presses Tab until the element has the focus, at most 30 times.
+    private static async Task TabToAsync(IPage page, string selector)
+    {
+        for (var i = 0; i < 30; i++)
+        {
+            if (await page.Locator(selector).EvaluateAsync<bool>("element => element === document.activeElement"))
+            {
+                return;
+            }
+
+            await page.Keyboard.PressAsync("Tab");
+        }
+
+        Assert.Fail($"Tab never reached {selector}.");
+    }
+
     [Theory]
     [InlineData(WebShell.PhoneWidth)]
     [InlineData(WebShell.DesktopWidth)]

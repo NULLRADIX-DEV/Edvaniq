@@ -187,6 +187,45 @@ internal static class Material
         });
     }
 
+    // A multiple choice question (#357): the first and the third option are right. The grade comes from the options sent.
+    public static async Task AnswerMultipleChoiceAsync(IPage page, List<string> sent)
+    {
+        var attempt = AttemptId;
+        await AnswerAsync(page, documents: [new[] { Document("Ready") }], topics: [Topics]);
+        await page.RouteAsync("**/api/assessment/attempts", route => FulfillAsync(route, new
+        {
+            id = attempt,
+            topicId = TopicId,
+            questionId = Guid.NewGuid(),
+            type = "multipleChoice",
+            text = "Was braucht die Photosynthese?",
+            options = new[] { "Licht", "Sauerstoff", "Wasser", LongWord },
+            difficulty = 2,
+        }, 201));
+        await page.RouteAsync("**/api/assessment/attempts/*/answer", route =>
+        {
+            sent.Add(route.Request.PostData ?? "");
+            var options = JsonDocument.Parse(route.Request.PostData!).RootElement.GetProperty("options")
+                .EnumerateArray().Select(option => option.GetInt32()).ToArray();
+            return FulfillAsync(route, new
+            {
+                id = attempt,
+                topicId = TopicId,
+                questionId = Guid.NewGuid(),
+                type = "multipleChoice",
+                option = (int?)null,
+                options,
+                revealed = false,
+                correct = options.SequenceEqual([0, 2]),
+                answer = 0,
+                answers = new[] { 0, 2 },
+                explanation = "Licht und Wasser.",
+                responseTimeMs = 1000,
+                answeredAt = DateTime.UtcNow,
+            });
+        });
+    }
+
     // Planning's learning goals: none yet, and a new one comes back as it was sent. What was sent lands in the list.
     public static Task AnswerGoalsAsync(IPage page, List<string> created) =>
         page.RouteAsync("**/api/planning/learning-goals", route =>
