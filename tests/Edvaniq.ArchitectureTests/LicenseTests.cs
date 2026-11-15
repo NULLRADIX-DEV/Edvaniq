@@ -75,6 +75,47 @@ public class LicenseTests
         Assert.Equal(LicenseList.IndirectPackages, list.Rows[2].Table);
     }
 
+    // #410: licenses for contents count only in their table, and the code licenses not there.
+    [Fact]
+    public void ContentLicenses_CountOnlyForContents()
+    {
+        var list = LicenseList.Read("""
+            **Erlaubt** sind `MIT`.
+
+            **Erlaubt für Inhalte** sind `CC0-1.0` und `CC-BY-SA-4.0`.
+
+            ## Liste
+
+            ### Inhalte
+
+            | Komponente | Lizenz | Einsatz |
+            |---|---|---|
+            | Demo-Text | CC0-1.0 | Demo |
+            | Code als Inhalt | MIT | Demo |
+
+            ### Tools und Programme
+
+            | Komponente | Lizenz | Einsatz |
+            |---|---|---|
+            | Werkzeug | CC-BY-SA-4.0 | CI |
+            """);
+
+        Assert.Equal(["MIT"], list.Allowed);
+        Assert.Equal([true, false, false], list.Rows.Select(list.IsAllowed));
+        Assert.Equal(
+            ["Code als Inhalt is listed with the license MIT, which is not allowed and not approved", "Werkzeug is listed with the license CC-BY-SA-4.0, which is not allowed and not approved"],
+            LicenseRule.Violations(list, Used()).Where(violation => violation.Contains("is listed with", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void LicenseListOfTheRepository_NamesTheDemoMaterial()
+    {
+        var list = LicenseList.Read(File.ReadAllText(Path.Combine(Repository.Root, "docs", "licenses.md")));
+
+        Assert.Equal(["CC-BY-4.0", "CC-BY-SA-4.0", "CC0-1.0"], list.AllowedForContents.Order(StringComparer.Ordinal));
+        Assert.Contains(list.Rows, row => row.Table == LicenseList.Contents && row.License == "CC0-1.0" && list.IsAllowed(row));
+    }
+
     [Theory]
     [InlineData("MIT", true)]
     [InlineData("MIT AND Apache-2.0", true)]

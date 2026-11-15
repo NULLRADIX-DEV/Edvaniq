@@ -48,7 +48,7 @@ internal static partial class LicenseRule
             yield return $"{row.Component} is listed under \"{LicenseList.Packages}\" but no direct package";
         }
 
-        foreach (var row in list.Rows.Where(row => !row.IsApproved && !list.IsAllowed(row.License)))
+        foreach (var row in list.Rows.Where(row => !row.IsApproved && !list.IsAllowed(row)))
         {
             yield return $"{row.Component} is listed with the license {row.License}, which is not allowed and not approved";
         }
