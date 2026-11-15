@@ -40,6 +40,7 @@ public sealed class SourceTests(ServiceFactory service) : IClassFixture<ServiceF
 
         Assert.Equal(document.Id, source.GetProperty("documentId").GetGuid());
         Assert.Equal(sections[1].Id, source.GetProperty("sectionId").GetGuid());
+        Assert.Equal(1, source.GetProperty("position").GetInt32());
         Assert.Equal(("Skript", "pdf", true), (source.GetProperty("title").GetString(), source.GetProperty("format").GetString(), source.GetProperty("hasFile").GetBoolean()));
         Assert.Equal((3, 3), (source.GetProperty("page").GetInt32(), source.GetProperty("pageTo").GetInt32()));
         Assert.Equal(JsonValueKind.Null, source.GetProperty("text").ValueKind);
@@ -192,6 +193,7 @@ public sealed class SourceTests(ServiceFactory service) : IClassFixture<ServiceF
 
     private static void AssertWindow(JsonElement source, string text, Section section, Section from, Section to, bool before, bool after)
     {
+        Assert.Equal(section.Ordinal, source.GetProperty("position").GetInt32());
         var window = source.GetProperty("text").GetString()!;
         var start = source.GetProperty("start").GetInt32();
         var length = source.GetProperty("length").GetInt32();

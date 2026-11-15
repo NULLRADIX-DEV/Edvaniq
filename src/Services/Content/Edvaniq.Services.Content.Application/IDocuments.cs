@@ -68,4 +68,4 @@ public sealed record DocumentSummary(
 
 // A section at its place in the original: a PDF opens at its pages, any other document shows the section in Window.
 public sealed record SectionSource(
-    Guid DocumentId, Guid SectionId, string Title, FileFormat? Format, bool HasFile, int? PageFrom, int? PageTo, SourceWindow? Window);
+    Guid DocumentId, Guid SectionId, int Position, string Title, FileFormat? Format, bool HasFile, int? PageFrom, int? PageTo, SourceWindow? Window);

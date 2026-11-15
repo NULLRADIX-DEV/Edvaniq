@@ -113,7 +113,7 @@ internal sealed class Documents(
         {
             var pages = await db.DocumentPages.AsNoTracking().Where(page => page.DocumentId == document.Id).ToListAsync(cancellationToken);
             var (from, to) = section.PagesIn(pages);
-            return new SectionSource(document.Id, section.Id, document.Title, document.FileFormat, document.FileId is not null, from, to, null);
+            return new SectionSource(document.Id, section.Id, section.Ordinal, document.Title, document.FileFormat, document.FileId is not null, from, to, null);
         }
 
         var text = await db.Documents.AsNoTracking()
@@ -124,7 +124,7 @@ internal sealed class Documents(
             .Where(item => item.DocumentId == document.Id && item.Ordinal >= section.Ordinal - 1 && item.Ordinal <= section.Ordinal + 1)
             .ToListAsync(cancellationToken);
         return new SectionSource(
-            document.Id, section.Id, document.Title, document.FileFormat, document.FileId is not null, null, null, SourceWindow.Around(text, section, neighbours));
+            document.Id, section.Id, section.Ordinal, document.Title, document.FileFormat, document.FileId is not null, null, null, SourceWindow.Around(text, section, neighbours));
     }
 
     // The status is a concurrency token: of two retries at once only the first save wins, the second finds the

@@ -67,11 +67,13 @@ internal static class SourceEndpoints
     };
 }
 
-// Format is pdf, docx, text or markdown, null for a pasted text. A PDF names its pages and has no text, any other
-// document has the window around the section (SourceWindow): start and length count from the start of text.
+// Position counts the sections of the document from 0, as GET /documents/{id}/sections does. Format is pdf, docx, text
+// or markdown, null for a pasted text. A PDF names its pages and has no text, any other document has the window around
+// the section (SourceWindow): start and length count from the start of text.
 internal sealed record SectionSourceResponse(
     Guid DocumentId,
     Guid SectionId,
+    int Position,
     string Title,
     string? Format,
     bool HasFile,
@@ -87,6 +89,7 @@ internal sealed record SectionSourceResponse(
         new(
             source.DocumentId,
             source.SectionId,
+            source.Position,
             source.Title,
             source.Format?.ToString().ToLowerInvariant(),
             source.HasFile,
