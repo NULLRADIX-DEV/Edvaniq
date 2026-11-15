@@ -138,8 +138,8 @@ public sealed class SessionResultTests(ServiceFactory service) : IClassFixture<S
         AddKnownTopic(user, topic);
         service.Assessment.Set(token, topic);
         service.LearningEngine.Set(token, topic, 50, "new");
-        var block = (await PlanAsync(token)).Blocks.Single();
-        Assert.Equal("learn", block.Kind);
+        // A new topic can get more than one block today, the first learn block is the one this session runs.
+        var block = (await PlanAsync(token)).Blocks.First(entry => entry.TopicId == topic && entry.Kind == "learn");
         var session = await StartAsync(token, block.Id);
         await PostAsync(token, $"/sessions/{session}/complete");
         service.Assessment.SetAnswers(token, block.Id, Answer(topic, true), Answer(topic, true));
