@@ -866,7 +866,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Single(attempts.Select(attempt => attempt.CallId).Distinct());
     }
 
-    // The cost log holds only numbers and names of our own, never a prompt, the material or the answer.
+    // The cost log holds only numbers, ids and names of our own, never a prompt, the material or the answer.
     [Fact]
     public void CostLog_HasNoColumnForText()
     {
@@ -874,7 +874,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         var model = scope.ServiceProvider.GetRequiredService<ContentDbContext>().Model;
 
         Assert.Equal(
-            ["Attempt", "CallId", "CalledAt", "Cost", "DocumentId", "DurationMs", "Id", "InputTokens", "Model", "Outcome", "OutputTokens", "OwnerId", "PromptVersion", "Purpose"],
+            ["Attempt", "CallId", "CalledAt", "Cost", "DocumentId", "DurationMs", "Id", "InputTokens", "Model", "Outcome", "OutputTokens", "OwnerId", "PromptVersion", "Purpose", "SummaryId", "TopicId"],
             model.FindEntityType(typeof(AiAttempt))!.GetProperties().Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
             ["Attempts", "Calls", "Cost", "Day", "DurationMs", "InputTokens", "Model", "OutputTokens", "PromptVersion", "Purpose", "UnpricedAttempts"],

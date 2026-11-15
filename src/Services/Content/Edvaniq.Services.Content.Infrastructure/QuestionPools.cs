@@ -60,7 +60,7 @@ public sealed class QuestionPools(
                 }
                 catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
                 {
-                    ContentLog.PoolRoundFailed(logger, exception, Interval);
+                    ContentLog.PoolRoundFailed(logger, ContentLog.Describe(exception), Interval);
                 }
 
                 await Task.Delay(Interval, time, stoppingToken);
@@ -123,6 +123,7 @@ public sealed class QuestionPools(
             return false;
         }
 
+        var started = time.GetTimestamp();
         var topics = await TopicsAsync(scope.ServiceProvider.GetRequiredService<IKnowledgeTopics>(), documentId, cancellationToken);
         var ids = topics.Select(topic => topic.Id).ToList();
         var pooled = await db.QuestionPools.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
@@ -188,7 +189,7 @@ public sealed class QuestionPools(
             }
 
             var (items, failure, attempts) = await QuestionRequests.AskAsync(
-                document, profile, material, texts, 0, ai, testDouble, answers, AiTimeout, cancellationToken);
+                document, profile, material, texts, 0, AiAttempt.Questions, topic.Id, ai, testDouble, answers, AiTimeout, cancellationToken);
             if (items is null)
             {
                 if (failure is not null)
@@ -218,7 +219,12 @@ public sealed class QuestionPools(
         }
 
         document.FinishAnalysis();
-        await WorkerSave.SaveAsync(db, documentId, "questions", logger, cancellationToken);
+        if (await WorkerSave.SaveAsync(db, documentId, "questions", logger, cancellationToken))
+        {
+            ContentLog.PoolsMade(
+                logger, documentId, made.Count, made.Sum(pool => pool.Items.Count), (long)time.GetElapsedTime(started).TotalMilliseconds);
+        }
+
         return true;
     }
 

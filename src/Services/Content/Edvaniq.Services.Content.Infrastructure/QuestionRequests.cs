@@ -14,13 +14,15 @@ internal static class QuestionRequests
     // The checked questions as items, or null if none held up, then with the failure of the provider if that was why.
     // An answer without a valid question gets asked again, up to StructuredOutput.DefaultAttempts, since a real model
     // may just have had a bad moment. A provider that fails or takes too long ends at once. Every attempt goes into the
-    // cost log. Have is the number of questions the pool has already.
+    // cost log, under the purpose and the topic. Have is the number of questions the pool has already.
     public static async Task<(List<GeneratedItem>? Items, Exception? Failure, int Attempts)> AskAsync(
         Document document,
         LearnerProfile profile,
         IReadOnlyList<Guid> sectionIds,
         IReadOnlyDictionary<Guid, string> texts,
         int have,
+        string purpose,
+        Guid topicId,
         IChatClient ai,
         TestDoubleAi testDouble,
         AiAnswers answers,
@@ -30,8 +32,9 @@ internal static class QuestionRequests
         var chat = ContentAi.For(document, ai, testDouble);
         var answer = await answers.AskAsync(
             document,
-            AiAttempt.Questions,
+            purpose,
             QuestionGeneration.PromptVersion,
+            AiReference.Topic(topicId),
             chat,
             [
                 new ChatMessage(ChatRole.System, QuestionGeneration.System(profile, have)),

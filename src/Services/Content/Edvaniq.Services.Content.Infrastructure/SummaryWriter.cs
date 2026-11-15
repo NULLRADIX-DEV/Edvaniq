@@ -48,7 +48,7 @@ public sealed partial class SummaryWriter(
                 }
                 catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
                 {
-                    LogRoundFailed(exception, Interval);
+                    LogRoundFailed(ContentLog.Describe(exception), Interval);
                 }
 
                 await Task.Delay(Interval, time, stoppingToken);
@@ -95,6 +95,7 @@ public sealed partial class SummaryWriter(
             return;
         }
 
+        var started = time.GetTimestamp();
         var sectionIds = summary.Sections.Select(section => section.SectionId).ToList();
         var documentIds = summary.Sections.Select(section => section.DocumentId).Distinct().ToList();
         var stored = await db.Sections.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
@@ -107,6 +108,7 @@ public sealed partial class SummaryWriter(
             .ToList();
         if (material.Count == 0)
         {
+            LogNoMaterial(summary.Id);
             await FailAsync(db, summary, DocumentFailures.SummaryNoMaterial, cancellationToken);
             return;
         }
@@ -127,6 +129,7 @@ public sealed partial class SummaryWriter(
             first,
             AiAttempt.Summary,
             TopicSummaryGeneration.PromptVersion,
+            AiReference.Summary(summary.Id),
             chat,
             [
                 new ChatMessage(ChatRole.System, TopicSummaryGeneration.System(profile, summary.Length)),
@@ -160,6 +163,9 @@ public sealed partial class SummaryWriter(
         var used = draft.Used.Select(index => material[index].Position).ToList();
         summary.Finish(draft.Text, used, ContentAi.ModelOf(chat, answer.ModelId), TopicSummaryGeneration.PromptVersion, time.GetUtcNow().UtcDateTime);
         await db.SaveChangesAsync(cancellationToken);
+        LogReady(
+            summary.Id, summary.Length, used.Count, (long)time.GetElapsedTime(started).TotalMilliseconds,
+            (long)(summary.ReadyAt!.Value - summary.CreatedAt).TotalSeconds);
     }
 
     private static string Text(Document document, Section section) => document.Text.Substring(section.Start, section.Length);
@@ -207,21 +213,29 @@ public sealed partial class SummaryWriter(
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "A round of summaries failed, the next starts in {Interval}")]
-    private partial void LogRoundFailed(Exception exception, TimeSpan interval);
+    // Fixed event ids (#417), so the way of a summary can be found in the log. Never its text or material.
+    // The type and place only: a parser or the provider may quote the material in a message.
+    [LoggerMessage(EventId = 33950, Level = LogLevel.Error, Message = "A round of summaries failed ({Error}), the next starts in {Interval}")]
+    private partial void LogRoundFailed(string error, TimeSpan interval);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "The AI answered no usable summary {SummaryId} in {Attempts} attempts, it is marked as failed")]
+    [LoggerMessage(EventId = 33951, Level = LogLevel.Information, Message = "Summary {SummaryId} ({Length}) is ready: {Sources} sources, written in {DurationMs} ms, {WaitedSeconds} s after it was asked for")]
+    private partial void LogReady(Guid summaryId, SummaryLength length, int sources, long durationMs, long waitedSeconds);
+
+    [LoggerMessage(EventId = 33952, Level = LogLevel.Warning, Message = "The AI answered no usable summary {SummaryId} in {Attempts} attempts, it is marked as failed")]
     private partial void LogUnusable(Guid summaryId, int attempts);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Planning could not be asked for the learning goal of summary {SummaryId}, it is marked as failed")]
+    [LoggerMessage(EventId = 33953, Level = LogLevel.Warning, Message = "Planning could not be asked for the learning goal of summary {SummaryId}, it is marked as failed")]
     private partial void LogGoalUnavailable(Guid summaryId);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "The AI is stopped for summary {SummaryId} ({Reason}), it is marked as failed")]
+    [LoggerMessage(EventId = 33954, Level = LogLevel.Warning, Message = "The AI is stopped for summary {SummaryId} ({Reason}), it is marked as failed")]
     private partial void LogStopped(Guid summaryId, string reason);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "The AI is unavailable for summary {SummaryId} ({Error}), it waits until {NextAttemptAt}")]
+    [LoggerMessage(EventId = 33955, Level = LogLevel.Warning, Message = "The AI is unavailable for summary {SummaryId} ({Error}), it waits until {NextAttemptAt}")]
     private partial void LogPostponed(Guid summaryId, string error, DateTime? nextAttemptAt);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "The AI refused summary {SummaryId} ({Error}), it is marked as failed")]
+    [LoggerMessage(EventId = 33956, Level = LogLevel.Error, Message = "The AI refused summary {SummaryId} ({Error}), it is marked as failed")]
     private partial void LogUnavailable(Guid summaryId, string error);
+
+    [LoggerMessage(EventId = 33957, Level = LogLevel.Warning, Message = "The material of summary {SummaryId} is gone, it is marked as failed")]
+    private partial void LogNoMaterial(Guid summaryId);
 }

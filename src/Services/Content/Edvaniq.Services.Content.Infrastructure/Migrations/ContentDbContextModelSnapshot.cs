@@ -215,6 +215,12 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)");
 
+                    b.Property<Guid?>("SummaryId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid?>("TopicId")
+                        .HasColumnType("char(36)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CalledAt");

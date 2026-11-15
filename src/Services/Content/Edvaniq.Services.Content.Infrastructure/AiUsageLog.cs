@@ -12,8 +12,8 @@ namespace Edvaniq.Services.Content.Infrastructure;
 public sealed class AiUsageLog(IServiceScopeFactory scopes, ILogger<AiUsageLog> logger)
 {
     public async Task RecordAsync(
-        Document document, string purpose, string promptVersion, IReadOnlyList<AiTry> tries, string fallbackModel,
-        CancellationToken cancellationToken)
+        Document document, string purpose, string promptVersion, AiReference reference, IReadOnlyList<AiTry> tries,
+        string fallbackModel, CancellationToken cancellationToken)
     {
         if (tries.Count == 0)
         {
@@ -23,11 +23,12 @@ public sealed class AiUsageLog(IServiceScopeFactory scopes, ILogger<AiUsageLog> 
         var callId = Guid.NewGuid();
         var attempts = tries.Select(attempt => AiAttempt.Of(
             callId, attempt.Number, document, purpose, attempt.ModelId ?? fallbackModel, promptVersion, attempt.StartedAt,
-            attempt.Duration, attempt.InputTokens, attempt.OutputTokens, attempt.Cost, OutcomeOf(attempt.Outcome))).ToList();
+            attempt.Duration, attempt.InputTokens, attempt.OutputTokens, attempt.Cost, OutcomeOf(attempt.Outcome), reference)).ToList();
         ContentLog.AiUsage(
-            logger, purpose, document.Id, attempts.Count, attempts.Sum(attempt => attempt.InputTokens),
-            attempts.Sum(attempt => attempt.OutputTokens), attempts.Sum(attempt => attempt.Cost ?? 0),
-            attempts.Count(attempt => attempt.Cost is null), attempts.Sum(attempt => attempt.DurationMs), attempts[^1].Model);
+            logger, purpose, document.Id, reference.TopicId, reference.SummaryId, callId, attempts.Count,
+            attempts.Sum(attempt => attempt.InputTokens), attempts.Sum(attempt => attempt.OutputTokens),
+            attempts.Sum(attempt => attempt.Cost ?? 0), attempts.Count(attempt => attempt.Cost is null),
+            attempts.Sum(attempt => attempt.DurationMs), promptVersion, attempts[^1].Model);
         try
         {
             using var scope = scopes.CreateScope();
@@ -42,8 +43,8 @@ public sealed class AiUsageLog(IServiceScopeFactory scopes, ILogger<AiUsageLog> 
     }
 
     // A call answered from a stored answer (AiAnswers): no attempt, so no row, only the line in the log.
-    public void Reused(Document document, string purpose, string promptVersion, string model) =>
-        ContentLog.AiUsageReused(logger, purpose, document.Id, promptVersion, model);
+    public void Reused(Document document, string purpose, string promptVersion, AiReference reference, string model) =>
+        ContentLog.AiUsageReused(logger, purpose, document.Id, reference.TopicId, reference.SummaryId, promptVersion, model);
 
     private static AiAttemptOutcome OutcomeOf(AiTryOutcome outcome) => outcome switch
     {
