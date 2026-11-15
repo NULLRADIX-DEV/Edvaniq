@@ -27,6 +27,15 @@ public sealed class HttpQuiz(HttpClient http) : IQuiz
             QuizJson.Default.GradedAnswer,
             cancellationToken);
 
+    public Task<CallOutcome<GradedAnswer>> AnswerAsync(Guid attemptId, IReadOnlyList<int> options, int responseTimeMs, CancellationToken cancellationToken = default) =>
+        CallAsync(
+            token => http.PostAsync(
+                $"{AttemptsPath}/{attemptId:D}/answer",
+                JsonContent.Create(new ChoicesBody([.. options.Distinct().Order()], responseTimeMs), QuizJson.Default.ChoicesBody),
+                token),
+            QuizJson.Default.GradedAnswer,
+            cancellationToken);
+
     // Same path as an answer, the host needs no route of its own.
     public Task<CallOutcome<GradedAnswer>> RevealAsync(Guid attemptId, int responseTimeMs, CancellationToken cancellationToken = default) =>
         CallAsync(
@@ -66,7 +75,11 @@ public sealed class HttpQuiz(HttpClient http) : IQuiz
     private static bool Valid<T>(T value) => value switch
     {
         AskedQuestion question => question.Options.Count >= 2,
-        GradedAnswer graded => (graded.Option is { } option ? option >= 0 : graded.Revealed) && graded.Answer >= 0,
+        GradedAnswer graded => (graded.Option is { } option ? option >= 0
+                : graded.Options is { Count: > 0 } options ? options.All(chosen => chosen >= 0)
+                : graded.Revealed)
+            && graded.Answer >= 0
+            && graded.RightOptions.All(right => right >= 0),
         _ => true,
     };
 }
@@ -75,12 +88,15 @@ internal sealed record AskBody(Guid TopicId);
 
 internal sealed record AnswerBody(int Option, int ResponseTimeMs);
 
+internal sealed record ChoicesBody(IReadOnlyList<int> Options, int ResponseTimeMs);
+
 internal sealed record RevealBody(bool ShowSolution, int ResponseTimeMs);
 
 // Source-generated for the trimmed browser app. An answer without the fields that make a question or a grade fails.
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, RespectRequiredConstructorParameters = true)]
 [JsonSerializable(typeof(AskBody))]
 [JsonSerializable(typeof(AnswerBody))]
+[JsonSerializable(typeof(ChoicesBody))]
 [JsonSerializable(typeof(RevealBody))]
 [JsonSerializable(typeof(AskedQuestion))]
 [JsonSerializable(typeof(GradedAnswer))]

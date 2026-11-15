@@ -55,6 +55,63 @@ public sealed class HttpQuizTests
         Assert.Equal(new GradedAnswer(Guid.Parse(AttemptId), 0, false, 1, "Weil.", 4200), outcome.Value);
     }
 
+    // #357: a question names its type, one without counts as single choice.
+    [Fact]
+    public async Task Ask_ReadsTheType()
+    {
+        var quiz = Quiz([], Answer(HttpStatusCode.Created, AskedJson.Replace("\"difficulty\":2", "\"difficulty\":2,\"type\":\"multipleChoice\"", StringComparison.Ordinal)));
+
+        var outcome = await quiz.AskAsync(Guid.Parse(TopicId), TestContext.Current.CancellationToken);
+
+        Assert.Equal(QuestionTypes.MultipleChoice, outcome.Value!.Type);
+        Assert.True(outcome.Value.IsMultipleChoice);
+    }
+
+    // Multiple choice sends all ticked options, without doubles and in order, so a retry sends the same body. The grade
+    // names all chosen and all right options.
+    [Fact]
+    public async Task AnswerMultiple_PostsTheOptionsInOrder_AndReadsAllRightOnes()
+    {
+        var requests = new List<(HttpRequestMessage Request, string? Body)>();
+        var quiz = Quiz(requests, Answer(HttpStatusCode.OK, $$"""
+            {"id":"{{AttemptId}}","topicId":"{{TopicId}}","questionId":"{{QuestionId}}","type":"multipleChoice","option":null,
+             "options":[0,2],"revealed":false,"correct":false,"answer":0,"answers":[0,1],"explanation":"Weil.","responseTimeMs":4200,
+             "answeredAt":"2026-11-11T09:00:00.123456Z"}
+            """));
+
+        var outcome = await quiz.AnswerAsync(Guid.Parse(AttemptId), [2, 0, 2], 4200, TestContext.Current.CancellationToken);
+
+        var (request, body) = Assert.Single(requests);
+        Assert.Equal(new Uri($"https://edvaniq.test/api/assessment/attempts/{AttemptId}/answer"), request.RequestUri);
+        Assert.Equal("""{"options":[0,2],"responseTimeMs":4200}""", body);
+        Assert.Equal(CallResult.Ok, outcome.Result);
+        Assert.Equal([0, 2], outcome.Value!.Chosen);
+        Assert.Equal([0, 1], outcome.Value.RightOptions);
+        Assert.False(outcome.Value.Correct);
+    }
+
+    // A grade without answers (older Assessment) has the one right answer.
+    [Fact]
+    public async Task GradeWithoutAnswers_HasTheOneRightAnswer()
+    {
+        var outcome = await Quiz([], Answer(HttpStatusCode.OK, GradedJson)).AnswerAsync(Guid.Parse(AttemptId), 0, 1, TestContext.Current.CancellationToken);
+
+        Assert.Equal([1], outcome.Value!.RightOptions);
+        Assert.Equal([0], outcome.Value.Chosen);
+    }
+
+    [Theory]
+    [InlineData("\"options\":[0,-1]")]
+    [InlineData("\"options\":[0],\"answers\":[-1]")]
+    public async Task GradeWithANegativeOption_Fails(string part)
+    {
+        var body = GradedJson.Replace("\"option\":0", "\"option\":null," + part, StringComparison.Ordinal);
+
+        var outcome = await Quiz([], Answer(HttpStatusCode.OK, body)).AnswerAsync(Guid.Parse(AttemptId), [0], 1, TestContext.Current.CancellationToken);
+
+        Assert.Equal(CallResult.Failed, outcome.Result);
+    }
+
     // Showing the solution goes the same way as an answer, the grade has no option then.
     [Fact]
     public async Task Reveal_PostsShowSolutionAndTime_ToTheAttempt()

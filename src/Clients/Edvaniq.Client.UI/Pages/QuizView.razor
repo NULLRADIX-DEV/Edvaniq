@@ -33,6 +33,11 @@
         case ViewState.LoadFailed:
             <ConnectionProblem Title="@FeedbackTexts.Quiz.LoadFailed" TraceId="@loadTrace" />
             break;
+        case ViewState.UnknownType:
+            <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.Quiz.UnknownType" class="quiz-unknown-type">
+                <p>@FeedbackTexts.Quiz.UnknownTypeHint</p>
+            </Notice>
+            break;
     }
 </div>
 
@@ -49,28 +54,65 @@
         <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="() => AskAsync(focus: true)"
                       Href="themen" LinkText="@FeedbackTexts.Quiz.BackToTopics" />
         break;
+    case ViewState.UnknownType:
+        <div class="quiz-actions">
+            <button type="button" class="button" @onclick="() => AskAsync(focus: true)">Nächste Frage</button>
+            <a href="themen">Zurück zu den Themen</a>
+        </div>
+        break;
     case ViewState.Asking or ViewState.Graded:
         <form class="quiz-form" @onsubmit="SubmitAsync" novalidate>
-            <fieldset class="quiz-question" disabled="@(graded is not null)">
-                <legend tabindex="-1" @ref="questionLegend"><SafeMarkdown Text="@asked!.Text" Inline /></legend>
+            <fieldset class="quiz-question" disabled="@(graded is not null)" aria-describedby="@(asked!.IsMultipleChoice ? "quiz-several" : null)">
+                <legend tabindex="-1" @ref="questionLegend"><SafeMarkdown Text="@asked.Text" Inline /></legend>
+                @if (asked.IsMultipleChoice)
+                {
+                    <p id="quiz-several" class="quiz-several">@FeedbackTexts.Quiz.SeveralRight</p>
+                }
                 <ul class="quiz-options">
                     @for (var i = 0; i < asked.Options.Count; i++)
                     {
                         var option = i;
                         <li @key="option" class="@OptionClass(option)">
-                            <input type="radio" id="option-@option" name="quiz-option" value="@option"
-                                   checked="@(Chosen == option)" @onchange="() => Choose(option)" />
+                            @if (asked.IsMultipleChoice)
+                            {
+                                <input type="checkbox" id="option-@option" name="quiz-options" value="@option"
+                                       checked="@IsTicked(option)" @onchange="args => Tick(option, args.Value is true)" />
+                            }
+                            else
+                            {
+                                <input type="radio" id="option-@option" name="quiz-option" value="@option"
+                                       checked="@(Chosen == option)" @onchange="() => Choose(option)" />
+                            }
                             <label for="option-@option">
                                 <span class="quiz-option-text"><SafeMarkdown Text="@asked.Options[option]" Inline /></span>
-                                @if (graded is not null && option == graded.Option)
+                                @if (graded is not null && asked.IsMultipleChoice)
                                 {
-                                    <span class="quiz-mark quiz-mark-own">
-                                        <span aria-hidden="true">@(graded.Correct ? "✓" : "✗")</span> Deine Antwort
-                                    </span>
+                                    var right = graded.RightOptions.Contains(option);
+                                    if (graded.Chosen.Contains(option))
+                                    {
+                                        <span class="quiz-mark quiz-mark-own">
+                                            <span aria-hidden="true">@(right ? "✓" : "✗")</span> @(right ? FeedbackTexts.Quiz.RightChosen : FeedbackTexts.Quiz.WrongChosen)
+                                        </span>
+                                    }
+                                    else if (right)
+                                    {
+                                        <span class="quiz-mark quiz-mark-right">
+                                            <span aria-hidden="true">✓</span> @(graded.Revealed ? "Richtige Antwort" : FeedbackTexts.Quiz.RightMissed)
+                                        </span>
+                                    }
                                 }
-                                @if (graded is not null && option == graded.Answer)
+                                else if (graded is not null)
                                 {
-                                    <span class="quiz-mark quiz-mark-right"><span aria-hidden="true">✓</span> Richtige Antwort</span>
+                                    if (option == graded.Option)
+                                    {
+                                        <span class="quiz-mark quiz-mark-own">
+                                            <span aria-hidden="true">@(graded.Correct ? "✓" : "✗")</span> Deine Antwort
+                                        </span>
+                                    }
+                                    if (option == graded.Answer)
+                                    {
+                                        <span class="quiz-mark quiz-mark-right"><span aria-hidden="true">✓</span> Richtige Antwort</span>
+                                    }
                                 }
                             </label>
                         </li>
@@ -120,7 +162,20 @@
                 {
                     <p>@(graded.Revealed ? FeedbackTexts.Answer.RevealedHint : FeedbackTexts.Answer.WrongHint)</p>
                 }
-                <p><strong>Richtige Antwort:</strong> <SafeMarkdown Text="@RightOption" Inline /></p>
+                @if (RightOptions.Count > 1)
+                {
+                    <p><strong>Richtige Antworten:</strong></p>
+                    <ul class="quiz-right-list">
+                        @foreach (var right in RightOptions)
+                        {
+                            <li><SafeMarkdown Text="@right" Inline /></li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p><strong>Richtige Antwort:</strong> <SafeMarkdown Text="@RightOption" Inline /></p>
+                }
                 @* Below the h2 above, so a heading in the text starts at h3. *@
                 <div class="quiz-explanation">
                     <p><strong>Erklärung:</strong></p>
@@ -159,6 +214,9 @@
     private AskedQuestion? asked;
     private long shownAt;
     private int? selected;
+
+    // The ticks of a multiple choice question.
+    private readonly SortedSet<int> ticked = [];
     private bool answering;
     private bool revealing;
 
@@ -180,6 +238,7 @@
         NotReady,
         NotFound,
         LoadFailed,
+        UnknownType,
         Asking,
         Graded,
     }
@@ -200,16 +259,22 @@
         { askFailure: CallResult.NotFound } => ViewState.NotFound,
         { askFailure: not null } => ViewState.LoadFailed,
         { graded: not null } => ViewState.Graded,
+        { asked.IsKnownType: false } => ViewState.UnknownType,
         _ => ViewState.Asking,
     };
 
     // What the server graded counts, not what is ticked here: a second answer to the same attempt brings the first.
     private int? Chosen => graded?.Option ?? selected;
 
-    private bool Unchecked => asked is not null && graded is null && selected is not null;
+    private bool IsTicked(int option) => graded is not null ? graded.Chosen.Contains(option) : ticked.Contains(option);
+
+    private bool Unchecked => asked is not null && graded is null && (selected is not null || ticked.Count > 0);
 
     private string RightOption =>
         graded!.Answer < asked!.Options.Count ? asked.Options[graded.Answer] : "";
+
+    private IReadOnlyList<string> RightOptions =>
+        [.. graded!.RightOptions.Where(option => option < asked!.Options.Count).Select(option => asked!.Options[option])];
 
     protected override void OnInitialized() => time = Services.GetService<TimeProvider>() ?? TimeProvider.System;
 
@@ -229,6 +294,7 @@
             asked = open.Asked;
             shownAt = open.ShownAt;
             selected = open.Selected;
+            ticked.UnionWith(open.Ticked ?? []);
             responseTimeMs = open.ResponseTimeMs;
             answerMessage = FeedbackTexts.Session.AnswerBack;
             loading = false;
@@ -333,6 +399,7 @@
         asked = null;
         graded = null;
         selected = null;
+        ticked.Clear();
         responseTimeMs = null;
         answerMessage = null;
         answerTrace = null;
@@ -355,9 +422,9 @@
 
         if (focus)
         {
-            focusNext = asked is null ? FocusTarget.Page : FocusTarget.Question;
+            focusNext = asked is { IsKnownType: true } ? FocusTarget.Question : FocusTarget.Page;
         }
-        else if (quiet && asked is not null)
+        else if (quiet && asked is { IsKnownType: true })
         {
             // The hint and its button are gone, the focus goes where the button would have taken it.
             focusNext = FocusTarget.Question;
@@ -373,12 +440,45 @@
         }
     }
 
+    private void Tick(int option, bool on)
+    {
+        if (graded is not null)
+        {
+            return;
+        }
+
+        if (on)
+        {
+            ticked.Add(option);
+        }
+        else
+        {
+            ticked.Remove(option);
+        }
+
+        answerMessage = null;
+    }
+
     // One answer at a time: a second click while the first is on its way does nothing. What still comes in twice, a
     // retry after a lost answer or another tab, the server answers with the stored grade.
     private async Task SubmitAsync()
     {
         if (answering || graded is not null || asked is null)
         {
+            return;
+        }
+
+        if (asked.IsMultipleChoice)
+        {
+            if (ticked.Count == 0)
+            {
+                answerMessage = NothingChosen;
+                answerTrace = null;
+                return;
+            }
+
+            IReadOnlyList<int> options = [.. ticked];
+            await SendAsync((attemptId, ms) => Quiz.AnswerAsync(attemptId, options, ms, life.Token), reveal: false);
             return;
         }
 
@@ -426,7 +526,8 @@
 
         switch (outcome.Result)
         {
-            case CallResult.Ok when (outcome.Value!.Option ?? 0) < asked.Options.Count && outcome.Value.Answer < asked.Options.Count:
+            case CallResult.Ok when outcome.Value!.Chosen.All(option => option < asked.Options.Count)
+                && outcome.Value.RightOptions.All(option => option < asked.Options.Count):
                 graded = outcome.Value;
                 focusNext = FocusTarget.Feedback;
                 break;
@@ -450,14 +551,14 @@
     private string? OptionClass(int option) => graded switch
     {
         null => null,
-        _ when option == graded.Answer => "quiz-option-right",
-        _ when option == graded.Option => "quiz-option-own",
+        _ when graded.RightOptions.Contains(option) => "quiz-option-right",
+        _ when graded.Chosen.Contains(option) => "quiz-option-own",
         _ => null,
     };
 
     private string DraftKey => $"{nameof(OpenQuestion)}:{TopicId:D}";
 
-    private sealed record OpenQuestion(AskedQuestion Asked, long ShownAt, int? Selected, int? ResponseTimeMs);
+    private sealed record OpenQuestion(AskedQuestion Asked, long ShownAt, int? Selected, int? ResponseTimeMs, IReadOnlyList<int>? Ticked = null);
 
     // An attempt left open because the login ran out waits for the same account (Drafts). Never sent again by itself:
     // the user checks it once more.
@@ -465,7 +566,7 @@
     {
         if (signedOut && asked is not null && graded is null)
         {
-            Services.GetService<Drafts>()?.Keep(DraftKey, new OpenQuestion(asked, shownAt, selected, responseTimeMs));
+            Services.GetService<Drafts>()?.Keep(DraftKey, new OpenQuestion(asked, shownAt, selected, responseTimeMs, [.. ticked]));
         }
 
         life.Cancel();

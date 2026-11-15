@@ -57,6 +57,20 @@ internal sealed class FakeQuiz : IQuiz
         return Next(answers, CallOutcome<GradedAnswer>.Failed());
     }
 
+    public List<(Guid AttemptId, IReadOnlyList<int> Options, int ResponseTimeMs)> AnsweredMany { get; } = [];
+
+    public async Task<CallOutcome<GradedAnswer>> AnswerAsync(
+        Guid attemptId, IReadOnlyList<int> options, int responseTimeMs, CancellationToken cancellationToken = default)
+    {
+        AnsweredMany.Add((attemptId, options, responseTimeMs));
+        if (AnswerGate is not null)
+        {
+            await AnswerGate.Task;
+        }
+
+        return Next(answers, CallOutcome<GradedAnswer>.Failed());
+    }
+
     public List<(Guid AttemptId, int ResponseTimeMs)> Revealed { get; } = [];
 
     // Shares the queue of answers, as the server grades both the same way.

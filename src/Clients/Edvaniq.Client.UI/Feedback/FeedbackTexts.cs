@@ -62,6 +62,21 @@ public static class FeedbackTexts
 
         public const string NothingChosen = "Wähl zuerst eine Antwort aus.";
 
+        // Under a multiple choice question (#357), read out with it.
+        public const string SeveralRight = "Mehrere Antworten können richtig sein.";
+
+        // A kind of question this version of the app can't show, so it doesn't pretend to.
+        public const string UnknownType = "Diese Frage kann die App noch nicht anzeigen.";
+
+        public const string UnknownTypeHint = "Mit der nächsten Frage geht es weiter.";
+
+        // At each option of a graded multiple choice question, in words next to the symbol.
+        public const string RightChosen = "Richtig gewählt";
+
+        public const string WrongChosen = "Gewählt, aber nicht richtig";
+
+        public const string RightMissed = "Richtig, aber nicht gewählt";
+
         public const string AskAgain = "Noch einmal versuchen";
 
         public const string OtherTopic = "Anderes Thema wählen";

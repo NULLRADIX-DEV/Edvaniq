@@ -202,6 +202,33 @@ public sealed class SessionExpiryTests : BunitContext
         Assert.NotNull(after.Find("#feedback-heading"));
     }
 
+    // #357: the ticks of a multiple choice question come back too, and go to the same attempt.
+    [Fact]
+    public async Task OpenMultipleChoice_KeepsItsTicks_AfterTheLogin()
+    {
+        await state.GetAuthenticationStateAsync();
+        quiz.Ask(Question with { Type = QuestionTypes.MultipleChoice })
+            .Answer(CallOutcome<GradedAnswer>.SignedOut)
+            .Answer(new GradedAnswer(Attempt, null, true, 0, "Erklärung", 1500, Options: [0, 2], Answers: [0, 2]));
+        var before = Render<QuizView>(parameters => parameters.Add(p => p.TopicId, Topic));
+
+        before.Find("#option-2").Change(true);
+        before.Find("#option-0").Change(true);
+        before.Find("form").Submit();
+
+        await LeaveForTheLoginAsync(FakeWebSession.DefaultAccount);
+        var after = Render<QuizView>(parameters => parameters.Add(p => p.TopicId, Topic));
+
+        Assert.True(after.Find("#option-0").HasAttribute("checked"));
+        Assert.False(after.Find("#option-1").HasAttribute("checked"));
+        Assert.True(after.Find("#option-2").HasAttribute("checked"));
+
+        after.Find("form").Submit();
+
+        Assert.Equal([[0, 2], [0, 2]], quiz.AnsweredMany.Select(answer => answer.Options));
+        Assert.Equal([Attempt, Attempt], quiz.AnsweredMany.Select(answer => answer.AttemptId));
+    }
+
     [Fact]
     public async Task OpenAnswer_OfOneAccount_IsGone_ForAnother()
     {
