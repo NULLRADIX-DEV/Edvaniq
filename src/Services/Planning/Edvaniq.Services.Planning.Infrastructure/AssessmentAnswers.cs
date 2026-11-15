@@ -34,7 +34,7 @@ public sealed partial class AssessmentAnswers(HttpClient http, ILogger<Assessmen
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Assessment could not be asked for the answers of a block ({Error}, status {Status})")]
+    [LoggerMessage(EventId = PlanningLog.Queries.AnswersUnavailable, EventName = "AnswersUnavailable", Level = LogLevel.Warning, Message = "Assessment could not be asked for the answers of a block ({Error}, status {Status})")]
     private partial void LogUnavailable(string error, int? status);
 
     private sealed record AnswerList(IReadOnlyList<Entry> Answers);

@@ -34,7 +34,7 @@ public sealed partial class AssessmentQuestionPools(HttpClient http, ILogger<Ass
     // The one place that reads Assessment's status names. Anything but "ready" (a newer status too) isn't ready.
     public static bool IsReady(string? status) => status == "ready";
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Assessment could not be asked for the question pools ({Error}, status {Status})")]
+    [LoggerMessage(EventId = PlanningLog.Queries.QuestionPoolsUnavailable, EventName = "QuestionPoolsUnavailable", Level = LogLevel.Warning, Message = "Assessment could not be asked for the question pools ({Error}, status {Status})")]
     private partial void LogUnavailable(string error, int? status);
 
     private sealed record PoolList(IReadOnlyList<TopicPool> Topics);

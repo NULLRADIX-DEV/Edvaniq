@@ -106,8 +106,9 @@ app.MapGet("/mastery/weak-and-secure", async (string? learningGoalId, IMasteries
 // How topics stood at the start and the end of a session and whether its answers have arrived (#403), for Planning's
 // session result. Ids repeat in the query: topicId, answerId. From and to are UTC. Topics the user doesn't know are left
 // out. The limits keep the address short: a block has a quiz of at most 20 questions and a few check questions per
-// session, Planning asks for one block.
-app.MapGet("/mastery/changes", async (HttpRequest request, IMasteries masteries, CancellationToken cancellationToken) =>
+// session, Planning asks for one block. Answers still missing well after the end are worth a warning (#417).
+app.MapGet("/mastery/changes", async (
+    HttpRequest request, IMasteries masteries, ILoggerFactory loggers, TimeProvider time, CancellationToken cancellationToken) =>
 {
     var errors = new Dictionary<string, string[]>();
     var topicIds = Guids(request, "topicId", MasteryChangeLimits.Topics, errors);
@@ -130,6 +131,8 @@ app.MapGet("/mastery/changes", async (HttpRequest request, IMasteries masteries,
     }
 
     var changes = await masteries.ChangesAsync(topicIds!, from!.Value, to!.Value, answerIds!, cancellationToken);
+    LearningEngineLog.IfAnswersLate(
+        loggers.CreateLogger("Edvaniq.Services.LearningEngine.MasteryChanges"), changes.MissingAnswers, answerIds!.Count, to.Value, time.GetUtcNow().UtcDateTime);
     return Results.Ok(new MasteryChangesResponse(
         Mastery.RuleVersion,
         changes.MissingAnswers,

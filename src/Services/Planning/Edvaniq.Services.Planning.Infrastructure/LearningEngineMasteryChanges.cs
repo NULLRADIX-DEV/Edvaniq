@@ -47,7 +47,7 @@ public sealed partial class LearningEngineMasteryChanges(HttpClient http, ILogge
     private static TopicStanding? Of(Standing? standing) =>
         standing is null ? null : new TopicStanding(standing.Mastery, LearningEngineMastery.StateOf(standing.State));
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "LearningEngine could not be asked for the mastery changes ({Error}, status {Status})")]
+    [LoggerMessage(EventId = PlanningLog.Queries.MasteryChangesUnavailable, EventName = "MasteryChangesUnavailable", Level = LogLevel.Warning, Message = "LearningEngine could not be asked for the mastery changes ({Error}, status {Status})")]
     private partial void LogUnavailable(string error, int? status);
 
     private sealed record ChangeList(int RuleVersion, int MissingAnswers, IReadOnlyList<Change> Topics);

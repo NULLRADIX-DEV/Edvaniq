@@ -43,7 +43,7 @@ public sealed partial class LearningEngineMastery(HttpClient http, ILogger<Learn
         _ => null,
     };
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "LearningEngine could not be asked for the mastery ({Error}, status {Status})")]
+    [LoggerMessage(EventId = PlanningLog.Queries.MasteryUnavailable, EventName = "MasteryUnavailable", Level = LogLevel.Warning, Message = "LearningEngine could not be asked for the mastery ({Error}, status {Status})")]
     private partial void LogUnavailable(string error, int? status);
 
     private sealed record MasteryList(int RuleVersion, IReadOnlyList<TopicMastery> Topics);

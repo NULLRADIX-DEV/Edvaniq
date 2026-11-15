@@ -10,6 +10,9 @@ public interface IKnownTopics
     // The owner's topics of this learning goal and those with one of the ids, wherever they belong now.
     Task<IReadOnlyList<KnownTopic>> ListAsync(string ownerId, Guid learningGoalId, IReadOnlyCollection<Guid> topicIds, CancellationToken cancellationToken);
 
+    // Those of the ids the owner's topics have, in one query.
+    Task<IReadOnlySet<Guid>> KnownAsync(string ownerId, IReadOnlyCollection<Guid> topicIds, CancellationToken cancellationToken);
+
     void Add(TopicsSnapshot snapshot);
 
     void Add(KnownTopic topic);
