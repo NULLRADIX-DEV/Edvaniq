@@ -36,7 +36,7 @@ public sealed class SourceTests(ServiceFactory service) : IClassFixture<ServiceF
         });
         using var client = ClientFor(alice);
 
-        var source = await client.GetFromJsonAsync<JsonElement>($"/sections/{sections[1].Id}/source", Cancel);
+        var source = await client.GetFromJsonAsync<JsonElement>($"/sections/{sections[1].Id}/original", Cancel);
 
         Assert.Equal(document.Id, source.GetProperty("documentId").GetGuid());
         Assert.Equal(sections[1].Id, source.GetProperty("sectionId").GetGuid());
@@ -62,8 +62,8 @@ public sealed class SourceTests(ServiceFactory service) : IClassFixture<ServiceF
         });
         using var client = ClientFor(alice);
 
-        var middle = await client.GetFromJsonAsync<JsonElement>($"/sections/{sections[1].Id}/source", Cancel);
-        var last = await client.GetFromJsonAsync<JsonElement>($"/sections/{sections[3].Id}/source", Cancel);
+        var middle = await client.GetFromJsonAsync<JsonElement>($"/sections/{sections[1].Id}/original", Cancel);
+        var last = await client.GetFromJsonAsync<JsonElement>($"/sections/{sections[3].Id}/original", Cancel);
 
         Assert.Equal(("text", true), (middle.GetProperty("format").GetString(), middle.GetProperty("hasFile").GetBoolean()));
         Assert.Equal(JsonValueKind.Null, middle.GetProperty("page").ValueKind);
@@ -84,7 +84,7 @@ public sealed class SourceTests(ServiceFactory service) : IClassFixture<ServiceF
         });
         using var client = ClientFor(alice);
 
-        var first = await client.GetFromJsonAsync<JsonElement>($"/sections/{sections[0].Id}/source", Cancel);
+        var first = await client.GetFromJsonAsync<JsonElement>($"/sections/{sections[0].Id}/original", Cancel);
 
         Assert.Equal(JsonValueKind.Null, first.GetProperty("format").ValueKind);
         Assert.False(first.GetProperty("hasFile").GetBoolean());
@@ -106,13 +106,13 @@ public sealed class SourceTests(ServiceFactory service) : IClassFixture<ServiceF
         using var owner = ClientFor(alice);
         using var bob = ClientFor(NewUser());
 
-        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(bob, $"/sections/{sections[0].Id}/source"));
-        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(owner, $"/sections/{Guid.NewGuid()}/source"));
-        Assert.Equal(HttpStatusCode.OK, await StatusAsync(owner, $"/sections/{sections[0].Id}/source"));
+        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(bob, $"/sections/{sections[0].Id}/original"));
+        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(owner, $"/sections/{Guid.NewGuid()}/original"));
+        Assert.Equal(HttpStatusCode.OK, await StatusAsync(owner, $"/sections/{sections[0].Id}/original"));
 
         using var deleted = await owner.DeleteAsync($"/documents/{document.Id}", Cancel);
         Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(owner, $"/sections/{sections[0].Id}/source"));
+        Assert.Equal(HttpStatusCode.NotFound, await StatusAsync(owner, $"/sections/{sections[0].Id}/original"));
     }
 
     [Fact]

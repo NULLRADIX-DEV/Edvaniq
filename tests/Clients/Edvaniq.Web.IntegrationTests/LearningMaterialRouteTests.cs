@@ -28,7 +28,7 @@ public sealed class LearningMaterialRouteTests
     [InlineData("POST", "/api/content/demo", "/content/demo")]
     [InlineData("DELETE", "/api/content/demo", "/content/demo")]
     [InlineData("GET", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/file", "/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/file")]
-    [InlineData("GET", "/api/content/sections/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/source", "/content/sections/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/source")]
+    [InlineData("GET", "/api/content/sections/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/original", "/content/sections/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/original")]
     public async Task AfterLogin_TheCallReachesTheService_WithTheUsersToken(string method, string path, string arrives)
     {
         await using var gateway = await StubService.StartAsync("gateway-stub");
@@ -80,7 +80,7 @@ public sealed class LearningMaterialRouteTests
     [InlineData("POST", "/api/content/demo")]
     [InlineData("DELETE", "/api/content/demo")]
     [InlineData("GET", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/file")]
-    [InlineData("GET", "/api/content/sections/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/source")]
+    [InlineData("GET", "/api/content/sections/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/original")]
     public async Task WithoutLogin_IsRefused_AndNothingIsForwarded(string method, string path)
     {
         await using var gateway = await StubService.StartAsync("gateway-stub");
@@ -121,7 +121,7 @@ public sealed class LearningMaterialRouteTests
     [InlineData("GET", "/api/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01")]
     [InlineData("DELETE", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/file")]
     [InlineData("GET", "/api/content/documents/not-a-guid/file")]
-    [InlineData("POST", "/api/content/sections/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/source")]
+    [InlineData("POST", "/api/content/sections/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/original")]
     [InlineData("GET", "/api/content/sections/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01")]
     public async Task OtherMethodsAndPaths_AreNotForwarded(string method, string path)
     {

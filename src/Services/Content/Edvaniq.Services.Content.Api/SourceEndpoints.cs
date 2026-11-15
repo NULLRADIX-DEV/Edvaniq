@@ -15,7 +15,7 @@ internal static class SourceEndpoints
 
     public static IEndpointRouteBuilder MapSourceEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/sections/{sectionId:guid}/source", async (Guid sectionId, IDocuments documents, CancellationToken cancellationToken) =>
+        app.MapGet("/sections/{sectionId:guid}/original", async (Guid sectionId, IDocuments documents, CancellationToken cancellationToken) =>
             await documents.SourceAsync(sectionId, cancellationToken) is { } source
                 ? Results.Ok(SectionSourceResponse.From(source))
                 : Results.NotFound());

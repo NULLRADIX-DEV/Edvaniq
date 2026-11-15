@@ -20,7 +20,7 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         .Item("GET", "/documents/{id:guid}")
         .Item("GET", "/documents/{id:guid}/sections")
         .Item("GET", "/documents/{id:guid}/file")
-        .Item("GET", "/sections/{sectionId:guid}/source")
+        .Item("GET", "/sections/{sectionId:guid}/original")
         .Item("POST", "/documents/{id:guid}/retry")
         .Item("DELETE", "/documents/{id:guid}")
         .Exempt("POST", "/documents", "Adds a document of the caller, a foreign goal is Planning's.",

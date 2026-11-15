@@ -92,7 +92,7 @@ public sealed class SecurityHeaderTests
     // services included.
     [Theory]
     [InlineData("/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/file", FilePolicy)]
-    [InlineData("/api/content/sections/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/source", SecurityHeaders.ShellPolicy)]
+    [InlineData("/api/content/sections/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/original", SecurityHeaders.ShellPolicy)]
     [InlineData("/api/content/documents", SecurityHeaders.ShellPolicy)]
     public async Task ARouteWithAPolicy_GetsIt_OthersKeepTheShells(string path, string policy)
     {
