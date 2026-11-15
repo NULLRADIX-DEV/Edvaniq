@@ -5,15 +5,16 @@ using Edvaniq.BuildingBlocks.Domain;
 namespace Edvaniq.Services.Content.Domain;
 
 // One generation a topic took from its owner's daily quota: a job of the AI that makes learning content for the topic,
-// today its question pool. One per topic, so a retry takes nothing twice. It stays when the document is deleted, only
-// the deletion of the user takes it.
+// today its question pool and each round that tops it up (#339). One per topic and round, so a retry takes nothing twice.
+// It stays when the document is deleted, only the deletion of the user takes it.
 public sealed class GenerationCharge : IOwnedByUser
 {
-    private GenerationCharge(string ownerId, Guid documentId, Guid topicId, DateOnly studyDay, DateTime chargedAt)
+    private GenerationCharge(string ownerId, Guid documentId, Guid topicId, int round, DateOnly studyDay, DateTime chargedAt)
     {
         OwnerId = ownerId;
         DocumentId = documentId;
         TopicId = topicId;
+        Round = round;
         StudyDay = studyDay;
         ChargedAt = chargedAt;
     }
@@ -27,13 +28,16 @@ public sealed class GenerationCharge : IOwnedByUser
 
     public Guid TopicId { get; private set; }
 
+    // 0 for the pool, then the number of the top-up round.
+    public int Round { get; private set; }
+
     public DateOnly StudyDay { get; private set; }
 
     // UTC.
     public DateTime ChargedAt { get; private set; }
 
-    public static GenerationCharge For(Document document, Guid topicId, DateTime now) =>
-        new(document.OwnerId, document.Id, topicId, SharedKernel.StudyDay.Of(now), now);
+    public static GenerationCharge For(Document document, Guid topicId, DateTime now, int round = 0) =>
+        new(document.OwnerId, document.Id, topicId, round, SharedKernel.StudyDay.Of(now), now);
 }
 
 // What the user reads when a document needs more generations than are left today (docs/service-internals.md).

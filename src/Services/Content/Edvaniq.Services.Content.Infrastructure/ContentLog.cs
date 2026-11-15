@@ -132,4 +132,32 @@ internal static partial class ContentLog
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Topic {TopicId} has no material in document {DocumentId}, it gets no questions from it")]
     public static partial void TopicWithoutMaterial(ILogger logger, Guid topicId, Guid documentId);
+
+    // Topping up question pools (#339). Fixed event ids, so the state of a pool can be found in the log.
+    [LoggerMessage(EventId = 33900, Level = LogLevel.Warning, Message = "Topping up question pools failed, trying again in {Delay}")]
+    public static partial void TopUpRoundFailed(ILogger logger, Exception exception, TimeSpan delay);
+
+    [LoggerMessage(EventId = 33901, Level = LogLevel.Information, Message = "Question pool of topic {TopicId} got {Added} new questions and has {Questions} now, {Attempts} attempts")]
+    public static partial void ToppedUp(ILogger logger, Guid topicId, int added, int questions, int attempts);
+
+    [LoggerMessage(EventId = 33902, Level = LogLevel.Warning, Message = "Question pool of topic {TopicId} is not topped up, the AI is stopped by the operator: {Questions} questions, asking again at {NextTopUpAt}")]
+    public static partial void TopUpPaused(ILogger logger, Guid topicId, int questions, DateTime nextTopUpAt);
+
+    [LoggerMessage(EventId = 33903, Level = LogLevel.Warning, Message = "Question pool of topic {TopicId} is not topped up, the AI budget of the month is reached: {Questions} questions, asking again at {NextTopUpAt}")]
+    public static partial void TopUpOverBudget(ILogger logger, Guid topicId, int questions, DateTime nextTopUpAt);
+
+    [LoggerMessage(EventId = 33904, Level = LogLevel.Information, Message = "Question pool of topic {TopicId} is not topped up, the user's daily quota is used up: {Questions} questions, asking again at {NextTopUpAt}")]
+    public static partial void TopUpOverQuota(ILogger logger, Guid topicId, int questions, DateTime nextTopUpAt);
+
+    [LoggerMessage(EventId = 33905, Level = LogLevel.Warning, Message = "The AI is unavailable to top up the question pool of topic {TopicId} ({Error}), outage {Outages}, asking again at {NextTopUpAt}")]
+    public static partial void TopUpPostponed(ILogger logger, Guid topicId, string error, int outages, DateTime? nextTopUpAt);
+
+    [LoggerMessage(EventId = 33906, Level = LogLevel.Warning, Message = "Question pool of topic {TopicId} stays at {Questions} questions after {Rounds} top-up rounds")]
+    public static partial void TopUpStayedShort(ILogger logger, Guid topicId, int questions, int rounds);
+
+    [LoggerMessage(EventId = 33907, Level = LogLevel.Warning, Message = "Question pool of topic {TopicId} is no longer topped up and stays at {Questions} questions: {Reason}")]
+    public static partial void TopUpStopped(ILogger logger, Guid topicId, int questions, string reason);
+
+    [LoggerMessage(EventId = 33908, Level = LogLevel.Warning, Message = "Question pool of topic {TopicId} waits, Knowledge or Planning could not be asked ({Error}), asking again at {NextTopUpAt}")]
+    public static partial void TopUpUnreachable(ILogger logger, Guid topicId, string error, DateTime nextTopUpAt);
 }

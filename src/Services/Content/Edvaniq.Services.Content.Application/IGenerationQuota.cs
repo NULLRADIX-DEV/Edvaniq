@@ -8,8 +8,8 @@ public interface IGenerationQuota
 {
     Task<GenerationQuotaState> StateOfAsync(string ownerId, CancellationToken cancellationToken);
 
-    // Adds the charge to the open unit of work, the caller saves it with the pool.
-    void Charge(Document document, Guid topicId);
+    // Adds the charge to the open unit of work, the caller saves it with the pool. Round 0 is the pool, then each top-up.
+    void Charge(Document document, Guid topicId, int round = 0);
 }
 
 // ResetsAt is the next 04:00 in Berlin, in UTC.

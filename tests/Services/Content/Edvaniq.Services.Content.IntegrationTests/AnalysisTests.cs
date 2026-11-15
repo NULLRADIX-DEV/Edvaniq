@@ -383,7 +383,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     }
 
     // Fewer than 15 left after the check is no failure today: the pool takes what holds up and the document gets ready.
-    // Topping the pool up to 15 is #339, not a bug here.
+    // QuestionTopUps tops the pool up later (#339, QuestionTopUpTests), not the analysis.
     [Fact]
     public async Task FewerThanFifteenValidQuestions_StillMakeAPool_ToppingUpComesLater()
     {
@@ -1446,7 +1446,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         using var scope = service.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
         var document = await db.Documents.IgnoreQueryFilters().SingleAsync(item => item.Id == documentId, TestContext.Current.CancellationToken);
-        db.QuestionPools.Add(QuestionPool.For(document, topicId, DateTime.UtcNow));
+        db.QuestionPools.Add(QuestionPool.For(document, topicId, DateTime.UtcNow, [QuestionGeneration.KeyOf("Was spaltet Licht?")]));
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
