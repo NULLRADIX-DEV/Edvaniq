@@ -77,7 +77,7 @@ public sealed class LearningEngineStub(OutgoingCalls calls)
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = JsonContent.Create(
-                        new { ruleVersion = 3, missingAnswers = learningEngine.missing.GetValueOrDefault(token), topics = topicChanges },
+                        new { ruleVersion = 4, missingAnswers = learningEngine.missing.GetValueOrDefault(token), topics = topicChanges },
                         options: JsonSerializerOptions.Web),
                 };
             }
@@ -93,7 +93,7 @@ public sealed class LearningEngineStub(OutgoingCalls calls)
                 : [];
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = JsonContent.Create(new { ruleVersion = 3, topics }, options: JsonSerializerOptions.Web),
+                Content = JsonContent.Create(new { ruleVersion = 4, topics }, options: JsonSerializerOptions.Web),
             };
         }
     }

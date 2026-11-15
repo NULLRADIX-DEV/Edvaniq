@@ -32,7 +32,7 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
         var alice = NewUser("alice");
         var topic = await KnowAsync(alice);
 
-        Assert.Equal(new MasteryResponse(topic, 50, "new", 3), await MasteryAsync(alice, topic));
+        Assert.Equal(new MasteryResponse(topic, 50, "new", 4), await MasteryAsync(alice, topic));
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
 
         await DeliverAsync(Answer(alice, topic, correct: true, ago: TimeSpan.FromDays(90) + AMinute));
 
-        Assert.Equal(new MasteryResponse(topic, 31, "weakness", 3), await MasteryAsync(alice, topic));
+        Assert.Equal(new MasteryResponse(topic, 31, "weakness", 4), await MasteryAsync(alice, topic));
     }
 
     // Nothing is stored, so the state of the next request already follows every answer (#452). Every value is at least
@@ -82,7 +82,7 @@ public sealed class MasteryTests(ServiceFactory service) : IClassFixture<Service
         {
             await DeliverAsync(Answer(alice, topic, step.Correct, step.Ago, step.Difficulty));
 
-            Assert.Equal(new MasteryResponse(topic, step.Mastery, step.State, 3), await MasteryAsync(alice, topic));
+            Assert.Equal(new MasteryResponse(topic, step.Mastery, step.State, 4), await MasteryAsync(alice, topic));
         }
     }
 
