@@ -73,6 +73,10 @@ public static class DocumentFailures
 
     public static readonly DocumentFailure AnalysisTimedOut = new(FailureCode.Unknown, Document.AnalysisTimedOut);
 
+    public static readonly DocumentFailure SummaryNoMaterial = new(FailureCode.NoText, TopicSummary.NoMaterial);
+
+    public static readonly DocumentFailure SummaryFailed = new(FailureCode.Unknown, TopicSummary.Failed);
+
     public static readonly DocumentFailure Unknown = new(
         FailureCode.Unknown, "Etwas ist schiefgegangen. Starte die Analyse neu, und wenn es wieder scheitert, lade das Material noch einmal hoch.");
 
@@ -80,7 +84,7 @@ public static class DocumentFailures
     [
         NothingToLearn, NoTextInFile, FileUnreadable, FileNotProcessable, PdfProtected, PackedTooTightly, TakesTooLong,
         FileTextTooLong, TooManyPages, AiBudgetReached, AiUnavailable, AiPaused, Inappropriate, SplitFailed, AnalysisFailed,
-        QuestionsFailed, TopicsMissing, GoalUnavailable, GoalGone, AnalysisTimedOut, Unknown,
+        QuestionsFailed, TopicsMissing, GoalUnavailable, GoalGone, AnalysisTimedOut, SummaryNoMaterial, SummaryFailed, Unknown,
     ];
 
     // The daily quotas name numbers and a time, so their texts are built from a template.

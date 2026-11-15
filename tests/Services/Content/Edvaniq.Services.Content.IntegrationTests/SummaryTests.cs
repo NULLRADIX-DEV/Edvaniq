@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 
+using Edvaniq.BuildingBlocks.AI;
 using Edvaniq.Services.Content.Api;
 using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Domain;
@@ -11,11 +12,12 @@ using Edvaniq.Services.Content.Infrastructure.Ai;
 using Edvaniq.Testing;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Edvaniq.Services.Content.IntegrationTests;
 
-// #344: the summary of a topic comes into being on its first request, in the worker, and is kept. Every later read costs
+// #344, #345: the summary of a topic comes into being on its first request, in the worker, and is kept. Every later read costs
 // no AI call, the three lengths differ clearly, each names its sources, model and prompt, and only its owner sees it.
 // The users are test accounts, so the worker takes the simulated AI.
 public sealed class SummaryTests(ServiceFactory service) : IClassFixture<ServiceFactory>
@@ -133,16 +135,62 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
         using var client = ClientFor(alice);
         var empty = Guid.NewGuid();
         service.Material.Give(alice, empty, [(Guid.NewGuid(), Guid.NewGuid())]);
+        var withoutSections = Guid.NewGuid();
+        service.Material.Give(alice, withoutSections, []);
         var away = Guid.NewGuid();
         service.Material.Down(away);
 
         using var conflict = await client.PostAsync($"/topics/{empty}/summaries/short", null, Cancel);
+        using var none = await client.PostAsync($"/topics/{withoutSections}/summaries/short", null, Cancel);
         using var unavailable = await client.PostAsync($"/topics/{away}/summaries/short", null, Cancel);
 
-        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
-        Assert.Equal(SummaryEndpoints.NoMaterial, (await conflict.Content.ReadFromJsonAsync<ProblemDto>(Cancel))!.Title);
+        foreach (var response in new[] { conflict, none })
+        {
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            Assert.Equal(TopicSummary.NoMaterial, (await response.Content.ReadFromJsonAsync<ProblemDto>(Cancel))!.Title);
+        }
+
+        Assert.False(Query(db => db.TopicSummaries.IgnoreQueryFilters().Any(summary => summary.TopicId == empty || summary.TopicId == withoutSections)));
         Assert.Equal(HttpStatusCode.ServiceUnavailable, unavailable.StatusCode);
         Assert.Equal(SummaryEndpoints.KnowledgeUnavailable, (await unavailable.Content.ReadFromJsonAsync<ProblemDto>(Cancel))!.Title);
+    }
+
+    // #345: the AI away, the summary waits after each outage like a document, then fails with a reason the user reads, no
+    // crash. Asked for again once the AI is back, it gets made.
+    [Fact]
+    public async Task AiOutage_PostponesThenFails_AndARetryWorksOnceTheAiIsBack()
+    {
+        var alice = NewUser();
+        var (topic, _, _) = await TopicAsync(alice, usesTestDouble: false);
+        using var client = ClientFor(alice);
+        var broken = new BrokenSummaries(service.Services.GetRequiredService<TestDoubleAi>().Client);
+        await RequestAsync(client, topic, "short", HttpStatusCode.Accepted);
+
+        var before = DateTime.UtcNow;
+        await WriteAsync(broken);
+        var waiting = Query(db => db.TopicSummaries.IgnoreQueryFilters().AsNoTracking().Single(summary => summary.TopicId == topic));
+        Assert.Equal((SummaryStatus.Pending, 1), (waiting.Status, waiting.AiOutages));
+        Assert.InRange(waiting.NextAttemptAt!.Value, before + Document.OutageDelays[0], DateTime.UtcNow + Document.OutageDelays[0]);
+
+        // The rest without waiting.
+        await StoreAsync(db => db.TopicSummaries.IgnoreQueryFilters().Where(summary => summary.TopicId == topic)
+            .ExecuteUpdate(set => set.SetProperty(summary => summary.NextAttemptAt, (DateTime?)null)));
+        for (var round = 0; round < Document.OutageDelays.Count; round++)
+        {
+            await WriteAsync(broken, delays: [.. Document.OutageDelays.Select(_ => TimeSpan.Zero)]);
+        }
+
+        var failed = await client.GetFromJsonAsync<SummaryDto>($"/topics/{topic}/summaries/short", Cancel);
+        Assert.Equal(("failed", "AiUnavailable", Document.AiUnavailable, (string?)null),
+            (failed!.Status, failed.FailureCode, failed.FailureReason, failed.Text));
+
+        var retried = await RequestAsync(client, topic, "short", HttpStatusCode.Accepted);
+        Assert.Equal(("pending", (string?)null, (string?)null), (retried.Status, retried.FailureCode, retried.FailureReason));
+        await WriteAsync(broken.InnerClient);
+
+        var ready = await client.GetFromJsonAsync<SummaryDto>($"/topics/{topic}/summaries/short", Cancel);
+        Assert.Equal(("ready", (string?)null), (ready!.Status, ready.FailureReason));
+        Assert.False(string.IsNullOrWhiteSpace(ready.Text));
     }
 
     [Fact]
@@ -199,9 +247,10 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
     }
 
     // A pasted document with its sections, and Knowledge naming them as one topic's material.
-    private async Task<(Guid Topic, Guid Document, IReadOnlyList<Section> Sections)> TopicAsync(string owner)
+    // Without the test double the worker takes the chat a test hands it.
+    private async Task<(Guid Topic, Guid Document, IReadOnlyList<Section> Sections)> TopicAsync(string owner, bool usesTestDouble = true)
     {
-        var document = Document.Paste(owner, service.Planning.GoalOf(owner), "Photosynthese", Text, DateTime.UtcNow, usesTestDouble: true);
+        var document = Document.Paste(owner, service.Planning.GoalOf(owner), "Photosynthese", Text, DateTime.UtcNow, usesTestDouble);
         var sections = document.Split();
         await StoreAsync(db =>
         {
@@ -220,11 +269,29 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
         return (await response.Content.ReadFromJsonAsync<SummaryDto>(Cancel))!;
     }
 
-    // One round of the worker with the simulated AI.
-    private async Task WriteAsync()
+    // One round of the worker, with the simulated AI unless a test hands it another chat.
+    private async Task WriteAsync(IChatClient? chat = null, IReadOnlyList<TimeSpan>? delays = null)
     {
-        var chat = service.Services.GetRequiredService<TestDoubleAi>().Client;
-        await ActivatorUtilities.CreateInstance<SummaryWriter>(service.Services, chat).WriteWaitingAsync(Cancel);
+        var writer = ActivatorUtilities.CreateInstance<SummaryWriter>(
+            service.Services, chat ?? service.Services.GetRequiredService<TestDoubleAi>().Client);
+        if (delays is not null)
+        {
+            writer.OutageDelays = delays;
+        }
+
+        await writer.WriteWaitingAsync(Cancel);
+    }
+
+    // The provider is away for every summary, other calls go through.
+    private sealed class BrokenSummaries(IChatClient inner) : DelegatingChatClient(inner)
+    {
+        public new IChatClient InnerClient => base.InnerClient;
+
+        public override Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
+            messages.First().Text.StartsWith(ContentAi.SummaryTask, StringComparison.Ordinal)
+                ? throw new AiProviderException(HttpStatusCode.ServiceUnavailable, null)
+                : base.GetResponseAsync(messages, options, cancellationToken);
     }
 
     private int SummaryCalls(Guid document) =>
@@ -263,7 +330,7 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
     private static string NewUser() => $"alice-{Guid.NewGuid():N}";
 
     private sealed record SummaryDto(
-        Guid TopicId, string Length, string Status, string? Text, string? FailureCode, bool AiGenerated, string? Model,
+        Guid TopicId, string Length, string Status, string? Text, string? FailureCode, string? FailureReason, bool AiGenerated, string? Model,
         string? PromptVersion, DateTime CreatedAt, DateTime? ReadyAt, SourceDto[] Sources);
 
     private sealed record SourceDto(Guid DocumentId, string DocumentTitle, int? PageFrom, int? PageTo);

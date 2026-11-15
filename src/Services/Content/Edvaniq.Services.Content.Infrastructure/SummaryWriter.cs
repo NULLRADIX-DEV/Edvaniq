@@ -107,14 +107,14 @@ public sealed partial class SummaryWriter(
             .ToList();
         if (material.Count == 0)
         {
-            await FailAsync(db, summary, FailureCode.NoText, cancellationToken);
+            await FailAsync(db, summary, DocumentFailures.SummaryNoMaterial, cancellationToken);
             return;
         }
 
         var profile = await ProfileAsync(scope.ServiceProvider.GetRequiredService<IGoalProfiles>(), summary, cancellationToken);
         if (profile is null)
         {
-            await FailAsync(db, summary, FailureCode.Unknown, cancellationToken);
+            await FailAsync(db, summary, DocumentFailures.GoalUnavailable, cancellationToken);
             return;
         }
 
@@ -138,9 +138,9 @@ public sealed partial class SummaryWriter(
 
         if (answer.Failure is { } failure)
         {
-            if (Handle(summary, failure) is { } code)
+            if (Handle(summary, failure) is { } reason)
             {
-                await FailAsync(db, summary, code, cancellationToken);
+                await FailAsync(db, summary, reason, cancellationToken);
             }
             else
             {
@@ -153,7 +153,7 @@ public sealed partial class SummaryWriter(
         if (answer.Value is not { } draft)
         {
             LogUnusable(summary.Id, answer.Attempts);
-            await FailAsync(db, summary, FailureCode.Unknown, cancellationToken);
+            await FailAsync(db, summary, DocumentFailures.SummaryFailed, cancellationToken);
             return;
         }
 
@@ -182,13 +182,13 @@ public sealed partial class SummaryWriter(
         }
     }
 
-    // Like AiOutage for a document: null while it only waits, else the code to fail with.
-    private FailureCode? Handle(TopicSummary summary, Exception failure)
+    // Like AiOutage for a document: null while it only waits, else the reason to fail with.
+    private DocumentFailure? Handle(TopicSummary summary, Exception failure)
     {
         if (failure is AiPausedException or AiBudgetExhaustedException)
         {
             LogStopped(summary.Id, failure.GetType().Name);
-            return failure is AiPausedException ? FailureCode.AiUnavailable : FailureCode.LimitReached;
+            return failure is AiPausedException ? DocumentFailures.AiPaused : DocumentFailures.AiBudgetReached;
         }
 
         if (AiFailure.IsTransient(failure) && summary.Postpone(time.GetUtcNow().UtcDateTime, OutageDelays, AiFailure.RetryAfter(failure, time.GetUtcNow().UtcDateTime)))
@@ -198,12 +198,12 @@ public sealed partial class SummaryWriter(
         }
 
         LogUnavailable(summary.Id, failure.GetType().Name);
-        return FailureCode.AiUnavailable;
+        return DocumentFailures.AiUnavailable;
     }
 
-    private static async Task FailAsync(ContentDbContext db, TopicSummary summary, FailureCode code, CancellationToken cancellationToken)
+    private static async Task FailAsync(ContentDbContext db, TopicSummary summary, DocumentFailure failure, CancellationToken cancellationToken)
     {
-        summary.Fail(code);
+        summary.Fail(failure);
         await db.SaveChangesAsync(cancellationToken);
     }
 

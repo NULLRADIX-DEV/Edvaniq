@@ -7,7 +7,7 @@ namespace Edvaniq.Services.Content.Api;
 // until it is ready. The owner comes from the token, Knowledge decides whether the topic is the caller's.
 internal static class SummaryEndpoints
 {
-    public const string NoMaterial = "Zu diesem Thema gibt es noch kein Material, aus dem eine Zusammenfassung entstehen kann.";
+    public const string NoMaterial = TopicSummary.NoMaterial;
 
     public const string AiPaused = "Zusammenfassungen sind gerade pausiert. Versuch es später noch einmal.";
 
@@ -86,13 +86,14 @@ internal static class SummaryEndpoints
 }
 
 // Status is pending, ready or failed. Text, model and prompt version come once it is ready, a failed one names its
-// reason on the fixed list of #283. AiGenerated is always true, the client labels the text with it.
+// reason on the fixed list of #283, code and text. AiGenerated is always true, the client labels the text with it.
 internal sealed record SummaryResponse(
     Guid TopicId,
     string Length,
     string Status,
     string? Text,
     string? FailureCode,
+    string? FailureReason,
     bool AiGenerated,
     string? Model,
     string? PromptVersion,
@@ -109,6 +110,7 @@ internal sealed record SummaryResponse(
             summary.Status.ToString().ToLowerInvariant(),
             summary.Text,
             summary.FailureCode?.ToString(),
+            summary.FailureReason,
             AiGenerated: true,
             summary.Model,
             summary.PromptVersion,
