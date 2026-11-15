@@ -127,6 +127,23 @@ public sealed class TopicsTests : BunitContext
         Assert.Equal(["Üben zu „Photosynthese“", "Üben zu „Lichtreaktion“"], links.Select(link => link.TextContent));
     }
 
+    // #346: every topic and subtopic leads to its summary too.
+    [Fact]
+    public void EachTopic_LeadsToItsSummary()
+    {
+        var material = new FakeLearningMaterial()
+            .Documents(Document(DocumentStatus.Ready))
+            .Topics(NewTopic);
+
+        var page = RenderPage(material);
+
+        var links = page.FindAll(".topic-list a.summary-link");
+        Assert.Equal(
+            [$"themen/{NewTopic.Id}/zusammenfassung", $"themen/{NewTopic.Subtopics[0].Id}/zusammenfassung"],
+            links.Select(link => link.GetAttribute("href")));
+        Assert.Equal(["Zusammenfassung zu „Photosynthese“", "Zusammenfassung zu „Lichtreaktion“"], links.Select(link => link.TextContent));
+    }
+
     // The topics of earlier texts stay, the state follows the newest text.
     [Fact]
     public void EarlierTopics_StayVisible_WhileANewTextIsAnalyzed()

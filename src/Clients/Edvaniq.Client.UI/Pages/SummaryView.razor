@@ -1,0 +1,343 @@
+@using Microsoft.Extensions.DependencyInjection
+@implements IDisposable
+@inject ITopicSummaries Summaries
+@inject ILearningMaterial Material
+@inject IServiceProvider Services
+
+<h1>@(topicName is null ? "Zusammenfassung" : $"Zusammenfassung zu „{topicName}“")</h1>
+
+@* Real buttons, so Tab reaches each and Enter or Space picks it. The pressed one is the length shown. *@
+<div class="summary-lengths" role="group" aria-label="@FeedbackTexts.Summary.LengthLabel">
+    @foreach (var (length, label) in Lengths)
+    {
+        <button type="button" class="summary-length" aria-pressed="@(length == selected ? "true" : "false")" @onclick="() => SelectAsync(length)">
+            @label
+        </button>
+    }
+</div>
+
+@* Politely, so a screen reader finishes what it reads first. The text itself stays outside, it would be read out whole. *@
+<div class="summary-status" role="status">
+    @switch (State)
+    {
+        case ViewState.Loading:
+            <Loading Text="@FeedbackTexts.Summary.Loading" />
+            break;
+        case ViewState.Writing:
+            <Loading Text="@FeedbackTexts.Summary.Writing" />
+            <p class="summary-hint">@FeedbackTexts.Summary.WritingHint</p>
+            break;
+        case ViewState.Slow:
+            <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.Summary.Slow" class="summary-slow">
+                <p>@FeedbackTexts.Summary.SlowHint</p>
+            </Notice>
+            break;
+        case ViewState.Ready:
+            <span class="visually-hidden">@FeedbackTexts.Summary.Ready</span>
+            break;
+        case ViewState.Failed:
+            <Notice Kind="NoticeKind.Error" Title="@FeedbackTexts.Summary.Failed" class="summary-failed">
+                <p>@(Current!.FailureReason ?? FeedbackTexts.Summary.FailedHint)</p>
+            </Notice>
+            break;
+        case ViewState.NotFound:
+            <Notice Kind="NoticeKind.Error" Title="@FeedbackTexts.Summary.TopicGone" class="summary-topic-gone" />
+            break;
+        case ViewState.NoMaterial:
+            <Notice Kind="NoticeKind.Info" class="summary-no-material">
+                @foreach (var message in problem!.Messages ?? [])
+                {
+                    <p>@message</p>
+                }
+            </Notice>
+            break;
+        case ViewState.Limited:
+            <Notice Kind="NoticeKind.Warning" class="summary-limited">
+                @foreach (var message in FeedbackTexts.Limit.Or(problem!.Messages))
+                {
+                    <p>@message</p>
+                }
+            </Notice>
+            break;
+        case ViewState.LoadFailed:
+            <ConnectionProblem Title="@FeedbackTexts.Summary.LoadFailed" TraceId="@problem!.TraceId" />
+            break;
+    }
+</div>
+
+@switch (State)
+{
+    case ViewState.Slow:
+        <StateActions ActionText="@FeedbackTexts.Summary.CheckAgain" OnAction="CheckAgainAsync" />
+        break;
+    case ViewState.Failed or ViewState.Limited:
+        <StateActions ActionText="@FeedbackTexts.Summary.TryAgain" OnAction="() => RequestAsync(selected)" />
+        break;
+    case ViewState.LoadFailed:
+        <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="() => RequestAsync(selected)" />
+        break;
+    case ViewState.NotFound:
+        <StateActions Href="themen" LinkText="@FeedbackTexts.Summary.BackToTopics" />
+        break;
+    case ViewState.NoMaterial:
+        <StateActions Href="themen" LinkText="@FeedbackTexts.Summary.AddMaterial" />
+        break;
+    case ViewState.Ready:
+        @* AI text, so only text: each line a paragraph, never markup. *@
+        <article class="summary-text" aria-label="@($"Zusammenfassung, {LabelOf(selected)}")">
+            @foreach (var paragraph in Paragraphs(Current!.Text!))
+            {
+                <p>@paragraph</p>
+            }
+        </article>
+        @* Room for the sources and the AI label (#351), empty until then. *@
+        <div class="summary-meta"></div>
+        break;
+}
+
+@code {
+    private static readonly (SummaryLength Length, string Label)[] Lengths =
+    [
+        (SummaryLength.Short, FeedbackTexts.Summary.Short),
+        (SummaryLength.Standard, FeedbackTexts.Summary.Standard),
+        (SummaryLength.Detailed, FeedbackTexts.Summary.Detailed),
+    ];
+
+    [Parameter]
+    public Guid TopicId { get; set; }
+
+    private readonly CancellationTokenSource life = new();
+    private CancellationTokenSource? poll;
+    private SummaryPolling polling = SummaryPolling.Default;
+    private Guid? loadedTopic;
+    private string? topicName;
+
+    // What Content said per length while the page lives: switching back shows it without asking again.
+    private readonly Dictionary<SummaryLength, TopicSummary> summaries = [];
+    private SummaryLength selected = SummaryLength.Standard;
+
+    // Lengths asked for right now, so switching away and back doesn't ask a second time.
+    private readonly HashSet<SummaryLength> requesting = [];
+    private bool slow;
+
+    // A call for the selected length that brought no summary.
+    private CallOutcome<TopicSummary>? problem;
+
+    private enum ViewState
+    {
+        Loading,
+        Writing,
+        Slow,
+        Ready,
+        Failed,
+        NotFound,
+        NoMaterial,
+        Limited,
+        LoadFailed,
+        SignedOut,
+    }
+
+    private TopicSummary? Current => summaries.GetValueOrDefault(selected);
+
+    private ViewState State => this switch
+    {
+        _ when requesting.Contains(selected) => ViewState.Loading,
+        { problem.Result: CallResult.SignedOut } => ViewState.SignedOut,
+        { problem.Result: CallResult.NotFound } => ViewState.NotFound,
+        { problem.Result: CallResult.NotReady } => ViewState.NoMaterial,
+        { problem.Result: CallResult.Limited } => ViewState.Limited,
+        { problem: not null } => ViewState.LoadFailed,
+        _ => Current?.Status switch
+        {
+            SummaryStatus.Ready => ViewState.Ready,
+            SummaryStatus.Failed => ViewState.Failed,
+            SummaryStatus.Pending => slow ? ViewState.Slow : ViewState.Writing,
+            _ => ViewState.Loading,
+        },
+    };
+
+    protected override void OnInitialized() => polling = Services.GetService<SummaryPolling>() ?? SummaryPolling.Default;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedTopic == TopicId)
+        {
+            return;
+        }
+
+        loadedTopic = TopicId;
+        topicName = null;
+        summaries.Clear();
+        selected = SummaryLength.Standard;
+        await Task.WhenAll(ShowAsync(selected), LoadTopicNameAsync());
+    }
+
+    private static string LabelOf(SummaryLength length) => Lengths.First(entry => entry.Length == length).Label;
+
+    // Lines of the text as paragraphs, empty ones dropped.
+    private static IEnumerable<string> Paragraphs(string text) =>
+        text.Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0);
+
+    private async Task SelectAsync(SummaryLength length)
+    {
+        if (length == selected)
+        {
+            return;
+        }
+
+        selected = length;
+        await ShowAsync(length);
+    }
+
+    // Shows what the page has for the length. Only a length it never asked for goes to Content (POST makes it once), a
+    // pending one is followed again.
+    private Task ShowAsync(SummaryLength length)
+    {
+        StopPolling();
+        problem = null;
+        slow = false;
+        if (requesting.Contains(length))
+        {
+            return Task.CompletedTask;
+        }
+
+        return summaries.GetValueOrDefault(length)?.Status switch
+        {
+            null => RequestAsync(length),
+            SummaryStatus.Pending => FollowAsync(length),
+            _ => Task.CompletedTask,
+        };
+    }
+
+    // Asks Content for it, also again for a failed one: Content starts that one anew.
+    private async Task RequestAsync(SummaryLength length)
+    {
+        if (!requesting.Add(length))
+        {
+            return;
+        }
+
+        StopPolling();
+        problem = null;
+        slow = false;
+        CallOutcome<TopicSummary> outcome;
+        try
+        {
+            outcome = await Summaries.RequestAsync(TopicId, length, life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            requesting.Remove(length);
+        }
+
+        // The user may have picked another length meanwhile, that one is followed instead.
+        if (Take(length, outcome) is { Status: SummaryStatus.Pending } && length == selected)
+        {
+            await FollowAsync(length);
+        }
+    }
+
+    // After the page stopped by itself: one look now, and while still pending it follows again.
+    private async Task CheckAgainAsync()
+    {
+        slow = false;
+        await FollowAsync(selected, askFirst: true);
+    }
+
+    // Asks every Interval until it is no longer pending, up to Limit. Ends with the page, and when the user picks another
+    // length.
+    private async Task FollowAsync(SummaryLength length, bool askFirst = false)
+    {
+        StopPolling();
+        poll = CancellationTokenSource.CreateLinkedTokenSource(life.Token);
+        var token = poll.Token;
+        var waited = TimeSpan.Zero;
+        try
+        {
+            var first = askFirst;
+            while (summaries.GetValueOrDefault(length)?.Status == SummaryStatus.Pending)
+            {
+                if (!first)
+                {
+                    if (waited >= polling.Limit)
+                    {
+                        slow = length == selected;
+                        StateHasChanged();
+                        return;
+                    }
+
+                    await Task.Delay(polling.Interval, token);
+                    waited += polling.Interval;
+                }
+
+                first = false;
+                var outcome = await Summaries.GetAsync(TopicId, length, token);
+                Take(length, outcome);
+                StateHasChanged();
+                if (outcome.Result != CallResult.Ok)
+                {
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    // Keeps a summary for its length, a problem only for the length shown.
+    private TopicSummary? Take(SummaryLength length, CallOutcome<TopicSummary> outcome)
+    {
+        if (outcome is { Result: CallResult.Ok, Value: { } summary } && summary.Length == length)
+        {
+            summaries[length] = summary;
+            return summary;
+        }
+
+        if (length == selected)
+        {
+            problem = outcome.Result == CallResult.Ok ? CallOutcome<TopicSummary>.Failed() : outcome;
+        }
+
+        return null;
+    }
+
+    private void StopPolling()
+    {
+        poll?.Cancel();
+        poll?.Dispose();
+        poll = null;
+    }
+
+    // The heading names the topic. Without it the page still works, so a failure here shows nothing.
+    private async Task LoadTopicNameAsync()
+    {
+        CallOutcome<IReadOnlyList<TopicInfo>> topics;
+        try
+        {
+            topics = await Material.ListTopicsAsync(life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (topics is { Result: CallResult.Ok, Value: { } list })
+        {
+            topicName = list.Select(topic => topic.Id == TopicId ? topic.Name : null)
+                .Concat(list.SelectMany(topic => topic.Subtopics).Select(subtopic => subtopic.Id == TopicId ? subtopic.Name : null))
+                .FirstOrDefault(name => name is not null);
+        }
+    }
+
+    public void Dispose()
+    {
+        StopPolling();
+        life.Cancel();
+        life.Dispose();
+    }
+}

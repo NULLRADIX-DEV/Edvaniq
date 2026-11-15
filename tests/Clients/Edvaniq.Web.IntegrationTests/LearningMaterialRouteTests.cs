@@ -22,6 +22,8 @@ public sealed class LearningMaterialRouteTests
     [InlineData("GET", "/api/knowledge/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections", "/knowledge/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections")]
     [InlineData("GET", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections", "/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections")]
     [InlineData("POST", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/retry", "/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/retry")]
+    [InlineData("GET", "/api/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries/standard", "/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries/standard")]
+    [InlineData("POST", "/api/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries/short", "/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries/short")]
     public async Task AfterLogin_TheCallReachesTheService_WithTheUsersToken(string method, string path, string arrives)
     {
         await using var gateway = await StubService.StartAsync("gateway-stub");
@@ -67,6 +69,8 @@ public sealed class LearningMaterialRouteTests
     [InlineData("GET", "/api/knowledge/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections")]
     [InlineData("GET", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections")]
     [InlineData("POST", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/retry")]
+    [InlineData("GET", "/api/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries/standard")]
+    [InlineData("POST", "/api/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries/detailed")]
     public async Task WithoutLogin_IsRefused_AndNothingIsForwarded(string method, string path)
     {
         await using var gateway = await StubService.StartAsync("gateway-stub");
@@ -99,6 +103,12 @@ public sealed class LearningMaterialRouteTests
     [InlineData("GET", "/api/knowledge/topics/not-a-guid/sections")]
     [InlineData("PUT", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections")]
     [InlineData("GET", "/api/content/documents/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/sections/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01")]
+    [InlineData("PUT", "/api/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries/standard")]
+    [InlineData("DELETE", "/api/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries/standard")]
+    [InlineData("POST", "/api/content/topics/not-a-guid/summaries/standard")]
+    [InlineData("GET", "/api/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries")]
+    [InlineData("GET", "/api/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01/summaries/standard/more")]
+    [InlineData("GET", "/api/content/topics/0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01")]
     public async Task OtherMethodsAndPaths_AreNotForwarded(string method, string path)
     {
         await using var gateway = await StubService.StartAsync("gateway-stub");

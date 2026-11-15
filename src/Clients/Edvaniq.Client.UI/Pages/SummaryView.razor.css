@@ -1,0 +1,44 @@
+h1 {
+    overflow-wrap: anywhere;
+}
+
+/* Three equal buttons in a row, each at least 44 px high, also on a phone. */
+.summary-lengths {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2);
+    margin: 0 0 var(--space-4);
+}
+
+.summary-length {
+    min-height: 2.75rem;
+    padding: 0 var(--space-2);
+    font: inherit;
+    font-weight: 600;
+    color: var(--color-ink);
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius);
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+
+.summary-length[aria-pressed="true"] {
+    color: var(--color-on-accent);
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+}
+
+.summary-hint {
+    margin: var(--space-2) 0 0;
+    color: var(--color-ink-muted);
+}
+
+.summary-text {
+    max-width: 70ch;
+    overflow-wrap: anywhere;
+}
+
+.summary-meta:empty {
+    display: none;
+}

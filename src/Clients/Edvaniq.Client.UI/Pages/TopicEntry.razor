@@ -27,6 +27,7 @@
         @if (open)
         {
             @Tools
+            <p class="topic-summary"><SummaryLink TopicId="TopicId" Name="@Name" /></p>
         }
 
         @if (details?.Result == CallResult.Failed)
