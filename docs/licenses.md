@@ -22,6 +22,8 @@ Ein Ausdruck mit `AND` ist erlaubt, wenn jeder Teil erlaubt ist, einer mit `OR`,
 
 **Server-Software**, die als eigener Prozess unverändert läuft und nicht in ein Edvaniq-Image gebaut wird, darf unter `GPL` stehen, etwa MySQL. Sie steht trotzdem in der Liste, ihr Einsatz beginnt mit „Server-Software:“.
 
+**Erlaubt für Inhalte**, also Texte, Bilder und Demo-Material, sind `CC0-1.0`, `CC-BY-4.0` und `CC-BY-SA-4.0`. Bei den beiden letzten gehört zu jedem Einsatz die Namensnennung mit Titel, Urheber, Quelle, Lizenz und dem Hinweis auf Änderungen, bei `CC-BY-SA-4.0` stehen auch Fragen und Zusammenfassungen, die aus dem Inhalt entstehen und die wir zeigen, unter derselben Lizenz. Diese Lizenzen gelten nur für die Tabelle „Inhalte“, nicht für Code.
+
 Indirekte NuGet-Pakete, also Abhängigkeiten der gelisteten Pakete, stehen nicht einzeln in der Liste, solange ihre Lizenz erlaubt ist und als SPDX-Kennung im Paket steht. Alle anderen stehen mit Namen da.
 
 ## Liste
@@ -120,6 +122,12 @@ Diese Pakete kommen über ein gelistetes Paket dazu und haben keine erlaubte SPD
 | `nats` | Apache-2.0 | Server-Software: Broker auf dem Server, lokal und in Integrationstests, läuft unverändert als eigener Prozess. Variante `-alpine`, weil der Health-Check auf dem Server `wget` braucht. Die Pakete von Alpine darin stehen unter ihren eigenen Lizenzen. |
 | `phpmyadmin` | GPL-2.0-only | Server-Software: nur lokal über Aspire, läuft unverändert als eigener Prozess. |
 
+### Inhalte
+
+| Komponente | Lizenz | Einsatz |
+|---|---|---|
+| Demo-Material „Algorithmen: Suchen, Sortieren, Komplexität“ | CC0-1.0 | Material des Demo-Lernziels (`Demo/*.md` in `Edvaniq.Services.Content.Application`), vom Edvaniq-Team für Edvaniq geschrieben. Gemeinfrei gewidmet, eine Namensnennung ist nicht nötig. |
+
 ## Vorläufige Ausnahmen
 
 `MySql.Data` und `MySql.EntityFrameworkCore` stehen unter `GPL-2.0-only WITH Universal-FOSS-exception-1.0` und stecken in jedem Service mit Datenbank, also auch in dessen Image. Nach der Prüfregel wäre das ausgeschlossen. Sie sind trotzdem vorläufig freigegeben, weil `MySql.EntityFrameworkCore` der festgelegte EF-Provider ist: Die freie Alternative Pomelo unterstützt nur EF Core 9. Ob die Ausnahme der Lizenz für Edvaniq reicht, ist noch nicht geklärt. Bis dahin kommt keine weitere Komponente unter `GPL` dazu.
@@ -140,10 +148,10 @@ Diese Pakete kommen über ein gelistetes Paket dazu und haben keine erlaubte SPD
 - ein direktes Paket aus `Directory.Packages.props`, ein SDK unter `msbuild-sdks` in `global.json` oder ein SDK mit Version in einer Projektdatei ohne Zeile unter „NuGet-Pakete“, oder eine Zeile dort ohne solches Paket
 - ein Paket aus `obj/project.assets.json` eines Projekts in `Edvaniq.slnx`, dessen nuspec eine andere Lizenz nennt als die Liste
 - ein indirektes Paket ohne Zeile, dessen Lizenz nicht erlaubt ist oder nur als Datei oder Link im Paket steht
-- eine Zeile mit nicht erlaubter Lizenz, deren Einsatz nicht mit „Einzelfreigabe:“, „Vorläufige Ausnahme:“ oder „Server-Software:“ beginnt
+- eine Zeile mit nicht erlaubter Lizenz, deren Einsatz nicht mit „Einzelfreigabe:“, „Vorläufige Ausnahme:“ oder „Server-Software:“ beginnt, unter „Inhalte“ eine Lizenz außerhalb von „Erlaubt für Inhalte“
 - ein Tool aus `dotnet-tools.json`, eine Action aus `.github/workflows` oder ein Image aus `deploy`, den Workflows oder `tests` ohne Zeile
 
-Nicht sehen kann der Test die Basis-Images des SDK, die Images, die Aspire selbst holt, und Programme, die ein Workflow herunterlädt, wie gitleaks und Chromium. Die prüft der Reviewer. Der Test liest die Überschriften, Spalten und den Absatz „Erlaubt“ dieser Datei. Benenne sie nicht um, ohne den Test anzupassen.
+Nicht sehen kann der Test die Basis-Images des SDK, die Images, die Aspire selbst holt, und Programme, die ein Workflow herunterlädt, wie gitleaks und Chromium. Die prüft der Reviewer. Der Test liest die Überschriften, Spalten und die Absätze „Erlaubt“ und „Erlaubt für Inhalte“ dieser Datei. Benenne sie nicht um, ohne den Test anzupassen.
 
 Selbst nachsehen kannst du nach einem Restore so:
 

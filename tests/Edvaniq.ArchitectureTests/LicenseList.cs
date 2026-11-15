@@ -4,7 +4,8 @@ namespace Edvaniq.ArchitectureTests;
 // under "## Liste", each with the "### " heading above it as its table. A row names its component in the first
 // backticked word of its first cell, or in the whole cell if it has none, then its license and its use. A row whose
 // license is not allowed counts as approved if its use starts with "Einzelfreigabe:", "Vorläufige Ausnahme:" or
-// "Server-Software:".
+// "Server-Software:". The table "Inhalte" has its own licenses, the ones in the paragraph "Erlaubt für Inhalte" (#410),
+// and those count nowhere else.
 internal sealed record LicenseList(IReadOnlySet<string> Allowed, IReadOnlyList<LicenseList.Row> Rows)
 {
     public const string Packages = "NuGet-Pakete";
@@ -12,6 +13,9 @@ internal sealed record LicenseList(IReadOnlySet<string> Allowed, IReadOnlyList<L
     public const string Tools = "Tools und Programme";
     public const string Actions = "GitHub Actions";
     public const string Images = "Container-Images";
+    public const string Contents = "Inhalte";
+
+    public IReadOnlySet<string> AllowedForContents { get; init; } = new HashSet<string>();
 
     private static readonly string[] Approvals = ["Einzelfreigabe:", "Vorläufige Ausnahme:", "Server-Software:"];
 
@@ -43,8 +47,15 @@ internal sealed record LicenseList(IReadOnlySet<string> Allowed, IReadOnlyList<L
             }
         }
 
-        return new LicenseList(allowed, rows);
+        var allowedForContents = lines.Where(line => line.StartsWith("**Erlaubt für Inhalte**", StringComparison.Ordinal))
+            .SelectMany(Backticked)
+            .ToHashSet(StringComparer.Ordinal);
+        return new LicenseList(allowed, rows) { AllowedForContents = allowedForContents };
     }
+
+    // A row's license by the rules of its table.
+    public bool IsAllowed(Row row) =>
+        row.Table == Contents ? AllowedForContents.Contains(row.License.Trim()) : IsAllowed(row.License);
 
     // An SPDX expression is allowed if each part joined by AND is, or at least one part joined by OR. A WITH exception
     // or a license that is no SPDX id is never allowed.
