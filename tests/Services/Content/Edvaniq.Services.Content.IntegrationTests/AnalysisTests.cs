@@ -268,7 +268,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             .IgnoreQueryFilters().Count(charge => charge.DocumentId == id));
     }
 
-    // #1018: a document that got ready before #214 has no AnalyzedAt and no pools. Reopened, it gets its questions and
+    // #1018: a document that got ready before #214 has no AnalyzedAt, no pools and no charges. Reopened, it gets its questions and
     // its topics don't go out a second time.
     [Fact]
     public async Task ReopenedDocumentReadyBeforeAnalyzedAt_GetsItsQuestions_WithoutASecondAnalysis()
@@ -283,6 +283,8 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         {
             var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
             await db.QuestionPools.IgnoreQueryFilters().Where(pool => pool.DocumentId == id)
+                .ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+            await db.GenerationCharges.IgnoreQueryFilters().Where(charge => charge.DocumentId == id)
                 .ExecuteDeleteAsync(TestContext.Current.CancellationToken);
             await db.Documents.IgnoreQueryFilters().Where(document => document.Id == id)
                 .ExecuteUpdateAsync(set => set.SetProperty(document => document.AnalyzedAt, (DateTime?)null), TestContext.Current.CancellationToken);
