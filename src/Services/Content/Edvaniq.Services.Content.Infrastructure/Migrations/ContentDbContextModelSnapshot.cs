@@ -534,6 +534,32 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.ToTable("PageCharges");
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.PoolMaterial", b =>
+                {
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("QuestionKeys")
+                        .HasColumnType("text");
+
+                    b.HasKey("TopicId", "SectionId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("SectionId");
+
+                    b.ToTable("PoolMaterials");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.QuestionPool", b =>
                 {
                     b.Property<Guid>("TopicId")
@@ -560,6 +586,11 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
 
                     b.Property<int?>("Questions")
                         .HasColumnType("int");
+
+                    b.Property<int>("Rounds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
                     b.Property<int>("TopUpOutages")
                         .ValueGeneratedOnAdd()
@@ -767,6 +798,21 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.HasOne("Edvaniq.Services.Content.Domain.Document", null)
                         .WithMany()
                         .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.PoolMaterial", b =>
+                {
+                    b.HasOne("Edvaniq.Services.Content.Domain.Section", null)
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Edvaniq.Services.Content.Domain.QuestionPool", null)
+                        .WithMany()
+                        .HasForeignKey("TopicId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

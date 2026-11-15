@@ -236,9 +236,10 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     }
 
     // #343: topics that come later get their pool in the background, the ones with a pool keep their questions. A second
-    // document with a topic Knowledge merged into one of the first and a new one asks the AI once, for the new one. A topic
-    // added by hand has no sections and gets no pool, without holding anything up, until a third document brings its
-    // material. The app answers meanwhile. How many questions a pool gets isn't checked, topping up may add some.
+    // document with a topic Knowledge merged into one of the first and a new one gives the new one its pool, the merged
+    // one keeps its questions (and may get some on the new material, #915). A topic added by hand has no sections and
+    // gets no pool, without holding anything up, until a third document brings its material. The app answers meanwhile.
+    // How many questions a pool gets isn't checked, topping up may add some.
     [Fact]
     public async Task LaterTopics_GetTheirPools_ThoseWithAPoolKeepTheirQuestions()
     {
@@ -262,8 +263,8 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.True(await Pools().FinishAsync(second, TestContext.Current.CancellationToken));
 
         Assert.Equal(DocumentStatus.Ready, Stored(second).Status);
-        Assert.Equal([secondTopics[1].Id], (await GeneratedAsync(second)).Select(pool => pool.TopicId!.Value));
-        Assert.Equal(1, QuestionCalls(second));
+        Assert.Contains(secondTopics[1].Id, PooledTopics(second));
+        Assert.Contains(secondTopics[1].Id, (await GeneratedAsync(second)).Select(pool => pool.TopicId!.Value));
         Assert.Equal(firstItems, await ItemIdsAsync(first));
         Assert.DoesNotContain(added.Id, PooledTopics(second));
 
@@ -277,6 +278,97 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(DocumentStatus.Ready, Stored(third).Status);
         Assert.Equal([added.Id], (await GeneratedAsync(third)).Select(pool => pool.TopicId!.Value));
         Assert.Equal(firstItems, await ItemIdsAsync(first));
+    }
+
+    // #915: a second document brings new sections to a topic with a pool. The AI is asked about those sections only, what
+    // it brings again of the first document's questions stays out, the rest comes shuffled with the second document as
+    // source, and the document is ready only then. Asked again, the same sections cost no call. Deleted, the second
+    // document takes its material along, so the same text pasted once more gets its questions again.
+    [Fact]
+    public async Task NewMaterial_OfATopicWithAPool_GetsQuestionsOnExactlyThatMaterial()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var first = await PasteAsync(client, $"# Licht\n{TestTexts.Lesson}");
+        await AnalyzeAsync(first, withQuestions: true);
+        var topic = Assert.Single(await service.Knowledge.OfDocumentAsync(first, TestContext.Current.CancellationToken));
+        var firstItems = await ItemIdsAsync(first);
+        var repeated = (await GeneratedAsync(first)).SelectMany(pool => pool.Items).First().Question!.Text;
+        var material = $"# Lichtreaktion\nIm Licht entsteht in den Blättern Energie für den Zucker.\n\n# Mehr\n{TestTexts.Lesson}";
+        var answer = $$"""
+            {"questions":[
+              {"type":"single","text":"{{repeated}}","options":["A","B"],"answers":[1],"explanation":"Weil.","difficulty":1,"section":1},
+              {"type":"single","text":"Neu eins","options":["A","B","C","D"],"answers":[0],"explanation":"Weil.","difficulty":2,"section":1},
+              {"type":"multiple","text":"Neu zwei","options":["A","B","C","D"],"answers":[0,2],"explanation":"Weil.","difficulty":3,"section":1}]}
+            """;
+
+        var second = await AddMaterialAsync(client, material, topic);
+        Assert.Equal(DocumentStatus.Analyzing, Stored(second).Status);
+        var calls = QuestionCalls(first);
+        Assert.True(await Pools(new BrokenAnswers(failures: int.MaxValue, answer: answer)).FinishAsync(second, TestContext.Current.CancellationToken));
+
+        Assert.Equal(DocumentStatus.Ready, Stored(second).Status);
+        var added = Assert.Single(await GeneratedAsync(second));
+        Assert.Equal(topic.Id, added.TopicId);
+        Assert.Equal(["Neu eins", "Neu zwei"], added.Items.Select(item => item.Question!.Text));
+        var secondSections = SectionIdsOf(second);
+        Assert.All(added.Items, item => Assert.Equal(second, item.DocumentId));
+        Assert.All(added.Items, item => Assert.Contains(item.SectionId, secondSections));
+        Assert.Equal("A C", RightOptions(added.Items[1].Question!));
+        Assert.Equal(firstItems, await ItemIdsAsync(first));
+        Assert.Equal(calls, QuestionCalls(first));
+        Assert.Equal(1, QuestionCalls(second));
+        Assert.Equal(secondSections.Order(), MaterialOf(topic.Id).Where(secondSections.Contains).Order());
+        Assert.Equal([0, 1], ChargesOf(topic.Id));
+
+        // The same sections once more: no call.
+        await ReopenAsync(second);
+        Assert.True(await Pools().FinishAsync(second, TestContext.Current.CancellationToken));
+        Assert.Equal((1, DocumentStatus.Ready), (QuestionCalls(second), Stored(second).Status));
+
+        // Deleted, the material and its questions' keys go, the same text pasted again gets its questions again.
+        using var deleted = await client.DeleteAsync($"/documents/{second}", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        Assert.DoesNotContain(MaterialOf(topic.Id), secondSections.Contains);
+        var again = await AddMaterialAsync(client, material, topic);
+        Assert.True(await Pools(new BrokenAnswers(failures: int.MaxValue, answer: answer)).FinishAsync(again, TestContext.Current.CancellationToken));
+        Assert.Equal(["Neu eins", "Neu zwei"], Assert.Single(await GeneratedAsync(again)).Items.Select(item => item.Question!.Text));
+    }
+
+    // A pasted document whose one topic Knowledge merged into the given one, analyzed and waiting for its questions.
+    private async Task<Guid> AddMaterialAsync(HttpClient client, string text, KnowledgeTopic topic)
+    {
+        var id = await PasteAsync(client, text);
+        await AnalyzeAsync(id);
+        var made = service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
+        service.Knowledge.Give(id, [topic with { SectionIds = [.. made.SelectMany(item => item.SectionIds)] }]);
+        return id;
+    }
+
+    private async Task ReopenAsync(Guid id)
+    {
+        await using var command = service.WithWebHostBuilder(builder => builder.ConfigureTestServices(DocumentCommand.Register));
+        Assert.Equal(DocumentCommand.Ok, await DocumentCommand.RunAsync(command.Services, ["document", "reopen", id.ToString()], TextWriter.Null, TextWriter.Null));
+    }
+
+    private List<Guid> SectionIdsOf(Guid documentId)
+    {
+        using var scope = service.Services.CreateScope();
+        return [.. scope.ServiceProvider.GetRequiredService<ContentDbContext>().Sections.IgnoreQueryFilters()
+            .Where(section => section.DocumentId == documentId).Select(section => section.Id)];
+    }
+
+    private List<Guid> MaterialOf(Guid topicId)
+    {
+        using var scope = service.Services.CreateScope();
+        return [.. scope.ServiceProvider.GetRequiredService<ContentDbContext>().PoolMaterials.IgnoreQueryFilters()
+            .Where(material => material.TopicId == topicId).Select(material => material.SectionId)];
+    }
+
+    private List<int> ChargesOf(Guid topicId)
+    {
+        using var scope = service.Services.CreateScope();
+        return [.. scope.ServiceProvider.GetRequiredService<ContentDbContext>().GenerationCharges.IgnoreQueryFilters()
+            .Where(charge => charge.TopicId == topicId).Select(charge => charge.Round).Order()];
     }
 
     private async Task<List<Guid>> ItemIdsAsync(Guid documentId) =>

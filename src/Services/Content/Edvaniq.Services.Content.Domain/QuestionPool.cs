@@ -18,6 +18,12 @@ public sealed class QuestionPool : IOwnedByUser
 
     public const int KeyLength = 16;
 
+    // All questions of a topic, with those of material added later (#915). A full pool takes no more material.
+    public const int MaxAll = 200;
+
+    // How many a round on new material asks for.
+    public const int PerNewMaterial = 10;
+
     // Space between the keys.
     public const int KeysMaxLength = MaxQuestions * (KeyLength + 1);
 
@@ -46,6 +52,10 @@ public sealed class QuestionPool : IOwnedByUser
     public string? QuestionKeys { get; private set; }
 
     public int TopUps { get; private set; }
+
+    // The jobs of the AI for the topic after the pool, top-ups and new material alike. Each takes a generation with its
+    // number as round (GenerationCharge.Round).
+    public int Rounds { get; private set; }
 
     // Outages of the AI in a row while topping up, the next one waits by Document.OutageDelays.
     public int TopUpOutages { get; private set; }
@@ -84,6 +94,9 @@ public sealed class QuestionPool : IOwnedByUser
 
         return true;
     }
+
+    // The number of the next job of the AI for the topic.
+    public int NextRound() => ++Rounds;
 
     // Nothing asked: the quota, the budget or the emergency stop. Tried again from then.
     public void WaitUntil(DateTime then) => NextTopUpAt = then;

@@ -77,7 +77,9 @@ public sealed class UserDeletionTests(ServiceFactory service) : IClassFixture<Se
         db.TopicSummaries.Add(TopicSummary.Request(
             user, Guid.NewGuid(), null, SummaryLength.Short, [(document.Id, sections[0].Id)], DateTime.UtcNow));
         var pooled = Guid.NewGuid();
-        db.QuestionPools.Add(QuestionPool.For(document, pooled, DateTime.UtcNow, [QuestionGeneration.KeyOf("Was spaltet Licht?")]));
+        var pool = QuestionPool.For(document, pooled, DateTime.UtcNow, [QuestionGeneration.KeyOf("Was spaltet Licht?")]);
+        db.QuestionPools.Add(pool);
+        db.PoolMaterials.Add(PoolMaterial.Added(pool, sections[0].Id, [QuestionGeneration.KeyOf("Was spaltet Wasser?")]));
         db.PageCharges.Add(PageCharge.For(document, 1, DateTime.UtcNow));
         db.GenerationCharges.Add(GenerationCharge.For(document, pooled, DateTime.UtcNow));
         db.GenerationCharges.Add(GenerationCharge.For(document, pooled, DateTime.UtcNow, round: 1));
