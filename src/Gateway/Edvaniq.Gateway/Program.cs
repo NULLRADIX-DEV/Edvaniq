@@ -10,6 +10,7 @@ builder.AddServiceDefaults();
 // the gateway passes it on unchanged.
 builder.AddTokenValidation();
 builder.Services.AddTokenProblems();
+builder.Services.AddAccountRateLimits();
 
 // Routes and targets come only from the section ReverseProxy. Service discovery turns a name like planning-api into
 // the address: from Aspire locally, from services__<name>__http__0 in deploy/compose.yml on the server.
@@ -30,6 +31,9 @@ app.MapDefaultEndpoints();
 // After the health endpoints, which are middleware outside Development and would need a token otherwise.
 app.UseAuthentication();
 app.UseAuthorization();
+
+// After the token check: the limit counts per account, and a call without a valid token gets its 401 first.
+app.UseRateLimiter();
 
 // A custom pipeline replaces the default one, so the three steps of the default come back in by hand. Without them
 // LoadBalancingPolicy, SessionAffinity and passive health checks in the configuration would be ignored.
