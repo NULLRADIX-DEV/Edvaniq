@@ -82,6 +82,28 @@ public class QuestionPoolTests
         Assert.Throws<ArgumentException>(() => pool.ToppedUp(["kurz"]));
     }
 
+    // #915: every job of the AI after the pool takes the next round, whatever kind it is.
+    [Fact]
+    public void Rounds_CountEveryJobAfterThePool()
+    {
+        var pool = Pool(10);
+
+        Assert.Equal([1, 2, 3], [pool.NextRound(), pool.NextRound(), pool.NextRound()]);
+    }
+
+    // The material a pool was made from carries no keys, material added later the keys of its questions.
+    [Fact]
+    public void Material_KeepsTheKeysOfWhatItBrought()
+    {
+        var pool = Pool(10);
+        var section = Guid.NewGuid();
+
+        Assert.Empty(PoolMaterial.Of(pool, section).Keys);
+        Assert.Empty(PoolMaterial.Added(pool, section, []).Keys);
+        Assert.Equal([Key(30), Key(31)], PoolMaterial.Added(pool, section, [Key(30), Key(31)]).Keys);
+        Assert.Equal((pool.TopicId, section, pool.OwnerId), (PoolMaterial.Of(pool, section).TopicId, section, PoolMaterial.Of(pool, section).OwnerId));
+    }
+
     private static QuestionPool Pool(int questions) =>
         QuestionPool.For(Document.Paste("alice", Guid.NewGuid(), null, "Licht spaltet Wasser.", Now), Guid.NewGuid(), Now, Keys(0, questions));
 

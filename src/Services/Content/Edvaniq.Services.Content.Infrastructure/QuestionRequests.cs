@@ -1,26 +1,28 @@
 using Edvaniq.BuildingBlocks.AI;
+using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Contracts;
 using Edvaniq.Services.Content.Domain;
 using Edvaniq.Services.Content.Infrastructure.Ai;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 
 namespace Edvaniq.Services.Content.Infrastructure;
 
-// Asks the AI for the questions of one topic, for a new pool (QuestionPools) or a top-up (QuestionTopUps).
+// Asks the AI for the questions of one topic, for a new pool or new material (QuestionPools) or a top-up
+// (QuestionTopUps).
 internal static class QuestionRequests
 {
     // The checked questions as items, or null if none held up, then with the failure of the provider if that was why.
     // An answer without a valid question gets asked again, up to StructuredOutput.DefaultAttempts, since a real model
     // may just have had a bad moment. A provider that fails or takes too long ends at once. Every attempt goes into the
-    // cost log, under the purpose and the topic. Have is the number of questions the pool has already.
+    // cost log, under the purpose and the topic. System is the variant of QuestionGeneration.System the caller needs.
     public static async Task<(List<GeneratedItem>? Items, Exception? Failure, int Attempts)> AskAsync(
         Document document,
-        LearnerProfile profile,
+        string system,
         IReadOnlyList<Guid> sectionIds,
         IReadOnlyDictionary<Guid, string> texts,
-        int have,
         string purpose,
         Guid topicId,
         IChatClient ai,
@@ -37,7 +39,7 @@ internal static class QuestionRequests
             AiReference.Topic(topicId),
             chat,
             [
-                new ChatMessage(ChatRole.System, QuestionGeneration.System(profile, have)),
+                new ChatMessage(ChatRole.System, system),
                 new ChatMessage(ChatRole.User, QuestionGeneration.User(sectionIds.Select(id => texts[id]))),
             ],
             text => QuestionGeneration.Read(text, sectionIds) is { Count: > 0 } drafts ? drafts : null,
@@ -65,6 +67,23 @@ internal static class QuestionRequests
 
     public static List<string> KeysOf(IEnumerable<GeneratedItem> items) =>
         [.. items.Select(item => QuestionGeneration.KeyOf(item.Question!.Text))];
+
+    // Every key the topic has: those of the pool and those of material added later.
+    public static async Task<HashSet<string>> KeysOfAsync(ContentDbContext db, QuestionPool pool, CancellationToken cancellationToken)
+    {
+        var added = await db.PoolMaterials.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .Where(material => material.TopicId == pool.TopicId && material.QuestionKeys != null)
+            .Select(material => material.QuestionKeys!)
+            .ToListAsync(cancellationToken);
+        return [.. (pool.QuestionKeys ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries), .. added.SelectMany(keys => keys.Split(' '))];
+    }
+
+    // The questions that ask something the topic doesn't have yet, each only once, at most take of them.
+    public static List<GeneratedItem> Fresh(IEnumerable<GeneratedItem> items, IReadOnlySet<string> known, int take) =>
+        [.. items
+            .DistinctBy(item => QuestionGeneration.KeyOf(item.Question!.Text))
+            .Where(item => !known.Contains(QuestionGeneration.KeyOf(item.Question!.Text)))
+            .Take(take)];
 
     // A topic's own sections of this document. One without any, like the roof of its subtopics, gets theirs. Knowledge
     // merges topics of the same name across documents (#208), so a topic may have sections only in another document:

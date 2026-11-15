@@ -158,7 +158,8 @@ public sealed class QuestionTopUps(
         }
 
         var (items, failure, attempts) = await QuestionRequests.AskAsync(
-            document, profile, material, texts, pool.Questions ?? 0, AiAttempt.TopUp, pool.TopicId, ai, testDouble, answers, AiTimeout, cancellationToken);
+            document, QuestionGeneration.System(profile, pool.Questions ?? 0), material, texts, AiAttempt.TopUp, pool.TopicId, ai, testDouble, answers,
+            AiTimeout, cancellationToken);
         now = time.GetUtcNow().UtcDateTime;
         if (failure is not null)
         {
@@ -166,11 +167,8 @@ public sealed class QuestionTopUps(
             return await SaveAsync(db, document, cancellationToken);
         }
 
-        var fresh = (items ?? [])
-            .DistinctBy(item => QuestionGeneration.KeyOf(item.Question!.Text))
-            .Where(item => !pool.Knows(QuestionGeneration.KeyOf(item.Question!.Text)))
-            .Take(pool.Missing)
-            .ToList();
+        var known = await QuestionRequests.KeysOfAsync(db, pool, cancellationToken);
+        var fresh = QuestionRequests.Fresh(items ?? [], known, pool.Missing);
         if (!pool.ToppedUp(QuestionRequests.KeysOf(fresh)))
         {
             ContentLog.TopUpStayedShort(logger, topicId, pool.Questions ?? 0, pool.TopUps);
@@ -180,7 +178,7 @@ public sealed class QuestionTopUps(
             ContentLog.ToppedUp(logger, topicId, fresh.Count, pool.Questions ?? 0, attempts);
         }
 
-        services.GetRequiredService<IGenerationQuota>().Charge(document, topicId, pool.TopUps);
+        services.GetRequiredService<IGenerationQuota>().Charge(document, topicId, pool.NextRound());
         if (fresh.Count > 0)
         {
             services.GetRequiredService<IEventOutbox>().Add(new ItemsGenerated(document.OwnerId, document.Id, topic.Position, fresh, topicId));

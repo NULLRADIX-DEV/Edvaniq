@@ -20,6 +20,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
     public DbSet<QuestionPool> QuestionPools => Set<QuestionPool>();
 
+    public DbSet<PoolMaterial> PoolMaterials => Set<PoolMaterial>();
+
     public DbSet<AiAttempt> AiAttempts => Set<AiAttempt>();
 
     public DbSet<AiUsageDay> AiUsageDays => Set<AiUsageDay>();
@@ -84,6 +86,14 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         pool.Property(item => item.TopUps).HasDefaultValue(0);
         pool.Property(item => item.TopUpOutages).HasDefaultValue(0);
         pool.Property(item => item.TopUpStopped).HasDefaultValue(false);
+        pool.Property(item => item.Rounds).HasDefaultValue(0);
+
+        // The material of a pool goes with its section and with its pool (#915).
+        var material = modelBuilder.Entity<PoolMaterial>();
+        material.HasKey(item => new { item.TopicId, item.SectionId });
+        material.HasOne<QuestionPool>().WithMany().HasForeignKey(item => item.TopicId).OnDelete(DeleteBehavior.Cascade);
+        material.HasOne<Section>().WithMany().HasForeignKey(item => item.SectionId).OnDelete(DeleteBehavior.Cascade);
+        material.Property(item => item.QuestionKeys).HasColumnType("text");
         pool.HasIndex(item => new { item.Questions, item.NextTopUpAt });
 
         // No foreign key to the document: what an attempt cost stays when the document goes.

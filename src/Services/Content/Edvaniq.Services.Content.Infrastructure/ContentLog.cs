@@ -170,4 +170,11 @@ internal static partial class ContentLog
 
     [LoggerMessage(EventId = 33908, Level = LogLevel.Warning, Message = "Question pool of topic {TopicId} waits, Knowledge or Planning could not be asked ({Error}), asking again at {NextTopUpAt}")]
     public static partial void TopUpUnreachable(ILogger logger, Guid topicId, string error, DateTime nextTopUpAt);
+
+    // New material of a topic with a pool (#915).
+    [LoggerMessage(EventId = 33909, Level = LogLevel.Warning, Message = "Question pool of topic {TopicId} is full with {Questions} questions, it gets none on the new material of document {DocumentId}")]
+    public static partial void PoolFull(ILogger logger, Guid topicId, Guid documentId, int questions);
+
+    [LoggerMessage(EventId = 33960, Level = LogLevel.Information, Message = "Question pool of topic {TopicId} got {Added} new questions on {Sections} new sections of document {DocumentId}")]
+    public static partial void PoolGotNewMaterial(ILogger logger, Guid topicId, Guid documentId, int sections, int added);
 }

@@ -126,10 +126,14 @@ public sealed class QuestionPools(
         var started = time.GetTimestamp();
         var topics = await TopicsAsync(scope.ServiceProvider.GetRequiredService<IKnowledgeTopics>(), documentId, cancellationToken);
         var ids = topics.Select(topic => topic.Id).ToList();
-        var pooled = await db.QuestionPools.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+        var pools = await db.QuestionPools.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .Where(pool => ids.Contains(pool.TopicId))
-            .Select(pool => pool.TopicId)
-            .ToListAsync(cancellationToken);
+            .ToDictionaryAsync(pool => pool.TopicId, cancellationToken);
+        var asked = (await db.PoolMaterials.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+                .Where(material => ids.Contains(material.TopicId))
+                .Select(material => new { material.TopicId, material.SectionId })
+                .ToListAsync(cancellationToken))
+            .ToLookup(material => material.TopicId, material => material.SectionId);
         var sections = await db.Sections.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .Where(section => section.DocumentId == documentId)
             .ToListAsync(cancellationToken);
@@ -138,7 +142,7 @@ public sealed class QuestionPools(
         // No topic yet, or topics none of which has material of this document and none a pool: Knowledge hasn't got them
         // as they will be. Ready with nothing would leave the document without a single question, so it waits like for
         // missing topics, and fails as such after the limit.
-        if (topics.Count == 0 || (pooled.Count == 0 && topics.All(topic => QuestionRequests.SectionsOf(topics, topic, texts).Count == 0)))
+        if (topics.Count == 0 || (pools.Count == 0 && topics.All(topic => QuestionRequests.SectionsOf(topics, topic, texts).Count == 0)))
         {
             if (time.GetUtcNow().UtcDateTime - document.WaitsForTopicsSince < TopicsTimeout)
             {
@@ -151,23 +155,44 @@ public sealed class QuestionPools(
             return true;
         }
 
-        // Every AI call comes before the one save, nothing holds the database meanwhile. A topic without questions fails
-        // the document and nothing of the others goes out. An outage postpones it, then all its topics are asked again.
-        var needed = new List<(KnowledgeTopic Topic, List<Guid> Material)>();
-        foreach (var topic in topics.Where(topic => !pooled.Contains(topic.Id)))
+        // A topic without a pool gets one from its material here. A topic with a pool gets questions on the sections of
+        // this document it wasn't asked about yet (#915), none if there are none.
+        var needed = new List<Job>();
+        foreach (var topic in topics)
         {
             var material = QuestionRequests.SectionsOf(topics, topic, texts);
-            if (material.Count == 0)
+            if (!pools.TryGetValue(topic.Id, out var pool))
             {
-                ContentLog.TopicWithoutMaterial(logger, topic.Id, documentId);
+                if (material.Count == 0)
+                {
+                    ContentLog.TopicWithoutMaterial(logger, topic.Id, documentId);
+                    continue;
+                }
+
+                needed.Add(new Job(topic, material, null, new HashSet<string>()));
                 continue;
             }
 
-            needed.Add((topic, material));
+            // A pool from before #915 has no material rows: its own document counts as asked, every other as new.
+            var before = asked[topic.Id].ToHashSet();
+            List<Guid> fresh = before.Count == 0 && pool.DocumentId == documentId ? [] : [.. material.Where(section => !before.Contains(section))];
+            if (fresh.Count == 0)
+            {
+                continue;
+            }
+
+            var known = await QuestionRequests.KeysOfAsync(db, pool, cancellationToken);
+            if (known.Count >= QuestionPool.MaxAll)
+            {
+                ContentLog.PoolFull(logger, topic.Id, documentId, known.Count);
+                continue;
+            }
+
+            needed.Add(new Job(topic, fresh, pool, known));
         }
 
-        // The daily quota before the first AI call: every topic that gets a pool is one generation, all or none. The demo
-        // costs none (#411).
+        // The daily quota before the first AI call: every topic that gets a pool or new material is one generation, all
+        // or none. The demo costs none (#411).
         var quota = scope.ServiceProvider.GetRequiredService<IGenerationQuota>();
         if (needed.Count > 0 && document.Origin != DocumentOrigin.Demo && await quota.StateOfAsync(document.OwnerId, cancellationToken) is var state && !state.Allows(needed.Count))
         {
@@ -177,9 +202,11 @@ public sealed class QuestionPools(
             return true;
         }
 
-        var made = new List<(KnowledgeTopic Topic, List<GeneratedItem> Items)>();
+        // Every AI call comes before the one save, nothing holds the database meanwhile. A topic without questions fails
+        // the document and nothing of the others goes out. An outage postpones it, then all its topics are asked again.
+        var made = new List<(Job Job, List<GeneratedItem> Items)>();
         LearnerProfile? profile = null;
-        foreach (var (topic, material) in needed)
+        foreach (var job in needed)
         {
             // Asked once per round, only when a topic really needs the AI.
             profile ??= await GoalContext.ProfileOfAsync(document, scope.ServiceProvider.GetRequiredService<IGoalProfiles>(), logger, cancellationToken);
@@ -189,8 +216,11 @@ public sealed class QuestionPools(
                 return true;
             }
 
+            var system = job.Pool is null
+                ? QuestionGeneration.System(profile)
+                : QuestionGeneration.ForNewMaterial(profile, job.Room);
             var (items, failure, attempts) = await QuestionRequests.AskAsync(
-                document, profile, material, texts, 0, AiAttempt.Questions, topic.Id, ai, testDouble, answers, AiTimeout, cancellationToken);
+                document, system, job.Material, texts, AiAttempt.Questions, job.Topic.Id, ai, testDouble, answers, AiTimeout, cancellationToken);
             if (items is null)
             {
                 if (failure is not null)
@@ -207,19 +237,43 @@ public sealed class QuestionPools(
                 return true;
             }
 
-            made.Add((topic, items));
+            made.Add((job, items));
         }
 
         var outbox = scope.ServiceProvider.GetRequiredService<IEventOutbox>();
         var now = time.GetUtcNow().UtcDateTime;
-        foreach (var (topic, items) in made)
+        foreach (var (job, items) in made)
         {
-            db.QuestionPools.Add(QuestionPool.For(document, topic.Id, now, QuestionRequests.KeysOf(items)));
+            var topic = job.Topic;
+            if (job.Pool is not { } pool)
+            {
+                pool = QuestionPool.For(document, topic.Id, now, QuestionRequests.KeysOf(items));
+                db.QuestionPools.Add(pool);
+                db.PoolMaterials.AddRange(job.Material.Select(section => PoolMaterial.Of(pool, section)));
+                if (document.Origin != DocumentOrigin.Demo)
+                {
+                    quota.Charge(document, topic.Id);
+                }
+
+                outbox.Add(new ItemsGenerated(document.OwnerId, document.Id, topic.Position, items, topic.Id));
+                continue;
+            }
+
+            // Only what the topic doesn't ask yet, each section with the keys of the questions it brought.
+            var fresh = QuestionRequests.Fresh(items, job.Known, job.Room);
+            db.PoolMaterials.AddRange(job.Material.Select(section => PoolMaterial.Added(
+                pool, section, QuestionRequests.KeysOf(fresh.Where(item => item.SectionId == section)))));
+            var round = pool.NextRound();
             if (document.Origin != DocumentOrigin.Demo)
             {
-                quota.Charge(document, topic.Id);
+                quota.Charge(document, topic.Id, round);
             }
-            outbox.Add(new ItemsGenerated(document.OwnerId, document.Id, topic.Position, items, topic.Id));
+
+            ContentLog.PoolGotNewMaterial(logger, topic.Id, documentId, job.Material.Count, fresh.Count);
+            if (fresh.Count > 0)
+            {
+                outbox.Add(new ItemsGenerated(document.OwnerId, document.Id, topic.Position, fresh, topic.Id));
+            }
         }
 
         document.FinishAnalysis();
@@ -230,6 +284,13 @@ public sealed class QuestionPools(
         }
 
         return true;
+    }
+
+    // What the AI is asked for one topic: a new pool from its material (Pool null), or questions on material of this
+    // document that a topic with a pool wasn't asked about yet, at most Room of them, none it Knows.
+    private sealed record Job(KnowledgeTopic Topic, List<Guid> Material, QuestionPool? Pool, IReadOnlySet<string> Known)
+    {
+        public int Room => Math.Min(QuestionPool.PerNewMaterial, QuestionPool.MaxAll - Known.Count);
     }
 
     // Empty while Knowledge has none, and when it can't be asked: the next round asks again, until TopicsTimeout.
