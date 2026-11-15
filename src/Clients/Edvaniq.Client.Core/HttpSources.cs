@@ -21,7 +21,7 @@ public sealed class HttpSources(HttpClient http) : ISources
         HostCall.GuardAsync(
             async () =>
             {
-                using var response = await http.GetAsync($"{SectionsPath}/{sectionId:D}/source", cancellationToken);
+                using var response = await http.GetAsync($"{SectionsPath}/{sectionId:D}/original", cancellationToken);
                 switch (response.StatusCode)
                 {
                     case HttpStatusCode.Unauthorized:

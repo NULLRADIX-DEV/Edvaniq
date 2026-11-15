@@ -115,7 +115,7 @@ public sealed class SourcePageTests(WebShell shell)
             responseTimeMs = 1000,
             answeredAt = DateTime.UtcNow,
         }));
-        await browser.RouteAsync($"**/api/content/sections/{SectionId}/source", route => FulfillAsync(route, section));
+        await browser.RouteAsync($"**/api/content/sections/{SectionId}/original", route => FulfillAsync(route, section));
     }
 
     private static async Task AnswerWithTheKeyboardAsync(IPage page)

@@ -24,7 +24,7 @@ public sealed class HttpSourcesTests
 
         var request = Assert.Single(requests);
         Assert.Equal(HttpMethod.Get, request.Method);
-        Assert.Equal(new Uri($"https://edvaniq.test/api/content/sections/{SectionId}/source"), request.RequestUri);
+        Assert.Equal(new Uri($"https://edvaniq.test/api/content/sections/{SectionId}/original"), request.RequestUri);
         Assert.Equal(
             new SectionSource(Guid.Parse(DocumentId), Guid.Parse(SectionId), "Skript", SourceFormats.Pdf, true, 3, 4, Position: 2),
             outcome.Value);
