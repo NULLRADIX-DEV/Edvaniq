@@ -86,10 +86,15 @@ public sealed class FlowServices(MySqlTestServer mysql, NatsTestServer nats) : I
                 ContentInfra.Ai.ContentAi.AddContentTestDouble(services);
                 services.AddHttpClient<Edvaniq.Services.Content.Application.ILearningGoals, ContentInfra.PlanningLearningGoals>()
                     .ConfigurePrimaryHttpMessageHandler(() => planningHost.Server.CreateHandler());
+
+                // The sections of a topic for its summary, from the Knowledge above with the user's token.
+                services.AddHttpClient<Edvaniq.Services.Content.Application.ITopicMaterial, ContentInfra.KnowledgeTopicMaterial>()
+                    .ConfigurePrimaryHttpMessageHandler(() => Knowledge.Server.CreateHandler());
             },
             new()
             {
                 ["services:planning-api:http:0"] = "http://planning-api",
+                ["services:knowledge-api:http:0"] = "http://knowledge-api",
                 ["FileStorage:Directory"] = Path.Combine(Path.GetTempPath(), "edvaniq-flow-files", Guid.NewGuid().ToString("N")),
             });
         Planning = planningHost;

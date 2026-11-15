@@ -228,22 +228,37 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    // A summary that rests on a deleted document goes with it.
+    // A summary that rests on a deleted document goes with it, a second delete finds nothing.
     [Fact]
-    public async Task DeletedDocument_TakesItsSummaries()
+    public async Task DeletedDocument_TakesItsSummaries_OthersStay()
     {
         var alice = NewUser();
+        var bob = NewUser();
         var (topic, document, _) = await TopicAsync(alice);
+        var (otherTopic, otherDocument, _) = await TopicAsync(alice);
+        var (bobsTopic, bobsDocument, _) = await TopicAsync(bob);
         using var client = ClientFor(alice);
+        using var bobsClient = ClientFor(bob);
         await RequestAsync(client, topic, "short", HttpStatusCode.Accepted);
+        await RequestAsync(client, otherTopic, "short", HttpStatusCode.Accepted);
+        await RequestAsync(bobsClient, bobsTopic, "short", HttpStatusCode.Accepted);
         await WriteAsync();
 
         using var deleted = await client.DeleteAsync($"/documents/{document}", Cancel);
+        using var again = await client.DeleteAsync($"/documents/{document}", Cancel);
         using var read = await client.GetAsync($"/topics/{topic}/summaries/short", Cancel);
 
         Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, again.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, read.StatusCode);
         Assert.False(Query(db => db.TopicSummarySections.IgnoreQueryFilters().Any(section => section.DocumentId == document)));
+
+        // #401: the summaries of another document and of another user stay as they were.
+        var other = await client.GetFromJsonAsync<SummaryDto>($"/topics/{otherTopic}/summaries/short", Cancel);
+        var bobs = await bobsClient.GetFromJsonAsync<SummaryDto>($"/topics/{bobsTopic}/summaries/short", Cancel);
+        Assert.Equal(("ready", "ready"), (other!.Status, bobs!.Status));
+        Assert.Equal([otherDocument], other.Sources.Select(source => source.DocumentId));
+        Assert.Equal([bobsDocument], bobs.Sources.Select(source => source.DocumentId));
     }
 
     // A pasted document with its sections, and Knowledge naming them as one topic's material.

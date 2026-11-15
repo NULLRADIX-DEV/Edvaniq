@@ -55,12 +55,18 @@ public sealed class DeletionFlowTests(FlowServices services) : IDisposable
             () => Task.FromResult(QuestionDocuments(alice).Count == 2),
             () => $"Assessment did not take the questions of both documents over. {services.QuestionsOf(deleted, alice)}{Environment.NewLine}{services.QuestionsOf(kept, alice)}",
             Timeout);
+        var deletedSummary = await SummaryAsync(token, deleted);
+        var keptSummary = await SummaryAsync(token, kept);
 
         using (var client = ContentClient(token))
         {
             using var response = await client.DeleteAsync($"/documents/{deleted}", TestContext.Current.CancellationToken);
             Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         }
+
+        // #401: the summary resting on the deleted document goes with it, the other one stays.
+        Assert.Equal([keptSummary], services.QueryContent(db => db.TopicSummaries.IgnoreQueryFilters()
+            .Where(summary => summary.Id == deletedSummary || summary.Id == keptSummary).Select(summary => summary.Id).ToList()));
 
         await WaitForAsync(
             () => Task.FromResult(TopicsOf(deleted).Count == 0 && !QuestionDocuments(alice).Contains(deleted)),
@@ -107,6 +113,23 @@ public sealed class DeletionFlowTests(FlowServices services) : IDisposable
             async () => await pools.FinishAsync(documentId, TestContext.Current.CancellationToken),
             "The worker never got the topics from Knowledge.");
         return documentId;
+    }
+
+    // A ready summary of a topic with sections of the document, made by the worker from what Knowledge names.
+    private async Task<Guid> SummaryAsync(string token, Guid documentId)
+    {
+        var topic = services.QueryKnowledge(db => db.TopicSections.IgnoreQueryFilters()
+            .Where(section => section.DocumentId == documentId).Select(section => section.TopicId).First());
+        using (var client = ContentClient(token))
+        {
+            using var response = await client.PostAsync($"/topics/{topic}/summaries/short", null, TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        }
+
+        await ActivatorUtilities.CreateInstance<SummaryWriter>(services.Content.Services, Chat).WriteWaitingAsync(TestContext.Current.CancellationToken);
+        var summary = services.QueryContent(db => db.TopicSummaries.IgnoreQueryFilters().Single(summary => summary.TopicId == topic));
+        Assert.Equal(Edvaniq.Services.Content.Domain.SummaryStatus.Ready, summary.Status);
+        return summary.Id;
     }
 
     private HttpClient ContentClient(string token)
