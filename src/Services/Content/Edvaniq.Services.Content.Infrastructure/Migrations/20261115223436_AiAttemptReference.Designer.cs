@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Edvaniq.Services.Content.Infrastructure.Migrations
 {
     [DbContext(typeof(ContentDbContext))]
-    [Migration("20261115220101_AiAttemptReference")]
+    [Migration("20261115223436_AiAttemptReference")]
     partial class AiAttemptReference
     {
         /// <inheritdoc />
@@ -355,6 +355,11 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
 
                     b.Property<DateTime?>("NextAttemptAt")
                         .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Origin")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
                     b.Property<string>("OutputLanguage")
                         .HasMaxLength(8)
