@@ -1,0 +1,157 @@
+@implements IDisposable
+@inject ISessionResults Results
+
+@* What an ended session brought (#406). Plain on purpose: the closing screen (#405) builds around it. The counts show as
+   soon as Planning names them, the mastery only once it is complete, never an old one. All waiting is the service's. *@
+<div class="session-result-status" role="status">
+    @switch (State)
+    {
+        case ViewState.Loading or ViewState.Evaluating:
+            <Loading Text="@FeedbackTexts.SessionReport.Evaluating" />
+            break;
+        case ViewState.Ready:
+            <span class="visually-hidden">@FeedbackTexts.SessionReport.Ready</span>
+            break;
+        case ViewState.Slow:
+            <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.SessionReport.Slow" class="session-result-slow">
+                <p>@FeedbackTexts.SessionReport.SlowHint</p>
+            </Notice>
+            break;
+        case ViewState.TopicRemoved:
+            <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.SessionReport.TopicRemoved" class="session-result-removed">
+                <p>@FeedbackTexts.SessionReport.TopicRemovedHint</p>
+            </Notice>
+            break;
+        case ViewState.NotFound:
+            <Notice Kind="NoticeKind.Error" Title="@FeedbackTexts.SessionReport.NotFound" class="session-result-not-found" />
+            break;
+        case ViewState.Running:
+            <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.SessionReport.Running" class="session-result-running" />
+            break;
+        case ViewState.LoadFailed:
+            <ConnectionProblem Title="@FeedbackTexts.SessionReport.LoadFailed" TraceId="@failure?.TraceId" />
+            break;
+    }
+</div>
+
+@if (report is not null)
+{
+    <p class="session-result-counts">@FeedbackTexts.SessionReport.Counts(report.Correct, report.Answered)</p>
+}
+
+@if (State == ViewState.Ready && report is { Topics: { } topics } ready)
+{
+    <ul class="session-result-topics" aria-label="@FeedbackTexts.SessionReport.MasteryLabel">
+        @foreach (var (topic, after) in topics.Select(entry => (entry, entry.After)))
+        {
+            @if (after is not null)
+            {
+                <li class="session-result-topic" data-topic="@topic.TopicId">@FeedbackTexts.SessionReport.Change(topic.Before?.Mastery, after.Mastery)</li>
+            }
+        }
+    </ul>
+    <p class="session-result-next">@(ready.Next is null ? FeedbackTexts.SessionReport.BonusReview : FeedbackTexts.SessionReport.NextBlock)</p>
+}
+
+@switch (State)
+{
+    case ViewState.Slow:
+        <StateActions ActionText="@FeedbackTexts.SessionReport.CheckAgain" OnAction="WaitAsync" />
+        break;
+    case ViewState.LoadFailed:
+        <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="WaitAsync" />
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid SessionId { get; set; }
+
+    private readonly CancellationTokenSource life = new();
+    private Guid? loaded;
+    private bool waiting;
+    private SessionReport? report;
+    private CallOutcome<SessionReport>? failure;
+
+    private enum ViewState
+    {
+        Loading,
+        Evaluating,
+        Ready,
+        Slow,
+        TopicRemoved,
+        NotFound,
+        Running,
+        LoadFailed,
+        SignedOut,
+    }
+
+    private ViewState State => this switch
+    {
+        { failure.Result: CallResult.SignedOut } => ViewState.SignedOut,
+        { failure.Result: CallResult.NotFound } => ViewState.NotFound,
+        { failure.Result: CallResult.NotReady } => ViewState.Running,
+        { failure: not null } => ViewState.LoadFailed,
+        { report: null } => ViewState.Loading,
+        { report.TopicRemoved: true } => ViewState.TopicRemoved,
+        { report.Complete: true } => ViewState.Ready,
+        { waiting: true } => ViewState.Evaluating,
+        _ => ViewState.Slow,
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loaded == SessionId)
+        {
+            return;
+        }
+
+        loaded = SessionId;
+        report = null;
+        await WaitAsync();
+    }
+
+    // Waits for the complete report, again from the start after the limit or a failure.
+    private async Task WaitAsync()
+    {
+        failure = null;
+        waiting = true;
+        try
+        {
+            var outcome = await Results.WaitForCompleteAsync(SessionId, new Shown(this), life.Token);
+            if (outcome is { Result: CallResult.Ok, Value: { } last })
+            {
+                report = last;
+            }
+            else
+            {
+                failure = outcome;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            waiting = false;
+        }
+    }
+
+    // Shows each report right away, on the renderer's own thread through InvokeAsync.
+    private sealed class Shown(SessionResultView view) : IProgress<SessionReport>
+    {
+        public void Report(SessionReport value) =>
+            _ = view.InvokeAsync(() =>
+            {
+                view.report = value;
+                view.StateHasChanged();
+            });
+    }
+
+    public void Dispose()
+    {
+        life.Cancel();
+        life.Dispose();
+    }
+}

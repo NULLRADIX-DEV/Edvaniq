@@ -43,6 +43,44 @@ public static class FeedbackTexts
     }
 
     // The summary of a topic (#346). Content's own sentences come as they are, these only fill in where it has none.
+    // What an ended session brought (#406), shown by SessionResultView until #405 builds the screen around it.
+    public static class SessionReport
+    {
+        public const string Evaluating = "Deine Antworten werden ausgewertet …";
+
+        public const string Ready = "Die Auswertung ist da.";
+
+        public const string Slow = "Die Auswertung braucht gerade länger.";
+
+        public const string SlowHint = "Deine Antworten sind gespeichert und zählen. Schau gleich noch einmal nach.";
+
+        public const string CheckAgain = "Noch einmal prüfen";
+
+        public const string TopicRemoved = "Dieses Thema ist nicht mehr in deinem Lernziel.";
+
+        public const string TopicRemovedHint = "Deine Antworten sind gezählt. Wie gut du das Thema kannst, zeigt Edvaniq dafür nicht mehr an.";
+
+        public const string NotFound = "Diese Session gibt es nicht.";
+
+        public const string Running = "Diese Session läuft noch.";
+
+        public const string LoadFailed = "Das Ergebnis ließ sich nicht laden.";
+
+        public const string MasteryLabel = "Wie gut du das Thema kannst";
+
+        public const string NoStart = "vorher unbekannt";
+
+        public const string NextBlock = "Als Nächstes wartet der nächste Block in deinem Plan.";
+
+        public const string BonusReview = "Für heute ist alles erledigt. Wenn du magst, gibt es eine Bonus-Wiederholung.";
+
+        // "3 von 5 richtig".
+        public static string Counts(int correct, int answered) => $"{correct} von {answered} richtig";
+
+        // "50 % → 62 %".
+        public static string Change(int? before, int after) => before is { } start ? $"{start} % → {after} %" : $"{NoStart} → {after} %";
+    }
+
     public static class Summary
     {
         public const string Link = "Zusammenfassung";
