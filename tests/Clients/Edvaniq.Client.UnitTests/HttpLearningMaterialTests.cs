@@ -275,6 +275,52 @@ public sealed class HttpLearningMaterialTests
         Assert.Equal((CallResult.Limited, 0), (tooLong.Result, tooLong.Messages!.Count));
     }
 
+    // #277/#307: a learning goal with 10 documents already refuses a new one with 409 and its sentence in the title. That
+    // is something the user can act on, so Rejected with the sentence, never a trace.
+    [Fact]
+    public async Task GoalFull_OnPasteAndUpload_IsRejectedWithContentsSentence()
+    {
+        const string sentence = "Dieses Lernziel hat schon 10 Dokumente. Lösche eines, das du nicht mehr brauchst, oder lege ein neues Lernziel an.";
+        var material = Material(
+            Problem(HttpStatusCode.Conflict, $$"""{"title":"{{sentence}}","status":409,"traceId":"{{TraceId}}"}"""),
+            Problem(HttpStatusCode.Conflict, $$"""{"title":"{{sentence}}","status":409,"traceId":"{{TraceId}}"}"""));
+
+        var paste = await material.PasteAsync(null, "Text", TestContext.Current.CancellationToken);
+        using var file = new MemoryStream([1, 2, 3]);
+        var upload = await material.UploadAsync("Skript.pdf", file, TestContext.Current.CancellationToken);
+
+        Assert.Equal([CallResult.Rejected, CallResult.Rejected], [paste.Result, upload.Result]);
+        Assert.Equal([sentence], paste.Messages);
+        Assert.Equal([sentence], upload.Messages);
+        Assert.Null(paste.TraceId);
+    }
+
+    // Same checks as for a 429: without a sentence that passes them there is nothing to show.
+    [Theory]
+    [InlineData("application/problem+json", """{"status":409}""")]
+    [InlineData("application/problem+json", """{"title":"Conflict","status":409}""")]
+    [InlineData("application/problem+json", """{"title":"Zeile\neins","status":409}""")]
+    [InlineData("text/html", "<html>409 Conflict</html>")]
+    public async Task ConflictWithoutAUsableTitle_DidNotGetThrough(string type, string body)
+    {
+        var material = Material(new HttpResponseMessage(HttpStatusCode.Conflict) { Content = new StringContent(body, Encoding.UTF8, type) });
+
+        var outcome = await material.PasteAsync(null, "Text", TestContext.Current.CancellationToken);
+
+        Assert.Equal(CallResult.Failed, outcome.Result);
+    }
+
+    // A retry that isn't needed any more stays Failed, the page asks for the newest state then.
+    [Fact]
+    public async Task Retry_Conflict_StaysFailed()
+    {
+        var material = Material(Problem(HttpStatusCode.Conflict, """{"title":"Die Analyse dieses Textes läuft schon oder ist fertig.","status":409}"""));
+
+        var outcome = await material.RetryAsync(Guid.Parse(DocumentId), TestContext.Current.CancellationToken);
+
+        Assert.Equal(CallResult.Failed, outcome.Result);
+    }
+
     [Fact]
     public async Task WithoutALogin_SaysSignedOut()
     {

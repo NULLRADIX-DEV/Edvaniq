@@ -163,8 +163,13 @@
         <div class="paste-field">
             <label for="upload-file">@FeedbackTexts.Upload.Label</label>
             @* A new key after an upload empties the browser's field. *@
-            <InputFile @key="uploadField" id="upload-file" accept="@string.Join(',', UploadExtensions)" aria-describedby="upload-hint upload-privacy"
+            <InputFile @key="uploadField" id="upload-file" accept="@string.Join(',', UploadExtensions)" aria-describedby="@(QuotaText is null ? "upload-hint upload-privacy" : "upload-quota upload-hint upload-privacy")"
                        OnChange="FileChosen" />
+            @* Read with the field, not announced on each reload. Without an answer from Content it is just missing. *@
+            @if (QuotaText is { } quotaText)
+            {
+                <p id="upload-quota" class="upload-quota">@quotaText</p>
+            }
             <p id="upload-hint" class="paste-optional">@FeedbackTexts.Upload.Hint</p>
             <p id="upload-privacy" class="paste-optional">@FeedbackTexts.Upload.NoPersonalData</p>
         </div>
@@ -237,6 +242,16 @@
     private string? uploadTrace;
     private bool uploadLimited;
 
+    // Only to show, Content checks each upload itself. A quota with no pages per day at all shows nothing.
+    private MaterialQuota? quota;
+
+    private string? QuotaText => quota switch
+    {
+        null or { PagesPerDay: <= 0 } => null,
+        { PagesLeftToday: <= 0 } => FeedbackTexts.Upload.NoPagesLeft,
+        _ => FeedbackTexts.Upload.PagesLeft(quota.PagesLeftToday, quota.PagesPerDay),
+    };
+
     private enum ViewState
     {
         Loading,
@@ -283,7 +298,25 @@
             Show([FeedbackTexts.Session.TextBack]);
         }
 
-        return LoadAsync();
+        return Task.WhenAll(LoadAsync(), LoadQuotaAsync());
+    }
+
+    // Anything but an answer hides the count, quietly: a lost login reports the shell already (SessionWatch), and a hint
+    // next to an upload that still works would only be noise.
+    private async Task LoadQuotaAsync()
+    {
+        if (Services.GetService<IMaterialQuota>() is not { } quotas)
+        {
+            return;
+        }
+
+        try
+        {
+            quota = await quotas.GetAsync(life.Token) is { Result: CallResult.Ok, Value: { } value } ? value : null;
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     private async Task LoadAsync()
@@ -423,6 +456,13 @@
                     return;
                 }
             }
+
+            // The worker charges the pages once it has read them, so the count changes only now.
+            if (waited > TimeSpan.Zero)
+            {
+                await LoadQuotaAsync();
+                StateHasChanged();
+            }
         }
         catch (OperationCanceledException)
         {
@@ -477,6 +517,7 @@
                     break;
                 case CallResult.Limited:
                     retryLimit = FeedbackTexts.Limit.Or(outcome.Messages);
+                    await LoadQuotaAsync();
                     break;
                 default:
                     if (await RefreshAsync(documents: true, life.Token))
@@ -538,11 +579,13 @@
                 follow?.Cancel();
                 break;
             case CallResult.Rejected or CallResult.TooLarge:
+                // Also a learning goal that is full (#277): the text stays for another goal.
                 Show(TakeConfirmation(outcome.Messages ?? [NotThrough]));
                 break;
             case CallResult.Limited:
                 // The text stays in the form for later.
                 Show(FeedbackTexts.Limit.Or(outcome.Messages), limited: true);
+                await LoadQuotaAsync();
                 break;
             default:
                 Show([NotThrough], outcome.TraceId);
@@ -618,6 +661,7 @@
             case CallResult.Limited:
                 // The file stays chosen for later.
                 ShowUpload(FeedbackTexts.Limit.Or(outcome.Messages), limited: true);
+                await LoadQuotaAsync();
                 break;
             default:
                 ShowUpload([FeedbackTexts.Upload.NotThrough, FeedbackTexts.Connection.Advice], outcome.TraceId);

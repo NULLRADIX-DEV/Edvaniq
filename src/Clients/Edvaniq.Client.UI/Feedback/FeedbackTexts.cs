@@ -510,6 +510,13 @@ public static class FeedbackTexts
 
         public const string Hint = "Dateien mit .pdf, .docx, .txt oder .md, höchstens 20 MB.";
 
+        // What is left of the pages for today (#307), texts count too. The study day ends at 04:00, so the next 04:00 is
+        // always when it goes on.
+        public static string PagesLeft(int left, int perDay) =>
+            left == 1 ? $"Heute ist noch 1 von {perDay} Seiten frei." : $"Heute sind noch {left} von {perDay} Seiten frei.";
+
+        public const string NoPagesLeft = "Für heute sind keine Seiten mehr frei. Ab 04:00 Uhr geht es weiter.";
+
         // Under the file field (#312): the content goes to an AI.
         public const string NoPersonalData =
             "Lade nur Dateien ohne persönliche Daten hoch, also ohne Namen, Adressen oder Telefonnummern. Eine KI wertet den Inhalt aus.";

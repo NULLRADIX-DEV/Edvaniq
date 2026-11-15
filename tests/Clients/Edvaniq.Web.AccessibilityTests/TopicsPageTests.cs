@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 using Microsoft.Playwright;
 
 namespace Edvaniq.Web.AccessibilityTests;
@@ -145,6 +147,26 @@ public sealed class TopicsPageTests(WebShell shell)
         await Assertions.Expect(text).ToHaveValueAsync("Die Photosynthese wandelt Lichtenergie in chemische Energie um.");
         await AssertNoSidewaysScrollAsync(page.Page);
         await AxeScan.AssertNoViolationsAsync(page.Page, $"/themen at a limit at {WebShell.PhoneWidth} px");
+    }
+
+    // #307: what is left of today's pages stands at the upload field and is read out with it.
+    [Fact]
+    public async Task Upload_OnAPhone_ShowsThePagesLeftForToday()
+    {
+        await using var page = await shell.OpenSignedInAsync("/themen", WebShell.PhoneWidth, prepare: async browser =>
+        {
+            await Material.AnswerAsync(browser, documents: [Array.Empty<object>()], topics: [Array.Empty<object>()]);
+            await browser.RouteAsync("**/api/content/quota", route => route.FulfillAsync(new RouteFulfillOptions
+            {
+                ContentType = "application/json",
+                Body = """{"pagesLeftToday":42,"pagesPerDay":200,"generationsLeftToday":20,"generationsPerDay":20,"resetsAt":"2026-11-16T03:00:00Z"}""",
+            }));
+        });
+
+        await Assertions.Expect(page.Page.Locator("#upload-quota")).ToHaveTextAsync("Heute sind noch 42 von 200 Seiten frei.");
+        await Assertions.Expect(page.Page.Locator("#upload-file")).ToHaveAccessibleDescriptionAsync(new Regex("^Heute sind noch 42 von 200 Seiten frei\\."));
+        await AssertNoSidewaysScrollAsync(page.Page);
+        await AxeScan.AssertNoViolationsAsync(page.Page, $"/themen with the pages left at {WebShell.PhoneWidth} px");
     }
 
     private static async Task AssertLargeEnoughAsync(ILocator target)
