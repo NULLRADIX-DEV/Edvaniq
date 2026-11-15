@@ -120,6 +120,10 @@
                 </ul>
             </fieldset>
 
+            @* Label and hint stand from the start, they give nothing away. The source comes with the feedback: its page and
+               passage often hold the answer. *@
+            <AiNote WithoutMaterial="DocumentOrigins.IsSynthetic(sourceOrigin)" FromDemo="DocumentOrigins.IsDemo(sourceOrigin)" />
+
             @* Always there, so a screen reader announces each hint. *@
             <div role="alert">
                 @if (answerMessage is NotThrough)
@@ -181,6 +185,11 @@
                     <p><strong>Erklärung:</strong></p>
                     <SafeMarkdown Text="@graded.Explanation" HeadingOffset="2" />
                 </div>
+                @if (asked.Source is { } source)
+                {
+                    <h3 class="quiz-source-heading">@FeedbackTexts.Sources.Heading</h3>
+                    <SourceView Lookup="documents" DocumentId="source.DocumentId" SectionId="source.SectionId" />
+                }
                 <AnswerProgress TopicId="TopicId" AnswerId="graded.Id" />
             </section>
 
@@ -201,6 +210,11 @@
     public Guid TopicId { get; set; }
 
     private readonly CancellationTokenSource life = new();
+    private DocumentLookup documents = default!;
+
+    // What the question's document is made of, once the documents are known: only then can the label say "without
+    // material". Until then it says "KI-generiert".
+    private string? sourceOrigin;
     private TimeProvider time = TimeProvider.System;
     private Guid? loadedTopic;
 
@@ -276,7 +290,11 @@
     private IReadOnlyList<string> RightOptions =>
         [.. graded!.RightOptions.Where(option => option < asked!.Options.Count).Select(option => asked!.Options[option])];
 
-    protected override void OnInitialized() => time = Services.GetService<TimeProvider>() ?? TimeProvider.System;
+    protected override void OnInitialized()
+    {
+        time = Services.GetService<TimeProvider>() ?? TimeProvider.System;
+        documents = new DocumentLookup(Material);
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -410,6 +428,7 @@
             case CallResult.Ok:
                 asked = outcome.Value!;
                 shownAt = time.GetTimestamp();
+                _ = LoadOriginAsync(asked);
                 break;
             case CallResult.SignedOut:
                 signedOut = true;
@@ -428,6 +447,32 @@
         {
             // The hint and its button are gone, the focus goes where the button would have taken it.
             focusNext = FocusTarget.Question;
+        }
+    }
+
+    // Without an answer the label stays "KI-generiert": that is true either way.
+    private async Task LoadOriginAsync(AskedQuestion question)
+    {
+        sourceOrigin = null;
+        if (question.Source is not { } source)
+        {
+            return;
+        }
+
+        try
+        {
+            var outcome = await documents.ListAsync(life.Token);
+            if (asked == question && outcome.Value?.FirstOrDefault(document => document.Id == source.DocumentId) is { } document)
+            {
+                sourceOrigin = document.Origin;
+                StateHasChanged();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
         }
     }
 

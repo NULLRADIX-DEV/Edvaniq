@@ -39,6 +39,16 @@ h1 {
     overflow-wrap: anywhere;
 }
 
+.summary-sources {
+    margin: 0;
+    padding-left: var(--space-4);
+}
+
+.summary-sources-heading {
+    margin: var(--space-4) 0 var(--space-2);
+    font-size: 1.125rem;
+}
+
 .summary-meta:empty {
     display: none;
 }

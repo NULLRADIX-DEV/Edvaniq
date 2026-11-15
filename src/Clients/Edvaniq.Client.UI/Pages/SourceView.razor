@@ -1,0 +1,196 @@
+@using Edvaniq.Client.Core
+@implements IDisposable
+@inject ISources Sources
+
+@* One source of a question or a summary (#351): the document with its pages, and on request the place in the
+   original. Title and window are the user's text, Razor writes them as text, the mark is the only element around it. *@
+<div class="source">
+    @switch (documentOutcome?.Result)
+    {
+        case null:
+            <p class="source-line">@FeedbackTexts.Sources.Loading</p>
+            break;
+        case CallResult.Ok when document is null:
+            <p class="source-line source-gone">@FeedbackTexts.Sources.Gone</p>
+            break;
+        case CallResult.Ok:
+            <p class="source-line">
+                <span class="source-title">@document.Title</span>@(PagesText is { } pages ? ", " + pages : "")
+            </p>
+            @if (DocumentOrigins.IsSynthetic(document.Origin))
+            {
+                @* Nothing to open: the AI wrote it without material, the label says so. *@
+            }
+            else if (SectionId is { } sectionId)
+            {
+                <button type="button" class="source-toggle" aria-expanded="@(open ? "true" : "false")" aria-controls="@panelId" @onclick="ToggleAsync">
+                    @(open ? FeedbackTexts.Sources.Hide : FeedbackTexts.Sources.Show)<span class="visually-hidden"> in „@document.Title“</span>
+                </button>
+                <div id="@panelId" class="source-panel" hidden="@(!open)">
+                    <div role="status">
+                        @switch (section?.Result)
+                        {
+                            case null when open:
+                                <Loading Text="@FeedbackTexts.Sources.Loading" />
+                                break;
+                            case CallResult.NotFound:
+                                <p class="source-gone">@FeedbackTexts.Sources.Gone</p>
+                                break;
+                            case CallResult.Ok or CallResult.SignedOut or null:
+                                break;
+                            default:
+                                <ConnectionProblem Title="@FeedbackTexts.Sources.LoadFailed" TraceId="@section.TraceId" />
+                                break;
+                        }
+                    </div>
+                    @if (section is { Result: CallResult.Ok, Value: { } place })
+                    {
+                        @if (place.Format == SourceFormats.Pdf)
+                        {
+                            <p class="source-place">@(place.Page is { } page ? FeedbackTexts.Sources.Pages(page, place.PageTo) : FeedbackTexts.Sources.Passage)</p>
+                            <p>@FileLink(place.DocumentId, place.Page, place.Title, download: false)</p>
+                        }
+                        else
+                        {
+                            <p class="source-place">@(place.Position is { } position ? FeedbackTexts.Sources.Section(position) : FeedbackTexts.Sources.Passage)</p>
+                            @if (place.Text is { } text)
+                            {
+                                var start = place.Start ?? 0;
+                                var length = place.Length ?? 0;
+                                <blockquote class="source-window">@(place.TruncatedBefore ? FeedbackTexts.Sources.Gap + " " : "")@text[..start]<mark>@text.Substring(start, length)</mark>@text[(start + length)..]@(place.TruncatedAfter ? " " + FeedbackTexts.Sources.Gap : "")</blockquote>
+                            }
+                            @if (place.HasFile)
+                            {
+                                <p>@FileLink(place.DocumentId, null, place.Title, download: place.Format == SourceFormats.Docx)</p>
+                            }
+                        }
+                    }
+                    else if (section?.Result is not (null or CallResult.Ok or CallResult.NotFound or CallResult.SignedOut))
+                    {
+                        <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="LoadSectionAsync" />
+                    }
+                </div>
+            }
+            else if (PageFrom is { } firstPage)
+            {
+                <p>@FileLink(DocumentId, firstPage, document.Title, download: false)</p>
+            }
+            else if (document.Source == DocumentSource.File)
+            {
+                <p>@FileLink(DocumentId, null, document.Title, download: false)</p>
+            }
+            else
+            {
+                <p class="source-hint">@FeedbackTexts.Sources.CannotOpen</p>
+            }
+            break;
+        case CallResult.SignedOut:
+            break;
+        default:
+            <ConnectionProblem Title="@FeedbackTexts.Sources.LoadFailed" TraceId="@documentOutcome.TraceId" />
+            <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="LoadDocumentAsync" />
+            break;
+    }
+</div>
+
+@code {
+    private readonly string panelId = $"source-{Guid.NewGuid():N}";
+    private readonly CancellationTokenSource life = new();
+    private CallOutcome<IReadOnlyList<DocumentInfo>>? documentOutcome;
+    private DocumentInfo? document;
+    private CallOutcome<SectionSource>? section;
+    private bool open;
+    private bool loadingSection;
+    private (Guid, Guid?)? loaded;
+
+    [Parameter, EditorRequired]
+    public DocumentLookup Lookup { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public Guid DocumentId { get; set; }
+
+    // The section to open. Without one only the document is shown, a PDF opens at PageFrom, a file as a whole.
+    [Parameter]
+    public Guid? SectionId { get; set; }
+
+    [Parameter]
+    public int? PageFrom { get; set; }
+
+    [Parameter]
+    public int? PageTo { get; set; }
+
+    private string? PagesText => PageFrom is { } from ? FeedbackTexts.Sources.Pages(from, PageTo) : null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loaded == (DocumentId, SectionId))
+        {
+            return;
+        }
+
+        loaded = (DocumentId, SectionId);
+        open = false;
+        section = null;
+        await LoadDocumentAsync();
+    }
+
+    private async Task LoadDocumentAsync()
+    {
+        documentOutcome = null;
+        try
+        {
+            documentOutcome = await Lookup.ListAsync(life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        document = documentOutcome.Value?.FirstOrDefault(candidate => candidate.Id == DocumentId);
+    }
+
+    // The place in the original loads on the first opening only.
+    private async Task ToggleAsync()
+    {
+        open = !open;
+        if (open && section?.Result != CallResult.Ok)
+        {
+            await LoadSectionAsync();
+        }
+    }
+
+    private async Task LoadSectionAsync()
+    {
+        if (loadingSection || SectionId is not { } sectionId)
+        {
+            return;
+        }
+
+        loadingSection = true;
+        section = null;
+        try
+        {
+            section = await Sources.SectionAsync(sectionId, life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            loadingSection = false;
+        }
+    }
+
+    // A link to the file through the web host, relative to the app's base address. Opened in a new tab, so the question
+    // or summary stays; a Word file is saved instead.
+    private static RenderFragment FileLink(Guid documentId, int? page, string title, bool download) =>
+        @<a class="source-open" href="@HttpSources.FilePath(documentId, page)" target="@(download ? null : "_blank")" rel="noopener" download="@download">
+            @(download ? FeedbackTexts.Sources.Download : FeedbackTexts.Sources.OpenOriginal)<span class="visually-hidden"> „@title“@(page is { } number ? ", " + FeedbackTexts.Sources.Pages(number, null) : "")@(download ? "" : " " + FeedbackTexts.Sources.NewTab)</span>
+        </a>;
+
+    public void Dispose()
+    {
+        life.Cancel();
+        life.Dispose();
+    }
+}

@@ -1,0 +1,20 @@
+@* The label and the hint at every question and summary (#351). In words, so it never hangs on a color, and named as a
+   group for a screen reader. *@
+<p class="ai-note" role="group" aria-label="@FeedbackTexts.Sources.NoteLabel">
+    <span class="ai-label">@Label</span>
+    <span class="ai-hint">@FeedbackTexts.Sources.MayErr</span>
+</p>
+
+@code {
+    // Made from text the AI wrote itself, so there is no material behind it.
+    [Parameter]
+    public bool WithoutMaterial { get; set; }
+
+    [Parameter]
+    public bool FromDemo { get; set; }
+
+    private string Label =>
+        WithoutMaterial ? FeedbackTexts.Sources.AiWithoutMaterial
+        : FromDemo ? FeedbackTexts.Sources.AiFromDemo
+        : FeedbackTexts.Sources.AiGenerated;
+}

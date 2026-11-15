@@ -30,7 +30,7 @@ public sealed partial class SummaryPageTests(WebShell shell)
             await AssertLargeEnoughAsync(page.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = name }));
         }
 
-        await Assertions.Expect(page.Page.Locator(".summary-meta")).Not.ToBeVisibleAsync();
+        await Assertions.Expect(page.Page.Locator(".summary-meta .ai-note")).ToContainTextAsync("KI kann Fehler machen.");
         await AssertNoSidewaysScrollAsync(page.Page);
         await AxeScan.AssertNoViolationsAsync(page.Page, $"{Path} with the standard summary at {width} px");
 

@@ -18,15 +18,27 @@ public interface IQuiz
     Task<CallOutcome<GradedAnswer>> RevealAsync(Guid attemptId, int responseTimeMs, CancellationToken cancellationToken = default);
 }
 
-// Id is the attempt the answer goes to. Type is one of QuestionTypes, a question without one is single choice.
+// Id is the attempt the answer goes to. Type is one of QuestionTypes, a question without one is single choice. Source
+// names the document and section it was made from (#349).
 public sealed record AskedQuestion(
-    Guid Id, Guid TopicId, Guid QuestionId, string Text, IReadOnlyList<string> Options, int Difficulty, string? Type = null)
+    Guid Id,
+    Guid TopicId,
+    Guid QuestionId,
+    string Text,
+    IReadOnlyList<string> Options,
+    int Difficulty,
+    string? Type = null,
+    QuestionSource? Source = null)
 {
     public bool IsMultipleChoice => Type == QuestionTypes.MultipleChoice;
 
     // A type the page doesn't know can't be answered fairly, it says so instead.
     public bool IsKnownType => Type is null or QuestionTypes.SingleChoice or QuestionTypes.MultipleChoice or QuestionTypes.TrueFalse;
 }
+
+// Where a question comes from. Title, pages and origin are Content's (DocumentInfo, ISources). Model and prompt version
+// are only for support, the page doesn't show them.
+public sealed record QuestionSource(Guid DocumentId, Guid SectionId, string? Model = null, string? PromptVersion = null);
 
 // As Assessment names them. True/false comes as two options like single choice.
 public static class QuestionTypes

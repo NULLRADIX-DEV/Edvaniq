@@ -37,4 +37,6 @@ public sealed record TopicSummary(
     bool AiGenerated,
     IReadOnlyList<SummarySource> Sources);
 
-public sealed record SummarySource(Guid DocumentId, string DocumentTitle, int? PageFrom, int? PageTo);
+// Origin as DocumentOrigins, SectionId the first section of the document the summary rests on (#349).
+public sealed record SummarySource(
+    Guid DocumentId, string DocumentTitle, int? PageFrom, int? PageTo, string? Origin = null, Guid? SectionId = null);
