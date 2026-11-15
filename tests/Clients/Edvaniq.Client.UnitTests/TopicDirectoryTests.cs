@@ -85,6 +85,21 @@ public sealed class TopicDirectoryTests : BunitContext
         Assert.DoesNotContain(Gone, directory.DocumentSectionCalls);
     }
 
+    // #346: an open topic leads to its summary.
+    [Fact]
+    public void OpenTopic_LeadsToItsSummary()
+    {
+        var page = RenderPage(Directory());
+
+        Assert.Empty(page.FindAll("a.summary-link"));
+
+        Toggle(page, "Photosynthese").Click();
+
+        var link = Panel(page, "Photosynthese").QuerySelector("a.summary-link")!;
+        Assert.Equal($"themen/{Photosynthese}/zusammenfassung", link.GetAttribute("href"));
+        Assert.Equal("Zusammenfassung zu „Photosynthese“", link.TextContent);
+    }
+
     [Fact]
     public void Details_LoadOnTheFirstOpening_AndEachDocumentOnce()
     {

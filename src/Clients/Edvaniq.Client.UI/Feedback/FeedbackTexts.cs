@@ -42,6 +42,48 @@ public static class FeedbackTexts
         public const string RevealedHint = "Schau dir die Erklärung in Ruhe an, so bleibt sie hängen.";
     }
 
+    // The summary of a topic (#346). Content's own sentences come as they are, these only fill in where it has none.
+    public static class Summary
+    {
+        public const string Link = "Zusammenfassung";
+
+        public const string LengthLabel = "Länge";
+
+        public const string Short = "Kurz";
+
+        public const string Standard = "Standard";
+
+        public const string Detailed = "Detailliert";
+
+        public const string Loading = "Wird geladen …";
+
+        public const string Writing = "Zusammenfassung wird erstellt …";
+
+        public const string WritingHint = "Das dauert meist nicht länger als eine Minute.";
+
+        public const string Ready = "Die Zusammenfassung ist da.";
+
+        public const string Slow = "Die Zusammenfassung braucht gerade länger.";
+
+        public const string SlowHint = "Sie wird weiter erstellt. Schau gleich noch einmal nach.";
+
+        public const string CheckAgain = "Noch einmal prüfen";
+
+        public const string Failed = "Die Zusammenfassung ließ sich nicht erstellen.";
+
+        public const string FailedHint = "Versuch es noch einmal. Klappt es dann nicht, versuch es später.";
+
+        public const string TryAgain = "Noch einmal";
+
+        public const string LoadFailed = "Die Zusammenfassung ließ sich gerade nicht laden.";
+
+        public const string TopicGone = "Dieses Thema gibt es nicht oder nicht mehr.";
+
+        public const string AddMaterial = "Material hinzufügen";
+
+        public const string BackToTopics = "Zurück zu den Themen";
+    }
+
     // Hints on the practice page around the question.
     public static class Quiz
     {
