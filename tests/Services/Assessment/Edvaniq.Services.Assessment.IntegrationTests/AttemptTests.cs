@@ -177,6 +177,36 @@ public sealed class AttemptTests(ServiceFactory service) : IClassFixture<Service
         Assert.Equal(answers[0].Correct, record.Correct);
     }
 
+    // #392: the answer is stored with its learning record before the response goes out, so it is there right away. A
+    // client cut off from the response sends it again, even to a restarted service, and gets the same answer, counted once.
+    [Fact]
+    public async Task Answer_IsStoredAtOnce_AndSendingItAgainAfterARestart_CountsOnce()
+    {
+        var alice = User.New("alice");
+        var (topicId, _) = await AddTopicAsync(alice);
+        var attemptId = await AskIdAsync(alice, topicId);
+
+        var first = await AnswerAsync(alice, attemptId, option: 1, responseTimeMs: 0);
+
+        var stored = Stored(attemptId);
+        Assert.Equal((true, (int?)1, first.Correct), (stored.Answered, stored.Option, stored.Correct));
+        Assert.NotNull(stored.AnsweredAt);
+        var record = Assert.Single(Records(attemptId));
+        Assert.Equal((attemptId, first.Correct), (record.AnswerId, record.Correct));
+
+        await using var restarted = service.WithWebHostBuilder(_ => { });
+        using var client = restarted.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", alice.Token);
+        using var response = await client.PostAsJsonAsync(
+            $"/attempts/{attemptId}/answer", new { option = 1, responseTimeMs = 0 }, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var again = await response.Content.ReadFromJsonAsync<GradedDto>(TestContext.Current.CancellationToken);
+
+        Assert.Equivalent(first, again, strict: true);
+        Assert.Single(Records(attemptId));
+        Assert.Equal(stored.AnsweredAt, Stored(attemptId).AnsweredAt);
+    }
+
     [Fact]
     public async Task Answer_IsReportedAsALearningRecord()
     {
