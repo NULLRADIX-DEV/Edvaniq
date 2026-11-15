@@ -235,6 +235,53 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(topics.Take(3).Select(topic => topic.Id).Order(), (await GeneratedAsync(id)).Select(pool => pool.TopicId!.Value).Order());
     }
 
+    // #343: topics that come later get their pool in the background, the ones with a pool keep their questions. A second
+    // document with a topic Knowledge merged into one of the first and a new one asks the AI once, for the new one. A topic
+    // added by hand has no sections and gets no pool, without holding anything up, until a third document brings its
+    // material. The app answers meanwhile. How many questions a pool gets isn't checked, topping up may add some.
+    [Fact]
+    public async Task LaterTopics_GetTheirPools_ThoseWithAPoolKeepTheirQuestions()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var first = await PasteAsync(client, Text);
+        await AnalyzeAsync(first, withQuestions: true);
+        var firstTopics = await service.Knowledge.OfDocumentAsync(first, TestContext.Current.CancellationToken);
+        var firstItems = await ItemIdsAsync(first);
+
+        var second = await PasteAsync(client, $"# Photosynthese\n{TestTexts.Lesson}\n\n# Genetik\n{TestTexts.Lesson}");
+        await AnalyzeAsync(second);
+        var secondTopics = service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(second)));
+        var merged = secondTopics[0] with { Id = firstTopics[0].Id };
+        var added = new KnowledgeTopic(Guid.NewGuid(), null, secondTopics.Count, []);
+        service.Knowledge.Give(second, [merged, secondTopics[1], added]);
+
+        // The pools are still open, the documents answer at once.
+        var listed = await client.GetFromJsonAsync<DocumentDto[]>("/documents", TestContext.Current.CancellationToken);
+        Assert.Equal("Analyzing", listed!.Single(document => document.Id == second).Status);
+
+        Assert.True(await Pools().FinishAsync(second, TestContext.Current.CancellationToken));
+
+        Assert.Equal(DocumentStatus.Ready, Stored(second).Status);
+        Assert.Equal([secondTopics[1].Id], (await GeneratedAsync(second)).Select(pool => pool.TopicId!.Value));
+        Assert.Equal(1, QuestionCalls(second));
+        Assert.Equal(firstItems, await ItemIdsAsync(first));
+        Assert.DoesNotContain(added.Id, PooledTopics(second));
+
+        var third = await PasteAsync(client, $"# Selbst angelegt\n{TestTexts.Lesson}");
+        await AnalyzeAsync(third);
+        var thirdTopic = Assert.Single(service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(third))));
+        service.Knowledge.Give(third, [thirdTopic with { Id = added.Id }]);
+
+        Assert.True(await Pools().FinishAsync(third, TestContext.Current.CancellationToken));
+
+        Assert.Equal(DocumentStatus.Ready, Stored(third).Status);
+        Assert.Equal([added.Id], (await GeneratedAsync(third)).Select(pool => pool.TopicId!.Value));
+        Assert.Equal(firstItems, await ItemIdsAsync(first));
+    }
+
+    private async Task<List<Guid>> ItemIdsAsync(Guid documentId) =>
+        [.. (await GeneratedAsync(documentId)).SelectMany(pool => pool.Items).Select(item => item.ItemId).Order()];
+
     // Knowledge merges topics of the same name across documents (#208). A topic whose sections all lie in another
     // document has no material here: it gets no questions from this document, the others do, and the document gets
     // ready. Before, the AI was asked about nothing and the document failed.
