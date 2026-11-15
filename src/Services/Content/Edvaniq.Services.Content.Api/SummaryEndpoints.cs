@@ -25,7 +25,7 @@ internal static class SummaryEndpoints
                     : Results.NotFound());
 
         // A ready or pending summary comes back as it is, a failed one goes to the worker again. Only a new or retried one
-        // checks the AI first: no job for it while it is paused or this month's budget is used up.
+        // needs the AI: no job for it while it is paused or this month's budget is used up, unless it is the demo's (#413).
         summaries.MapPost("/{length}", async (
             Guid topicId,
             string length,
@@ -40,26 +40,20 @@ internal static class SummaryEndpoints
             }
 
             var existing = await summaries.FindAsync(topicId, parsed, cancellationToken);
-            if (existing?.Summary.Status != SummaryStatus.Ready && existing?.Summary.Status != SummaryStatus.Pending)
-            {
-                if (await aiSwitch.IsPausedAsync(cancellationToken))
-                {
-                    return Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: AiPaused);
-                }
-
-                if (await BudgetRefusal.OfAsync(budget, cancellationToken) is { } refused)
-                {
-                    return refused;
-                }
-            }
+            var ai = existing?.Summary.Status is SummaryStatus.Ready or SummaryStatus.Pending ? AiState.Running
+                : await aiSwitch.IsPausedAsync(cancellationToken) ? AiState.Paused
+                : (await budget.StateAsync(cancellationToken)).Exhausted ? AiState.BudgetUsedUp
+                : AiState.Running;
 
             try
             {
-                var (result, view) = await summaries.RequestAsync(topicId, parsed, cancellationToken);
+                var (result, view) = await summaries.RequestAsync(topicId, parsed, ai, cancellationToken);
                 return result switch
                 {
                     SummaryRequestResult.TopicNotFound => Results.NotFound(),
                     SummaryRequestResult.NoMaterial => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: NoMaterial),
+                    SummaryRequestResult.AiPaused => Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: AiPaused),
+                    SummaryRequestResult.BudgetUsedUp => Results.Problem(statusCode: StatusCodes.Status429TooManyRequests, title: Document.AiBudgetReached),
                     SummaryRequestResult.Existing when view!.Summary.Status == SummaryStatus.Ready => Results.Ok(SummaryResponse.From(view)),
                     _ => Results.Json(SummaryResponse.From(view!), statusCode: StatusCodes.Status202Accepted),
                 };

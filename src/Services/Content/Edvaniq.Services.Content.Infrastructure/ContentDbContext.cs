@@ -36,6 +36,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
     public DbSet<TopicSummary> TopicSummaries => Set<TopicSummary>();
 
+    public DbSet<DemoGoal> DemoGoals => Set<DemoGoal>();
+
     public DbSet<TopicSummarySection> TopicSummarySections => Set<TopicSummarySection>();
 
     protected override void ConfigureModel(ModelBuilder modelBuilder)
@@ -134,6 +136,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         modelBuilder.Entity<StoredFile>().Property(item => item.Id).ValueGeneratedNever();
 
         // #344: one summary per topic and length. Its sections go with it, and with every document they come from.
+        modelBuilder.Entity<DemoGoal>().HasKey(item => item.OwnerId);
+
         var summary = modelBuilder.Entity<TopicSummary>();
         summary.Property(item => item.Id).ValueGeneratedNever();
         summary.Property(item => item.Length).HasConversion<string>().HasMaxLength(16);

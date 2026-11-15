@@ -164,16 +164,39 @@ public sealed class AiBudgetTests(ServiceFactory service) : IClassFixture<Servic
     {
         var alice = $"alice-{Guid.NewGuid():N}";
         using var client = ClientFor(alice);
+        var topic = await TopicAsync(alice, DocumentOrigin.Material);
+        var demoTopic = await TopicAsync(alice, DocumentOrigin.Demo);
         await AiUsageSeed.AddAsync(service.Services, alice, DateOnly.FromDateTime(DateTime.UtcNow), (1, 0.5m));
         await SetBudgetAsync(Math.Round((await StateAsync()).Spent / 2, 6));
-        var topic = Guid.NewGuid();
 
         using var response = await client.PostAsync($"/topics/{topic}/summaries/short", null, Cancel);
+        using var demo = await client.PostAsync($"/topics/{demoTopic}/summaries/short", null, Cancel);
 
         Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(Cancel);
         Assert.Equal(Document.AiBudgetReached, problem.GetProperty("title").GetString());
         Assert.False(Query(db => db.TopicSummaries.IgnoreQueryFilters().Any(summary => summary.TopicId == topic)));
+
+        // #413: the demo needs no AI and goes on.
+        Assert.Equal(HttpStatusCode.Accepted, demo.StatusCode);
+    }
+
+    // A topic whose material is one document of this origin.
+    private async Task<Guid> TopicAsync(string owner, DocumentOrigin origin)
+    {
+        var document = Document.Paste(owner, Guid.Empty, "Licht", TestTexts.Lesson, DateTime.UtcNow, origin: origin);
+        var sections = document.Split();
+        using (var scope = service.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
+            db.Documents.Add(document);
+            db.Sections.AddRange(sections);
+            await db.SaveChangesAsync(Cancel);
+        }
+
+        var topic = Guid.NewGuid();
+        service.Material.Give(owner, topic, [.. sections.Select(section => (document.Id, section.Id))]);
+        return topic;
     }
 
     private async Task<(int ExitCode, string Output)> RunAsync(params string[] args)

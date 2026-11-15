@@ -194,10 +194,11 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
     }
 
     [Fact]
-    public async Task PausedAi_TakesNoNewSummary()
+    public async Task PausedAi_TakesNoNewSummary_ExceptOfTheDemo()
     {
         var alice = NewUser();
         var (topic, _, _) = await TopicAsync(alice);
+        var (demoTopic, _, _) = await TopicAsync(alice, origin: DocumentOrigin.Demo);
         using var client = ClientFor(alice);
         await SetPausedAsync(true);
         try
@@ -207,6 +208,10 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
             Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
             Assert.Equal(SummaryEndpoints.AiPaused, (await response.Content.ReadFromJsonAsync<ProblemDto>(Cancel))!.Title);
             Assert.False(Query(db => db.TopicSummaries.IgnoreQueryFilters().Any(summary => summary.TopicId == topic)));
+
+            // #413: the demo needs no AI and goes on while it is paused.
+            using var demo = await client.PostAsync($"/topics/{demoTopic}/summaries/short", null, Cancel);
+            Assert.Equal(HttpStatusCode.Accepted, demo.StatusCode);
         }
         finally
         {
@@ -288,9 +293,10 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
 
     // A pasted document with its sections, and Knowledge naming them as one topic's material.
     // Without the test double the worker takes the chat a test hands it.
-    private async Task<(Guid Topic, Guid Document, IReadOnlyList<Section> Sections)> TopicAsync(string owner, bool usesTestDouble = true)
+    private async Task<(Guid Topic, Guid Document, IReadOnlyList<Section> Sections)> TopicAsync(
+        string owner, bool usesTestDouble = true, DocumentOrigin origin = DocumentOrigin.Material)
     {
-        var document = Document.Paste(owner, service.Planning.GoalOf(owner), "Photosynthese", Text, DateTime.UtcNow, usesTestDouble);
+        var document = Document.Paste(owner, service.Planning.GoalOf(owner), "Photosynthese", Text, DateTime.UtcNow, usesTestDouble, origin);
         var sections = document.Split();
         await StoreAsync(db =>
         {
