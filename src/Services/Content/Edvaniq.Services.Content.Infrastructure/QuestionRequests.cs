@@ -51,7 +51,9 @@ internal static class QuestionRequests
         }
 
         var model = ContentAi.ModelOf(chat, answer.ModelId);
-        return ([.. drafts.Select(draft => new GeneratedItem(
+
+        // Shuffled here, so every pool and top-up sends its options in a random order (#1046).
+        return ([.. drafts.Select(draft => draft.Shuffled(Random.Shared)).Select(draft => new GeneratedItem(
             Guid.NewGuid(), ItemKind.Question, document.Id, draft.SectionId, model, QuestionGeneration.PromptVersion,
             new GeneratedQuestion(
                 draft.Text, draft.Options, draft.Answer, draft.Explanation, draft.Difficulty, draft.Type,

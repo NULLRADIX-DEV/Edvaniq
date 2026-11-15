@@ -133,6 +133,12 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
                 {
                     Assert.Null(item.Question.Answers);
                 }
+
+                // Shuffled or not (#1046), the right option is still the one the simulated AI marked, never a distractor.
+                if (item.Question.Type != QuestionType.TrueFalse)
+                {
+                    Assert.DoesNotContain(item.Question.Options[item.Question.Answer], (string[])["Nichts aus dem Material", "Ein Thema außerhalb des Materials", "Gar kein Thema"]);
+                }
             });
             Assert.Equal(
                 [QuestionType.SingleChoice, QuestionType.MultipleChoice, QuestionType.TrueFalse],
@@ -402,10 +408,15 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
 
         var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
         Assert.Equal("Ready", found!.Status);
+        // The options come shuffled (#1046), so the right ones count by their text. True/false keeps its order.
         Assert.All(await GeneratedAsync(id), pool => Assert.Equal(
-            [("Was?", QuestionType.SingleChoice, 0), ("Welche?", QuestionType.MultipleChoice, 0), ("A ist B.", QuestionType.TrueFalse, 1)],
-            pool.Items.Select(item => (item.Question!.Text, item.Question.Type!.Value, item.Question.Answer))));
+            [("Was?", QuestionType.SingleChoice, "A"), ("Welche?", QuestionType.MultipleChoice, "A C"), ("A ist B.", QuestionType.TrueFalse, "Falsch")],
+            pool.Items.Select(item => (item.Question!.Text, item.Question.Type!.Value, RightOptions(item.Question)))));
+        Assert.All(await GeneratedAsync(id), pool => Assert.Equal(["Wahr", "Falsch"], pool.Items.Single(item => item.Question!.Type == QuestionType.TrueFalse).Question!.Options));
     }
+
+    private static string RightOptions(GeneratedQuestion question) =>
+        string.Join(' ', (question.Answers ?? [question.Answer]).Select(right => question.Options[right]).Order(StringComparer.Ordinal));
 
     [Fact]
     public async Task TopicWithoutValidQuestionTwice_FailsTheDocument_AndSendsNoQuestions()
