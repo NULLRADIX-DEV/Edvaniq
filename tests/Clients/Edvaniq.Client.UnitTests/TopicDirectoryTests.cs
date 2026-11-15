@@ -265,6 +265,8 @@ public sealed class TopicDirectoryTests : BunitContext
     private IRenderedComponent<TopicDirectory> RenderPage(FakeTopicDirectory directory)
     {
         Services.AddSingleton<ITopicDirectory>(directory);
+        Services.AddSingleton<ITopicEntries>(new FakeTopicEntries());
+        Services.AddSingleton<ILearningGoals>(new FakeLearningGoals());
         JSInterop.Mode = JSRuntimeMode.Loose;
         SetRendererInfo(new RendererInfo("WebAssembly", isInteractive: true));
         return Render<TopicDirectory>();

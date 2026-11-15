@@ -45,6 +45,69 @@ public sealed class TopicDirectoryPageTests(WebShell shell)
         await AxeScan.AssertNoViolationsAsync(page.Page, $"{Path} open at {WebShell.PhoneWidth} px");
     }
 
+    // #295: rename, hide with undo and add on a phone with the keyboard only. The focus follows each step, and each state
+    // passes axe-core.
+    [Fact]
+    public async Task TopicsChange_ByKeyboard_OnAPhone()
+    {
+        var changes = new List<string>();
+        await using var page = await shell.OpenSignedInAsync(Path, WebShell.PhoneWidth, prepare: async browser =>
+        {
+            await AnswerAsync(browser);
+            await AnswerChangesAsync(browser, changes);
+        });
+        var keys = page.Page.Keyboard;
+        var topic = Toggle(page.Page, "Photosynthese");
+        await topic.FocusAsync();
+        await keys.PressAsync("Enter");
+        var panel = page.Page.Locator($"#{await topic.GetAttributeAsync("aria-controls")}");
+        await Assertions.Expect(panel.Locator("dt").First).ToHaveTextAsync("Chlorophyll");
+
+        var rename = panel.Locator(":scope > .topic-tools button", new LocatorLocatorOptions { HasText = "Umbenennen" });
+        await AssertLargeEnoughAsync(rename);
+        await rename.FocusAsync();
+        await keys.PressAsync("Enter");
+        var field = page.Page.Locator($"#rename-{Material.TopicId:N}");
+        await Assertions.Expect(field).ToBeFocusedAsync();
+        await AxeScan.AssertNoViolationsAsync(page.Page, $"{Path} renaming at {WebShell.PhoneWidth} px");
+        await keys.PressAsync("Control+A");
+        await keys.TypeAsync("Fotosynthese");
+        await keys.PressAsync("Enter");
+
+        var status = page.Page.Locator(".directory-edit-status");
+        await Assertions.Expect(status).ToContainTextAsync("Das Thema heißt jetzt „Fotosynthese“.");
+        await Assertions.Expect(rename).ToBeFocusedAsync();
+
+        await keys.PressAsync("Tab");
+        await keys.PressAsync("Tab");
+        await Assertions.Expect(panel.Locator(":scope > .topic-tools .topic-hide")).ToBeFocusedAsync();
+        await keys.PressAsync("Enter");
+
+        await Assertions.Expect(status).ToContainTextAsync("„Photosynthese“ ist samt 2 Unterthemen ausgeblendet.");
+        var undo = page.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Rückgängig" });
+        await Assertions.Expect(undo).ToBeFocusedAsync();
+        await AssertNoSidewaysScrollAsync(page.Page);
+        await AxeScan.AssertNoViolationsAsync(page.Page, $"{Path} hidden at {WebShell.PhoneWidth} px");
+        await keys.PressAsync("Enter");
+        await Assertions.Expect(status).ToContainTextAsync("„Photosynthese“ ist wieder eingeblendet.");
+
+        await page.Page.Locator("#topic-add-name").FocusAsync();
+        await keys.TypeAsync("Zellteilung");
+        await keys.PressAsync("Enter");
+        await Assertions.Expect(status).ToContainTextAsync("„Zellteilung“ ist hinzugefügt.");
+
+        Assert.Equal(
+            [
+                $"PATCH /api/knowledge/topics/{Material.TopicId}",
+                $"PUT /api/knowledge/topics/{Material.TopicId}/hidden",
+                $"DELETE /api/knowledge/topics/{Material.TopicId}/hidden",
+                "POST /api/knowledge/topics",
+            ],
+            changes);
+        await AssertNoSidewaysScrollAsync(page.Page);
+        await AxeScan.AssertNoViolationsAsync(page.Page, $"{Path} added at {WebShell.PhoneWidth} px");
+    }
+
     [Theory]
     [InlineData("Analyzing", "Die Analyse läuft noch.")]
     [InlineData(null, "Du hast noch kein Material.")]
@@ -87,10 +150,45 @@ public sealed class TopicDirectoryPageTests(WebShell shell)
         }));
     }
 
-    private static Task FulfillAsync(IRoute route, object body) =>
+    // Knowledge takes every change and answers with the topic. The list stays as it was, only the page's messages count.
+    private static async Task AnswerChangesAsync(IPage page, List<string> changes)
+    {
+        async Task ChangeAsync(IRoute route)
+        {
+            var request = route.Request;
+            if (request.Method == "GET")
+            {
+                await route.FallbackAsync();
+                return;
+            }
+
+            lock (changes)
+            {
+                changes.Add($"{request.Method} {new Uri(request.Url).AbsolutePath}");
+            }
+
+            var name = "Photosynthese";
+            if (request.PostData is { Length: > 0 } body)
+            {
+                using var sent = JsonDocument.Parse(body);
+                name = sent.RootElement.GetProperty("name").GetString()!;
+            }
+
+            await FulfillAsync(
+                route,
+                new { id = request.Method == "POST" ? Guid.NewGuid() : Material.TopicId, learningGoalId = Guid.Empty, name, position = 0, hidden = request.Method == "PUT" },
+                request.Method == "POST" ? 201 : 200);
+        }
+
+        await page.RouteAsync("**/api/knowledge/topics", ChangeAsync);
+        await page.RouteAsync($"**/api/knowledge/topics/{Material.TopicId}", ChangeAsync);
+        await page.RouteAsync($"**/api/knowledge/topics/{Material.TopicId}/hidden", ChangeAsync);
+    }
+
+    private static Task FulfillAsync(IRoute route, object body, int status = 200) =>
         route.FulfillAsync(new RouteFulfillOptions
         {
-            Status = 200,
+            Status = status,
             ContentType = "application/json",
             Body = JsonSerializer.Serialize(body, JsonSerializerOptions.Web),
         });

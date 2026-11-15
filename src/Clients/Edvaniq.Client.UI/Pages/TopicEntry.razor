@@ -3,7 +3,7 @@
    Razor writes them as text. *@
 <div class="topic-entry">
     @Heading(Level, "topic-heading",
-        @<button type="button" class="disclosure" aria-expanded="@(open ? "true" : "false")" aria-controls="@panelId" @onclick="ToggleAsync">
+        @<button type="button" class="disclosure" aria-expanded="@(open ? "true" : "false")" aria-controls="@panelId" @onclick="ToggleAsync" @ref="toggle">
             <span class="disclosure-mark" aria-hidden="true"></span>@Name
         </button>)
     @if (Note is not null)
@@ -23,6 +23,11 @@
                     break;
             }
         </div>
+
+        @if (open)
+        {
+            @Tools
+        }
 
         @if (details?.Result == CallResult.Failed)
         {
@@ -98,6 +103,15 @@
     // The subtopics, shown inside the open topic.
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
+
+    // What the user can do with the topic (#295), first in the open panel.
+    [Parameter]
+    public RenderFragment? Tools { get; set; }
+
+    private ElementReference toggle;
+
+    // Back to the topic after a change somewhere else, undoing a hide for instance.
+    public ValueTask FocusAsync() => toggle.FocusAsync();
 
     private async Task ToggleAsync()
     {

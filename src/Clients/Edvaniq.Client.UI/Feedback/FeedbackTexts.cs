@@ -118,6 +118,16 @@ public static class FeedbackTexts
 
         public const string Ready = "Die Themen aus „{0}“ sind da.";
 
+        // The review after an analysis (#295). The path names the navigation as it is labelled in the shell.
+        public const string Review =
+            "Prüf kurz, ob die Themen passen: Im Themenverzeichnis kannst du sie umbenennen, ausblenden oder ergänzen. Du kannst das auch überspringen und gleich üben.";
+
+        public const string ReviewLink = "Themen prüfen";
+
+        public const string ReviewSkip = "Überspringen";
+
+        public const string ReviewSkipped = "Die Themen prüfen kannst du jederzeit später unter „Themen“ → „Themenverzeichnis“.";
+
         public static string WithTitle(string text, string title) =>
             string.Format(System.Globalization.CultureInfo.InvariantCulture, text, title);
     }
@@ -495,6 +505,78 @@ public static class FeedbackTexts
 
         // {0} is the name of the upper topic.
         public const string SubtopicOf = "Unterthema von {0}";
+    }
+
+    // Renaming, hiding and adding topics in the directory (#295).
+    public static class TopicEditing
+    {
+        public const string AddHeading = "Thema hinzufügen";
+
+        public const string NameLabel = "Name";
+
+        public const string GoalLabel = "Lernziel";
+
+        public const string Add = "Hinzufügen";
+
+        // {0} is the new topic.
+        public const string Added = "„{0}“ ist hinzugefügt.";
+
+        public const string GoalMissing = "Wähl das Lernziel, zu dem das Thema gehört.";
+
+        public const string NoGoal = "Themen gehören zu einem Lernziel. Leg zuerst eins an.";
+
+        public const string NoGoalLink = "Lernziel anlegen";
+
+        public const string Rename = "Umbenennen";
+
+        public const string NewNameLabel = "Neuer Name";
+
+        public const string Save = "Speichern";
+
+        public const string Cancel = "Abbrechen";
+
+        // {0} is the new name.
+        public const string Renamed = "Das Thema heißt jetzt „{0}“.";
+
+        public const string Hide = "Ausblenden";
+
+        public const string Show = "Einblenden";
+
+        // {0} is the topic.
+        public const string HiddenOne = "„{0}“ ist ausgeblendet.";
+
+        // {0} is the topic, {1} the number of its subtopics.
+        public const string HiddenWithSubtopics = "„{0}“ ist samt {1} Unterthemen ausgeblendet.";
+
+        public const string HiddenWithOneSubtopic = "„{0}“ ist samt 1 Unterthema ausgeblendet.";
+
+        public const string HiddenWhere = "Du findest es unter „Ausgeblendete Themen“ am Ende der Seite.";
+
+        public const string Undo = "Rückgängig";
+
+        // {0} is the topic.
+        public const string Shown = "„{0}“ ist wieder eingeblendet.";
+
+        public const string AddSubtopic = "Unterthema hinzufügen";
+
+        public const string SubtopicNameLabel = "Name des Unterthemas";
+
+        // Same words as Topic.CheckName in Knowledge, TopicValuesTests checks it.
+        public const string NameEmpty = "Der Name ist leer. Gib dem Thema einen Namen.";
+
+        public const string NameTaken = "Ein Thema mit diesem Namen gibt es hier schon, vielleicht unter den ausgeblendeten. Wähl einen anderen Namen.";
+
+        public const string ParentHidden = "Das übergeordnete Thema ist ausgeblendet. Blende zuerst das übergeordnete Thema ein.";
+
+        public const string Busy = "Das ging gerade nicht, deine Themen wurden zur selben Zeit geändert.";
+
+        public const string TryAgain = "Nochmal versuchen";
+
+        public const string Gone = "Dieses Thema gibt es nicht mehr, vielleicht wurde sein Material gelöscht.";
+
+        public const string Reload = "Neu laden";
+
+        public const string NotThrough = "Die Änderung ist nicht angekommen.";
     }
 
     // A limit or the pause of the AI stops a text, a file or a new try. Content says why in its answer (#307), this is

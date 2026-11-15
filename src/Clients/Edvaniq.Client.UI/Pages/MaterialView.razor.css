@@ -77,3 +77,16 @@
     align-items: center;
     min-height: 2.75rem;
 }
+
+/* Review the topics or go on, as easy to hit as each other. On a phone they wrap. */
+.material-review {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+}
+
+.material-review .button {
+    min-height: 2.75rem;
+}

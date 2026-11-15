@@ -61,7 +61,11 @@
             }
             break;
         case ViewState.Ready:
-            <Notice Kind="NoticeKind.Success" class="material-ready"><p>@FeedbackTexts.Material.WithTitle(FeedbackTexts.Material.Ready, latest!.Title)</p></Notice>
+            <Notice Kind="NoticeKind.Success" class="material-ready">
+                <p>@FeedbackTexts.Material.WithTitle(FeedbackTexts.Material.Ready, latest!.Title)</p>
+                @* The review never blocks: the topics below can be practised right away. *@
+                <p class="material-review-hint">@(reviewSkipped ? FeedbackTexts.Material.ReviewSkipped : FeedbackTexts.Material.Review)</p>
+            </Notice>
             break;
     }
 </div>
@@ -77,6 +81,12 @@
     case ViewState.Failed:
         <StateActions ActionText="@(retrying ? FeedbackTexts.Retry.Starting : FeedbackTexts.Retry.Button)" OnAction="RetryAnalysisAsync" />
         break;
+    case ViewState.Ready when !reviewSkipped && topics.Count > 0:
+        <div class="state-actions material-review">
+            <a class="button" href="themen/verzeichnis">@FeedbackTexts.Material.ReviewLink</a>
+            <button type="button" class="button-secondary material-skip" @onclick="SkipReview">@FeedbackTexts.Material.ReviewSkip</button>
+        </div>
+        break;
 }
 
 @if (State is not ViewState.SignedOut and not ViewState.Loading)
@@ -84,7 +94,7 @@
     @if (topics.Count > 0)
     {
         <section class="material-section" aria-labelledby="topics-heading">
-            <h2 id="topics-heading">Themen</h2>
+            <h2 id="topics-heading" tabindex="-1" @ref="topicsHeading">Themen</h2>
             <p><a class="material-directory" href="themen/verzeichnis">@FeedbackTexts.TopicDirectory.Link</a></p>
             <ul class="topic-list">
                 @foreach (var topic in topics)
@@ -222,6 +232,11 @@
     // Stays checked after a send, the user confirmed for this visit.
     private bool confirmed;
     private string? confirmMessage;
+
+    // The review of the topics after an analysis (#295), skipped for this visit.
+    private bool reviewSkipped;
+    private bool focusTopics;
+    private ElementReference topicsHeading;
 
     private bool retrying;
     private bool retryFailed;
@@ -710,6 +725,31 @@
     }
 
     private sealed record PasteDraft(string Title, string Text);
+
+    // The button goes away, so the focus goes on to the topics to practise.
+    private void SkipReview()
+    {
+        reviewSkipped = true;
+        focusTopics = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!focusTopics)
+        {
+            return;
+        }
+
+        focusTopics = false;
+        try
+        {
+            await topicsHeading.FocusAsync();
+        }
+        catch (Microsoft.JSInterop.JSException)
+        {
+            // The heading went away between render and focus, nothing to do.
+        }
+    }
 
     // Leaving for the login keeps what was not sent yet, for the same account only (Drafts).
     public void Dispose()

@@ -3,13 +3,16 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Content.Contracts;
+using Edvaniq.Services.Knowledge.Application;
 using Edvaniq.Services.Knowledge.Contracts;
 using Edvaniq.Services.Knowledge.Domain;
 using Edvaniq.Services.Knowledge.Infrastructure;
 using Edvaniq.Testing;
 
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -102,6 +105,8 @@ public sealed class TopicEditTests(ServiceFactory service) : IClassFixture<Servi
             Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
             Assert.DoesNotContain(cell.Id.ToString(), body, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain(hidden.Id.ToString(), body, StringComparison.OrdinalIgnoreCase);
+            using var problem = JsonDocument.Parse(body);
+            Assert.Equal("nameTaken", problem.RootElement.GetProperty("code").GetString());
         }
 
         Assert.Equal("Genetik", (await GetAsync(client, genetics.Id)).Name);
@@ -147,6 +152,7 @@ public sealed class TopicEditTests(ServiceFactory service) : IClassFixture<Servi
         // A subtopic comes back only with its topic.
         using var early = await client.DeleteAsync($"/topics/{nucleus.Id}/hidden", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Conflict, early.StatusCode);
+        Assert.Equal("parentHidden", await CodeAsync(early));
 
         Assert.Equal(HttpStatusCode.OK, await SendAsync(client, HttpMethod.Delete, $"/topics/{cell.Id}/hidden"));
         var tree = (await ListAsync(client, "/topics"))[0];
@@ -258,6 +264,27 @@ public sealed class TopicEditTests(ServiceFactory service) : IClassFixture<Servi
         }
     }
 
+    // Topics that change under every try: the user hears to try again, with a code the client can tell apart.
+    [Fact]
+    public async Task ChangeThatNeverGetsItsSave_IsAConflict_ToTryAgain()
+    {
+        await using var busy = service.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => services.AddScoped<ITopics, BusyTopics>()));
+        using var client = busy.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.Create(NewUser()));
+
+        using var response = await client.PatchAsJsonAsync($"/topics/{Guid.NewGuid()}", new { name = "Zelle" }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("busy", await CodeAsync(response));
+    }
+
+    private static async Task<string?> CodeAsync(HttpResponseMessage response)
+    {
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        return problem.TryGetProperty("code", out var code) ? code.GetString() : null;
+    }
+
     private static string NewUser() => $"alice-{Guid.NewGuid():N}";
 
     private HttpClient ClientFor(string userId)
@@ -305,4 +332,24 @@ public sealed class TopicEditTests(ServiceFactory service) : IClassFixture<Servi
     private sealed record Tree(Guid Id, string Name, bool Hidden, Leaf[] Subtopics);
 
     private sealed record Leaf(Guid Id, string Name, bool Hidden);
+
+    // An analysis always got its save in first.
+    private sealed class BusyTopics : ITopics
+    {
+        public Task<IReadOnlyList<Topic>> ListAsync(Guid? learningGoalId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<Topic?> FindAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<KeyTerm>?> TermsAsync(Guid topicId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<TopicSection>?> SectionsAsync(Guid topicId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<TopicResult> RenameAsync(Guid id, string name, CancellationToken cancellationToken) =>
+            throw new MessageNotReadyException("The topic set changed.");
+
+        public Task<TopicResult> AddAsync(Guid learningGoalId, Guid? parentId, string name, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<TopicResult> SetHiddenAsync(Guid id, bool hidden, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
 }

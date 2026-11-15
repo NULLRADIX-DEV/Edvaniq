@@ -1,0 +1,228 @@
+@using Microsoft.JSInterop
+@inject ITopicEntries Entries
+
+@* What the user can do with one topic of the directory (#295): rename it, add a subtopic, hide it or show it again.
+   Renaming and adding open a small form right here, Escape closes it. What went wrong with the name stands at the
+   field, anything else in the live region of the form. Hiding and showing the directory does itself, it shows the
+   undo. *@
+<div class="topic-tools">
+    @if (form == Form.None)
+    {
+        <div class="topic-tool-buttons">
+            <button type="button" class="button-secondary" @ref="renameButton" @onclick="() => Open(Form.Rename)">@FeedbackTexts.TopicEditing.Rename</button>
+            @if (CanAddSubtopic)
+            {
+                <button type="button" class="button-secondary" @ref="subtopicButton" @onclick="() => Open(Form.Subtopic)">@FeedbackTexts.TopicEditing.AddSubtopic</button>
+            }
+            @if (OnHide.HasDelegate)
+            {
+                <button type="button" class="button-secondary topic-hide" @onclick="OnHide">@FeedbackTexts.TopicEditing.Hide</button>
+            }
+            @if (OnShow.HasDelegate)
+            {
+                <button type="button" class="button-secondary topic-show" @onclick="OnShow">@FeedbackTexts.TopicEditing.Show</button>
+            }
+        </div>
+    }
+    else
+    {
+        <form class="topic-form" @onsubmit="SubmitAsync" @onkeydown="KeyAsync" novalidate>
+            <TextField @ref="field" Id="@FieldId" Label="@(form == Form.Rename ? FeedbackTexts.TopicEditing.NewNameLabel : FeedbackTexts.TopicEditing.SubtopicNameLabel)"
+                       Value="@name" ValueChanged="value => name = value" Error="@fieldError" Required="true" Immediate="true" autocomplete="off" />
+            <div class="topic-form-actions">
+                @* Stays enabled while it saves: a disabled button would lose the keyboard focus. *@
+                <button type="submit" class="button">@(form == Form.Rename ? FeedbackTexts.TopicEditing.Save : FeedbackTexts.TopicEditing.Add)</button>
+                <button type="button" class="button-secondary" @onclick="CloseAsync">@FeedbackTexts.TopicEditing.Cancel</button>
+            </div>
+        </form>
+    }
+
+    <div role="status" class="topic-tools-status">
+        @switch (problem)
+        {
+            case CallResult.Failed:
+                <ConnectionProblem Title="@FeedbackTexts.TopicEditing.NotThrough" TraceId="@problemTrace" />
+                break;
+            case CallResult.NotFound:
+                <Notice Kind="NoticeKind.Error"><p>@FeedbackTexts.TopicEditing.Gone</p></Notice>
+                break;
+            case CallResult.Rejected when problemText is not null:
+                <Notice Kind="NoticeKind.Error"><p>@problemText</p></Notice>
+                break;
+        }
+    </div>
+    @if (problem == CallResult.NotFound)
+    {
+        <button type="button" class="button-secondary" @onclick="OnReload">@FeedbackTexts.TopicEditing.Reload</button>
+    }
+</div>
+
+@code {
+    private Form form;
+    private string name = "";
+    private string? fieldError;
+    private CallResult? problem;
+    private string? problemText;
+    private string? problemTrace;
+    private bool saving;
+    private TextField? field;
+    private ElementReference renameButton;
+    private ElementReference subtopicButton;
+    private Focus focusNext;
+
+    [Parameter, EditorRequired]
+    public Guid TopicId { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Name { get; set; } = "";
+
+    // Only a topic of the upper level that is not hidden takes subtopics.
+    [Parameter]
+    public bool CanAddSubtopic { get; set; }
+
+    // Set for a visible topic.
+    [Parameter]
+    public EventCallback OnHide { get; set; }
+
+    // Set for a hidden one that can come back on its own.
+    [Parameter]
+    public EventCallback OnShow { get; set; }
+
+    // Renamed, or a subtopic added: the directory loads anew and says so.
+    [Parameter]
+    public EventCallback<TopicEdited> OnEdited { get; set; }
+
+    [Parameter]
+    public EventCallback OnReload { get; set; }
+
+    private string FieldId => $"{(form == Form.Rename ? "rename" : "subtopic")}-{TopicId:N}";
+
+    private void Open(Form which)
+    {
+        form = which;
+        name = which == Form.Rename ? Name : "";
+        fieldError = null;
+        ClearProblem();
+        focusNext = Focus.Field;
+    }
+
+    private Task CloseAsync()
+    {
+        focusNext = form == Form.Subtopic ? Focus.Subtopic : Focus.Rename;
+        form = Form.None;
+        fieldError = null;
+        return Task.CompletedTask;
+    }
+
+    private Task KeyAsync(KeyboardEventArgs key) => key.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
+
+    private async Task SubmitAsync()
+    {
+        if (saving)
+        {
+            return;
+        }
+
+        ClearProblem();
+        var trimmed = name.Trim();
+        fieldError = trimmed.Length == 0 ? FeedbackTexts.TopicEditing.NameEmpty
+            : trimmed.Length > TopicValues.NameMaxLength ? FeedbackTexts.Goal.TopicTooLong
+            : null;
+        if (fieldError is not null)
+        {
+            focusNext = Focus.Field;
+            return;
+        }
+
+        // Nothing changed, nothing to send.
+        if (form == Form.Rename && trimmed == Name)
+        {
+            await CloseAsync();
+            return;
+        }
+
+        var which = form;
+        saving = true;
+        CallOutcome<TopicEdit> outcome;
+        try
+        {
+            outcome = which == Form.Rename
+                ? await Entries.RenameAsync(TopicId, trimmed)
+                : await Entries.CreateSubtopicAsync(TopicId, trimmed);
+        }
+        finally
+        {
+            saving = false;
+        }
+
+        switch (outcome)
+        {
+            case { Result: CallResult.Ok, Value.Topic: { } topic }:
+                form = Form.None;
+                focusNext = which == Form.Subtopic ? Focus.None : Focus.Rename;
+                await OnEdited.InvokeAsync(new TopicEdited(which == Form.Rename ? TopicEditKind.Renamed : TopicEditKind.SubtopicAdded, topic));
+                break;
+            case { Result: CallResult.Rejected, FieldErrors: { } errors } when errors.TryGetValue("Name", out var error):
+                fieldError = error;
+                focusNext = Focus.Field;
+                break;
+            case { Result: CallResult.Rejected, Value.Conflict: TopicConflict.NameTaken }:
+                fieldError = FeedbackTexts.TopicEditing.NameTaken;
+                focusNext = Focus.Field;
+                break;
+            case { Result: CallResult.SignedOut }:
+                // The shell says the login ran out (SessionEndedNotice), the form keeps the name.
+                break;
+            case { Result: CallResult.Rejected or CallResult.NotFound }:
+                problem = outcome.Result;
+                problemText = TopicEditTexts.ForConflict(outcome.Value?.Conflict);
+                break;
+            default:
+                problem = CallResult.Failed;
+                problemTrace = outcome.TraceId;
+                break;
+        }
+    }
+
+    private void ClearProblem() => (problem, problemText, problemTrace) = (null, null, null);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var target = focusNext;
+        focusNext = Focus.None;
+        try
+        {
+            switch (target)
+            {
+                case Focus.Field when field is not null:
+                    await field.FocusAsync();
+                    break;
+                case Focus.Rename:
+                    await renameButton.FocusAsync();
+                    break;
+                case Focus.Subtopic when CanAddSubtopic:
+                    await subtopicButton.FocusAsync();
+                    break;
+            }
+        }
+        catch (JSException)
+        {
+            // The element went away between render and focus, nothing to do.
+        }
+    }
+
+    private enum Form
+    {
+        None,
+        Rename,
+        Subtopic,
+    }
+
+    private enum Focus
+    {
+        None,
+        Field,
+        Rename,
+        Subtopic,
+    }
+}

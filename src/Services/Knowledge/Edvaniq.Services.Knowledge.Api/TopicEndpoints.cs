@@ -91,21 +91,22 @@ internal static class TopicEndpoints
             : Failure(changed.Error);
     }
 
-    // The messages name no other topic, only what the user can do.
+    // The messages name no other topic, only what the user can do. Clients tell the conflicts apart by code, never by the
+    // text.
     private static IResult Failure(TopicError error) => error switch
     {
-        TopicError.NameTaken => Results.Problem(
-            statusCode: StatusCodes.Status409Conflict, detail: "Ein Thema mit diesem Namen gibt es hier schon, auch wenn es ausgeblendet ist."),
-        TopicError.ParentHidden => Results.Problem(
-            statusCode: StatusCodes.Status409Conflict, detail: "Das übergeordnete Thema ist ausgeblendet. Blende zuerst das übergeordnete Thema ein."),
-        TopicError.Busy => Results.Problem(
-            statusCode: StatusCodes.Status409Conflict, detail: "Die Themen wurden gerade geändert. Versuch es noch einmal."),
+        TopicError.NameTaken => Conflict("nameTaken", "Ein Thema mit diesem Namen gibt es hier schon, auch wenn es ausgeblendet ist."),
+        TopicError.ParentHidden => Conflict("parentHidden", "Das übergeordnete Thema ist ausgeblendet. Blende zuerst das übergeordnete Thema ein."),
+        TopicError.Busy => Conflict("busy", "Die Themen wurden gerade geändert. Versuch es noch einmal."),
         TopicError.ParentIsSubtopic => Results.ValidationProblem(new Dictionary<string, string[]>
         {
             [nameof(NewTopic.ParentId)] = ["Ein Unterthema hat keine Unterthemen. Themen haben zwei Ebenen."],
         }),
         _ => Results.NotFound(),
     };
+
+    private static IResult Conflict(string code, string detail) =>
+        Results.Problem(statusCode: StatusCodes.Status409Conflict, detail: detail, extensions: new Dictionary<string, object?> { ["code"] = code });
 }
 
 internal sealed record RenamedTopic(string? Name);

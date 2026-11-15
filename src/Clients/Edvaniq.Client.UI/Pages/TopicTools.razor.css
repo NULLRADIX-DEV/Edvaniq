@@ -1,0 +1,17 @@
+/* Buttons and form wrap on a phone, each as easy to hit as the other. */
+.topic-tool-buttons,
+.topic-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.topic-tools {
+    margin-top: var(--space-3);
+    overflow-wrap: anywhere;
+}
+
+.topic-form-actions .button {
+    min-height: 2.75rem;
+}
