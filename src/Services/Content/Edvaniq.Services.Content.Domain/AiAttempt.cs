@@ -20,9 +20,13 @@ public sealed class AiAttempt : IOwnedByUser
 
     public const string Summary = "summary";
 
+    // More questions for a pool that came out short (#339), apart from the first questions of a topic.
+    public const string TopUp = "topup";
+
     private AiAttempt(
         Guid callId, int attempt, string ownerId, Guid documentId, string purpose, string model, string promptVersion,
-        DateTime calledAt, long durationMs, long inputTokens, long outputTokens, decimal? cost, AiAttemptOutcome outcome)
+        DateTime calledAt, long durationMs, long inputTokens, long outputTokens, decimal? cost, AiAttemptOutcome outcome,
+        Guid? topicId, Guid? summaryId)
     {
         CallId = callId;
         Attempt = attempt;
@@ -37,6 +41,8 @@ public sealed class AiAttempt : IOwnedByUser
         OutputTokens = outputTokens;
         Cost = cost;
         Outcome = outcome;
+        TopicId = topicId;
+        SummaryId = summaryId;
     }
 
     public Guid Id { get; private set; } = Guid.NewGuid();
@@ -70,11 +76,19 @@ public sealed class AiAttempt : IOwnedByUser
 
     public AiAttemptOutcome Outcome { get; private set; }
 
+    // What the call was about beyond the document (#417): the topic of its questions, or the summary. Null before #417
+    // and for the topics of a document.
+    public Guid? TopicId { get; private set; }
+
+    public Guid? SummaryId { get; private set; }
+
     public static AiAttempt Of(
         Guid callId, int attempt, Document document, string purpose, string model, string promptVersion,
-        DateTime calledAt, TimeSpan duration, long inputTokens, long outputTokens, decimal? cost, AiAttemptOutcome outcome) =>
+        DateTime calledAt, TimeSpan duration, long inputTokens, long outputTokens, decimal? cost, AiAttemptOutcome outcome,
+        AiReference reference = default) =>
         new(callId, attempt, document.OwnerId, document.Id, Cut(purpose, PurposeMaxLength), Cut(model, ModelMaxLength),
-            Cut(promptVersion, PromptVersionMaxLength), calledAt, (long)duration.TotalMilliseconds, inputTokens, outputTokens, cost, outcome);
+            Cut(promptVersion, PromptVersionMaxLength), calledAt, (long)duration.TotalMilliseconds, inputTokens, outputTokens, cost, outcome,
+            reference.TopicId, reference.SummaryId);
 
     // The model name comes from the provider, a long one must not lose the row.
     private static string Cut(string value, int length) => value.Length <= length ? value : value[..length];
@@ -87,4 +101,11 @@ public enum AiAttemptOutcome
     Unusable,
 
     Failed,
+}
+// What an AI call is about beyond its document, for the cost log. Default for the topics of a document.
+public readonly record struct AiReference(Guid? TopicId = null, Guid? SummaryId = null)
+{
+    public static AiReference Topic(Guid topicId) => new(TopicId: topicId);
+
+    public static AiReference Summary(Guid summaryId) => new(SummaryId: summaryId);
 }

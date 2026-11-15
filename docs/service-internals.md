@@ -297,6 +297,12 @@ Der erste KI-Aufruf eines Monats, der 80 % des Budgets verbraucht findet, schrei
 
 Schalter und Budget sitzen vor dem `IChatClient` des Content-Workers (`AiGate`), den jeder KI-Aufruf passiert. Die Content-Api fragt mit derselben Summe (`IAiBudget`). Ruft später ein anderer Service eine KI, muss er beides beachten.
 
+## Logzeilen des Workers
+
+Die Zeilen zu Fragenpools, Nachfüllen und Zusammenfassungen haben feste Event-IDs, so findet man den Weg eines Dokuments, Themas oder einer Zusammenfassung im Log über seine ID. Content nutzt 33900 bis 33999: 33900 bis 33908 das Nachfüllen, 33910 bis 33921 die Zeilen jedes KI-Aufrufs (Ausfall, Pause, Budget, Ablehnung, Kosten), 33930 bis 33937 die Fragenpools und 33950 bis 33957 die Zusammenfassungen. Fertige Pools (`PoolsMade`) und fertige Zusammenfassungen (`LogReady`) nennen ihre Dauer.
+
+Jeder KI-Aufruf schreibt eine Zeile `AiUsage` mit Zweck (`topics`, `questions`, `topup`, `summary`), Aufruf-ID, Versuchen, Tokens, Kosten, Dauer, Prompt und Modell, dazu das Thema oder die Zusammenfassung, um die es ging. Dieselben Werte stehen je Versuch in `AiAttempts`, die Aufruf-ID führt vom Log zu den Zeilen. Material, Prompts und Antworten der KI stehen nie im Log, auch nicht in einer Fehlermeldung: Bricht eine Runde ab, nennt die Zeile nur Art und Ort des Fehlers. `LogPrivacyTests` prüft das mit einem Wort, das nur im Material und in den Antworten vorkommt.
+
 ## Zeitgrenzen der Analyse
 
 Kein Dokument bleibt für immer „in Analyse“. Die Grenzen des Content-Workers stehen im Abschnitt `Content:Analysis` der Konfiguration, ohne gültige Werte startet der Worker nicht:

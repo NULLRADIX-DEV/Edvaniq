@@ -59,7 +59,7 @@ public sealed class QuestionTopUps(
                 }
                 catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
                 {
-                    ContentLog.TopUpRoundFailed(logger, exception, Interval);
+                    ContentLog.TopUpRoundFailed(logger, ContentLog.Describe(exception), Interval);
                 }
 
                 await Task.Delay(Interval, time, stoppingToken);
@@ -158,7 +158,7 @@ public sealed class QuestionTopUps(
         }
 
         var (items, failure, attempts) = await QuestionRequests.AskAsync(
-            document, profile, material, texts, pool.Questions ?? 0, ai, testDouble, answers, AiTimeout, cancellationToken);
+            document, profile, material, texts, pool.Questions ?? 0, AiAttempt.TopUp, pool.TopicId, ai, testDouble, answers, AiTimeout, cancellationToken);
         now = time.GetUtcNow().UtcDateTime;
         if (failure is not null)
         {

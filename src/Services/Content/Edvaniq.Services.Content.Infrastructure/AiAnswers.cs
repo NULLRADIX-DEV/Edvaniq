@@ -23,6 +23,7 @@ public sealed class AiAnswers(IServiceScopeFactory scopes, AiUsageLog usage, Tim
         Document document,
         string purpose,
         string promptVersion,
+        AiReference reference,
         IChatClient chat,
         IReadOnlyList<ChatMessage> messages,
         Func<string, T?> read,
@@ -34,7 +35,7 @@ public sealed class AiAnswers(IServiceScopeFactory scopes, AiUsageLog usage, Tim
         var key = KeyOf(purpose, promptVersion, model, document.UsesTestDouble, messages);
         if (await StoredAsync(document, key, cancellationToken) is { } stored && read(stored.Answer) is { } reused)
         {
-            usage.Reused(document, purpose, promptVersion, stored.Model);
+            usage.Reused(document, purpose, promptVersion, reference, stored.Model);
             return new StructuredAnswer<T>(reused, 0, new UsageDetails(), stored.Model, null, []);
         }
 
@@ -45,7 +46,7 @@ public sealed class AiAnswers(IServiceScopeFactory scopes, AiUsageLog usage, Tim
             request,
             time,
             cancellationToken);
-        await usage.RecordAsync(document, purpose, promptVersion, answer.Tries, model, cancellationToken);
+        await usage.RecordAsync(document, purpose, promptVersion, reference, answer.Tries, model, cancellationToken);
         if (answer.Value is not null && usable is not null)
         {
             await StoreAsync(AiAnswer.Of(

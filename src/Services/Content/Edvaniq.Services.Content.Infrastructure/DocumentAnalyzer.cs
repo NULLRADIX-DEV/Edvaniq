@@ -195,6 +195,7 @@ public sealed class DocumentAnalyzer(
             document,
             AiAttempt.Topics,
             TopicAnalysis.PromptVersion,
+            new AiReference(),
             chat,
             [
                 new ChatMessage(ChatRole.System, TopicAnalysis.System(profile, topicsBefore)),
