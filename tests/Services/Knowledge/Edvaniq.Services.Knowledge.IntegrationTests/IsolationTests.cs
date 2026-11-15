@@ -29,7 +29,7 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         .Item("PATCH", "/topics/{id:guid}", new { name = "Von Bob" })
         .Item("PUT", "/topics/{id:guid}/hidden")
         .Item("DELETE", "/topics/{id:guid}/hidden")
-        .Exempt("POST", "/topics", "Adds a topic of the caller. A foreign parent: OtherUser_CannotAddASubtopicToAForeignTopic.");
+        .Exempt("POST", "/topics", "Adds a topic of the caller, a foreign parent is refused.", nameof(OtherUser_CannotAddASubtopicToAForeignTopic));
 
     [Fact]
     public void EveryEndpoint_IsInTheCheck() => Check().AssertCovers(service.Services);
