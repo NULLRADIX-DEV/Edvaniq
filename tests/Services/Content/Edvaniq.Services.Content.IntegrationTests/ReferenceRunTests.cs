@@ -1,5 +1,7 @@
 extern alias referencerun;
 
+using Edvaniq.Services.Content.UnitTests;
+
 using Microsoft.Extensions.Configuration;
 
 using Run = referencerun::Edvaniq.Services.Content.ReferenceRun.ReferenceRun;
@@ -12,6 +14,8 @@ namespace Edvaniq.Services.Content.IntegrationTests;
 public sealed class ReferenceRunTests : IDisposable
 {
     private readonly string file = Path.Combine(Path.GetTempPath(), $"reference-run-{Guid.NewGuid():N}.md");
+
+    private readonly string sample = Path.Combine(Path.GetTempPath(), $"reference-sample-{Guid.NewGuid():N}.md");
 
     [Fact]
     public async Task SimulatedRun_WritesTheTable_WithNamesAndNumbersOnly()
@@ -39,6 +43,45 @@ public sealed class ReferenceRunTests : IDisposable
         Assert.Matches(@"\| 1 \| [1-9]\d* \| 0 \| 0 \| [1-9]\d* \| 0 \| 0 \| safe \| safe \| safe \| safe \|", report);
         Assert.Matches(@"\| 2 \| [1-9]\d* \| 0 \| 0 \| [1-9]\d* \| 0 \| 0 \| safe \| safe \| safe \| safe \|", report);
         Assert.Contains("(simulated)", report, StringComparison.Ordinal);
+    }
+
+    // #342: with --questions every document gets its pools and their numbers, only numbers in the public table. The sample
+    // with the questions themselves goes to the file given, outside the repo.
+    [Fact]
+    public async Task QuestionsRun_AddsTheNumbers_AndWritesTheSampleApart()
+    {
+        using var output = new StringWriter();
+
+        await Run.RunAsync(["--questions", "--out", file, "--sample", sample], Simulated, output, TestContext.Current.CancellationToken);
+
+        var report = await File.ReadAllTextAsync(file, TestContext.Current.CancellationToken);
+        Assert.Contains("## Fragenqualität", report, StringComparison.Ordinal);
+        Assert.Matches(@"\| biologie-fotosynthese \| [1-9]\d* \| [1-9]\d* \| 0 \| \d\.\d\d \|", report);
+        Assert.DoesNotContain("### Frage", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("Erklärung:", report, StringComparison.Ordinal);
+
+        var judged = await File.ReadAllTextAsync(sample, TestContext.Current.CancellationToken);
+        Assert.Contains("## biologie-fotosynthese", judged, StringComparison.Ordinal);
+        Assert.Contains("### Frage 1 (", judged, StringComparison.Ordinal);
+        Assert.Contains("### Karte 1 (", judged, StringComparison.Ordinal);
+        Assert.Contains("Urteil: sinnvoll", judged, StringComparison.Ordinal);
+    }
+
+    // The questions of the AI never go into the repo, and a sample without the pools has nothing to show.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Sample_InTheRepo_OrWithoutQuestions_StopsBeforeAnything(bool questions)
+    {
+        using var output = new StringWriter();
+        var path = questions ? Path.Combine(ReferenceSet.Folder, "results", "sample.md") : sample;
+        string[] args = questions ? ["--questions", "--out", file, "--sample", path] : ["--out", file, "--sample", path];
+
+        var exit = await Run.RunAsync(args, Simulated, output, TestContext.Current.CancellationToken);
+
+        Assert.Equal(Run.Stopped, exit);
+        Assert.False(File.Exists(file));
+        Assert.False(File.Exists(path));
     }
 
     // The file goes into the public repo: it names the run by its label, never a provider or model.
@@ -93,7 +136,11 @@ public sealed class ReferenceRunTests : IDisposable
         Assert.StartsWith("Usage:", output.ToString(), StringComparison.Ordinal);
     }
 
-    public void Dispose() => File.Delete(file);
+    public void Dispose()
+    {
+        File.Delete(file);
+        File.Delete(sample);
+    }
 
     private static void Simulated(IConfigurationBuilder configuration) =>
         configuration.AddInMemoryCollection([KeyValuePair.Create("Ai:Provider", (string?)"Simulated")]);
