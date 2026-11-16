@@ -70,14 +70,14 @@ internal sealed record PlanBody(
     };
 }
 
-internal sealed record BlockBody(Guid TopicId, int Minutes, string? Kind = null, bool Done = false)
+internal sealed record BlockBody(Guid TopicId, int Minutes, string? Kind = null, bool Done = false, Guid? Id = null)
 {
     public PlanBlock ToBlock() => new(TopicId, Minutes, Kind switch
     {
         "learn" => BlockKind.Learn,
         "review" => BlockKind.Review,
         _ => null,
-    }, Done);
+    }, Done, Id);
 }
 
 // Source-generated for the trimmed browser app. A plan without its day, blocks or mastery flag fails.

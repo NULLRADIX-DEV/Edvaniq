@@ -48,6 +48,7 @@ builder.Services.AddScoped<ITopicEntries>(services => new HttpTopicEntries(Watch
 builder.Services.AddScoped<IDailyBudget>(services => new HttpDailyBudget(Watched(services)));
 builder.Services.AddScoped<ILearningProgress>(services => new HttpLearningProgress(Watched(services)));
 builder.Services.AddScoped<ISessionResults>(services => new HttpSessionResults(Watched(services)));
+builder.Services.AddScoped<ISessions>(services => new HttpSessions(Watched(services)));
 builder.Services.AddSingleton<IWebSession>(new HttpWebSession(new HttpClient
 {
     BaseAddress = host,

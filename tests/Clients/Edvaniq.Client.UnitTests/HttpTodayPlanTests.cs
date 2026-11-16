@@ -86,6 +86,20 @@ public sealed class HttpTodayPlanTests
         Assert.Equal(expected, outcome.Value.DailyGoal);
     }
 
+    // #396: the block's id is what a session starts with. A host before that sends none.
+    [Fact]
+    public async Task Get_ReadsTheBlockIds()
+    {
+        var plans = Plans([], Answer(HttpStatusCode.OK, $$"""
+            {"studyDay":"2026-11-11","blocks":[{"topicId":"{{Review}}","minutes":10,"kind":"review","id":"{{NotReady}}"},
+             {"topicId":"{{Learn}}","minutes":20,"kind":"learn"}],"masteryAvailable":true}
+            """));
+
+        var outcome = await plans.GetAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal<Guid?>([Guid.Parse(NotReady), null], outcome.Value!.Blocks.Select(block => block.Id));
+    }
+
     // Planning may add kinds and fields later, the plan still comes through.
     [Fact]
     public async Task Get_UnknownKindAndMissingLists_StillGetThrough()

@@ -24,8 +24,9 @@ public sealed record TodayPlan(
     int? DaysToExam = null,
     DailyGoal DailyGoal = DailyGoal.None);
 
-// Kind is null for a kind this client doesn't know yet. Done: its session was finished today (#375).
-public sealed record PlanBlock(Guid TopicId, int Minutes, BlockKind? Kind, bool Done = false);
+// Kind is null for a kind this client doesn't know yet. Done: its session was finished today (#375). Id: the same for
+// the same block on every call, what a session starts with (#396). Null from a host before that.
+public sealed record PlanBlock(Guid TopicId, int Minutes, BlockKind? Kind, bool Done = false, Guid? Id = null);
 
 // None on a day without blocks, and for a state this client doesn't know yet.
 public enum DailyGoal
