@@ -264,6 +264,10 @@ jobs:
             | python3 -c 'import json, sys; c = json.load(sys.stdin); s = c["services"]; [print(n, *(["internal"] if v.get("internal") else sorted(k for k, sv in s.items() if n in sv.get("networks", {})))) for n, v in sorted(c["networks"].items())]; print("web", *sorted(s["web"]["networks"]))' \
             | diff <(printf '%s\n' 'backend db' 'data internal' 'default web' 'egress content-worker' 'inner internal' 'web default inner') - \
             || { echo "::error::Every network must be internal, except default for the port of web and backend for the port of db, each alone, and egress for the services that call outside, and web stays away from data (< expected, > found)"; exit 1; }
+          compose --profile '*' config --no-env-resolution --format json \
+            | python3 -c 'import json, sys; [print(n, v.get("mem_limit"), v.get("memswap_limit")) for n, v in sorted(json.load(sys.stdin)["services"].items()) if not v.get("mem_limit") or v.get("memswap_limit") != v.get("mem_limit")]' \
+            | diff /dev/null - \
+            || { echo "::error::Every service in deploy/compose.yml needs a mem_limit and the same memswap_limit, so it runs without swap (> found)"; exit 1; }
           compose --profile '*' config --format json \
             | python3 -c 'import json, sys
           files = [(n, f) for n, v in sorted(json.load(sys.stdin)["services"].items()) for k, f in (v.get("environment") or {}).items() if k.startswith("ENV_FILE_")]
