@@ -92,8 +92,9 @@ public class DemoReplayTests
                 ids.Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => texts[pair.index]));
         }
 
-        // A bit below what the demo pools have, the share with the longest option as answer is a finding, not a floor.
+        // A bit below what the demo pools have. The longest option as answer gives it away, the demo keeps that rare.
         Assert.Equal(0, tally.Unusable);
+        Assert.True(tally.LongestRight.Rate <= 0.15, $"longest {tally.LongestRight.Rate}");
         Assert.True(tally.Sourced.Rate >= 0.8, $"sourced {tally.Sourced.Rate}");
         Assert.True(tally.Distinct.Rate >= 0.9, $"distinct {tally.Distinct.Rate}");
         Assert.True(tally.Explained.Rate >= 0.8, $"explained {tally.Explained.Rate}");
