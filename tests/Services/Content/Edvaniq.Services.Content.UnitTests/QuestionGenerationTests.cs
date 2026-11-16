@@ -309,8 +309,20 @@ public class QuestionGenerationTests
     [InlineData("Was spaltet Licht?", "Was spaltet Wasser?")]
     [InlineData("Ist CO2 ein Gas?", "Ist CO3 ein Gas?")]
     [InlineData("Was ist Licht?", "Was ist kein Licht?")]
+    [InlineData("Liegt Bubblesort in O(n)?", "Liegt Bubblesort in O(n²)?")]
+    [InlineData("Was gilt für n₀?", "Was gilt für n?")]
     public void SameQuestion_KeepsDifferentQuestionsApart(string one, string other) =>
         Assert.NotEqual(QuestionGeneration.SameQuestion(one), QuestionGeneration.SameQuestion(other));
+
+    // #1107: a superscript alone makes another question.
+    [Fact]
+    public void Read_KeepsQuestionsThatDifferOnlyInASuperscript()
+    {
+        var linear = With(Valid, "text", "\"Liegt Bubblesort in O(n)?\"");
+        var square = With(Valid, "text", "\"Liegt Bubblesort in O(n²)?\"");
+
+        Assert.Equal(2, QuestionGeneration.Read(Answer(linear, square), Sections)!.Count);
+    }
 
     [Fact]
     public void Read_KeepsTheValidOnes_AndAtMostTheMaximum()
