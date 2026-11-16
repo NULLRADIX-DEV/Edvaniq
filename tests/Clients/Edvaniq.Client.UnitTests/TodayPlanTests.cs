@@ -306,6 +306,7 @@ public sealed class TodayPlanTests : BunitContext
     private IRenderedComponent<TodayPlanView> Render(FakeTodayPlan plans, FakeLearningMaterial? material = null)
     {
         Services.AddSingleton<ITodayPlan>(plans);
+        Services.AddSingleton<ILearningGoals>(FakeLearningGoals.WithOne());
         Services.AddSingleton<ILearningMaterial>(material ?? new FakeLearningMaterial().Topics(Topics));
         SetRendererInfo(new RendererInfo("WebAssembly", isInteractive: true));
         return Render<TodayPlanView>();

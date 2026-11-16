@@ -1,5 +1,6 @@
 @inject ITodayPlan Plans
 @inject ILearningMaterial Material
+@inject ILearningGoals Goals
 @inject AnswerSync Sync
 
 @* The plan is worked out anew on every call, so Home asks on every visit and when the user comes back: after an answer
@@ -27,8 +28,29 @@
                 <ConnectionProblem Title="@FeedbackTexts.Plan.LoadFailed" TraceId="@trace" />
                 break;
             case ViewState.Shown when plan!.Blocks.Count == 0:
-                <EmptyState Title="@Empty.Title" Hint="@Empty.Hint" />
+                <EmptyState Title="@Empty.Title" Hint="@Empty.Hint">
+                    @if (plan.Empty == PlanEmpty.AllMastered && !noGoal && !AnalysisIsTheReason)
+                    {
+                        <p class="plan-bonus">@FeedbackTexts.Plan.Bonus</p>
+                    }
+                </EmptyState>
                 break;
+        }
+
+        @* The goal reached is said once, when it comes. A return with the same plan leaves it out of the region, the
+           confirmation below stays. *@
+        @if (state == ViewState.Shown && announceGoal)
+        {
+            <p class="visually-hidden plan-goal-announcement">@FeedbackTexts.Plan.GoalReached @FeedbackTexts.Plan.GoalReachedHint</p>
+        }
+
+        @* Material in the analysis while the plan already has blocks or another reason to be empty. Without a goal the
+           wizard is the one next step. *@
+        @if (state == ViewState.Shown && analyzing is not null && !noGoal && !AnalysisIsTheReason)
+        {
+            <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.Material.WithTitle(FeedbackTexts.Plan.Analyzing, analyzing.Title)" class="plan-hint plan-analyzing">
+                <p><a href="themen">@FeedbackTexts.Plan.AnalyzingLink</a></p>
+            </Notice>
         }
 
         @* An answer just given is on its way to LearningEngine, the plan below doesn't contain it yet. *@
@@ -48,7 +70,15 @@
     }
     else if (state == ViewState.Shown && plan!.Blocks.Count == 0)
     {
-        <StateActions Href="themen" LinkText="@Empty.Link" />
+        <StateActions Href="@Empty.Href" LinkText="@Empty.Link" />
+    }
+
+    @if (state == ViewState.Shown && plan!.DailyGoal == DailyGoal.Reached)
+    {
+        <Notice Kind="NoticeKind.Success" Title="@FeedbackTexts.Plan.GoalReached" class="plan-goal-reached">
+            <p>@FeedbackTexts.Plan.GoalReachedHint</p>
+            <p class="plan-bonus">@FeedbackTexts.Plan.Bonus</p>
+        </Notice>
     }
 
     @if (state == ViewState.Shown && syncLate && !syncing)
@@ -62,9 +92,13 @@
             @foreach (var (block, index) in plan.Blocks.Select((block, index) => (block, index)))
             {
                 var name = NameOf(block.TopicId);
-                <li @key="index" class="plan-block">
+                <li @key="index" class="@(block.Done ? "plan-block plan-block-done" : "plan-block")">
                     <span class="plan-topic">@name</span>
                     <span class="plan-details">
+                        @if (block.Done)
+                        {
+                            <span class="plan-done">@FeedbackTexts.Plan.Done</span>
+                        }
                         @if (KindOf(block.Kind) is { } kind)
                         {
                             <span class="plan-kind">@kind</span>
@@ -123,6 +157,9 @@
     private int loads;
     private bool syncing;
     private bool syncLate;
+    private bool noGoal;
+    private DocumentInfo? analyzing;
+    private bool announceGoal;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -163,12 +200,13 @@
     }
 
     // A shown plan stays until the new one is there, so a return doesn't flash a loading hint. Only the newest load
-    // counts when two overlap.
+    // counts when two overlap. The documents (#385) come along, a plan with blocks never waits for them.
     private async Task LoadPlanAsync()
     {
         var load = ++loads;
         var planCall = Plans.GetAsync();
         var topicsCall = Material.ListTopicsAsync();
+        var documentsCall = Material.ListDocumentsAsync();
         var (planned, topics) = (await planCall, await topicsCall);
         if (load != loads)
         {
@@ -192,7 +230,30 @@
         }
         else
         {
-            plan = planned.Value!;
+            var next = planned.Value!;
+            if (next.Blocks.Count == 0 && next.Empty == PlanEmpty.NoTopics)
+            {
+                // Nothing to plan from yet, the next step depends on the goals and the documents. Either one failing
+                // leaves the hint as it was before #385.
+                var goals = await Goals.ListAsync();
+                var documents = await documentsCall;
+                if (load != loads)
+                {
+                    return;
+                }
+
+                noGoal = goals.Result == CallResult.Ok && goals.Value!.Count == 0;
+                analyzing = AnalyzingOf(documents);
+            }
+            else
+            {
+                noGoal = false;
+                _ = ShowAnalysisAsync(load, documentsCall);
+            }
+
+            var wasReached = state == ViewState.Shown && plan?.DailyGoal == DailyGoal.Reached;
+            announceGoal = next.DailyGoal == DailyGoal.Reached && !wasReached;
+            plan = next;
             names = [];
             foreach (var topic in topics.Value!)
             {
@@ -207,13 +268,46 @@
         }
     }
 
-    // Each reason for an empty plan names its own next step.
-    private (string Title, string? Hint, string Link) Empty => plan?.Empty switch
+    // A plan with blocks shows the documents once they are there. A failed call leaves the hint as it was.
+    private async Task ShowAnalysisAsync(int load, Task<CallOutcome<IReadOnlyList<DocumentInfo>>> documentsCall)
     {
-        PlanEmpty.NoTopics => (FeedbackTexts.Plan.NoTopics, FeedbackTexts.Plan.NoTopicsHint, FeedbackTexts.Plan.NoTopicsLink),
-        PlanEmpty.QuestionsPending => (FeedbackTexts.Plan.QuestionsPending, FeedbackTexts.Plan.QuestionsPendingHint, FeedbackTexts.Plan.QuestionsPendingLink),
-        PlanEmpty.AllMastered => (FeedbackTexts.Plan.AllMastered, FeedbackTexts.Plan.AllMasteredHint, FeedbackTexts.Plan.AllMasteredLink),
-        _ => (FeedbackTexts.Plan.Nothing, null, FeedbackTexts.Plan.NothingLink),
+        var documents = await documentsCall;
+        if (load != loads || documents.Result != CallResult.Ok)
+        {
+            return;
+        }
+
+        analyzing = AnalyzingOf(documents);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // The newest material Content is still working on, null when there is none or the call failed.
+    private static DocumentInfo? AnalyzingOf(CallOutcome<IReadOnlyList<DocumentInfo>> documents) =>
+        documents.Result != CallResult.Ok
+            ? null
+            : documents.Value!
+                .Where(document => document.Status is DocumentStatus.Uploaded or DocumentStatus.Analyzing)
+                .OrderByDescending(document => document.CreatedAt)
+                .FirstOrDefault();
+
+    // Without topics yet, material in the analysis is why.
+    private bool AnalysisIsTheReason =>
+        !noGoal && analyzing is not null && plan is { Blocks.Count: 0, Empty: PlanEmpty.NoTopics };
+
+    // Each reason for an empty plan names its own next step. No goal comes first (#385): without one there is nothing
+    // to add material to.
+    private (string Title, string? Hint, string Link, string Href) Empty => plan?.Empty switch
+    {
+        _ when noGoal => (FeedbackTexts.Plan.NoGoal, FeedbackTexts.Plan.NoGoalHint, FeedbackTexts.Plan.NoGoalLink, "lernziele/neu"),
+        _ when AnalysisIsTheReason => (
+            FeedbackTexts.Material.WithTitle(FeedbackTexts.Plan.Analyzing, analyzing!.Title),
+            FeedbackTexts.Plan.AnalyzingHint,
+            FeedbackTexts.Plan.AnalyzingLink,
+            "themen"),
+        PlanEmpty.NoTopics => (FeedbackTexts.Plan.NoTopics, FeedbackTexts.Plan.NoTopicsHint, FeedbackTexts.Plan.NoTopicsLink, "themen"),
+        PlanEmpty.QuestionsPending => (FeedbackTexts.Plan.QuestionsPending, FeedbackTexts.Plan.QuestionsPendingHint, FeedbackTexts.Plan.QuestionsPendingLink, "themen"),
+        PlanEmpty.AllMastered => (FeedbackTexts.Plan.AllMastered, FeedbackTexts.Plan.AllMasteredHint, FeedbackTexts.Plan.AllMasteredLink, "themen"),
+        _ => (FeedbackTexts.Plan.Nothing, null, FeedbackTexts.Plan.NothingLink, "themen"),
     };
 
     private string NameOf(Guid topicId) => names.GetValueOrDefault(topicId) ?? FeedbackTexts.Plan.UnnamedTopic;

@@ -64,6 +64,28 @@ public sealed class HttpTodayPlanTests
         Assert.Empty(outcome.Value.Blocks);
     }
 
+    // #383: which blocks are done and the state of today's goal, an unknown state counts as none.
+    [Theory]
+    [InlineData("\"reached\"", DailyGoal.Reached)]
+    [InlineData("\"open\"", DailyGoal.Open)]
+    [InlineData("\"none\"", DailyGoal.None)]
+    [InlineData("\"somethingNew\"", DailyGoal.None)]
+    [InlineData("null", DailyGoal.None)]
+    public async Task Get_ReadsDoneBlocksAndTheDailyGoal(string goal, DailyGoal expected)
+    {
+        var plans = Plans([], Answer(HttpStatusCode.OK, $$"""
+            {"studyDay":"2026-11-11","blocks":[{"topicId":"{{Review}}","minutes":10,"kind":"review","id":"{{NotReady}}","done":true},
+             {"topicId":"{{Learn}}","minutes":20,"kind":"learn","id":"{{Shortened}}","done":false}],
+             "masteryAvailable":true,"dailyGoal":{{goal}}}
+            """));
+
+        var outcome = await plans.GetAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(CallResult.Ok, outcome.Result);
+        Assert.Equal([true, false], outcome.Value!.Blocks.Select(block => block.Done));
+        Assert.Equal(expected, outcome.Value.DailyGoal);
+    }
+
     // Planning may add kinds and fields later, the plan still comes through.
     [Fact]
     public async Task Get_UnknownKindAndMissingLists_StillGetThrough()

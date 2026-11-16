@@ -368,6 +368,34 @@ public static class FeedbackTexts
 
         public const string NothingLink = "Zu deinen Themen";
 
+        // #385: no learning goal yet, the plan has nothing to follow.
+        public const string NoGoal = "Du hast noch kein Lernziel.";
+
+        public const string NoGoalHint = "Leg ein Lernziel an und füge Material hinzu. Aus seinen Themen entsteht dein Plan.";
+
+        public const string NoGoalLink = "Lernziel anlegen";
+
+        // #385: material still in the analysis. {0} is its title.
+        public const string Analyzing = "„{0}“ wird gerade analysiert.";
+
+        public const string AnalyzingHint = "Sobald die Themen da sind, entsteht daraus dein Plan.";
+
+        public const string AnalyzingLink = "Zum Stand der Analyse";
+
+        // #383: the ring above the list. {0} done, {1} all blocks, {2} "Block" or "Blöcken".
+        public const string Progress = "{0} von {1} {2} erledigt";
+
+        // On a block whose session was finished today.
+        public const string Done = "Erledigt";
+
+        // #383: every block of today is done.
+        public const string GoalReached = "Tagesziel geschafft!";
+
+        public const string GoalReachedHint = "Alle Blöcke für heute sind erledigt. Gut gemacht.";
+
+        // #385: nothing open today, a bonus review is possible (started with #409).
+        public const string Bonus = "Wenn du magst, ist noch eine Bonus-Wiederholung möglich.";
+
         public const string MasteryUnavailable = "Dein Lernstand ist gerade nicht abrufbar, die Reihenfolge ist deshalb vorläufig.";
 
         // Followed by the names of the topics.
