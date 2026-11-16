@@ -19,7 +19,8 @@ public interface IQuiz
 }
 
 // Id is the attempt the answer goes to. Type is one of QuestionTypes, a question without one is single choice. Source
-// names the document and section it was made from (#349).
+// names the document and section it was made from (#349). Repeated: all questions of the topic were answered lately, so
+// this one comes again (#387). Null from a host before that.
 public sealed record AskedQuestion(
     Guid Id,
     Guid TopicId,
@@ -28,7 +29,8 @@ public sealed record AskedQuestion(
     IReadOnlyList<string> Options,
     int Difficulty,
     string? Type = null,
-    QuestionSource? Source = null)
+    QuestionSource? Source = null,
+    bool? Repeated = null)
 {
     public bool IsMultipleChoice => Type == QuestionTypes.MultipleChoice;
 

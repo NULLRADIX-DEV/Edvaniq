@@ -78,12 +78,12 @@ public sealed class HttpQuiz(HttpClient http) : IQuiz, IBlockQuiz
             },
             cancellationToken);
 
-    // A question the page couldn't show as single choice, or a grade pointing at no option, didn't really get through.
-    // Only a shown solution has no option.
+    // A question the page couldn't show (no text, fewer than two options, an empty one), or a grade pointing at no option,
+    // didn't really get through. Only a shown solution has no option.
     private static bool Valid<T>(T value) => value switch
     {
-        AskedQuestion question => question.Options.Count >= 2,
-        BlockQuiz quiz => quiz.Questions.Count > 0 && quiz.Questions.All(question => question.Options.Count >= 2),
+        AskedQuestion question => Shows(question.Text, question.Options),
+        BlockQuiz quiz => quiz.Questions is { Count: > 0 } questions && questions.All(question => question is not null && Shows(question.Text, question.Options)),
         GradedAnswer graded => (graded.Option is { } option ? option >= 0
                 : graded.Options is { Count: > 0 } options ? options.All(chosen => chosen >= 0)
                 : graded.Revealed)
@@ -91,6 +91,9 @@ public sealed class HttpQuiz(HttpClient http) : IQuiz, IBlockQuiz
             && graded.RightOptions.All(right => right >= 0),
         _ => true,
     };
+
+    private static bool Shows(string? text, IReadOnlyList<string?>? options) =>
+        !string.IsNullOrWhiteSpace(text) && options is { Count: >= 2 } && options.All(option => !string.IsNullOrWhiteSpace(option));
 }
 
 internal sealed record AskBody(Guid TopicId);
