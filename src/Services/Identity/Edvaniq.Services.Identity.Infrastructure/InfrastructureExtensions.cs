@@ -51,6 +51,7 @@ public static class InfrastructureExtensions
         builder.Services.AddSingleton<IValidateOptions<MailOptions>, MailOptionsValidation>();
         builder.Services.AddSingleton(services => new MailLinks(services.GetRequiredService<IOptions<MailOptions>>().Value.BaseAddress));
         builder.Services.AddScoped<IMailOutbox, MailOutbox>();
+        builder.Services.AddScoped<IAccountTokens, AccountTokens>();
         builder.Services.AddScoped<SystemMails>();
         if (builder.Configuration.GetValue<MailProvider>($"{MailOptions.Section}:{nameof(MailOptions.Provider)}") == MailProvider.Recording)
         {

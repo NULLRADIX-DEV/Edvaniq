@@ -17,11 +17,13 @@ internal sealed class MailOutbox(IdentityDbContext db) : IMailOutbox
         db.OutgoingMails.AnyAsync(mail => mail.CreatedAt <= before, cancellationToken);
 }
 
-// Sends the mails of the outbox (#248). A mail that fails waits and is tried again (OutgoingMail.RetryDelays), a sent one
-// goes, and so does one older than OutgoingMail.MaxAge, sent or not: its link has run out by then. Without a mail service
-// (MailProvider.None) mails only wait. The log names a mail by id and kind, never address, subject or text.
+// Sends the mails of the outbox (#248). Each mail is written only now, and a link gets its token only now: its hash is
+// saved together with the removal of the sent mail, a new confirmation link replaces the older ones. A mail that fails
+// waits and is tried again (OutgoingMail.RetryDelays), no token of it is kept. One older than OutgoingMail.MaxAge goes,
+// sent or not. Without a mail service (MailProvider.None) mails only wait, and no token is made at all. The log names a
+// mail by id and kind, never address, text or token.
 public sealed partial class MailDispatcher(
-    IServiceScopeFactory scopes, IOptions<MailOptions> options, TimeProvider time, ILogger<MailDispatcher> logger,
+    IServiceScopeFactory scopes, IOptions<MailOptions> options, MailLinks links, TimeProvider time, ILogger<MailDispatcher> logger,
     IMailSender? sender = null) : BackgroundService
 {
     public const int Batch = 20;
@@ -58,14 +60,15 @@ public sealed partial class MailDispatcher(
         }
     }
 
-    // One round: drops what is too old, then sends what is due. Returns how many were sent.
+    // One round: drops what is too old, then sends what is due. Returns how many were sent. The database calls are
+    // synchronous on purpose, MySql.Data's OpenAsync can hang forever (like the OutboxDispatcher).
     public async Task<int> SendDueAsync(CancellationToken cancellationToken)
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
         var now = time.GetUtcNow().UtcDateTime;
 
-        var expired = await db.OutgoingMails.Where(mail => mail.CreatedAt <= now - OutgoingMail.MaxAge).ExecuteDeleteAsync(cancellationToken);
+        var expired = db.OutgoingMails.Where(mail => mail.CreatedAt <= now - OutgoingMail.MaxAge).ExecuteDelete();
         if (expired > 0)
         {
             LogExpired(logger, expired, OutgoingMail.MaxAge);
@@ -73,7 +76,7 @@ public sealed partial class MailDispatcher(
 
         if (sender is null)
         {
-            var waiting = await db.OutgoingMails.CountAsync(cancellationToken);
+            var waiting = db.OutgoingMails.Count();
             if (waiting > 0 && (reportedWaitingAt is null || now - reportedWaitingAt >= WaitingReport))
             {
                 LogNoMailService(logger, waiting);
@@ -83,27 +86,58 @@ public sealed partial class MailDispatcher(
             return 0;
         }
 
-        var due = await db.OutgoingMails.Where(mail => mail.DueAt <= now).OrderBy(mail => mail.DueAt).Take(Batch).ToListAsync(cancellationToken);
+        var due = db.OutgoingMails.Where(mail => mail.DueAt <= now).OrderBy(mail => mail.DueAt).Take(Batch).ToList();
         var sent = 0;
         foreach (var mail in due)
         {
-            try
+            if (await SendAsync(db, mail, cancellationToken))
             {
-                await sender.SendAsync(new MailMessage(mail.To, mail.Subject, mail.Body), cancellationToken);
-                db.OutgoingMails.Remove(mail);
                 sent++;
-                LogSent(logger, mail.Id, mail.Kind, mail.Attempts + 1);
-            }
-            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
-            {
-                mail.Postpone(time.GetUtcNow().UtcDateTime);
-                LogFailed(logger, mail.Id, mail.Kind, mail.Attempts, exception.GetType().Name, mail.DueAt);
             }
 
-            await db.SaveChangesAsync(cancellationToken);
+            db.SaveChanges();
         }
 
         return sent;
+    }
+
+    private async Task<bool> SendAsync(IdentityDbContext db, OutgoingMail mail, CancellationToken cancellationToken)
+    {
+        var account = db.Accounts.Single(item => item.Id == mail.AccountId);
+        var now = time.GetUtcNow().UtcDateTime;
+        AccountToken? token = null;
+        string? value = null;
+        if (SystemMails.TokenOf(mail.Kind) is { } purpose)
+        {
+            (token, value) = AccountToken.Create(account, purpose, now);
+        }
+
+        var content = SystemMails.Write(mail.Kind, links, value);
+        try
+        {
+            await sender!.SendAsync(new MailMessage(account.Email!, content.Subject, content.Body), cancellationToken);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            mail.Postpone(now);
+            LogFailed(logger, mail.Id, mail.Kind, mail.Attempts, exception.GetType().Name, mail.DueAt);
+            return false;
+        }
+
+        if (token is not null)
+        {
+            // The newest link holds, every older one of the same purpose is replaced.
+            foreach (var older in db.AccountTokens.Where(item => item.AccountId == account.Id && item.Purpose == token.Purpose && item.UsedAt == null))
+            {
+                older.Use(now);
+            }
+
+            db.AccountTokens.Add(token);
+        }
+
+        db.OutgoingMails.Remove(mail);
+        LogSent(logger, mail.Id, mail.Kind, mail.Attempts + 1);
+        return true;
     }
 
     [LoggerMessage(EventId = 34100, Level = LogLevel.Information, Message = "Mail {MailId} ({Kind}) is sent after {Attempts} attempts")]

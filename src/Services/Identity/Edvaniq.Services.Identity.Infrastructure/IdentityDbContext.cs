@@ -17,6 +17,8 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
 
     public DbSet<OutgoingMail> OutgoingMails => Set<OutgoingMail>();
 
+    public DbSet<AccountToken> AccountTokens => Set<AccountToken>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         var account = modelBuilder.Entity<Account>();
@@ -43,12 +45,17 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
         // #248: system mails on their way, gone with their account.
         var mail = modelBuilder.Entity<OutgoingMail>();
         mail.Property(item => item.Kind).HasConversion<string>().HasMaxLength(32);
-        mail.Property(item => item.To).HasMaxLength(AccountEmail.MaxLength);
-        mail.Property(item => item.Subject).HasMaxLength(OutgoingMail.SubjectMaxLength);
-        mail.Property(item => item.Body).HasMaxLength(OutgoingMail.BodyMaxLength);
         mail.Ignore(item => item.ExpiresAt);
         mail.HasOne<Account>().WithMany().HasForeignKey(item => item.AccountId).OnDelete(DeleteBehavior.Cascade);
         mail.HasIndex(item => item.DueAt);
         mail.HasIndex(item => item.CreatedAt);
+
+        // #248: the hash of the token of a link in a mail, gone with its account.
+        var token = modelBuilder.Entity<AccountToken>();
+        token.Property(item => item.Purpose).HasConversion<string>().HasMaxLength(32);
+        token.Property(item => item.Hash).HasMaxLength(AccountToken.HashLength);
+        token.HasIndex(item => item.Hash).IsUnique();
+        token.HasIndex(item => new { item.AccountId, item.Purpose, item.CreatedAt });
+        token.HasOne<Account>().WithMany().HasForeignKey(item => item.AccountId).OnDelete(DeleteBehavior.Cascade);
     }
 }

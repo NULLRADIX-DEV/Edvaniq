@@ -19,7 +19,8 @@ public class UserDataTests
         [typeof(AiSwitch)] = "the operator's emergency stop for the AI, one row without a user",
         [typeof(Account)] = "Identity deletes the account itself and sends UserDeleted (AccountDeletion)",
         [typeof(InviteCode)] = "the operator's invitation codes, only a hash and times, nothing says who redeemed one",
-        [typeof(OutgoingMail)] = "a system mail on its way, goes with its account (cascade) and after 24 hours at the latest",
+        [typeof(OutgoingMail)] = "only that a mail of a kind is due for an account, goes with its account (cascade) and after 24 hours at the latest",
+        [typeof(AccountToken)] = "only the hash of a link token, goes with its account (cascade)",
     };
 
     [Fact]

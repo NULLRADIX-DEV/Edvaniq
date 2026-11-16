@@ -1,14 +1,11 @@
 namespace Edvaniq.Services.Identity.Domain;
 
 // A system mail on its way (#248). It is written in the same save as what it tells about, so no mail gets lost when the
-// mail service is away, and it goes with its account. It holds a link with a token, so it lives only until it is sent
-// or MaxAge has passed, sent or not.
+// mail service is away, and it goes with its account. It holds no text and no link: the mail is written when it is sent,
+// and only then a link gets its token (AccountToken). So nothing that opens the account lies in the database while the
+// mail waits. After MaxAge it goes, sent or not.
 public sealed class OutgoingMail
 {
-    public const int SubjectMaxLength = 200;
-
-    public const int BodyMaxLength = 4_000;
-
     // As long as the longest link in a mail is good for (a confirmation, #250).
     public static readonly TimeSpan MaxAge = TimeSpan.FromHours(24);
 
@@ -16,13 +13,10 @@ public sealed class OutgoingMail
     public static readonly IReadOnlyList<TimeSpan> RetryDelays =
         [TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(15), TimeSpan.FromHours(1)];
 
-    private OutgoingMail(Guid accountId, MailKind kind, string to, string subject, string body, DateTime createdAt)
+    private OutgoingMail(Guid accountId, MailKind kind, DateTime createdAt)
     {
         AccountId = accountId;
         Kind = kind;
-        To = to;
-        Subject = subject;
-        Body = body;
         CreatedAt = createdAt;
         DueAt = createdAt;
     }
@@ -32,14 +26,6 @@ public sealed class OutgoingMail
     public Guid AccountId { get; private set; }
 
     public MailKind Kind { get; private set; }
-
-    // The address, normalized (AccountEmail). Never logged.
-    public string To { get; private set; }
-
-    public string Subject { get; private set; }
-
-    // Plain text with the link, never logged.
-    public string Body { get; private set; }
 
     // UTC.
     public DateTime CreatedAt { get; private set; }
@@ -51,8 +37,10 @@ public sealed class OutgoingMail
 
     public DateTime ExpiresAt => CreatedAt + MaxAge;
 
-    public static OutgoingMail For(Account account, MailKind kind, string subject, string body, DateTime createdAt) =>
-        new(account.Id, kind, account.Email ?? throw new InvalidOperationException("A team account gets no mail."), subject, body, createdAt);
+    public static OutgoingMail For(Account account, MailKind kind, DateTime createdAt) =>
+        account.Email is null
+            ? throw new InvalidOperationException("A team account gets no mail.")
+            : new(account.Id, kind, createdAt);
 
     // After a failed attempt: the next one after the next wait.
     public void Postpone(DateTime now)

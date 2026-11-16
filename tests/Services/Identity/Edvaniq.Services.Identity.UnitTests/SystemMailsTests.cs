@@ -6,82 +6,90 @@ using Edvaniq.Testing;
 
 namespace Edvaniq.Services.Identity.UnitTests;
 
-// #248: the system mails are short German plain text with links only to the web app, and nothing that tracks.
+// #248: the system mails are short German plain text with links only to the web app, nothing that tracks and nothing a
+// user wrote. The outbox holds only that a mail is due, the text comes when it is sent.
 public sealed partial class SystemMailsTests
 {
     private const string Base = "https://app.example.org/";
+
+    private static readonly MailLinks Links = new(new Uri(Base));
 
     private readonly Outbox outbox = new();
 
     private readonly TestTime time = new();
 
-    private readonly Account account = Account.CreateUser("lena@example.org", "Lernfuchs", 2009, "hash", DateTime.UtcNow);
+    private readonly Account account = Account.CreateUser("lena@example.org", "paypal-login.example", 2009, "hash", DateTime.UtcNow);
 
-    private SystemMails Mails => new(outbox, new MailLinks(new Uri(Base)), time);
+    private SystemMails Mails => new(outbox, time);
+
+    [Fact]
+    public void AskingForAMail_QueuesItsKindOnly()
+    {
+        Mails.Confirmation(account);
+
+        var mail = Assert.Single(outbox.Mails);
+        Assert.Equal((MailKind.Confirmation, account.Id, time.GetUtcNow().UtcDateTime, 0), (mail.Kind, mail.AccountId, mail.DueAt, mail.Attempts));
+    }
 
     [Fact]
     public void Confirmation_LinksToTheConfirmPage_WithTheTokenInTheFragment()
     {
-        Mails.Confirmation(account, "abc-DEF_123");
+        var mail = SystemMails.Write(MailKind.Confirmation, Links, "abc-DEF_123");
 
-        var mail = Assert.Single(outbox.Mails);
-        Assert.Equal((MailKind.Confirmation, account.Id, "lena@example.org"), (mail.Kind, mail.AccountId, mail.To));
-        Assert.Equal([Base + "konto/bestaetigen#t=abc-DEF_123"], Links(mail.Body));
-        Assert.Contains("Hallo Lernfuchs,", mail.Body, StringComparison.Ordinal);
+        Assert.Equal([Base + "konto/bestaetigen#t=abc-DEF_123"], LinksIn(mail.Body));
         Assert.Contains("24 Stunden", mail.Body, StringComparison.Ordinal);
-        Assert.Equal(time.GetUtcNow().UtcDateTime, mail.DueAt);
+        Assert.Contains("nach 7 Tagen gelöscht", mail.Body, StringComparison.Ordinal);
+        Assert.Equal(TokenPurpose.Confirmation, SystemMails.TokenOf(MailKind.Confirmation));
     }
 
     [Fact]
     public void PasswordReset_LinksToTheResetPage_AndSaysItHoldsAnHour()
     {
-        Mails.PasswordReset(account, "tok");
+        var mail = SystemMails.Write(MailKind.PasswordReset, Links, "tok");
 
-        var mail = Assert.Single(outbox.Mails);
-        Assert.Equal([Base + "konto/passwort-neu#t=tok"], Links(mail.Body));
+        Assert.Equal([Base + "konto/passwort-neu#t=tok"], LinksIn(mail.Body));
         Assert.Contains("eine Stunde", mail.Body, StringComparison.Ordinal);
+        Assert.Equal(TokenPurpose.PasswordReset, SystemMails.TokenOf(MailKind.PasswordReset));
     }
 
     [Fact]
-    public void AlreadyRegistered_LinksToTheLogin_AndNamesNoPseudonym()
+    public void AlreadyRegistered_LinksToTheLogin_WithoutToken()
     {
-        Mails.AlreadyRegistered(account);
+        var mail = SystemMails.Write(MailKind.AlreadyRegistered, Links, null);
 
-        var mail = Assert.Single(outbox.Mails);
-        Assert.Equal([Base + "login"], Links(mail.Body));
-        Assert.DoesNotContain("Lernfuchs", mail.Body, StringComparison.Ordinal);
+        Assert.Equal([Base + "login"], LinksIn(mail.Body));
+        Assert.Null(SystemMails.TokenOf(MailKind.AlreadyRegistered));
     }
 
-    // No HTML, no images, no tracking parameters, every line short enough for a phone, nothing beyond the link and a few
-    // sentences.
-    [Fact]
-    public void EveryMail_IsShortPlainTextWithoutTracking()
+    // No HTML, no images, no tracking parameters, no pseudonym, a few sentences.
+    [Theory]
+    [InlineData(MailKind.Confirmation)]
+    [InlineData(MailKind.AlreadyRegistered)]
+    [InlineData(MailKind.PasswordReset)]
+    public void EveryMail_IsShortPlainTextWithoutTracking(MailKind kind)
     {
-        Mails.Confirmation(account, "t1");
-        Mails.AlreadyRegistered(account);
-        Mails.PasswordReset(account, "t2");
+        var mail = SystemMails.Write(kind, Links, "t1");
 
-        Assert.All(outbox.Mails, mail =>
-        {
-            Assert.DoesNotMatch("<[a-z/!]", mail.Body);
-            Assert.DoesNotContain("utm_", mail.Body, StringComparison.OrdinalIgnoreCase);
-            Assert.All(Links(mail.Body), link => Assert.StartsWith(Base, link, StringComparison.Ordinal));
-            Assert.InRange(WordsOf(mail.Body), 20, 90);
-            Assert.InRange(mail.Subject.Length, 10, OutgoingMail.SubjectMaxLength);
-            Assert.True(mail.Body.Length <= OutgoingMail.BodyMaxLength);
-            Assert.DoesNotContain("\r", mail.Body, StringComparison.Ordinal);
-        });
+        Assert.StartsWith("Hallo,\n", mail.Body, StringComparison.Ordinal);
+        Assert.EndsWith("\n\nDein Edvaniq-Team", mail.Body, StringComparison.Ordinal);
+        Assert.DoesNotMatch("<[a-z/!]", mail.Body);
+        Assert.DoesNotContain("utm_", mail.Body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(account.Pseudonym!, mail.Body, StringComparison.Ordinal);
+        Assert.All(LinksIn(mail.Body), link => Assert.StartsWith(Base, link, StringComparison.Ordinal));
+        Assert.InRange(WordsOf(mail.Body), 20, 90);
+        Assert.InRange(mail.Subject.Length, 10, 60);
+        Assert.DoesNotContain("\r", mail.Body, StringComparison.Ordinal);
     }
 
     [Fact]
     public void TeamAccount_GetsNoMail() =>
-        Assert.Throws<InvalidOperationException>(() => Mails.Confirmation(Account.Create("ben", "hash", DateTime.UtcNow), "t"));
+        Assert.Throws<InvalidOperationException>(() => Mails.Confirmation(Account.Create("ben", "hash", DateTime.UtcNow)));
 
     // After a failure the waits grow, then stay at the last one.
     [Fact]
     public void FailedMail_WaitsLongerEachTime()
     {
-        Mails.Confirmation(account, "t");
+        Mails.Confirmation(account);
         var mail = outbox.Mails[0];
         var now = time.GetUtcNow().UtcDateTime;
 
@@ -105,7 +113,20 @@ public sealed partial class SystemMailsTests
         Assert.Equal(time.GetUtcNow().UtcDateTime - SystemMails.DelayedAfter, outbox.AskedSince);
     }
 
-    private static List<string> Links(string body) => [.. Link().Matches(body).Select(match => match.Value)];
+    // A link token is 256 random bits, URL-safe, and only its hash is kept.
+    [Fact]
+    public void Token_IsRandom_AndKeptAsHash()
+    {
+        var (first, value) = AccountToken.Create(account, TokenPurpose.Confirmation, DateTime.UtcNow);
+        var (_, other) = AccountToken.Create(account, TokenPurpose.Confirmation, DateTime.UtcNow);
+
+        Assert.Matches("^[A-Za-z0-9_-]{43}$", value);
+        Assert.NotEqual(value, other);
+        Assert.Equal(AccountToken.HashOf(value), first.Hash);
+        Assert.Equal(first.CreatedAt + TimeSpan.FromHours(24), first.ExpiresAt);
+    }
+
+    private static List<string> LinksIn(string body) => [.. Link().Matches(body).Select(match => match.Value)];
 
     private static int WordsOf(string body) => body.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
 
