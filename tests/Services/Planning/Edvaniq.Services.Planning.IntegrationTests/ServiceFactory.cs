@@ -63,6 +63,12 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
                 services.AddHttpClient<ISessionAnswers, AssessmentAnswers>().ConfigurePrimaryHttpMessageHandler(Assessment.Handler);
 
                 // Keeps the retries of a LearningEngine or Assessment that is down short.
-                services.ConfigureAll<HttpStandardResilienceOptions>(options => options.Retry.Delay = TimeSpan.FromMilliseconds(1));
+                // The circuit breaker never opens: the stubs fail per token, and a breaker opened by one test's outage
+                // would cut off the next test of the class.
+                services.ConfigureAll<HttpStandardResilienceOptions>(options =>
+                {
+                    options.Retry.Delay = TimeSpan.FromMilliseconds(1);
+                    options.CircuitBreaker.MinimumThroughput = int.MaxValue;
+                });
             });
 }
