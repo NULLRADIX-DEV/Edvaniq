@@ -69,6 +69,31 @@ public sealed class LoggingTests
             StubService.Password, "ein-falsches-passwort", StubService.UserToken, web.ClientSecret, cookie.Split('=', 2)[1]));
     }
 
+    // #314: registering, confirming, a new link and a login by address pass the web host. What the person typed or got
+    // stays out of its log, also when the login is refused.
+    [Fact]
+    public async Task Registration_ToTheLoginByAddress_LogsNothingOfThePerson()
+    {
+        var cancel = TestContext.Current.CancellationToken;
+        var email = $"Fluss-{Guid.NewGuid():N}@example.org";
+        var password = $"passwort-{Guid.NewGuid():N}";
+        var code = $"code-{Guid.NewGuid():N}";
+        var pseudonym = $"Fuchs{Guid.NewGuid():N}"[..14];
+        var confirmation = $"bestaetigung-{Guid.NewGuid():N}";
+        await using var gateway = await StubService.StartAsync("gateway-stub");
+        await using var web = new WebFactory(gateway.Address, configure: builder => builder.UseEnvironment("Production"));
+        using var browser = web.CreateBrowser(handleCookies: false);
+
+        using var registered = await browser.PostAsJsonAsync("/api/identity/accounts", new { email, password, inviteCode = code, pseudonym, birthYear = 1931 }, cancel);
+        using var confirmed = await browser.PostAsJsonAsync("/api/identity/accounts/confirmations", new { token = confirmation }, cancel);
+        using var resent = await browser.PostAsJsonAsync("/api/identity/accounts/confirmations/resend", new { email }, cancel);
+        using var login = await LoginTests.LoginAsync(browser, email, password);
+
+        Assert.Equal(HttpStatusCode.OK, registered.StatusCode);
+        Assert.NotEmpty(web.Logs.Entries);
+        web.Logs.AssertNone(email, email.Split('@')[0], password, code, pseudonym, confirmation, web.ClientSecret);
+    }
+
     // Without a token the browser gets a problem. The warning names its trace and why, still without a secret.
     [Fact]
     public async Task NoToken_TheWarningNamesTheTraceOfTheProblem_AndNoSecret()
