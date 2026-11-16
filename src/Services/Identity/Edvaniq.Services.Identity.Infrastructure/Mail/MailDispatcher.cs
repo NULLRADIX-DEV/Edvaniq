@@ -14,14 +14,21 @@ internal sealed class MailOutbox(IdentityDbContext db) : IMailOutbox
     public void Add(OutgoingMail mail) => db.OutgoingMails.Add(mail);
 
     public Task<bool> AnyWaitingForAsync(Guid accountId, MailKind kind, CancellationToken cancellationToken) =>
-        db.OutgoingMails.AnyAsync(mail => mail.AccountId == accountId && mail.Kind == kind, cancellationToken);
+        db.OutgoingMails.AnyAsync(mail => mail.AccountId == accountId && mail.Kind == kind && mail.SentAt == null, cancellationToken);
 
     public Task<bool> AnyWaitingSinceAsync(DateTime before, CancellationToken cancellationToken) =>
-        db.OutgoingMails.AnyAsync(mail => mail.CreatedAt <= before, cancellationToken);
+        db.OutgoingMails.AnyAsync(mail => mail.SentAt == null && mail.CreatedAt <= before, cancellationToken);
+
+    public async Task<IReadOnlyList<DateTime>> AskedSinceAsync(Guid accountId, DateTime since, CancellationToken cancellationToken) =>
+        await db.OutgoingMails
+            .Where(mail => mail.AccountId == accountId && mail.CreatedAt >= since)
+            .OrderByDescending(mail => mail.CreatedAt)
+            .Select(mail => mail.CreatedAt)
+            .ToListAsync(cancellationToken);
 }
 
 // Sends the mails of the outbox (#248). Each mail is written only now, and a link gets its token only now: its hash is
-// saved together with the removal of the sent mail, a new confirmation link replaces the older ones. A mail that fails
+// saved together with the mark that the mail is sent, a new confirmation link replaces the older ones. A mail that fails
 // waits and is tried again (OutgoingMail.RetryDelays), no token of it is kept. One older than OutgoingMail.MaxAge goes,
 // sent or not. Without a mail service (MailProvider.None) mails only wait, and no token is made at all. The log names a
 // mail by id and kind, never address, text or token.
@@ -71,7 +78,8 @@ public sealed partial class MailDispatcher(
         var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
         var now = time.GetUtcNow().UtcDateTime;
 
-        var expired = db.OutgoingMails.Where(mail => mail.CreatedAt <= now - OutgoingMail.MaxAge).ExecuteDelete();
+        var expired = db.OutgoingMails.Where(mail => mail.SentAt == null && mail.CreatedAt <= now - OutgoingMail.MaxAge).ExecuteDelete();
+        db.OutgoingMails.Where(mail => mail.SentAt != null && mail.CreatedAt <= now - OutgoingMail.MaxAge).ExecuteDelete();
         if (expired > 0)
         {
             LogExpired(logger, expired, OutgoingMail.MaxAge);
@@ -79,7 +87,7 @@ public sealed partial class MailDispatcher(
 
         if (sender is null)
         {
-            var waiting = db.OutgoingMails.Count();
+            var waiting = db.OutgoingMails.Count(mail => mail.SentAt == null);
             if (waiting > 0 && (reportedWaitingAt is null || now - reportedWaitingAt >= WaitingReport))
             {
                 LogNoMailService(logger, waiting);
@@ -89,7 +97,7 @@ public sealed partial class MailDispatcher(
             return 0;
         }
 
-        var due = db.OutgoingMails.Where(mail => mail.DueAt <= now).OrderBy(mail => mail.DueAt).Take(Batch).ToList();
+        var due = db.OutgoingMails.Where(mail => mail.SentAt == null && mail.DueAt <= now).OrderBy(mail => mail.DueAt).Take(Batch).ToList();
         var sent = 0;
         foreach (var mail in due)
         {
@@ -138,8 +146,8 @@ public sealed partial class MailDispatcher(
             db.AccountTokens.Add(token);
         }
 
-        db.OutgoingMails.Remove(mail);
-        LogSent(logger, mail.Id, mail.Kind, mail.Attempts + 1);
+        mail.Sent(now);
+        LogSent(logger, mail.Id, mail.Kind, mail.Attempts);
         return true;
     }
 

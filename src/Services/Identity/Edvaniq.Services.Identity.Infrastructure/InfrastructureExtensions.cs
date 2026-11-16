@@ -33,6 +33,7 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<IIdentityTransactions, IdentityTransactions>();
         builder.Services.AddScoped<Confirmation>();
         builder.Services.AddScoped<Approvals>();
+        builder.Services.AddScoped<PasswordReset>();
         builder.Services.AddSingleton(LegalVersionsOf(builder.Configuration));
         builder.Services.AddSingleton<AccountSweep>();
         builder.Services.AddHostedService(services => services.GetRequiredService<AccountSweep>());

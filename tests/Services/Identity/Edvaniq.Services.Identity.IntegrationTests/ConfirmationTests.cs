@@ -121,7 +121,7 @@ public sealed partial class ConfirmationTests(IdentityDatabase database) : IClas
 
         await ResendAsync(identity, email);
         Assert.Empty(Waiting(identity, email));
-        time.Advance(Confirmation.ResendPause);
+        time.Advance(SystemMails.PerAccountPause);
         await ResendAsync(identity, email.ToUpperInvariant());
         await ResendAsync(identity, email);
         Assert.Single(Waiting(identity, email));
@@ -132,15 +132,15 @@ public sealed partial class ConfirmationTests(IdentityDatabase database) : IClas
             await AssertRefusedAsync(old, "token_used");
         }
 
-        for (var i = 0; i < Confirmation.ResendsPerDay; i++)
+        for (var i = 0; i < SystemMails.PerAccountPerDay; i++)
         {
-            time.Advance(Confirmation.ResendPause);
+            time.Advance(SystemMails.PerAccountPause);
             await ResendAsync(identity, email);
             await SentTokensAsync(identity, email);
         }
 
         var tokens = await SentTokensAsync(identity, email);
-        Assert.Equal(Confirmation.ResendsPerDay, tokens.Count);
+        Assert.Equal(SystemMails.PerAccountPerDay, tokens.Count);
         using var newest = await ConfirmAsync(identity, tokens[^1]);
         Assert.Equal(HttpStatusCode.NoContent, newest.StatusCode);
     }
@@ -153,7 +153,7 @@ public sealed partial class ConfirmationTests(IdentityDatabase database) : IClas
         await using var identity = new IdentityFactory(connectionString: database.ConnectionString, time: time);
         var email = await RegisterAsync(identity);
         await SentTokensAsync(identity, email);
-        time.Advance(Confirmation.ResendPause);
+        time.Advance(SystemMails.PerAccountPause);
 
         await Task.WhenAll(Enumerable.Range(0, 6).Select(_ => ResendAsync(identity, email)));
 

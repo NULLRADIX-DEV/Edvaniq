@@ -290,6 +290,12 @@ internal sealed class LoginOptions
 
     // Reads of the versions of the legal texts (#261) a client address may make in a minute.
     public int LegalVersionsPerClientPerMinute { get; set; }
+
+    // Password reset mails (#253) a client address may ask for in ten minutes. Identity limits them per account too.
+    public int ResetsPerClientPer10Minutes { get; set; }
+
+    // Reset links a client address may try in a minute.
+    public int ResetCompletionsPerClientPerMinute { get; set; }
 }
 
 internal static class LoginLimit
@@ -300,6 +306,8 @@ internal static class LoginLimit
     public const string ConfirmationPolicy = "confirmation";
     public const string ResendPolicy = "confirmation-resend";
     public const string LegalVersionsPolicy = "legal-versions";
+    public const string ResetPolicy = "password-reset";
+    public const string ResetCompletionPolicy = "password-reset-complete";
 
     public static IServiceCollection AddLoginLimit(this IServiceCollection services)
     {
@@ -310,6 +318,8 @@ internal static class LoginLimit
             .Validate(options => options.ConfirmationsPerClientPerMinute > 0, "Login:ConfirmationsPerClientPerMinute must be above 0.")
             .Validate(options => options.ResendsPerClientPer10Minutes > 0, "Login:ResendsPerClientPer10Minutes must be above 0.")
             .Validate(options => options.LegalVersionsPerClientPerMinute > 0, "Login:LegalVersionsPerClientPerMinute must be above 0.")
+            .Validate(options => options.ResetsPerClientPer10Minutes > 0, "Login:ResetsPerClientPer10Minutes must be above 0.")
+            .Validate(options => options.ResetCompletionsPerClientPerMinute > 0, "Login:ResetCompletionsPerClientPerMinute must be above 0.")
             .ValidateOnStart();
 
         // The client address is the browser's, behind nginx from X-Forwarded-For (Program.cs).
@@ -331,6 +341,8 @@ internal static class LoginLimit
             PerClient(options, ConfirmationPolicy, limits => limits.ConfirmationsPerClientPerMinute, TimeSpan.FromMinutes(1));
             PerClient(options, ResendPolicy, limits => limits.ResendsPerClientPer10Minutes, TimeSpan.FromMinutes(10));
             PerClient(options, LegalVersionsPolicy, limits => limits.LegalVersionsPerClientPerMinute, TimeSpan.FromMinutes(1));
+            PerClient(options, ResetPolicy, limits => limits.ResetsPerClientPer10Minutes, TimeSpan.FromMinutes(10));
+            PerClient(options, ResetCompletionPolicy, limits => limits.ResetCompletionsPerClientPerMinute, TimeSpan.FromMinutes(1));
         });
 
         return services;

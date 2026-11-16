@@ -9,6 +9,9 @@ public interface IMailOutbox
     // Whether a mail of this kind waits for the account.
     Task<bool> AnyWaitingForAsync(Guid accountId, MailKind kind, CancellationToken cancellationToken);
 
+    // The mails of the account asked for since then, sent or not, newest first by the time they were asked for.
+    Task<IReadOnlyList<DateTime>> AskedSinceAsync(Guid accountId, DateTime since, CancellationToken cancellationToken);
+
     // Whether a mail waits since before this time, a sign that the mail service is away.
     Task<bool> AnyWaitingSinceAsync(DateTime before, CancellationToken cancellationToken);
 }
@@ -47,6 +50,11 @@ public sealed record MailContent(string Subject, string Body);
 // save of the caller, the text and the token of its link come only when it is sent (MailDispatcher).
 public sealed class SystemMails(IMailOutbox outbox, TimeProvider time)
 {
+    // At most this many mails per account and day, and one per minute (#267): nobody can flood an inbox through Edvaniq.
+    public const int PerAccountPerDay = 5;
+
+    public static readonly TimeSpan PerAccountPause = TimeSpan.FromMinutes(1);
+
     // A mail that waits longer than this tells the user it may come late.
     public static readonly TimeSpan DelayedAfter = TimeSpan.FromMinutes(5);
 
@@ -57,6 +65,22 @@ public sealed class SystemMails(IMailOutbox outbox, TimeProvider time)
     public void AlreadyRegistered(Account account) => Add(account, MailKind.AlreadyRegistered);
 
     public void PasswordReset(Account account) => Add(account, MailKind.PasswordReset);
+
+    // A mail someone else may set off (#267), only within the limits per account. Over them nothing goes out, and the
+    // caller answers as if it had: nobody learns that the address has an account. Call it while the account's row is
+    // locked (IAccounts.LockByEmailAsync), so requests at once count one after the other.
+    public async Task<bool> TryAsync(Account account, MailKind kind, CancellationToken cancellationToken)
+    {
+        var now = time.GetUtcNow().UtcDateTime;
+        var asked = await outbox.AskedSinceAsync(account.Id, now - TimeSpan.FromDays(1), cancellationToken);
+        if (asked.Count >= PerAccountPerDay || asked.Count > 0 && now - asked[0] < PerAccountPause)
+        {
+            return false;
+        }
+
+        Add(account, kind);
+        return true;
+    }
 
     // True if mails wait longer than they should: the user hears that theirs may come late.
     public Task<bool> DelayedAsync(CancellationToken cancellationToken) =>

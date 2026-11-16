@@ -35,12 +35,22 @@ public sealed class OutgoingMail
 
     public int Attempts { get; private set; }
 
+    // UTC, when it went out. A sent mail stays until MaxAge without anything in it, so the limits per account (#267)
+    // count it.
+    public DateTime? SentAt { get; private set; }
+
     public DateTime ExpiresAt => CreatedAt + MaxAge;
 
     public static OutgoingMail For(Account account, MailKind kind, DateTime createdAt) =>
         account.Email is null
             ? throw new InvalidOperationException("A team account gets no mail.")
             : new(account.Id, kind, createdAt);
+
+    public void Sent(DateTime now)
+    {
+        SentAt = now;
+        Attempts++;
+    }
 
     // After a failed attempt: the next one after the next wait.
     public void Postpone(DateTime now)

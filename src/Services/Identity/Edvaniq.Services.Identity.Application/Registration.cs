@@ -75,10 +75,12 @@ public sealed class Registration(
                     return Refuse(InviteRevoked, "Dieser Einladungscode gilt nicht mehr.");
             }
 
+            await accounts.LockByEmailAsync(email, cancellationToken);
             var existing = await accounts.FindByEmailAsync(email, cancellationToken);
             if (existing is { Status: not AccountStatus.Unconfirmed })
             {
-                mails.AlreadyRegistered(existing);
+                // Within the limits per account (#267), so registering over and over floods no inbox.
+                await mails.TryAsync(existing, MailKind.AlreadyRegistered, cancellationToken);
             }
             else
             {

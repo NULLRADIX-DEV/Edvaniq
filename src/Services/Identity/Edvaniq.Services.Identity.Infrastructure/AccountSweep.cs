@@ -10,8 +10,9 @@ namespace Edvaniq.Services.Identity.Infrastructure;
 
 // Clears up after registrations (#266): a user account whose address isn't confirmed within UnconfirmedFor goes, with
 // its mails and links (cascade). It never logged in, so no other service holds anything of it, and no UserDeleted goes
-// out. A confirmation link that ran out more than ExpiredFor ago goes too, until then it still answers "expired". The
-// log names counts only. The database calls are synchronous on purpose, MySql.Data's OpenAsync can hang forever.
+// out. A link (confirmation or reset) that ran out more than ExpiredFor ago goes too, until then it still answers
+// "expired". The log names counts only. The database calls are synchronous on purpose, MySql.Data's OpenAsync can hang
+// forever.
 public sealed partial class AccountSweep(
     IServiceScopeFactory scopes, IConfiguration configuration, TimeProvider time, ILogger<AccountSweep> logger) : BackgroundService
 {
@@ -68,7 +69,7 @@ public sealed partial class AccountSweep(
         }
 
         var links = db.AccountTokens
-            .Where(token => token.Purpose == TokenPurpose.Confirmation && token.ExpiresAt <= now - ExpiredFor)
+            .Where(token => token.ExpiresAt <= now - ExpiredFor)
             .ExecuteDelete();
         if (links > 0)
         {
@@ -81,7 +82,7 @@ public sealed partial class AccountSweep(
     [LoggerMessage(EventId = 34110, Level = LogLevel.Information, Message = "{Count} accounts not confirmed within {Age} are deleted")]
     private static partial void LogAccounts(ILogger logger, int count, TimeSpan age);
 
-    [LoggerMessage(EventId = 34111, Level = LogLevel.Information, Message = "{Count} expired confirmation links are deleted")]
+    [LoggerMessage(EventId = 34111, Level = LogLevel.Information, Message = "{Count} expired links are deleted")]
     private static partial void LogLinks(ILogger logger, int count);
 
     [LoggerMessage(EventId = 34112, Level = LogLevel.Error, Message = "Clearing up accounts failed ({Error}), the next round starts in {Interval}")]

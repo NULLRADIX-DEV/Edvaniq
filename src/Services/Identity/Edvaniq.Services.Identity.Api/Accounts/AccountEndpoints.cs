@@ -1,3 +1,4 @@
+using Edvaniq.Services.Identity.Api.Tokens;
 using Edvaniq.Services.Identity.Application;
 
 namespace Edvaniq.Services.Identity.Api.Accounts;
@@ -12,6 +13,8 @@ internal static class AccountEndpoints
         app.MapPost("/accounts", RegisterAsync).AllowAnonymous();
         app.MapPost("/accounts/confirmations", ConfirmAsync).AllowAnonymous();
         app.MapPost("/accounts/confirmations/resend", ResendAsync).AllowAnonymous();
+        app.MapPost("/accounts/password-resets", RequestResetAsync).AllowAnonymous();
+        app.MapPost("/accounts/password-resets/complete", CompleteResetAsync).AllowAnonymous();
 
         // The versions a registration has to agree to (#261). The same for everyone and rarely new, so caches may keep
         // it a few minutes.
@@ -49,6 +52,32 @@ internal static class AccountEndpoints
 
     private static async Task<IResult> ResendAsync(EmailBody? body, Confirmation confirmation, CancellationToken cancellationToken) =>
         TypedResults.Accepted((string?)null, new Accepted(await confirmation.ResendAsync(body?.Email, cancellationToken)));
+
+    private static async Task<IResult> RequestResetAsync(EmailBody? body, PasswordReset reset, CancellationToken cancellationToken) =>
+        TypedResults.Accepted((string?)null, new Accepted(await reset.RequestAsync(body?.Email, cancellationToken)));
+
+    // A new password also lifts the lock after failed logins (#252).
+    private static async Task<IResult> CompleteResetAsync(
+        ResetBody? body, PasswordReset reset, LoginLock loginLock, CancellationToken cancellationToken)
+    {
+        var (result, account) = await reset.CompleteAsync(body?.Token, body?.Password, cancellationToken);
+        if (account is not null)
+        {
+            loginLock.Clear(account.Email);
+        }
+
+        return result switch
+        {
+            ResetResult.Done => TypedResults.NoContent(),
+            ResetResult.PasswordRules => Refused(
+                "password_rules", $"Dein Passwort braucht {PasswordHasher.MinimumLength} bis {PasswordHasher.MaximumLength} Zeichen."),
+            ResetResult.Expired => Refused("token_expired", "Dieser Link ist abgelaufen. Fordere einen neuen an."),
+            ResetResult.Used => Refused("token_used", "Dieser Link wurde schon benutzt oder durch einen neueren ersetzt."),
+            _ => Refused("token_invalid", "Dieser Link stimmt nicht. Kopier ihn vollständig aus der Mail oder fordere einen neuen an."),
+        };
+    }
+
+    private sealed record ResetBody(string? Token, string? Password);
 
     private sealed record LegalVersionsAnswer(string TermsVersion, string PrivacyVersion);
 

@@ -11,16 +11,12 @@ public enum ConfirmResult
 }
 
 // Confirming the address of a new account (#250). Registration asks for the first link, a user who lost it asks for a
-// new one, at most once a minute and five times a day per account, and a new one replaces the older ones. Asking never
+// new one within the limits of mails per account (SystemMails.TryAsync), and a new one replaces the older ones. Asking never
 // tells whether the address has an account. The operator confirms by hand while there is no mail service
 // (account confirm).
 public sealed class Confirmation(
     IAccounts accounts, IAccountTokens tokens, IMailOutbox outbox, SystemMails mails, IIdentityTransactions transactions, TimeProvider time)
 {
-    public static readonly TimeSpan ResendPause = TimeSpan.FromMinutes(1);
-
-    public const int ResendsPerDay = 5;
-
     // Gives a new account its first link, saved with the account. The link and its token come when the mail is sent.
     public void Send(Account account) => mails.Confirmation(account);
 
@@ -60,16 +56,11 @@ public sealed class Confirmation(
         {
             await using var transaction = await transactions.BeginAsync(cancellationToken);
             await accounts.LockByEmailAsync(normalized, cancellationToken);
-            var now = time.GetUtcNow().UtcDateTime;
             if (await accounts.FindByEmailAsync(normalized, cancellationToken) is { Status: AccountStatus.Unconfirmed } account
-                && !await outbox.AnyWaitingForAsync(account.Id, MailKind.Confirmation, cancellationToken))
+                && !await outbox.AnyWaitingForAsync(account.Id, MailKind.Confirmation, cancellationToken)
+                && await mails.TryAsync(account, MailKind.Confirmation, cancellationToken))
             {
-                var sent = await tokens.SinceAsync(account.Id, TokenPurpose.Confirmation, now - TimeSpan.FromDays(1), cancellationToken);
-                if (sent.Count < ResendsPerDay && (sent.Count == 0 || now - sent[0].CreatedAt >= ResendPause))
-                {
-                    Send(account);
-                    await accounts.SaveAsync(cancellationToken);
-                }
+                await accounts.SaveAsync(cancellationToken);
             }
 
             await transaction.CommitAsync(cancellationToken);
