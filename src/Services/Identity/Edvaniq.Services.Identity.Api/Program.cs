@@ -37,6 +37,7 @@ if (InviteCommand.Matches(args))
 
 app.MapDefaultEndpoints();
 app.MapTokenEndpoints();
+app.MapAccountEndpoints();
 
 app.Run();
 

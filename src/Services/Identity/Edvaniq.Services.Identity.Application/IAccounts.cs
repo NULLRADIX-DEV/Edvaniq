@@ -15,4 +15,7 @@ public interface IAccounts
     void Remove(Account account);
 
     Task SaveAsync(CancellationToken cancellationToken);
+
+    // Saves, or returns false and keeps nothing if an account with the same name or address came first.
+    Task<bool> SaveUnlessTakenAsync(CancellationToken cancellationToken);
 }
