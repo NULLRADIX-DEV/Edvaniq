@@ -46,6 +46,7 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
                         options.TokenValidationParameters.IssuerSigningKeys = [TestTokens.SigningKey];
                     });
                 services.AddInMemoryTransport();
+                services.AddTestResilience();
                 services.AddSingleton<ILoggerProvider>(Logs);
             });
 }

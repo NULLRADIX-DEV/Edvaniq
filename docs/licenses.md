@@ -52,7 +52,7 @@ Indirekte NuGet-Pakete, also Abhängigkeiten der gelisteten Pakete, stehen nicht
 | `Microsoft.Extensions.AI.Abstractions` | MIT | KI-Zugang (`IChatClient`), simulierter und echter Anbieter |
 | `Microsoft.Extensions.Diagnostics.HealthChecks` | MIT | DB-Prüfung für Health |
 | `Microsoft.Extensions.Hosting` | MIT | Worker |
-| `Microsoft.Extensions.Http.Resilience` | MIT | ServiceDefaults, KI-Zugang (ohne Wiederholungen) |
+| `Microsoft.Extensions.Http.Resilience` | MIT | ServiceDefaults, KI-Zugang (ohne Wiederholungen), Tests |
 | `Microsoft.Extensions.Logging.Abstractions` | MIT | Logzeilen in der Application-Schicht eines Service |
 | `Microsoft.Extensions.Logging.Debug` | MIT | MAUI-App |
 | `Microsoft.Extensions.ServiceDiscovery` | MIT | ServiceDefaults |
