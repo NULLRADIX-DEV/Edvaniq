@@ -15,8 +15,8 @@ using Microsoft.Extensions.Options;
 
 namespace Edvaniq.Services.Content.Infrastructure;
 
-// Runs in the worker and tops up every pool of a ready document that has fewer than QuestionPool.MinQuestions (#339):
-// it asks the AI for the questions still missing to QuestionPool.MaxQuestions and sends only those it hasn't sent
+// Runs in the worker and tops up every pool of a ready document that is short (QuestionPool.WantsTopUp, #339):
+// it asks the AI for the questions still missing to the pool's goal and sends only those it hasn't sent
 // before, with an ItemsGenerated of the same topic. Pool, event and the round's charge go out in one save. Each round
 // with an answer takes one generation of the user's daily quota. While the quota is used up, the budget is reached or the
 // operator stopped the AI, nothing is asked and a log line says why. An outage waits like a document (#300), and a pool
@@ -97,7 +97,7 @@ public sealed class QuestionTopUps(
             .Where(document => document.Status == DocumentStatus.Ready && document.Origin != DocumentOrigin.Demo)
             .Select(document => document.Id);
         var due = await db.QuestionPools.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
-            .Where(pool => pool.Questions < QuestionPool.MinQuestions && !pool.TopUpStopped)
+            .Where(pool => pool.Questions * 4 < (pool.Target ?? QuestionPool.MaxQuestions) * 3 && !pool.TopUpStopped)
             .Where(pool => pool.NextTopUpAt == null || pool.NextTopUpAt <= now)
             .Where(pool => ready.Contains(pool.DocumentId))
             .OrderBy(pool => pool.NextTopUpAt ?? pool.CreatedAt)
@@ -180,6 +180,7 @@ public sealed class QuestionTopUps(
             ContentLog.ToppedUp(logger, topicId, fresh.Count, pool.Questions ?? 0, attempts);
         }
 
+        db.PoolQuestions.AddRange(QuestionRequests.TextsOf(pool, fresh));
         services.GetRequiredService<IGenerationQuota>().Charge(document, topicId, pool.NextRound());
         if (fresh.Count > 0)
         {

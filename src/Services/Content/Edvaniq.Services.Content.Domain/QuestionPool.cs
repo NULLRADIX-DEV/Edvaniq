@@ -8,10 +8,10 @@ namespace Edvaniq.Services.Content.Domain;
 // short hash of each (QuestionKeys), so topping the pool up sends nothing twice (#339).
 public sealed class QuestionPool : IOwnedByUser
 {
-    // A pool with fewer questions gets topped up.
-    public const int MinQuestions = 15;
-
     public const int MaxQuestions = 20;
+
+    // A pool meant to have MaxQuestions gets topped up below this, three quarters of it (WantsTopUp).
+    public const int MinQuestions = 15;
 
     // Top-up rounds that brought an answer of the AI. One that adds nothing new would ask the same again, so it ends.
     public const int MaxTopUps = 3;
@@ -66,9 +66,15 @@ public sealed class QuestionPool : IOwnedByUser
     // No more top-ups: the AI refused, stayed away or brought too little three times.
     public bool TopUpStopped { get; private set; }
 
-    public int Missing => Math.Max(0, MaxQuestions - (Questions ?? MaxQuestions));
+    // How many questions the pool is meant to have. Null for a pool from before #1106, meant to have MaxQuestions.
+    public int? Target { get; private set; }
 
-    public bool WantsTopUp => Questions < MinQuestions && !TopUpStopped;
+    public int Goal => Target ?? MaxQuestions;
+
+    public int Missing => Math.Max(0, Goal - (Questions ?? Goal));
+
+    // Short below three quarters of its goal, under 15 of 20. QuestionTopUps.WaitingAsync asks the database the same.
+    public bool WantsTopUp => Questions * 4 < Goal * 3 && !TopUpStopped;
 
     public static QuestionPool For(Document document, Guid topicId, DateTime createdAt, IReadOnlyCollection<string> keys)
     {

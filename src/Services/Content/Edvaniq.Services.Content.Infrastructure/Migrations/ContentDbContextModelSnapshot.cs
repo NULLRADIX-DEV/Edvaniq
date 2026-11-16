@@ -614,6 +614,39 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.ToTable("PoolMaterials");
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.PoolQuestion", b =>
+                {
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Key")
+                        .HasMaxLength(16)
+                        .HasColumnType("char(16)")
+                        .IsFixedLength();
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.HasKey("TopicId", "Key");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("SectionId");
+
+                    b.ToTable("PoolQuestions");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.QuestionPool", b =>
                 {
                     b.Property<Guid>("TopicId")
@@ -645,6 +678,9 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
                         .HasDefaultValue(0);
+
+                    b.Property<int?>("Target")
+                        .HasColumnType("int");
 
                     b.Property<int>("TopUpOutages")
                         .ValueGeneratedOnAdd()
@@ -866,6 +902,21 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.PoolMaterial", b =>
+                {
+                    b.HasOne("Edvaniq.Services.Content.Domain.Section", null)
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Edvaniq.Services.Content.Domain.QuestionPool", null)
+                        .WithMany()
+                        .HasForeignKey("TopicId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.PoolQuestion", b =>
                 {
                     b.HasOne("Edvaniq.Services.Content.Domain.Section", null)
                         .WithMany()
