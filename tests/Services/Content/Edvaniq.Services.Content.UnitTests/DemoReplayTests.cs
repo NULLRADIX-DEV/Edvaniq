@@ -77,6 +77,30 @@ public class DemoReplayTests
         }
     }
 
+    // #342: the numbers of the reference run on the hand-written demo pools, a floor so they don't flag good questions.
+    [Fact]
+    public void DemoPools_HoldUp_ByTheQualityNumbers()
+    {
+        var tally = new QualityTally();
+        foreach (var (_, texts) in TopicMaterial())
+        {
+            var ids = texts.Select(_ => Guid.NewGuid()).ToList();
+            var answer = Assert.IsType<string>(DemoReplay.Answer(QuestionGeneration.System(Profile), QuestionGeneration.User(texts)));
+            tally.Add(
+                QuestionGeneration.Read(answer, ids),
+                QuestionGeneration.ReadCards(answer, ids) ?? [],
+                ids.Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => texts[pair.index]));
+        }
+
+        // A bit below what the demo pools have, the share with the longest option as answer is a finding, not a floor.
+        Assert.Equal(0, tally.Unusable);
+        Assert.True(tally.Sourced.Rate >= 0.8, $"sourced {tally.Sourced.Rate}");
+        Assert.True(tally.Distinct.Rate >= 0.9, $"distinct {tally.Distinct.Rate}");
+        Assert.True(tally.Explained.Rate >= 0.8, $"explained {tally.Explained.Rate}");
+        Assert.Equal(1, tally.WellFormed.Rate);
+        Assert.True(tally.CardsSourced.Rate >= 0.9, $"cards {tally.CardsSourced.Rate}");
+    }
+
     [Fact]
     public void EveryTopic_GetsASummaryInEveryLength()
     {
