@@ -22,6 +22,8 @@ Ein Ausdruck mit `AND` ist erlaubt, wenn jeder Teil erlaubt ist, einer mit `OR`,
 
 **Server-Software**, die als eigener Prozess unverändert läuft und nicht in ein Edvaniq-Image gebaut wird, darf unter `GPL` stehen, etwa MySQL. Sie steht trotzdem in der Liste, ihr Einsatz beginnt mit „Server-Software:“.
 
+**KI-Modelle** nutzt Edvaniq nur als Dienst über eine API. Kein Modell steckt in einem Edvaniq-Image oder wird ausgeliefert, deshalb stehen sie nicht in der Liste. Ob ein Modell und sein Anbieter genutzt werden dürfen, entscheidet die Wahl des Anbieters nach dessen veröffentlichten Bedingungen. Läuft einmal ein Modell selbst in einem Prozess oder Image, kommt es wie jede andere Komponente mit seiner Lizenz in die Liste.
+
 **Erlaubt für Inhalte**, also Texte, Bilder und Demo-Material, sind `CC0-1.0`, `CC-BY-4.0` und `CC-BY-SA-4.0`. Bei den beiden letzten gehört zu jedem Einsatz die Namensnennung mit Titel, Urheber, Quelle, Lizenz und dem Hinweis auf Änderungen, bei `CC-BY-SA-4.0` stehen auch Fragen und Zusammenfassungen, die aus dem Inhalt entstehen und die wir zeigen, unter derselben Lizenz. Diese Lizenzen gelten nur für die Tabelle „Inhalte“, nicht für Code.
 
 Indirekte NuGet-Pakete, also Abhängigkeiten der gelisteten Pakete, stehen nicht einzeln in der Liste, solange ihre Lizenz erlaubt ist und als SPDX-Kennung im Paket steht. Alle anderen stehen mit Namen da.
