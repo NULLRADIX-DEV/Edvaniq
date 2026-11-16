@@ -152,9 +152,21 @@ public sealed class BlockQuizTests : BunitContext
         var view = RenderView(new FakeQuiz(), blocks);
 
         Assert.Contains(FeedbackTexts.Quiz.NoQuestions, view.Find("[role=status]").TextContent, StringComparison.Ordinal);
+        Assert.Equal($"themen/{Topic:D}/zusammenfassung", view.Find(".state-actions .block-quiz-summary-link").GetAttribute("href"));
         view.Find(".state-actions button").Click();
 
         Assert.Equal(2, blocks.Opened.Count);
+        AssertProgress(view, 1, 1);
+        Assert.Empty(view.FindAll(".block-quiz-small-pool"));
+    }
+
+    // #388: too few questions for the quiz. Said above the questions while they run.
+    [Fact]
+    public void PoolTooSmall_SaysSo_WhileTheQuestionsRun()
+    {
+        var view = RenderView(new FakeQuiz(), new FakeBlockQuiz().Open(Quiz(SingleQuestion) with { PoolTooSmall = true }));
+
+        Assert.Contains(FeedbackTexts.BlockQuiz.PoolTooSmall, view.Find(".block-quiz-small-pool").TextContent, StringComparison.Ordinal);
         AssertProgress(view, 1, 1);
     }
 

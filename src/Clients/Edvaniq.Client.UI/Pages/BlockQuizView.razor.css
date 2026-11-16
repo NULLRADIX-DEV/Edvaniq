@@ -36,3 +36,11 @@
 .button {
     min-height: 2.75rem;
 }
+
+
+/* As easy to hit as the button next to it (#388). */
+.block-quiz-summary-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+}
