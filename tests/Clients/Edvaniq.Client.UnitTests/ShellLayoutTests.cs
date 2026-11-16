@@ -23,6 +23,7 @@ public sealed class ShellLayoutTests : BunitContext
         JSInterop.Mode = JSRuntimeMode.Loose;
         Services.AddSingleton<IBackendStatus>(_ => backend);
         Services.AddSingleton<IWebSession>(session);
+        Services.AddSingleton<IAccountConfirmations>(new FakeAccountConfirmations());
         authorization = AddAuthorization();
         SetRendererInfo(new RendererInfo("WebAssembly", isInteractive: true));
     }

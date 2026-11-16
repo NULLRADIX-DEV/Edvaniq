@@ -23,17 +23,23 @@ internal sealed record ProblemTitle(string? Title = null)
 
         try
         {
-            var title = (await response.Content.ReadFromJsonAsync(ProblemTitleJson.Default.ProblemTitle, cancellationToken))?.Title?.Trim();
-            return title is { Length: > 0 and <= MaxLength }
-                && !title.Any(char.IsControl)
-                && !ReasonPhrases.Contains(title, StringComparer.OrdinalIgnoreCase)
-                    ? title
-                    : null;
+            return Check((await response.Content.ReadFromJsonAsync(ProblemTitleJson.Default.ProblemTitle, cancellationToken))?.Title);
         }
         catch (JsonException)
         {
             return null;
         }
+    }
+
+    // The title if it reads like a sentence for the user, else null.
+    public static string? Check(string? title)
+    {
+        title = title?.Trim();
+        return title is { Length: > 0 and <= MaxLength }
+            && !title.Any(char.IsControl)
+            && !ReasonPhrases.Contains(title, StringComparer.OrdinalIgnoreCase)
+                ? title
+                : null;
     }
 }
 

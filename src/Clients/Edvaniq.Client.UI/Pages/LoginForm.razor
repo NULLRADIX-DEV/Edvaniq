@@ -2,11 +2,12 @@
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider Authentication
 @inject IJSRuntime JS
+@inject IAccountConfirmations Confirmations
 @using Microsoft.JSInterop
 
 <form class="login-form" @onsubmit="SignInAsync" novalidate>
     <div class="login-field">
-        <label for="login-name">Name</label>
+        <label for="login-name">E-Mail oder Name</label>
         <input id="login-name" name="username" type="text" autocomplete="username" autocapitalize="none"
                spellcheck="false" required @bind="name" />
     </div>
@@ -18,12 +19,39 @@
 
     @* Always there, so a screen reader announces each hint. *@
     <div role="alert">
-        @if (hint is not null)
+        @switch (refusal)
         {
-            <div class="login-hint">
-                <p>@hint</p>
-                <RequestId Value="@traceId" />
-            </div>
+            case SignInResult.AwaitingApproval:
+                @* Not an error: the account is fine, it only waits. So it looks unlike the other hints. *@
+                <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.Login.AwaitingApprovalTitle" class="login-approval">
+                    <p>@hint</p>
+                </Notice>
+                break;
+            case SignInResult.Unconfirmed:
+                <Notice Kind="NoticeKind.Warning" class="login-unconfirmed">
+                    <p>@hint</p>
+                    @if (resendTo is not null)
+                    {
+                        @if (resendNote is not null)
+                        {
+                            <p class="login-resend-note">@resendNote</p>
+                        }
+                        @* Stays enabled while it runs, for the same reason as the login button. *@
+                        <button type="button" class="button button-secondary" @onclick="ResendAsync">
+                            @(resending ? FeedbackTexts.Login.Resending : FeedbackTexts.Login.Resend)
+                        </button>
+                    }
+                </Notice>
+                break;
+            default:
+                @if (hint is not null)
+                {
+                    <div class="login-hint">
+                        <p>@hint</p>
+                        <RequestId Value="@traceId" />
+                    </div>
+                }
+                break;
         }
     </div>
 
@@ -44,7 +72,13 @@
     private string password = "";
     private string? hint;
     private string? traceId;
+    private SignInResult? refusal;
     private bool signingIn;
+
+    // The address a new confirmation link goes to: what was typed for the unconfirmed login, only if it is an address.
+    private string? resendTo;
+    private string? resendNote;
+    private bool resending;
 
     private async Task SignInAsync()
     {
@@ -58,11 +92,12 @@
         if (string.IsNullOrWhiteSpace(name) || string.IsNullOrEmpty(password))
         {
             signingIn = false;
-            Show("Gib deinen Namen und dein Passwort ein.");
+            Show(FeedbackTexts.Login.Missing);
             return;
         }
 
-        var outcome = await Session.SignInAsync(name.Trim(), password);
+        var login = name.Trim();
+        var outcome = await Session.SignInAsync(login, password);
         signingIn = false;
 
         if (outcome.Result == SignInResult.SignedIn)
@@ -78,7 +113,32 @@
         }
 
         password = "";
-        Show(Hint(outcome), outcome.TraceId);
+        Show(Hint(outcome), outcome.TraceId, outcome.Result);
+
+        // A team name never waits for a confirmation, and a name must not go out as an address.
+        if (outcome.Result == SignInResult.Unconfirmed && login.Contains('@'))
+        {
+            resendTo = login;
+        }
+    }
+
+    private async Task ResendAsync()
+    {
+        if (resending || resendTo is null)
+        {
+            return;
+        }
+
+        resending = true;
+        var outcome = await Confirmations.ResendAsync(resendTo);
+        resending = false;
+        resendNote = outcome.Result switch
+        {
+            ResendResult.Sent when outcome.MailDelayed => $"{FeedbackTexts.Login.Resent} {FeedbackTexts.Login.MailDelayed}",
+            ResendResult.Sent => FeedbackTexts.Login.Resent,
+            ResendResult.Limited => string.Format(FeedbackTexts.Login.ResendLimited, Wait(outcome.RetryAfter ?? TimeSpan.FromMinutes(10))),
+            _ => FeedbackTexts.Login.ResendUnavailable,
+        };
     }
 
     // Autofill and password managers may fill the fields without an event, so the binding can still be empty. What the
@@ -101,18 +161,23 @@
         }
     }
 
-    private void Show(string text, string? trace = null)
+    private void Show(string text, string? trace = null, SignInResult? result = null)
     {
         hint = text;
         traceId = trace;
+        refusal = result;
+        resendTo = null;
+        resendNote = null;
     }
 
-    // One hint for a wrong name and a wrong password: nobody learns whether an account exists.
+    // The wait comes from Retry-After, also for a locked login, so it is always said in the same words.
     private static string Hint(SignInOutcome outcome) => outcome.Result switch
     {
-        SignInResult.WrongCredentials => "Name oder Passwort stimmen nicht. Prüf beides und versuch es noch einmal.",
-        SignInResult.TooManyAttempts => $"Zu viele Versuche. Warte {Wait(outcome.RetryAfter)} und versuch es dann noch einmal.",
-        _ => "Die Anmeldung ist gerade nicht möglich. Versuch es in ein paar Minuten noch einmal.",
+        SignInResult.WrongCredentials => FeedbackTexts.Login.WrongCredentials,
+        SignInResult.TooManyAttempts => string.Format(FeedbackTexts.Login.TooManyAttempts, Wait(outcome.RetryAfter)),
+        SignInResult.Unconfirmed => outcome.Title ?? FeedbackTexts.Login.Unconfirmed,
+        SignInResult.AwaitingApproval => outcome.Title ?? FeedbackTexts.Login.AwaitingApproval,
+        _ => FeedbackTexts.Login.Unavailable,
     };
 
     private static string Wait(TimeSpan? retryAfter)

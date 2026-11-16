@@ -107,7 +107,7 @@ public sealed class SessionExpiryPageTests(WebShell shell)
         await Assertions.Expect(page.Page).ToHaveURLAsync(shell.Address + "/login?returnUrl=" + Uri.EscapeDataString(back));
         await Assertions.Expect(page.Page.Locator(".login-ended")).ToContainTextAsync("Nach dem Anmelden geht es dort weiter");
 
-        await page.Page.GetByLabel("Name").FillAsync(StubService.UserName);
+        await page.Page.GetByLabel("E-Mail oder Name").FillAsync(StubService.UserName);
         await page.Page.GetByLabel("Passwort").FillAsync(StubService.Password);
         await page.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Anmelden" }).ClickAsync();
     }

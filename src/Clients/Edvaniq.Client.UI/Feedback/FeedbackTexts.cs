@@ -320,6 +320,38 @@ public static class FeedbackTexts
         public const string AnswerBack = "Deine Frage von vorhin ist noch offen. Prüf deine Antwort, sie zählt einmal.";
     }
 
+    // The login page (#264, #269). Where the host sends a title, that title is shown and these are only the fallback.
+    // One hint for a wrong address, name or password: nobody learns whether an account exists.
+    public static class Login
+    {
+        public const string Missing = "Gib deine E-Mail-Adresse oder deinen Namen und dein Passwort ein.";
+
+        public const string WrongCredentials = "E-Mail, Name oder Passwort stimmen nicht. Prüf alles und versuch es noch einmal.";
+
+        public const string TooManyAttempts = "Zu viele Versuche. Warte {0} und versuch es dann noch einmal.";
+
+        public const string Unavailable = "Die Anmeldung ist gerade nicht möglich. Versuch es in ein paar Minuten noch einmal.";
+
+        public const string Unconfirmed = "Bestätige zuerst deine E-Mail-Adresse mit dem Link aus unserer Mail.";
+
+        public const string Resend = "Link neu senden";
+
+        public const string Resending = "Link wird gesendet …";
+
+        public const string Resent = "Wir haben dir einen neuen Link geschickt. Schau in dein Postfach, auch in den Spam-Ordner.";
+
+        public const string MailDelayed = "Die Mail kann sich verspäten.";
+
+        public const string ResendLimited = "Du hast gerade schon einen neuen Link bekommen. Warte {0} und frag dann noch einmal.";
+
+        public const string ResendUnavailable = "Der Link lässt sich gerade nicht senden. Versuch es in ein paar Minuten noch einmal.";
+
+        public const string AwaitingApprovalTitle = "Fast geschafft";
+
+        // For the account of a minor (#269), only after the right password. Has to work on its own for a child.
+        public const string AwaitingApproval = "Dein Konto ist angelegt, aber noch nicht freigeschaltet. Weil du noch nicht 18 bist, brauchen wir vorher die Erlaubnis deiner Eltern. Sobald sie da ist, schalten wir dein Konto frei, und du kannst dich hier anmelden.";
+    }
+
     // The mastery after an answer, which comes a moment later (#222).
     public static class Progress
     {

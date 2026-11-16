@@ -37,6 +37,7 @@ public sealed class SessionExpiryTests : BunitContext
         Services.AddSingleton(watch);
         Services.AddSingleton(drafts);
         Services.AddSingleton<IWebSession>(session);
+        Services.AddSingleton<IAccountConfirmations>(new FakeAccountConfirmations());
         Services.AddSingleton<TimeProvider>(new ManualTime());
         Services.AddSingleton<ILearningMaterial>(material);
         Services.AddSingleton<IQuiz>(quiz);

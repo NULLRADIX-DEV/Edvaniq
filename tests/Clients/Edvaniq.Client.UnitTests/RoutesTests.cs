@@ -22,6 +22,7 @@ public sealed class RoutesTests : BunitContext
         Services.AddSingleton<IBackendStatus>(new FakeBackendStatus(true));
         Services.AddSingleton<IPing>(new FakePing(new PingOutcome(new PingResult(42, DateTimeOffset.UtcNow))));
         Services.AddSingleton<IWebSession>(new FakeWebSession());
+        Services.AddSingleton<IAccountConfirmations>(new FakeAccountConfirmations());
         authorization = AddAuthorization();
         SetRendererInfo(new RendererInfo("WebAssembly", isInteractive: true));
     }

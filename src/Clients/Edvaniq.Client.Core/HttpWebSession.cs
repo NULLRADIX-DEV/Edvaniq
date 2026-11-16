@@ -49,13 +49,23 @@ public sealed class HttpWebSession(HttpClient http) : IWebSession
         {
             using var response = await http.PostAsJsonAsync(
                 LoginPath, new Credentials(name, password), SessionJson.Default.Credentials, cancellationToken);
-            return response.StatusCode switch
+            if (response.IsSuccessStatusCode)
             {
-                _ when response.IsSuccessStatusCode => new SignInOutcome(SignInResult.SignedIn),
-                HttpStatusCode.Unauthorized => new SignInOutcome(SignInResult.WrongCredentials),
-                HttpStatusCode.TooManyRequests => new SignInOutcome(
+                return new SignInOutcome(SignInResult.SignedIn);
+            }
+
+            // 401 and 429 say enough by their status: too_many_attempts and locked (#252) only differ in the wait.
+            var refusal = await LoginRefusal.ReadAsync(response, cancellationToken);
+            return (response.StatusCode, refusal.Code) switch
+            {
+                (HttpStatusCode.Unauthorized, _) => new SignInOutcome(SignInResult.WrongCredentials),
+                (HttpStatusCode.TooManyRequests, _) => new SignInOutcome(
                     SignInResult.TooManyAttempts, response.Headers.RetryAfter?.Delta ?? TimeSpan.FromMinutes(1)),
-                _ => new SignInOutcome(SignInResult.Unavailable, TraceId: await ProblemTrace.ReadAsync(response, cancellationToken)),
+                (HttpStatusCode.Forbidden, "unconfirmed") => new SignInOutcome(
+                    SignInResult.Unconfirmed, Title: ProblemTitle.Check(refusal.Title)),
+                (HttpStatusCode.Forbidden, "awaiting_approval") => new SignInOutcome(
+                    SignInResult.AwaitingApproval, Title: ProblemTitle.Check(refusal.Title)),
+                _ => new SignInOutcome(SignInResult.Unavailable, TraceId: ProblemTrace.Check(refusal.TraceId)),
             };
         }
         catch (HttpRequestException)
@@ -90,7 +100,29 @@ internal sealed record Credentials(string Name, string Password);
 
 internal sealed record SessionUser(string? Account);
 
+// Why the host refused a login. Anything but a readable problem counts as none.
+internal sealed record LoginRefusal(string? Code = null, string? Title = null, string? TraceId = null)
+{
+    public static async Task<LoginRefusal> ReadAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (!string.Equals(response.Content.Headers.ContentType?.MediaType, "application/problem+json", StringComparison.OrdinalIgnoreCase))
+        {
+            return new LoginRefusal();
+        }
+
+        try
+        {
+            return await response.Content.ReadFromJsonAsync(SessionJson.Default.LoginRefusal, cancellationToken) ?? new LoginRefusal();
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            return new LoginRefusal();
+        }
+    }
+}
+
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
 [JsonSerializable(typeof(Credentials))]
 [JsonSerializable(typeof(SessionUser))]
+[JsonSerializable(typeof(LoginRefusal))]
 internal sealed partial class SessionJson : JsonSerializerContext;

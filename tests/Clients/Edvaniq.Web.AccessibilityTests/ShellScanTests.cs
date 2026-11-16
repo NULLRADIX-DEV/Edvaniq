@@ -54,7 +54,7 @@ public sealed class ShellScanTests(WebShell shell)
         await using var page = await shell.OpenAsync(shell.AddressWithoutGateway, path, width);
         await Assertions.Expect(page.Page.Locator(".backend-banner")).ToBeVisibleAsync();
 
-        await page.Page.GetByLabel("Name").FillAsync("ben");
+        await page.Page.GetByLabel("E-Mail oder Name").FillAsync("ben");
         await page.Page.GetByLabel("Passwort").FillAsync("richtig-langes-passwort");
         await page.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Anmelden" }).ClickAsync();
         await Assertions.Expect(page.Page.Locator(".login-hint")).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 45_000 });

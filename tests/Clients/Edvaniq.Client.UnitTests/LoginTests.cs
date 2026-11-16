@@ -2,6 +2,7 @@ using Bunit;
 using Bunit.TestDoubles;
 
 using Edvaniq.Client.Core;
+using Edvaniq.Client.UI.Feedback;
 using Edvaniq.Client.UI.Pages;
 
 using Microsoft.AspNetCore.Components;
@@ -20,12 +21,15 @@ public sealed class LoginTests : BunitContext
 
     private FakeWebSession session = new();
 
+    private FakeAccountConfirmations confirmations = new();
+
     // What the fields show in the browser on submit. Null: the binding knows it all, as when somebody typed.
     private readonly JSRuntimeInvocationHandler<string?[]?> shown;
 
     public LoginTests()
     {
         Services.AddSingleton<IWebSession>(_ => session);
+        Services.AddSingleton<IAccountConfirmations>(_ => confirmations);
         AddAuthorization();
         SetRendererInfo(new RendererInfo("WebAssembly", isInteractive: true));
         JSInterop.Mode = JSRuntimeMode.Strict;
@@ -73,7 +77,7 @@ public sealed class LoginTests : BunitContext
         form.Find("form").Submit();
 
         Assert.Empty(session.Logins);
-        Assert.Equal("Gib deinen Namen und dein Passwort ein.", form.Find("[role=alert] p").TextContent);
+        Assert.Equal(FeedbackTexts.Login.Missing, form.Find("[role=alert] p").TextContent);
     }
 
     // Without the script the binding still works.
@@ -94,7 +98,7 @@ public sealed class LoginTests : BunitContext
     {
         var form = RenderForm(new FakeWebSession());
 
-        Assert.Equal("Name", form.Find("label[for=login-name]").TextContent);
+        Assert.Equal("E-Mail oder Name", form.Find("label[for=login-name]").TextContent);
         Assert.Equal("Passwort", form.Find("label[for=login-password]").TextContent);
         Assert.Equal("username", form.Find("#login-name").GetAttribute("autocomplete"));
         Assert.Equal("password", form.Find("#login-password").GetAttribute("type"));
@@ -139,7 +143,7 @@ public sealed class LoginTests : BunitContext
         SignIn(form);
 
         Assert.Equal(
-            "Name oder Passwort stimmen nicht. Prüf beides und versuch es noch einmal.",
+            "E-Mail, Name oder Passwort stimmen nicht. Prüf alles und versuch es noch einmal.",
             form.Find("[role=alert] p").TextContent);
         Assert.Equal("ben", form.Find("#login-name").GetAttribute("value"));
         Assert.Equal("", form.Find("#login-password").GetAttribute("value"));
@@ -183,7 +187,7 @@ public sealed class LoginTests : BunitContext
         SignIn(form, name, password);
 
         Assert.Empty(session.Logins);
-        Assert.Equal("Gib deinen Namen und dein Passwort ein.", form.Find("[role=alert] p").TextContent);
+        Assert.Equal(FeedbackTexts.Login.Missing, form.Find("[role=alert] p").TextContent);
     }
 
     // A second press while a login runs sends nothing, the button says what is going on.
@@ -226,9 +230,158 @@ public sealed class LoginTests : BunitContext
         Assert.Equal("http://localhost/systemstatus", Services.GetRequiredService<NavigationManager>().Uri);
     }
 
-    private IRenderedComponent<LoginForm> RenderForm(FakeWebSession fake, string? returnUrl = null)
+    // #252: a locked login waits longer, said in minutes like any other wait.
+    [Fact]
+    public void Locked_SaysTheMinutes()
+    {
+        var form = RenderForm(new FakeWebSession(new SignInOutcome(SignInResult.TooManyAttempts, TimeSpan.FromMinutes(15))));
+
+        SignIn(form, "kim@example.org");
+
+        Assert.Equal("Zu viele Versuche. Warte 15 Minuten und versuch es dann noch einmal.", form.Find("[role=alert] p").TextContent);
+    }
+
+    [Fact]
+    public void Unconfirmed_ShowsTheHostsSentence_AndOffersANewLink()
+    {
+        var form = RenderForm(new FakeWebSession(new SignInOutcome(SignInResult.Unconfirmed, Title: "Bestätige zuerst deine Adresse.")));
+
+        SignIn(form, " kim@example.org ");
+
+        var notice = form.Find("[role=alert] .login-unconfirmed");
+        Assert.Equal("Bestätige zuerst deine Adresse.", notice.QuerySelector("p")!.TextContent);
+        Assert.Equal(FeedbackTexts.Login.Resend, notice.QuerySelector("button")!.TextContent.Trim());
+        Assert.Equal("button", notice.QuerySelector("button")!.GetAttribute("type"));
+        Assert.Empty(form.FindAll(".login-hint"));
+    }
+
+    [Fact]
+    public void Unconfirmed_WithoutATitle_HasItsOwnSentence()
+    {
+        var form = RenderForm(new FakeWebSession(new SignInOutcome(SignInResult.Unconfirmed)));
+
+        SignIn(form, "kim@example.org");
+
+        Assert.Equal(FeedbackTexts.Login.Unconfirmed, form.Find(".login-unconfirmed p").TextContent);
+    }
+
+    // A team name never waits for a confirmation, and it must not go out as an address.
+    [Fact]
+    public void Unconfirmed_ForAName_OffersNoLink()
+    {
+        var form = RenderForm(new FakeWebSession(new SignInOutcome(SignInResult.Unconfirmed)));
+
+        SignIn(form, "ben");
+
+        Assert.Empty(form.FindAll(".login-unconfirmed button"));
+    }
+
+    [Theory]
+    [InlineData(false, "Wir haben dir einen neuen Link geschickt. Schau in dein Postfach, auch in den Spam-Ordner.")]
+    [InlineData(true, "Wir haben dir einen neuen Link geschickt. Schau in dein Postfach, auch in den Spam-Ordner. Die Mail kann sich verspäten.")]
+    public void NewLink_GoesToTheTypedAddress_AndSaysSo(bool delayed, string note)
+    {
+        var fake = new FakeAccountConfirmations(new ResendOutcome(ResendResult.Sent, delayed));
+        var form = RenderForm(new FakeWebSession(new SignInOutcome(SignInResult.Unconfirmed)), confirmationsFake: fake);
+        SignIn(form, " kim@example.org ");
+        form.Find("#login-name").Change("jemand@anders.org");
+
+        form.Find(".login-unconfirmed button").Click();
+
+        Assert.Equal("kim@example.org", Assert.Single(fake.Resent));
+        Assert.Equal(note, form.Find(".login-resend-note").TextContent);
+        Assert.NotNull(form.Find("[role=alert] .login-resend-note"));
+    }
+
+    [Theory]
+    [InlineData(420, "Du hast gerade schon einen neuen Link bekommen. Warte 7 Minuten und frag dann noch einmal.")]
+    [InlineData(null, "Du hast gerade schon einen neuen Link bekommen. Warte 10 Minuten und frag dann noch einmal.")]
+    public void NewLink_Limited_SaysHowLongToWait(int? seconds, string note)
+    {
+        var fake = new FakeAccountConfirmations(new ResendOutcome(
+            ResendResult.Limited, RetryAfter: seconds is null ? null : TimeSpan.FromSeconds(seconds.Value)));
+        var form = RenderForm(new FakeWebSession(new SignInOutcome(SignInResult.Unconfirmed)), confirmationsFake: fake);
+        SignIn(form, "kim@example.org");
+
+        form.Find(".login-unconfirmed button").Click();
+
+        Assert.Equal(note, form.Find(".login-resend-note").TextContent);
+    }
+
+    [Fact]
+    public void NewLink_Unavailable_SaysSo()
+    {
+        var fake = new FakeAccountConfirmations(new ResendOutcome(ResendResult.Unavailable));
+        var form = RenderForm(new FakeWebSession(new SignInOutcome(SignInResult.Unconfirmed)), confirmationsFake: fake);
+        SignIn(form, "kim@example.org");
+
+        form.Find(".login-unconfirmed button").Click();
+
+        Assert.Equal(FeedbackTexts.Login.ResendUnavailable, form.Find(".login-resend-note").TextContent);
+    }
+
+    // A new attempt starts over: the note of the last link goes.
+    [Fact]
+    public void NextAttempt_ClearsTheLinkNote()
+    {
+        var form = RenderForm(new FakeWebSession(new SignInOutcome(SignInResult.Unconfirmed)));
+        SignIn(form, "kim@example.org");
+        form.Find(".login-unconfirmed button").Click();
+
+        SignIn(form, "kim@example.org");
+
+        Assert.Empty(form.FindAll(".login-resend-note"));
+    }
+
+    // #269: the account of a minor waits for its approval. The hint looks unlike an error and names no request id.
+    [Fact]
+    public void AwaitingApproval_ShowsItsOwnHint_WithTheHostsSentence()
+    {
+        var form = RenderForm(new FakeWebSession(new SignInOutcome(
+            SignInResult.AwaitingApproval, Title: "Deine Eltern müssen noch zustimmen.", TraceId: TraceId)));
+
+        SignIn(form, "kim@example.org");
+
+        var notice = form.Find("[role=alert] .login-approval");
+        Assert.Contains("notice-info", notice.ClassList);
+        Assert.Equal(FeedbackTexts.Login.AwaitingApprovalTitle, notice.QuerySelector(".notice-title")!.TextContent);
+        Assert.Equal("Deine Eltern müssen noch zustimmen.", notice.QuerySelector(".notice-body > p:not(.notice-title)")!.TextContent);
+        Assert.Empty(form.FindAll(".login-hint"));
+        Assert.Empty(form.FindAll(".login-unconfirmed"));
+        Assert.Empty(form.FindAll(".request-id"));
+        Assert.Empty(form.FindAll("[role=alert] button"));
+    }
+
+    [Fact]
+    public void AwaitingApproval_WithoutATitle_HasAChildFriendlySentence()
+    {
+        var form = RenderForm(new FakeWebSession(new SignInOutcome(SignInResult.AwaitingApproval)));
+
+        SignIn(form, "kim@example.org");
+
+        Assert.Equal(FeedbackTexts.Login.AwaitingApproval, form.Find(".login-approval .notice-body > p:not(.notice-title)").TextContent);
+    }
+
+    // What needs a step of its own looks unlike an error: a warning with the link, a note for the approval.
+    [Theory]
+    [InlineData(SignInResult.WrongCredentials, "login-hint")]
+    [InlineData(SignInResult.TooManyAttempts, "login-hint")]
+    [InlineData(SignInResult.Unavailable, "login-hint")]
+    [InlineData(SignInResult.Unconfirmed, "notice notice-warning login-unconfirmed")]
+    [InlineData(SignInResult.AwaitingApproval, "notice notice-info login-approval")]
+    public void EachRefusal_HasItsLook(SignInResult result, string look)
+    {
+        var form = RenderForm(new FakeWebSession(new SignInOutcome(result, TimeSpan.FromMinutes(1))));
+
+        SignIn(form, "kim@example.org");
+
+        Assert.Equal(look, Assert.Single(form.FindAll("[role=alert] > *")).ClassName);
+    }
+
+    private IRenderedComponent<LoginForm> RenderForm(FakeWebSession fake, string? returnUrl = null, FakeAccountConfirmations? confirmationsFake = null)
     {
         session = fake;
+        confirmations = confirmationsFake ?? new FakeAccountConfirmations();
         return Render<LoginForm>(parameters => parameters.Add(form => form.ReturnTo, returnUrl));
     }
 

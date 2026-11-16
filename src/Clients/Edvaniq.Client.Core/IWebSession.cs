@@ -20,11 +20,17 @@ public enum SignInResult
     // Name or password wrong. Which of the two, nobody says.
     WrongCredentials,
 
-    // Too many attempts, RetryAfter says how long to wait.
+    // Too many attempts or a locked login, RetryAfter says how long to wait.
     TooManyAttempts,
+
+    // Right password, but the address is not confirmed yet. Title is the host's sentence, if it sent one.
+    Unconfirmed,
+
+    // Right password, but the account of a minor still waits for its approval (#269). Title as above.
+    AwaitingApproval,
 
     Unavailable,
 }
 
 // A login that did not get through names the trace of the failed request when the host answered with a problem.
-public sealed record SignInOutcome(SignInResult Result, TimeSpan? RetryAfter = null, string? TraceId = null);
+public sealed record SignInOutcome(SignInResult Result, TimeSpan? RetryAfter = null, string? TraceId = null, string? Title = null);

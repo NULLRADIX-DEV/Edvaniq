@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 
 using Edvaniq.Client.Core;
 
@@ -44,15 +45,96 @@ public sealed class HttpWebSessionTests
         Assert.Equal(new SignInOutcome(SignInResult.TooManyAttempts, TimeSpan.FromSeconds(42)), outcome);
     }
 
-    [Theory]
-    [InlineData(HttpStatusCode.BadGateway)]
-    [InlineData(HttpStatusCode.BadRequest)]
-    [InlineData(HttpStatusCode.Forbidden)]
-    public async Task OtherError_IsUnavailable_WithTheTrace(HttpStatusCode code)
+    // #252: a locked login is a 429 like too many attempts, only with a longer wait.
+    [Fact]
+    public async Task Locked_IsTooManyAttempts_WithTheLongerWait()
     {
-        var outcome = await Session([], Problem(code)).SignInAsync("ben", "x", TestContext.Current.CancellationToken);
+        var answer = Problem(HttpStatusCode.TooManyRequests, "locked", "Zu viele Fehlversuche. Versuch es in 15 Minuten noch einmal.");
+        answer.Headers.RetryAfter = new(TimeSpan.FromMinutes(15));
+
+        var outcome = await Session([], answer).SignInAsync("kim@example.org", "x", TestContext.Current.CancellationToken);
+
+        Assert.Equal(new SignInOutcome(SignInResult.TooManyAttempts, TimeSpan.FromMinutes(15)), outcome);
+    }
+
+    [Fact]
+    public async Task TooManyRequests_WithoutRetryAfter_WaitsAMinute()
+    {
+        var outcome = await Session([], new HttpResponseMessage(HttpStatusCode.TooManyRequests))
+            .SignInAsync("ben", "x", TestContext.Current.CancellationToken);
+
+        Assert.Equal(new SignInOutcome(SignInResult.TooManyAttempts, TimeSpan.FromMinutes(1)), outcome);
+    }
+
+    [Theory]
+    [InlineData("invalid_credentials")]
+    [InlineData(null)]
+    public async Task Unauthorized_IsWrongCredentials_WhateverTheCode(string? code)
+    {
+        var outcome = await Session([], Problem(HttpStatusCode.Unauthorized, code, "Anmeldung fehlgeschlagen."))
+            .SignInAsync("ben", "x", TestContext.Current.CancellationToken);
+
+        Assert.Equal(new SignInOutcome(SignInResult.WrongCredentials), outcome);
+    }
+
+    [Theory]
+    [InlineData("unconfirmed", SignInResult.Unconfirmed)]
+    [InlineData("awaiting_approval", SignInResult.AwaitingApproval)]
+    public async Task Forbidden_WithAKnownCode_CarriesTheTitle(string code, SignInResult result)
+    {
+        var outcome = await Session([], Problem(HttpStatusCode.Forbidden, code, "  Ein Satz vom Host.  "))
+            .SignInAsync("kim@example.org", "x", TestContext.Current.CancellationToken);
+
+        Assert.Equal(new SignInOutcome(result, Title: "Ein Satz vom Host."), outcome);
+    }
+
+    // A title that is no sentence for the user is dropped, the page has its own then.
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("Forbidden\nline")]
+    public async Task Forbidden_WithoutAUsableTitle_HasNone(string? title)
+    {
+        var outcome = await Session([], Problem(HttpStatusCode.Forbidden, "awaiting_approval", title))
+            .SignInAsync("kim@example.org", "x", TestContext.Current.CancellationToken);
+
+        Assert.Equal(new SignInOutcome(SignInResult.AwaitingApproval), outcome);
+    }
+
+    [Fact]
+    public async Task Forbidden_WithALongTitle_HasNone()
+    {
+        var outcome = await Session([], Problem(HttpStatusCode.Forbidden, "unconfirmed", new string('a', 301)))
+            .SignInAsync("kim@example.org", "x", TestContext.Current.CancellationToken);
+
+        Assert.Equal(new SignInOutcome(SignInResult.Unconfirmed), outcome);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadGateway, null)]
+    [InlineData(HttpStatusCode.BadRequest, null)]
+    [InlineData(HttpStatusCode.Forbidden, null)]
+    [InlineData(HttpStatusCode.Forbidden, "something_new")]
+    public async Task OtherError_IsUnavailable_WithTheTrace(HttpStatusCode status, string? code)
+    {
+        var outcome = await Session([], Problem(status, code)).SignInAsync("ben", "x", TestContext.Current.CancellationToken);
 
         Assert.Equal(new SignInOutcome(SignInResult.Unavailable, TraceId: TraceId), outcome);
+    }
+
+    // The web host answers a failing Identity with a bare 502, a proxy maybe with a page of its own.
+    [Theory]
+    [InlineData("", "text/plain")]
+    [InlineData("<html>Bad Gateway</html>", "text/html")]
+    [InlineData("{kaputt", "application/problem+json")]
+    [InlineData("""{"code":7,"title":["x"]}""", "application/problem+json")]
+    public async Task BrokenAnswer_IsUnavailable_WithoutATrace(string body, string mediaType)
+    {
+        var answer = new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = new StringContent(body, Encoding.UTF8, mediaType) };
+
+        var outcome = await Session([], answer).SignInAsync("ben", "x", TestContext.Current.CancellationToken);
+
+        Assert.Equal(new SignInOutcome(SignInResult.Unavailable), outcome);
     }
 
     [Fact]
@@ -109,10 +191,13 @@ public sealed class HttpWebSessionTests
     private static HttpClient Client(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> answer) =>
         new(new Handler(answer)) { BaseAddress = new Uri("https://edvaniq.test/") };
 
-    private static HttpResponseMessage Problem(HttpStatusCode code) =>
-        new(code)
+    private static HttpResponseMessage Problem(HttpStatusCode status, string? code = null, string? title = null) =>
+        new(status)
         {
-            Content = new StringContent($$"""{"status":{{(int)code}},"traceId":"{{TraceId}}"}""", Encoding.UTF8, "application/problem+json"),
+            Content = new StringContent(
+                JsonSerializer.Serialize(new { status = (int)status, code, title, traceId = TraceId }),
+                Encoding.UTF8,
+                "application/problem+json"),
         };
 
     private static string Line(HttpRequestMessage request) => $"{request.Method} {request.RequestUri?.AbsolutePath}";
