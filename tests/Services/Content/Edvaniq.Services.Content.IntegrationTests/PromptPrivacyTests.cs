@@ -90,7 +90,13 @@ public sealed class PromptPrivacyTests : IClassFixture<ServiceFactory>, IDisposa
         var systems = provider.Requests.SelectMany(request => request.SystemPrompts).ToList();
         var templates = Templates();
         Assert.NotEmpty(templates);
-        Assert.All(templates, template => Assert.Contains(systems, system => system.StartsWith(template.Task, StringComparison.Ordinal)));
+        Assert.All(templates.Where(template => template.Task != ModerationCheck.Task), template =>
+            Assert.Contains(systems, system => system.StartsWith(template.Task, StringComparison.Ordinal)));
+
+        // The check of the material has no system prompt, only the material, sent to its own model.
+        Assert.Contains(templates, template => template.Task == ModerationCheck.Task);
+        Assert.Contains(provider.Requests, request => (string?)JsonNode.Parse(request.Body)!["model"] == ServiceFactory.ModerationModel
+            && request.SystemPrompts.Count == 0);
     }
 
     public void Dispose() => ai.Dispose();
@@ -196,7 +202,12 @@ public sealed class PromptPrivacyTests : IClassFixture<ServiceFactory>, IDisposa
                     [.. messages.Where(message => message.Role == ChatRole.System).Select(message => message.Text)]));
             }
 
-            var answer = await simulated.Services.GetRequiredService<SimulatedChatClient>().GetResponseAsync(messages, cancellationToken: cancellationToken);
+            // The task never goes over the wire, the check of the material is known by its model.
+            var model = JsonNode.Parse(body)!["model"]!.GetValue<string>();
+            var options = model == ServiceFactory.ModerationModel
+                ? new ChatOptions { AdditionalProperties = new() { [AiRequest.Task] = ModerationCheck.Task } }
+                : null;
+            var answer = await simulated.Services.GetRequiredService<SimulatedChatClient>().GetResponseAsync(messages, options, cancellationToken);
             var json = new JsonObject
             {
                 ["id"] = "answer",

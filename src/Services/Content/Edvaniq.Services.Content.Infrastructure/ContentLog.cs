@@ -177,4 +177,11 @@ internal static partial class ContentLog
 
     [LoggerMessage(EventId = 33960, Level = LogLevel.Information, Message = "Question pool of topic {TopicId} got {Added} new questions on {Sections} new sections of document {DocumentId}")]
     public static partial void PoolGotNewMaterial(ILogger logger, Guid topicId, Guid documentId, int sections, int added);
+
+    // #298: codes only, never the text that was checked.
+    [LoggerMessage(EventId = 33970, Level = LogLevel.Warning, Message = "Moderation flagged document {DocumentId}: {Codes}")]
+    public static partial void ModerationFlagged(ILogger logger, Guid documentId, string codes);
+
+    [LoggerMessage(EventId = 33971, Level = LogLevel.Warning, Message = "Moderation gave no readable answer for document {DocumentId} after {Attempts} attempts, nothing goes on")]
+    public static partial void ModerationUnreadable(ILogger logger, Guid documentId, int attempts);
 }

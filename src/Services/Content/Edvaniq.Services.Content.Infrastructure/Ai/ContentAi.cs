@@ -45,6 +45,7 @@ public static class ContentAi
     // The simulated answers, and the simulated AI for documents of a test account whatever Ai:Provider says.
     public static IServiceCollection AddContentTestDouble(this IServiceCollection services)
     {
+        services.AddSingleton<ISimulatedAnswer, SimulatedModeration>();
         services.AddSingleton<ISimulatedAnswer, SimulatedTopics>();
         services.AddSingleton<ISimulatedAnswer, SimulatedQuestions>();
         services.AddSingleton<ISimulatedAnswer, SimulatedSummary>();

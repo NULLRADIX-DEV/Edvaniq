@@ -26,6 +26,7 @@ public sealed class QuestionPools(
     TestDoubleAi testDouble,
     IOptions<AnalysisOptions> options,
     AiAnswers answers,
+    IModeration moderation,
     TimeProvider time,
     ILogger<QuestionPools> logger) : BackgroundService
 {
@@ -219,13 +220,17 @@ public sealed class QuestionPools(
             var system = job.Pool is null
                 ? QuestionGeneration.System(profile)
                 : QuestionGeneration.ForNewMaterial(profile, job.Room);
-            var (items, failure, attempts) = await QuestionRequests.AskAsync(
-                document, system, job.Material, texts, AiAttempt.Questions, job.Topic.Id, ai, testDouble, answers, AiTimeout, cancellationToken);
+            var (items, failure, attempts, flagged) = await QuestionRequests.AskAsync(
+                document, system, job.Material, texts, AiAttempt.Questions, job.Topic.Id, ai, testDouble, answers, moderation, AiTimeout, cancellationToken);
             if (items is null)
             {
                 if (failure is not null)
                 {
                     AiOutage.Handle(document, AiAttempt.Questions, failure, time.GetUtcNow().UtcDateTime, OutageDelays, logger);
+                }
+                else if (flagged)
+                {
+                    document.Fail(DocumentFailures.Inappropriate);
                 }
                 else
                 {

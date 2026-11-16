@@ -25,6 +25,7 @@ public sealed class DocumentAnalyzer(
     TestDoubleAi testDouble,
     IOptions<AnalysisOptions> options,
     AiAnswers answers,
+    IModeration moderation,
     TimeProvider time,
     ILogger<DocumentAnalyzer> logger) : BackgroundService
 {
@@ -121,6 +122,29 @@ public sealed class DocumentAnalyzer(
             .OrderBy(section => section.Ordinal)
             .ToListAsync(cancellationToken);
 
+        // The material is checked before any of it goes to the AI for topics (#298). A check that fails holds the document
+        // back like an outage of the AI, nothing goes on unchecked.
+        var verdict = await moderation.CheckAsync(
+            document,
+            ContentAi.For(document, ai, testDouble),
+            [.. sections.Select(section => document.Text.Substring(section.Start, section.Length))],
+            default,
+            cancellationToken);
+        if (verdict.Flagged || verdict.Failure is not null)
+        {
+            if (verdict.Failure is { } failed)
+            {
+                AiOutage.Handle(document, AiAttempt.Moderation, failed, time.GetUtcNow().UtcDateTime, OutageDelays, logger);
+            }
+            else
+            {
+                document.Fail(DocumentFailures.Inappropriate);
+            }
+
+            await WorkerSave.SaveAsync(db, documentId, "analysis", logger, cancellationToken);
+            return;
+        }
+
         var profile = await GoalContext.ProfileOfAsync(document, scope.ServiceProvider.GetRequiredService<IGoalProfiles>(), logger, cancellationToken);
         if (profile is null)
         {
@@ -132,8 +156,26 @@ public sealed class DocumentAnalyzer(
         var answer = await TopicsAsync(document, profile, sections, cancellationToken);
         if (answer.Value is { } topics)
         {
-            document.ReportTopics(time.GetUtcNow().UtcDateTime);
-            scope.ServiceProvider.GetRequiredService<IEventOutbox>().Add(new DocumentAnalyzed(document.OwnerId, document.Id, topics, document.LearningGoalId));
+            // The topics with their terms are checked before anything of them goes out (#298).
+            var checkedTopics = await moderation.CheckAsync(
+                document,
+                ContentAi.For(document, ai, testDouble),
+                [.. topics.Select(topic => string.Join('\n', [topic.Name, .. (topic.Terms ?? []).Select(term => $"{term.Term}: {term.Definition}")]))],
+                default,
+                cancellationToken);
+            if (checkedTopics.Failure is { } checkFailed)
+            {
+                AiOutage.Handle(document, AiAttempt.Moderation, checkFailed, time.GetUtcNow().UtcDateTime, OutageDelays, logger);
+            }
+            else if (checkedTopics.Flagged)
+            {
+                document.Fail(DocumentFailures.Inappropriate);
+            }
+            else
+            {
+                document.ReportTopics(time.GetUtcNow().UtcDateTime);
+                scope.ServiceProvider.GetRequiredService<IEventOutbox>().Add(new DocumentAnalyzed(document.OwnerId, document.Id, topics, document.LearningGoalId));
+            }
         }
         else if (answer.Failure is { } failure)
         {

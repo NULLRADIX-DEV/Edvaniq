@@ -883,9 +883,14 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             .. sectionIds.Select(section => section.ToString()), .. topicIds.Select(topic => topic.ToString())];
         Assert.All(questionRequests, text =>
             Assert.DoesNotContain(traces, trace => text.Contains(trace, StringComparison.OrdinalIgnoreCase)));
+        // The check of the material names its task and its model from the configuration, nothing of the user.
         Assert.All(requestOptions, options => Assert.True(
-            options is null || (options.ResponseFormat is not null && options.ConversationId is null && options.Instructions is null
-                && options.AdditionalProperties is null && options.Tools is null && options.ModelId is null),
+            options is null
+                || (options.ResponseFormat is not null && options.ConversationId is null && options.Instructions is null
+                    && options.AdditionalProperties is null && options.Tools is null && options.ModelId is null)
+                || (AiRequest.TaskOf(options) == ModerationCheck.Task && options.ResponseFormat is null && options.ConversationId is null
+                    && options.Instructions is null && options.Tools is null
+                    && options.AdditionalProperties!.Keys.All(key => key is AiRequest.Task or AiRequest.ExtraBody)),
             "A request carries options besides the form of the answer."));
     }
 
@@ -1462,11 +1467,12 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             .Select(section => section.Id)];
     }
 
+    // The cost of the analysis. The check of the material in front of it has its own rows, ModerationTests counts them.
     private List<AiAttempt> AttemptsOf(Guid documentId)
     {
         using var scope = service.Services.CreateScope();
         return [.. scope.ServiceProvider.GetRequiredService<ContentDbContext>().AiAttempts.IgnoreQueryFilters()
-            .Where(attempt => attempt.DocumentId == documentId)];
+            .Where(attempt => attempt.DocumentId == documentId && attempt.Purpose != AiAttempt.Moderation)];
     }
 
     // Calls for questions, not attempts: a call may need a second try.
@@ -1478,13 +1484,16 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         public IServiceScope CreateScope() => throw new InvalidOperationException("The database is away.");
     }
 
-    // A host with nothing but Content's AI on the simulated provider.
+    // A host with nothing but Content's AI on the simulated provider. The faults of these tests are meant for the tasks
+    // of the analysis, the check of the material before them passes (ModerationTests has its own outages).
     private static IHost SimulatedAi()
     {
         var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
         builder.Configuration.AddInMemoryCollection([KeyValuePair.Create("Ai:Provider", (string?)SimulatedChatClient.Provider)]);
         builder.AddContentAi();
-        return builder.Build();
+        var host = builder.Build();
+        host.Services.GetRequiredService<SimulatedChatClient>().FaultWhen = prompt => prompt.Task != ModerationCheck.Task;
+        return host;
     }
 
     // The simulated AI, keeping every prompt it gets. BrokenAnswers sits in between when given.

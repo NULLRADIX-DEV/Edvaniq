@@ -23,6 +23,9 @@ public sealed class AiAttempt : IOwnedByUser
     // More questions for a pool that came out short (#339), apart from the first questions of a topic.
     public const string TopUp = "topup";
 
+    // The check of material and output before anything goes on (#298).
+    public const string Moderation = "moderation";
+
     private AiAttempt(
         Guid callId, int attempt, string ownerId, Guid documentId, string purpose, string model, string promptVersion,
         DateTime calledAt, long durationMs, long inputTokens, long outputTokens, decimal? cost, AiAttemptOutcome outcome,
