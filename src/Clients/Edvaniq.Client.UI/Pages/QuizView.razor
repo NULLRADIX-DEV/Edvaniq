@@ -9,10 +9,6 @@
    attempt stays as it is: it belongs to the question asked, a new one with each return would be wrong. *@
 <RefreshOnReturn OnReturn="RefreshOnReturnAsync" />
 
-@* Reloading or closing the page would throw away a ticked answer not checked yet, so the browser asks first. *@
-<NavigationLock ConfirmExternalNavigation="Unchecked" />
-
-@* Question, options and explanation are Markdown from the AI, shown through SafeMarkdown: never as HTML. *@
 <h1 tabindex="-1" @ref="pageHeading">@(topicName is null ? "Frage üben" : $"Frage zu „{topicName}“")</h1>
 
 <div class="quiz-status" role="status">
@@ -60,162 +56,25 @@
             <a href="themen">Zurück zu den Themen</a>
         </div>
         break;
-    case ViewState.Asking or ViewState.Graded:
-        <form class="quiz-form" @onsubmit="SubmitAsync" novalidate>
-            <fieldset class="quiz-question" disabled="@(graded is not null)" aria-describedby="@(asked!.IsMultipleChoice ? "quiz-several" : null)">
-                <legend tabindex="-1" @ref="questionLegend"><SafeMarkdown Text="@asked.Text" Inline /></legend>
-                @if (asked.IsMultipleChoice)
-                {
-                    <p id="quiz-several" class="quiz-several">@FeedbackTexts.Quiz.SeveralRight</p>
-                }
-                <ul class="quiz-options">
-                    @for (var i = 0; i < asked.Options.Count; i++)
-                    {
-                        var option = i;
-                        <li @key="option" class="@OptionClass(option)">
-                            @if (asked.IsMultipleChoice)
-                            {
-                                <input type="checkbox" id="option-@option" name="quiz-options" value="@option"
-                                       checked="@IsTicked(option)" @onchange="args => Tick(option, args.Value is true)" />
-                            }
-                            else
-                            {
-                                <input type="radio" id="option-@option" name="quiz-option" value="@option"
-                                       checked="@(Chosen == option)" @onchange="() => Choose(option)" />
-                            }
-                            <label for="option-@option">
-                                <span class="quiz-option-text"><SafeMarkdown Text="@asked.Options[option]" Inline /></span>
-                                @if (graded is not null && asked.IsMultipleChoice)
-                                {
-                                    var right = graded.RightOptions.Contains(option);
-                                    if (graded.Chosen.Contains(option))
-                                    {
-                                        <span class="quiz-mark quiz-mark-own">
-                                            <span aria-hidden="true">@(right ? "✓" : "✗")</span> @(right ? FeedbackTexts.Quiz.RightChosen : FeedbackTexts.Quiz.WrongChosen)
-                                        </span>
-                                    }
-                                    else if (right)
-                                    {
-                                        <span class="quiz-mark quiz-mark-right">
-                                            <span aria-hidden="true">✓</span> @(graded.Revealed ? "Richtige Antwort" : FeedbackTexts.Quiz.RightMissed)
-                                        </span>
-                                    }
-                                }
-                                else if (graded is not null)
-                                {
-                                    if (option == graded.Option)
-                                    {
-                                        <span class="quiz-mark quiz-mark-own">
-                                            <span aria-hidden="true">@(graded.Correct ? "✓" : "✗")</span> Deine Antwort
-                                        </span>
-                                    }
-                                    if (option == graded.Answer)
-                                    {
-                                        <span class="quiz-mark quiz-mark-right"><span aria-hidden="true">✓</span> Richtige Antwort</span>
-                                    }
-                                }
-                            </label>
-                        </li>
-                    }
-                </ul>
-            </fieldset>
-
-            @* Label and hint stand from the start, they give nothing away. The source comes with the feedback: its page and
-               passage often hold the answer. *@
-            <AiNote WithoutMaterial="DocumentOrigins.IsSynthetic(sourceOrigin)" FromDemo="DocumentOrigins.IsDemo(sourceOrigin)" />
-
-            @* Always there, so a screen reader announces each hint. *@
-            <div role="alert">
-                @if (answerMessage is NotThrough)
-                {
-                    <ConnectionProblem Title="@NotThrough" TraceId="@answerTrace">
-                        <p>@FeedbackTexts.Quiz.NotThroughHint</p>
-                    </ConnectionProblem>
-                }
-                else if (answerMessage is not null)
-                {
-                    <Notice Kind="@(answerMessage is FeedbackTexts.Session.AnswerBack ? NoticeKind.Info : NoticeKind.Error)" class="quiz-answer-message">
-                        <p>@answerMessage</p>
-                        <RequestId Value="@answerTrace" />
-                    </Notice>
-                }
-            </div>
-
-            @if (graded is null)
-            {
-                @* Both stay enabled while one sends: a disabled button would lose the keyboard focus. Showing the
-                   solution counts as a wrong answer (docs/spec/modes.md). *@
+    case ViewState.Question:
+        <QuestionCard Round="askCount" Question="asked!" TopicId="TopicId" Documents="documents" FocusOnShow="focusQuestion"
+                      Resume="resume" DraftKey="@DraftKey" OnGone="GoneAsync">
+            <Next>
                 <div class="quiz-actions">
-                    <button type="submit" class="button">@(answering && !revealing ? "Wird geprüft …" : "Antwort prüfen")</button>
-                    <button type="button" class="quiz-reveal" @onclick="RevealAsync">
-                        @(answering && revealing ? "Wird geladen …" : "Lösung anzeigen")
-                    </button>
+                    <button type="button" class="button" @onclick="() => AskAsync(focus: true)">Nächste Frage</button>
+                    <a href="themen">Zurück zu den Themen</a>
                 </div>
-            }
-        </form>
-
-        @if (graded is not null)
-        {
-            @* Below the explanation, how the answer moved the mastery once LearningEngine has it (#222). *@
-            <section class="quiz-feedback @(graded.Correct ? "quiz-right" : "")" aria-labelledby="feedback-heading">
-                <h2 id="feedback-heading" tabindex="-1" @ref="feedbackHeading">
-                    <span aria-hidden="true">@(graded.Correct ? "✓" : "✗")</span>
-                    @(graded.Correct ? FeedbackTexts.Answer.Right : graded.Revealed ? FeedbackTexts.Answer.Revealed : FeedbackTexts.Answer.Wrong)
-                </h2>
-                @if (!graded.Correct)
-                {
-                    <p>@(graded.Revealed ? FeedbackTexts.Answer.RevealedHint : FeedbackTexts.Answer.WrongHint)</p>
-                }
-                @if (RightOptions.Count > 1)
-                {
-                    <p><strong>Richtige Antworten:</strong></p>
-                    <ul class="quiz-right-list">
-                        @foreach (var right in RightOptions)
-                        {
-                            <li><SafeMarkdown Text="@right" Inline /></li>
-                        }
-                    </ul>
-                }
-                else
-                {
-                    <p><strong>Richtige Antwort:</strong> <SafeMarkdown Text="@RightOption" Inline /></p>
-                }
-                @* Below the h2 above, so a heading in the text starts at h3. *@
-                <div class="quiz-explanation">
-                    <p><strong>Erklärung:</strong></p>
-                    <SafeMarkdown Text="@graded.Explanation" HeadingOffset="2" />
-                </div>
-                @if (asked.Source is { } source)
-                {
-                    <h3 class="quiz-source-heading">@FeedbackTexts.Sources.Heading</h3>
-                    <SourceView Lookup="documents" DocumentId="source.DocumentId" SectionId="source.SectionId" />
-                }
-                <AnswerProgress TopicId="TopicId" AnswerId="graded.Id" />
-            </section>
-
-            <div class="quiz-actions">
-                <button type="button" class="button" @onclick="() => AskAsync(focus: true)">Nächste Frage</button>
-                <a href="themen">Zurück zu den Themen</a>
-            </div>
-        }
+            </Next>
+        </QuestionCard>
         break;
 }
 
 @code {
-    private const string NotThrough = FeedbackTexts.Quiz.NotThrough;
-
-    private const string NothingChosen = FeedbackTexts.Quiz.NothingChosen;
-
     [Parameter]
     public Guid TopicId { get; set; }
 
     private readonly CancellationTokenSource life = new();
     private DocumentLookup documents = default!;
-
-    // What the question's document is made of, once the documents are known: only then can the label say "without
-    // material". Until then it says "KI-generiert".
-    private string? sourceOrigin;
-    private TimeProvider time = TimeProvider.System;
     private Guid? loadedTopic;
 
     private bool loading = true;
@@ -226,24 +85,16 @@
     private string? topicName;
 
     private AskedQuestion? asked;
-    private long shownAt;
-    private int? selected;
 
-    // The ticks of a multiple choice question.
-    private readonly SortedSet<int> ticked = [];
-    private bool answering;
-    private bool revealing;
+    // Each ask starts the card afresh, even when the server brings the same attempt again.
+    private int askCount;
 
-    // Measured once on the first submit, so a retry after a failed call sends the same time.
-    private int? responseTimeMs;
-    private string? answerMessage;
-    private string? answerTrace;
-    private GradedAnswer? graded;
+    // The open question back from the login, handed to the card once.
+    private QuestionDraft? resume;
+    private bool focusQuestion;
 
     private ElementReference pageHeading;
-    private ElementReference questionLegend;
-    private ElementReference feedbackHeading;
-    private FocusTarget focusNext;
+    private bool focusPage;
 
     private enum ViewState
     {
@@ -253,16 +104,7 @@
         NotFound,
         LoadFailed,
         UnknownType,
-        Asking,
-        Graded,
-    }
-
-    private enum FocusTarget
-    {
-        None,
-        Page,
         Question,
-        Feedback,
     }
 
     private ViewState State => this switch
@@ -272,29 +114,14 @@
         { askFailure: CallResult.NotReady } => ViewState.NotReady,
         { askFailure: CallResult.NotFound } => ViewState.NotFound,
         { askFailure: not null } => ViewState.LoadFailed,
-        { graded: not null } => ViewState.Graded,
         { asked.IsKnownType: false } => ViewState.UnknownType,
-        _ => ViewState.Asking,
+        { asked: not null } => ViewState.Question,
+        _ => ViewState.Loading,
     };
 
-    // What the server graded counts, not what is ticked here: a second answer to the same attempt brings the first.
-    private int? Chosen => graded?.Option ?? selected;
+    private string DraftKey => $"{nameof(QuestionDraft)}:{TopicId:D}";
 
-    private bool IsTicked(int option) => graded is not null ? graded.Chosen.Contains(option) : ticked.Contains(option);
-
-    private bool Unchecked => asked is not null && graded is null && (selected is not null || ticked.Count > 0);
-
-    private string RightOption =>
-        graded!.Answer < asked!.Options.Count ? asked.Options[graded.Answer] : "";
-
-    private IReadOnlyList<string> RightOptions =>
-        [.. graded!.RightOptions.Where(option => option < asked!.Options.Count).Select(option => asked!.Options[option])];
-
-    protected override void OnInitialized()
-    {
-        time = Services.GetService<TimeProvider>() ?? TimeProvider.System;
-        documents = new DocumentLookup(Material);
-    }
+    protected override void OnInitialized() => documents = new DocumentLookup(Material);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -307,16 +134,12 @@
         topicName = null;
 
         // Back from the login: the same open attempt, so the answer goes to it and counts once.
-        if (Services.GetService<Drafts>()?.Take<OpenQuestion>(DraftKey) is { } open)
+        if (Services.GetService<Drafts>()?.Take<QuestionDraft>(DraftKey) is { } open)
         {
             asked = open.Asked;
-            shownAt = open.ShownAt;
-            selected = open.Selected;
-            ticked.UnionWith(open.Ticked ?? []);
-            responseTimeMs = open.ResponseTimeMs;
-            answerMessage = FeedbackTexts.Session.AnswerBack;
+            resume = open;
             loading = false;
-            focusNext = FocusTarget.Question;
+            focusQuestion = true;
             await LoadTopicNameAsync();
             return;
         }
@@ -326,22 +149,15 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        var target = focusNext;
-        focusNext = FocusTarget.None;
+        if (!focusPage)
+        {
+            return;
+        }
+
+        focusPage = false;
         try
         {
-            switch (target)
-            {
-                case FocusTarget.Page:
-                    await pageHeading.FocusAsync();
-                    break;
-                case FocusTarget.Question:
-                    await questionLegend.FocusAsync();
-                    break;
-                case FocusTarget.Feedback:
-                    await feedbackHeading.FocusAsync();
-                    break;
-            }
+            await pageHeading.FocusAsync();
         }
         catch (JSException)
         {
@@ -374,7 +190,7 @@
     // attempt when it has a question, so asking again after 409 leaves nothing open.
     private async Task RefreshOnReturnAsync()
     {
-        if (loading || askingNow || answering)
+        if (loading || askingNow)
         {
             return;
         }
@@ -415,20 +231,14 @@
         }
 
         asked = null;
-        graded = null;
-        selected = null;
-        ticked.Clear();
-        responseTimeMs = null;
-        answerMessage = null;
-        answerTrace = null;
+        resume = null;
         askFailure = null;
         loadTrace = null;
         switch (outcome.Result)
         {
             case CallResult.Ok:
                 asked = outcome.Value!;
-                shownAt = time.GetTimestamp();
-                _ = LoadOriginAsync(asked);
+                askCount++;
                 break;
             case CallResult.SignedOut:
                 signedOut = true;
@@ -439,181 +249,24 @@
                 break;
         }
 
-        if (focus)
-        {
-            focusNext = asked is { IsKnownType: true } ? FocusTarget.Question : FocusTarget.Page;
-        }
-        else if (quiet && asked is { IsKnownType: true })
-        {
-            // The hint and its button are gone, the focus goes where the button would have taken it.
-            focusNext = FocusTarget.Question;
-        }
+        // Quietly back with a question, the hint and its button are gone: the focus goes where the button would have
+        // taken it.
+        focusQuestion = asked is { IsKnownType: true } && (focus || quiet);
+        focusPage = focus && !focusQuestion;
     }
 
-    // Without an answer the label stays "KI-generiert": that is true either way.
-    private async Task LoadOriginAsync(AskedQuestion question)
+    // The topic went away while its question was open.
+    private Task GoneAsync()
     {
-        sourceOrigin = null;
-        if (question.Source is not { } source)
-        {
-            return;
-        }
-
-        try
-        {
-            var outcome = await documents.ListAsync(life.Token);
-            if (asked == question && outcome.Value?.FirstOrDefault(document => document.Id == source.DocumentId) is { } document)
-            {
-                sourceOrigin = document.Origin;
-                StateHasChanged();
-            }
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (ObjectDisposedException)
-        {
-        }
+        asked = null;
+        resume = null;
+        askFailure = CallResult.NotFound;
+        focusPage = true;
+        return Task.CompletedTask;
     }
 
-    private void Choose(int option)
-    {
-        if (graded is null)
-        {
-            selected = option;
-            answerMessage = null;
-        }
-    }
-
-    private void Tick(int option, bool on)
-    {
-        if (graded is not null)
-        {
-            return;
-        }
-
-        if (on)
-        {
-            ticked.Add(option);
-        }
-        else
-        {
-            ticked.Remove(option);
-        }
-
-        answerMessage = null;
-    }
-
-    // One answer at a time: a second click while the first is on its way does nothing. What still comes in twice, a
-    // retry after a lost answer or another tab, the server answers with the stored grade.
-    private async Task SubmitAsync()
-    {
-        if (answering || graded is not null || asked is null)
-        {
-            return;
-        }
-
-        if (asked.IsMultipleChoice)
-        {
-            if (ticked.Count == 0)
-            {
-                answerMessage = NothingChosen;
-                answerTrace = null;
-                return;
-            }
-
-            IReadOnlyList<int> options = [.. ticked];
-            await SendAsync((attemptId, ms) => Quiz.AnswerAsync(attemptId, options, ms, life.Token), reveal: false);
-            return;
-        }
-
-        if (selected is not { } option)
-        {
-            answerMessage = NothingChosen;
-            answerTrace = null;
-            return;
-        }
-
-        await SendAsync((attemptId, ms) => Quiz.AnswerAsync(attemptId, option, ms, life.Token), reveal: false);
-    }
-
-    // Counts as a wrong answer, with the time measured like one. Whatever is ticked doesn't count then.
-    private async Task RevealAsync()
-    {
-        if (answering || graded is not null || asked is null)
-        {
-            return;
-        }
-
-        await SendAsync((attemptId, ms) => Quiz.RevealAsync(attemptId, ms, life.Token), reveal: true);
-    }
-
-    private async Task SendAsync(Func<Guid, int, Task<CallOutcome<GradedAnswer>>> send, bool reveal)
-    {
-        responseTimeMs ??= (int)Math.Min(time.GetElapsedTime(shownAt).TotalMilliseconds, int.MaxValue);
-        answering = true;
-        revealing = reveal;
-        answerMessage = null;
-        answerTrace = null;
-        CallOutcome<GradedAnswer> outcome;
-        try
-        {
-            outcome = await send(asked!.Id, responseTimeMs.Value);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        finally
-        {
-            answering = false;
-        }
-
-        switch (outcome.Result)
-        {
-            case CallResult.Ok when outcome.Value!.Chosen.All(option => option < asked.Options.Count)
-                && outcome.Value.RightOptions.All(option => option < asked.Options.Count):
-                graded = outcome.Value;
-                focusNext = FocusTarget.Feedback;
-                break;
-            case CallResult.SignedOut:
-                // The question stays, the shell leads to the login, and the drafts bring it back afterwards.
-                signedOut = true;
-                answerMessage = FeedbackTexts.Session.AnswerKept;
-                break;
-            case CallResult.NotFound:
-                asked = null;
-                askFailure = CallResult.NotFound;
-                focusNext = FocusTarget.Page;
-                break;
-            default:
-                answerMessage = NotThrough;
-                answerTrace = outcome.TraceId;
-                break;
-        }
-    }
-
-    private string? OptionClass(int option) => graded switch
-    {
-        null => null,
-        _ when graded.RightOptions.Contains(option) => "quiz-option-right",
-        _ when graded.Chosen.Contains(option) => "quiz-option-own",
-        _ => null,
-    };
-
-    private string DraftKey => $"{nameof(OpenQuestion)}:{TopicId:D}";
-
-    private sealed record OpenQuestion(AskedQuestion Asked, long ShownAt, int? Selected, int? ResponseTimeMs, IReadOnlyList<int>? Ticked = null);
-
-    // An attempt left open because the login ran out waits for the same account (Drafts). Never sent again by itself:
-    // the user checks it once more.
     public void Dispose()
     {
-        if (signedOut && asked is not null && graded is null)
-        {
-            Services.GetService<Drafts>()?.Keep(DraftKey, new OpenQuestion(asked, shownAt, selected, responseTimeMs, [.. ticked]));
-        }
-
         life.Cancel();
         life.Dispose();
     }

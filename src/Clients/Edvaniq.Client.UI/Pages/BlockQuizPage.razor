@@ -1,0 +1,31 @@
+@page "/themen/{TopicId:guid}/quiz/{BlockId:guid}"
+@attribute [Authorize]
+
+<PageTitle>Quiz – Edvaniq</PageTitle>
+
+@* A way to the block quiz on its own, for checks and tests. Nothing links here: the session runner (#396) puts
+   BlockQuizView into its quiz step directly. The block id is only a key, Assessment keeps quizzes per user. *@
+<h1>Quiz</h1>
+
+@if (RendererInfo.IsInteractive)
+{
+    <BlockQuizView TopicId="TopicId" BlockId="BlockId">
+        <AfterDone>
+            <div class="block-quiz-way">
+                <a href="">Zur Startseite</a>
+            </div>
+        </AfterDone>
+    </BlockQuizView>
+}
+else
+{
+    <PageLoading />
+}
+
+@code {
+    [Parameter]
+    public Guid TopicId { get; set; }
+
+    [Parameter]
+    public Guid BlockId { get; set; }
+}

@@ -235,6 +235,68 @@ internal static class Material
         });
     }
 
+    // A block's quiz with one question of each type (#357). Right are "In den Thylakoiden", "Licht" with "Wasser" and
+    // "Wahr". Each answer is graded from what was sent to its attempt, and lands in sent.
+    public static async Task AnswerBlockQuizAsync(IPage page, List<string> sent)
+    {
+        Guid single = Guid.Parse("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c01"), several = Guid.Parse("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c02"),
+            trueFalse = Guid.Parse("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c03");
+        static object Question(Guid id, string type, string text, string[] options) => new
+        {
+            id,
+            topicId = TopicId,
+            questionId = Guid.NewGuid(),
+            type,
+            text,
+            options,
+            difficulty = 1,
+            answered = false,
+            correct = (bool?)null,
+        };
+
+        await AnswerAsync(page, documents: [new[] { Document("Ready") }], topics: [Topics]);
+        await page.RouteAsync("**/api/assessment/quizzes", route => FulfillAsync(route, new
+        {
+            id = Guid.NewGuid(),
+            blockId = BlockId,
+            topicId = TopicId,
+            questions = new[]
+            {
+                Question(single, "singleChoice", "Wo findet die Lichtreaktion statt?", ["Im Zellkern", "In den Thylakoiden"]),
+                Question(several, "multipleChoice", "Was braucht die Photosynthese?", ["Licht", "Sauerstoff", "Wasser"]),
+                Question(trueFalse, "trueFalse", "Die Lichtreaktion braucht Licht.", ["Wahr", "Falsch"]),
+            },
+            poolTooSmall = false,
+        }));
+        await page.RouteAsync("**/api/assessment/attempts/*/answer", route =>
+        {
+            sent.Add(route.Request.PostData ?? "");
+            var id = Guid.Parse(route.Request.Url.Split('/')[^2]);
+            var body = JsonDocument.Parse(route.Request.PostData!).RootElement;
+            int[] chosen = body.TryGetProperty("options", out var options)
+                ? [.. options.EnumerateArray().Select(option => option.GetInt32())]
+                : [body.GetProperty("option").GetInt32()];
+            int[] right = id == single ? [1] : id == several ? [0, 2] : [0];
+            return FulfillAsync(route, new
+            {
+                id,
+                topicId = TopicId,
+                questionId = Guid.NewGuid(),
+                option = id == several ? (int?)null : chosen[0],
+                options = id == several ? chosen : null,
+                revealed = false,
+                correct = chosen.SequenceEqual(right),
+                answer = right[0],
+                answers = right,
+                explanation = "So steht es im Skript.",
+                responseTimeMs = 1000,
+                answeredAt = DateTime.UtcNow,
+            });
+        });
+    }
+
+    public static readonly Guid BlockId = Guid.Parse("2e3f4a5b-6c7d-4e8f-9a0b-1c2d3e4f5a62");
+
     // Planning's learning goals: none yet, and a new one comes back as it was sent. What was sent lands in the list.
     public static Task AnswerGoalsAsync(IPage page, List<string> created) =>
         page.RouteAsync("**/api/planning/learning-goals", route =>
