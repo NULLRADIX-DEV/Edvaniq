@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.Services.Planning.IntegrationTests;
@@ -61,14 +60,6 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
                 services.AddHttpClient<IQuestionPoolSource, AssessmentQuestionPools>().ConfigurePrimaryHttpMessageHandler(Assessment.Handler);
                 services.AddHttpClient<IMasteryChanges, LearningEngineMasteryChanges>().ConfigurePrimaryHttpMessageHandler(LearningEngine.Handler);
                 services.AddHttpClient<ISessionAnswers, AssessmentAnswers>().ConfigurePrimaryHttpMessageHandler(Assessment.Handler);
-
-                // Keeps the retries of a LearningEngine or Assessment that is down short.
-                // The circuit breaker never opens: the stubs fail per token, and a breaker opened by one test's outage
-                // would cut off the next test of the class.
-                services.ConfigureAll<HttpStandardResilienceOptions>(options =>
-                {
-                    options.Retry.Delay = TimeSpan.FromMilliseconds(1);
-                    options.CircuitBreaker.MinimumThroughput = int.MaxValue;
-                });
+                services.AddTestResilience();
             });
 }
