@@ -30,7 +30,7 @@ public enum MailProvider
     Recording,
 }
 
-internal sealed class MailOptionsValidation : IValidateOptions<MailOptions>
+public sealed class MailOptionsValidation : IValidateOptions<MailOptions>
 {
     public ValidateOptionsResult Validate(string? name, MailOptions options) =>
         Uri.TryCreate(options.PublicBaseUrl, UriKind.Absolute, out var address)

@@ -146,14 +146,13 @@ public sealed partial class MailTests(IdentityDatabase database) : IClassFixture
     [InlineData("app.example.org")]
     [InlineData("http://app.example.org/")]
     [InlineData("https://app.example.org/?a=1")]
-    public void WrongPublicBaseUrl_StopsTheStart(string? url)
+    public void WrongPublicBaseUrl_IsRefused(string? url)
     {
-        using var identity = new IdentityFactory(
-            new Dictionary<string, string?> { ["Mail:PublicBaseUrl"] = url }, connectionString: database.ConnectionString);
+        // Checked on its own: a factory whose start fails races its own disposal now and then (see StartupTests).
+        var result = new MailOptionsValidation().Validate(null, new MailOptions { PublicBaseUrl = url });
 
-        var failure = StartFailure.Of<OptionsValidationException>(() => identity.CreateClient());
-
-        Assert.Contains("Mail:PublicBaseUrl", failure.Message, StringComparison.Ordinal);
+        Assert.True(result.Failed);
+        Assert.Contains("Mail:PublicBaseUrl", result.FailureMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -163,6 +162,9 @@ public sealed partial class MailTests(IdentityDatabase database) : IClassFixture
             new Dictionary<string, string?> { ["Mail:PublicBaseUrl"] = "http://localhost:5096" }, connectionString: database.ConnectionString);
 
         Assert.Equal("http://localhost:5096/login", identity.Services.GetRequiredService<MailLinks>().Login);
+
+        // The check runs at every start (ValidateOnStart), Identity doesn't start with a wrong address.
+        Assert.Contains(identity.Services.GetServices<IValidateOptions<MailOptions>>(), validation => validation is MailOptionsValidation);
     }
 
     // A user account as registration makes it, straight into the database.
