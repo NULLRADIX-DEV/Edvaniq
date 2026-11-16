@@ -23,6 +23,8 @@ public sealed partial class ConfirmationTests(IdentityDatabase database) : IClas
 {
     private const string Password = "ein langes Passwort";
 
+    private const string Legal = "vorlaeufig-1";
+
     private static CancellationToken Cancel => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -256,7 +258,9 @@ public sealed partial class ConfirmationTests(IdentityDatabase database) : IClas
 
         email ??= $"lena-{Guid.NewGuid():N}@example.org";
         using var response = await identity.CreateClient().PostAsJsonAsync(
-            "/accounts", new { email, password = Password, inviteCode = code, pseudonym = "Lernfuchs", birthYear }, Cancel);
+            "/accounts",
+            new { email, password = Password, inviteCode = code, pseudonym = "Lernfuchs", birthYear, acceptedTermsVersion = Legal, acceptedPrivacyVersion = Legal },
+            Cancel);
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         return email;
     }

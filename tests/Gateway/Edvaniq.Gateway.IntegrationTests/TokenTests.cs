@@ -16,8 +16,9 @@ namespace Edvaniq.Gateway.IntegrationTests;
 // check, health and the 404 for unknown paths answer without one.
 public sealed class TokenTests
 {
-    // Open by design: the token endpoint, registering and confirming without an account (#249, #250).
-    private static readonly string[] OpenRoutes = ["identity-token", "identity-accounts", "identity-confirmation", "identity-resend"];
+    // Open by design: the token endpoint, registering and confirming without an account and the versions of the legal
+    // texts to agree to (#249, #250, #261).
+    private static readonly string[] OpenRoutes = ["identity-token", "identity-accounts", "identity-confirmation", "identity-resend", "identity-legal-versions"];
 
     // Goes through the routes of appsettings.json, so a new route is covered without a change here.
     [Fact]

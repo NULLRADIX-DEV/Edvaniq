@@ -20,6 +20,11 @@ internal static partial class AccountCommand
 
     public static async Task<int> RunAsync(IServiceProvider services, string[] args, TextReader input, TextWriter output, TextWriter error)
     {
+        if (args is ["account", "consent", var consenting])
+        {
+            return await ConsentAsync(services, consenting, output, error);
+        }
+
         if (args is ["account", "approve" or "revoke" or "pending", ..])
         {
             return await ApprovalsAsync(services, args, output, error);
@@ -44,7 +49,7 @@ internal static partial class AccountCommand
         if (name is null)
         {
             await error.WriteLineAsync(
-                $"Usage: account set <name> [{TestDoubleOption}], with the password on stdin, account delete <name or email>, account confirm <email>, account approve <email>, account revoke <email> or account pending.");
+                $"Usage: account set <name> [{TestDoubleOption}], with the password on stdin, account delete <name or email>, account confirm <email>, account approve <email>, account revoke <email>, account pending or account consent <email>.");
             return Invalid;
         }
 
