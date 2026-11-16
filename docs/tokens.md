@@ -164,3 +164,17 @@ dotnet Edvaniq.Services.Identity.Api.dll account confirm <email>
 ```
 
 Der Befehl schreibt `confirmed` oder, wenn es kein unbestätigtes Konto mit der Adresse gibt, `no account`, sonst nichts.
+
+## Freigabe Minderjähriger
+
+Wer laut Geburtsjahr minderjährig sein könnte, braucht die schriftliche Einwilligung der Eltern. Die Regel nimmt nur das Geburtsjahr und entscheidet im Zweifel für minderjährig: Volljährig ist ein Konto erst, wenn das Geburtsjahr mindestens 19 Jahre zurückliegt. Ein volljähriges Konto ist nach der Bestätigung sofort aktiv, ein minderjähriges wartet. Bei der Anmeldung bekommt es `awaiting_approval` mit einem Hinweis, wie es weitergeht.
+
+Ist die Einwilligung da, gibt der Betreiber das Konto frei. Edvaniq speichert davon nur das Datum der Freigabe, nicht die Einwilligung selbst:
+
+```bash
+dotnet Edvaniq.Services.Identity.Api.dll account pending
+dotnet Edvaniq.Services.Identity.Api.dll account approve <email>
+dotnet Edvaniq.Services.Identity.Api.dll account revoke <email>
+```
+
+`account pending` listet die wartenden Konten mit Adresse, Geburtsjahr und Datum der Bestätigung, die Adresse nur auf der Konsole, nie im Log. `account approve` gibt ein wartendes Konto frei und schreibt `approved`. `account revoke` nimmt eine Freigabe zurück, das Konto wartet dann wieder, und schreibt `revoked`. Gibt es kein passendes Konto, schreiben beide `no account`. Ein Token, das vor dem Widerruf ausgestellt wurde, gilt bis zu seinem Ablauf weiter, höchstens eine Stunde.

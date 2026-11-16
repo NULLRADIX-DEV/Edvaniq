@@ -32,6 +32,7 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<InviteService>();
         builder.Services.AddScoped<IIdentityTransactions, IdentityTransactions>();
         builder.Services.AddScoped<Confirmation>();
+        builder.Services.AddScoped<Approvals>();
         builder.Services.AddSingleton<AccountSweep>();
         builder.Services.AddHostedService(services => services.GetRequiredService<AccountSweep>());
         builder.Services.AddScoped<Registration>();
