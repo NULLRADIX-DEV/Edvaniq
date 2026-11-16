@@ -142,8 +142,22 @@ public sealed class QuizPageTests(WebShell shell)
         await Assertions.Expect(page.Page.Locator(".quiz-status")).ToContainTextAsync("Zu diesem Thema gibt es noch keine Fragen.");
         await AssertLargeEnoughAsync(page.Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Noch einmal versuchen" }));
         await AssertLargeEnoughAsync(page.Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Anderes Thema wählen" }));
+        await AssertLargeEnoughAsync(page.Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Zusammenfassung lesen zu „Photosynthese“" }));
         await AssertNoSidewaysScrollAsync(page.Page);
         await AxeScan.AssertNoViolationsAsync(page.Page, $"{Path} without questions at {width} px");
+    }
+
+    // #388 AC1: while the questions are made, the summary is one Tab and Enter away.
+    [Fact]
+    public async Task NoQuestionsYet_LeadsToTheSummary_WithTheKeyboard()
+    {
+        await using var page = await shell.OpenSignedInAsync(Path, WebShell.PhoneWidth, prepare: browser => Material.AnswerQuizAsync(browser, ready: false));
+        await Assertions.Expect(page.Page.Locator(".quiz-status")).ToContainTextAsync("Zu diesem Thema gibt es noch keine Fragen.");
+
+        await TabToAsync(page.Page, ".quiz-summary-link");
+        await page.Page.Keyboard.PressAsync("Enter");
+
+        await Assertions.Expect(page.Page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex($"/themen/{Material.TopicId}/zusammenfassung$"));
     }
 
     // #196 AC3 and AC4: the connection breaks while the answer is on its way. The page says so without anything

@@ -40,6 +40,20 @@ public sealed class HttpQuizTests
         Assert.Equal(["A", "B", "C"], outcome.Value.Options);
     }
 
+    // #387: true when the questions come again, missing from a host before that.
+    [Theory]
+    [InlineData(",\"repeated\":true", true)]
+    [InlineData(",\"repeated\":false", false)]
+    [InlineData("", null)]
+    public async Task Ask_ReadsWhetherTheQuestionComesAgain(string field, bool? expected)
+    {
+        var quiz = Quiz([], Answer(HttpStatusCode.Created, AskedJson.Replace("}", field + "}", StringComparison.Ordinal)));
+
+        var outcome = await quiz.AskAsync(Guid.Parse(TopicId), TestContext.Current.CancellationToken);
+
+        Assert.Equal((CallResult.Ok, expected), (outcome.Result, outcome.Value?.Repeated));
+    }
+
     [Fact]
     public async Task Answer_PostsOptionAndTime_ToTheAttempt()
     {
@@ -174,6 +188,11 @@ public sealed class HttpQuizTests
     [InlineData($$"""{"id":"{{AttemptId}}","topicId":"{{TopicId}}","questionId":"{{QuestionId}}","text":"Frage?","options":["A"],"difficulty":2}""")]
     [InlineData($$"""{"id":"{{AttemptId}}","topicId":"{{TopicId}}","questionId":"{{QuestionId}}","options":["A","B"],"difficulty":2}""")]
     [InlineData("<html>proxy</html>")]
+    [InlineData($$"""{"id":"{{AttemptId}}","topicId":"{{TopicId}}","questionId":"{{QuestionId}}","text":" ","options":["A","B"],"difficulty":2}""")]
+    [InlineData($$"""{"id":"{{AttemptId}}","topicId":"{{TopicId}}","questionId":"{{QuestionId}}","text":null,"options":["A","B"],"difficulty":2}""")]
+    [InlineData($$"""{"id":"{{AttemptId}}","topicId":"{{TopicId}}","questionId":"{{QuestionId}}","text":"Frage?","options":["A",null],"difficulty":2}""")]
+    [InlineData($$"""{"id":"{{AttemptId}}","topicId":"{{TopicId}}","questionId":"{{QuestionId}}","text":"Frage?","options":["A",""],"difficulty":2}""")]
+    [InlineData($$"""{"id":"{{AttemptId}}","topicId":"{{TopicId}}","questionId":"{{QuestionId}}","text":"Frage?","options":null,"difficulty":2}""")]
     public async Task UnusableQuestion_Fails(string body)
     {
         var quiz = Quiz([], Answer(HttpStatusCode.Created, body));

@@ -20,11 +20,18 @@
         case ViewState.SignedOut:
             @* No question yet: the shell says that the login ran out and leads to it (SessionEndedNotice). *@
             break;
+        case ViewState.NotReady when ownTopic:
+            <EmptyState Title="@FeedbackTexts.Quiz.NoQuestionsOwnTopic" Hint="@FeedbackTexts.Quiz.NoQuestionsOwnTopicHint" />
+            break;
         case ViewState.NotReady:
             <EmptyState Title="@FeedbackTexts.Quiz.NoQuestions" Hint="@FeedbackTexts.Quiz.NoQuestionsHint" />
             break;
         case ViewState.NotFound:
             <Notice Kind="NoticeKind.Error" Title="@FeedbackTexts.Quiz.TopicGone" class="quiz-topic-gone" />
+            break;
+        case ViewState.Question when announceRepeated:
+            @* Said once when the questions start to come again, not with every one after. *@
+            <span class="visually-hidden">@FeedbackTexts.Quiz.Repeated</span>
             break;
         case ViewState.LoadFailed:
             <ConnectionProblem Title="@FeedbackTexts.Quiz.LoadFailed" TraceId="@loadTrace" />
@@ -39,9 +46,14 @@
 
 @switch (State)
 {
+    case ViewState.NotReady when ownTopic:
+        <StateActions Href="themen" LinkText="@FeedbackTexts.Quiz.OtherTopic" />
+        break;
     case ViewState.NotReady:
         <StateActions ActionText="@FeedbackTexts.Quiz.AskAgain" OnAction="() => AskAsync(focus: true)"
-                      Href="themen" LinkText="@FeedbackTexts.Quiz.OtherTopic" />
+                      Href="themen" LinkText="@FeedbackTexts.Quiz.OtherTopic">
+            <a class="quiz-summary-link" href="@SummaryHref">@FeedbackTexts.Quiz.ReadSummary@NameForReaders()</a>
+        </StateActions>
         break;
     case ViewState.NotFound:
         <StateActions Href="themen" LinkText="@FeedbackTexts.Quiz.BackToTopics" />
@@ -57,6 +69,16 @@
         </div>
         break;
     case ViewState.Question:
+        @if (asked!.Repeated == true)
+        {
+            <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.Quiz.Repeated" class="quiz-repeated">
+                <p>@FeedbackTexts.Quiz.RepeatedHint</p>
+                <p class="quiz-repeated-ways">
+                    <a href="@SummaryHref">@FeedbackTexts.Quiz.ReadSummary@NameForReaders()</a>
+                    <a href="themen">@FeedbackTexts.Quiz.OtherTopic</a>
+                </p>
+            </Notice>
+        }
         <QuestionCard Round="askCount" Question="asked!" TopicId="TopicId" Documents="documents" FocusOnShow="focusQuestion"
                       Resume="resume" DraftKey="@DraftKey" OnGone="GoneAsync">
             <Next>
@@ -83,6 +105,12 @@
     private CallResult? askFailure;
     private string? loadTrace;
     private string? topicName;
+
+    // The user made the topic (#317): no document, so no questions will come from one (#388).
+    private bool ownTopic;
+
+    // The questions just started to come again (#387), the live region says so once.
+    private bool announceRepeated;
 
     private AskedQuestion? asked;
 
@@ -121,6 +149,20 @@
 
     private string DraftKey => $"{nameof(QuestionDraft)}:{TopicId:D}";
 
+    private string SummaryHref => $"themen/{TopicId:D}/zusammenfassung";
+
+    // The topic's name in the link for a screen reader, as SummaryLink has it.
+    private RenderFragment NameForReaders() => builder =>
+    {
+        if (topicName is not null)
+        {
+            builder.OpenElement(0, "span");
+            builder.AddAttribute(1, "class", "visually-hidden");
+            builder.AddContent(2, $" zu „{topicName}“");
+            builder.CloseElement();
+        }
+    };
+
     protected override void OnInitialized() => documents = new DocumentLookup(Material);
 
     protected override async Task OnParametersSetAsync()
@@ -132,6 +174,7 @@
 
         loadedTopic = TopicId;
         topicName = null;
+        ownTopic = false;
 
         // Back from the login: the same open attempt, so the answer goes to it and counts once.
         if (Services.GetService<Drafts>()?.Take<QuestionDraft>(DraftKey) is { } open)
@@ -180,9 +223,14 @@
 
         if (topics is { Result: CallResult.Ok, Value: { } list })
         {
-            topicName = list.Select(topic => topic.Id == TopicId ? topic.Name : null)
-                .Concat(list.SelectMany(topic => topic.Subtopics).Select(subtopic => subtopic.Id == TopicId ? subtopic.Name : null))
-                .FirstOrDefault(name => name is not null);
+            var found = list.Select(topic => (topic.Id, topic.Name, topic.DocumentId))
+                .Concat(list.SelectMany(topic => topic.Subtopics).Select(subtopic => (subtopic.Id, subtopic.Name, subtopic.DocumentId)))
+                .Where(entry => entry.Id == TopicId)
+                .ToList();
+
+            // Not found, the topic counts as one from material: its questions may still come.
+            topicName = found is [var match, ..] ? match.Name : null;
+            ownTopic = found is [{ DocumentId: null }, ..];
         }
     }
 
@@ -230,15 +278,18 @@
             loading = false;
         }
 
+        var wasRepeated = asked?.Repeated == true;
         asked = null;
         resume = null;
         askFailure = null;
+        announceRepeated = false;
         loadTrace = null;
         switch (outcome.Result)
         {
             case CallResult.Ok:
                 asked = outcome.Value!;
                 askCount++;
+                announceRepeated = asked.Repeated == true && !wasRepeated;
                 break;
             case CallResult.SignedOut:
                 signedOut = true;

@@ -30,11 +30,21 @@
     }
 </div>
 
+@* Before the questions, not in their run: the quiz is shorter or repeats one (#387, #388). *@
+@if (State is ViewState.Question && quiz is { PoolTooSmall: true })
+{
+    <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.BlockQuiz.PoolTooSmall" class="block-quiz-small-pool">
+        <p>@FeedbackTexts.BlockQuiz.PoolTooSmallHint</p>
+    </Notice>
+}
+
 @switch (State)
 {
     case ViewState.NotReady:
         <StateActions ActionText="@FeedbackTexts.Quiz.AskAgain" OnAction="OpenAsync"
-                      Href="themen" LinkText="@FeedbackTexts.Quiz.OtherTopic" />
+                      Href="themen" LinkText="@FeedbackTexts.Quiz.OtherTopic">
+            <a class="block-quiz-summary-link" href="themen/@TopicId.ToString("D")/zusammenfassung">@FeedbackTexts.Quiz.ReadSummary</a>
+        </StateActions>
         break;
     case ViewState.NotFound:
         <StateActions Href="themen" LinkText="@FeedbackTexts.Quiz.BackToTopics" />

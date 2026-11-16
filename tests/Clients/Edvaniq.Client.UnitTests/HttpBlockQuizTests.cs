@@ -84,6 +84,10 @@ public sealed class HttpBlockQuizTests
     [Theory]
     [InlineData("\"questions\":[]")]
     [InlineData("\"options\":[\"A\"]")]
+    [InlineData("\"options\":[\"A\",null]")]
+    [InlineData("\"options\":null")]
+    [InlineData("\"questions\":null")]
+    [InlineData("\"questions\":[null]")]
     public async Task UnusableQuiz_Fails(string broken)
     {
         var body = broken.StartsWith("\"questions\"", StringComparison.Ordinal)

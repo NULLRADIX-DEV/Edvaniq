@@ -20,3 +20,19 @@ h1 {
 .button {
     min-height: 2.75rem;
 }
+
+
+/* The ways on from a hint (#388), as easy to hit as a button. */
+.quiz-summary-link,
+.quiz-repeated-ways a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+}
+
+.quiz-repeated-ways {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin-bottom: 0;
+}
