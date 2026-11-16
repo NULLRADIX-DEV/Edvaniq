@@ -218,6 +218,61 @@ public sealed class DemoTests(ServiceFactory service) : IClassFixture<ServiceFac
         }
     }
 
+    // The demo answers know only whole pools: a short demo pool is never topped up. No quota, no call, no log line.
+    [Fact]
+    public async Task ShortDemoPool_IsNotToppedUp()
+    {
+        var alice = NewUser();
+        using var client = ClientFor(alice, testDouble: true);
+        var ai = new NoAi();
+        var demo = await CreateAsync(client, alice, HttpStatusCode.Created);
+        var topic = (await AnalyzeAsync(demo, ai))[0];
+        await StoreAsync(db => db.QuestionPools.IgnoreQueryFilters().Where(pool => pool.TopicId == topic.Id)
+            .ExecuteUpdateAsync(set => set.SetProperty(pool => pool.Questions, 5), Cancel));
+        var topUps = ActivatorUtilities.CreateInstance<QuestionTopUps>(service.Services, (IChatClient)ai);
+        var lines = service.Logs.Entries.Count;
+
+        Assert.DoesNotContain(topic.Id, await topUps.WaitingAsync(Cancel));
+        Assert.False(await topUps.TopUpAsync(topic.Id, Cancel));
+
+        var pool = Query(db => db.QuestionPools.IgnoreQueryFilters().AsNoTracking().Single(item => item.TopicId == topic.Id));
+        Assert.Equal((5, false, 0), (pool.Questions, pool.TopUpStopped, pool.TopUps));
+        Assert.DoesNotContain(service.Logs.Entries.Skip(lines), entry => entry.Message.Contains(topic.Id.ToString(), StringComparison.Ordinal));
+        Assert.Equal(0, ai.Calls);
+        Assert.False(Query(db => db.GenerationCharges.IgnoreQueryFilters().Any(charge => charge.TopicId == topic.Id)));
+    }
+
+    // A demo document that brings sections to a topic with a pool adds nothing to it, asks nothing and gets ready (#915).
+    [Fact]
+    public async Task DemoMaterial_ForATopicWithAPool_AddsNothing_AndGetsReady()
+    {
+        var alice = NewUser();
+        using var client = ClientFor(alice, testDouble: true);
+        var ai = new NoAi();
+        var demo = await CreateAsync(client, alice, HttpStatusCode.Created);
+        var (first, second) = (demo.Documents[0].Id, demo.Documents[1].Id);
+        var topic = (await AnalyzeAsync(new DemoDto(demo.LearningGoalId, [demo.Documents[0]]), ai))[0];
+
+        await ActivatorUtilities.CreateInstance<DocumentSplitter>(service.Services).SplitAsync(second, Cancel);
+        await ActivatorUtilities.CreateInstance<DocumentAnalyzer>(service.Services, (IChatClient)ai).AnalyzeAsync(second, Cancel);
+        var made = service.Knowledge.TakeOver(Assert.Single(await OutboxAsync<DocumentAnalyzed>(second)));
+        service.Knowledge.Give(second, [topic with { SectionIds = [.. topic.SectionIds, .. made.SelectMany(item => item.SectionIds)] }]);
+        Assert.True(await ActivatorUtilities.CreateInstance<QuestionPools>(service.Services, (IChatClient)ai).FinishAsync(second, Cancel));
+
+        Assert.Equal(DocumentStatus.Ready, Query(db => db.Documents.IgnoreQueryFilters().Single(document => document.Id == second)).Status);
+        Assert.Empty(await OutboxAsync<ItemsGenerated>(second));
+        var secondSections = Query(db => db.Sections.IgnoreQueryFilters().Where(section => section.DocumentId == second).Select(section => section.Id).ToList());
+        Assert.False(Query(db => db.PoolMaterials.IgnoreQueryFilters().Any(material => secondSections.Contains(material.SectionId))));
+        Assert.Equal(0, ai.Calls);
+        Assert.False(Query(db => db.AiAttempts.IgnoreQueryFilters().Any(attempt => attempt.DocumentId == first || attempt.DocumentId == second)));
+    }
+
+    private async Task StoreAsync(Func<ContentDbContext, Task> change)
+    {
+        using var scope = service.Services.CreateScope();
+        await change(scope.ServiceProvider.GetRequiredService<ContentDbContext>());
+    }
+
     // The worker's steps for each demo document: split, analyze, Knowledge takes the topics over, the pools follow.
     private async Task<List<KnowledgeTopic>> AnalyzeAsync(DemoDto demo, NoAi ai)
     {

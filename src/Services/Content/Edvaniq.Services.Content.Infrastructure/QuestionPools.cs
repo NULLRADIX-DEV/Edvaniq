@@ -174,6 +174,12 @@ public sealed class QuestionPools(
                 continue;
             }
 
+            // The demo answers know only whole pools (#411), demo material adds nothing to a pool that has one.
+            if (document.Origin == DocumentOrigin.Demo)
+            {
+                continue;
+            }
+
             // A pool from before #915 has no material rows: its own document counts as asked, every other as new.
             var before = asked[topic.Id].ToHashSet();
             List<Guid> fresh = before.Count == 0 && pool.DocumentId == documentId ? [] : [.. material.Where(section => !before.Contains(section))];
