@@ -117,6 +117,9 @@ public sealed class AccountServiceTests
         public Task<Account?> FindAsync(string name, CancellationToken cancellationToken) =>
             Task.FromResult(All.FirstOrDefault(account => account.Name == name));
 
+        public Task<Account?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
+            Task.FromResult(All.FirstOrDefault(account => account.Id == id));
+
         public Task<Account?> FindByEmailAsync(string email, CancellationToken cancellationToken) =>
             Task.FromResult(All.FirstOrDefault(account => account.Email == email));
 
@@ -127,5 +130,7 @@ public sealed class AccountServiceTests
         public Task SaveAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task<bool> SaveUnlessTakenAsync(CancellationToken cancellationToken) => Task.FromResult(true);
+
+        public Task LockByEmailAsync(string email, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

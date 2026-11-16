@@ -10,6 +10,8 @@ internal static class AccountEndpoints
     public static IEndpointRouteBuilder MapAccountEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/accounts", RegisterAsync).AllowAnonymous();
+        app.MapPost("/accounts/confirmations", ConfirmAsync).AllowAnonymous();
+        app.MapPost("/accounts/confirmations/resend", ResendAsync).AllowAnonymous();
         return app;
     }
 
@@ -24,6 +26,22 @@ internal static class AccountEndpoints
 
     public static IResult Refused(string code, string title) =>
         TypedResults.Problem(statusCode: StatusCodes.Status400BadRequest, title: title, extensions: new Dictionary<string, object?> { ["code"] = code });
+
+    private static async Task<IResult> ConfirmAsync(TokenBody? body, Confirmation confirmation, CancellationToken cancellationToken) =>
+        await confirmation.ConfirmAsync(body?.Token, cancellationToken) switch
+        {
+            ConfirmResult.Confirmed => TypedResults.NoContent(),
+            ConfirmResult.Expired => Refused("token_expired", "Dieser Link ist abgelaufen. Fordere einen neuen an."),
+            ConfirmResult.Used => Refused("token_used", "Dieser Link wurde schon benutzt oder durch einen neueren ersetzt."),
+            _ => Refused("token_invalid", "Dieser Link stimmt nicht. Kopier ihn vollständig aus der Mail oder fordere einen neuen an."),
+        };
+
+    private static async Task<IResult> ResendAsync(EmailBody? body, Confirmation confirmation, CancellationToken cancellationToken) =>
+        TypedResults.Accepted((string?)null, new Accepted(await confirmation.ResendAsync(body?.Email, cancellationToken)));
+
+    private sealed record TokenBody(string? Token);
+
+    private sealed record EmailBody(string? Email);
 
     private sealed record RegistrationBody(string? Email, string? Password, string? InviteCode, string? Pseudonym, int? BirthYear);
 

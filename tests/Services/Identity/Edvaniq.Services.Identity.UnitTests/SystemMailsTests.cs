@@ -141,6 +141,9 @@ public sealed partial class SystemMailsTests
 
         public void Add(OutgoingMail mail) => Mails.Add(mail);
 
+        public Task<bool> AnyWaitingForAsync(Guid accountId, MailKind kind, CancellationToken cancellationToken) =>
+            Task.FromResult(Mails.Any(mail => mail.AccountId == accountId && mail.Kind == kind));
+
         public Task<bool> AnyWaitingSinceAsync(DateTime before, CancellationToken cancellationToken)
         {
             AskedSince = before;

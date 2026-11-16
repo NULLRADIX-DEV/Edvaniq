@@ -99,6 +99,7 @@ public sealed class IdentityFactory(
             ["Mail:Provider"] = "Recording",
             ["Mail:PublicBaseUrl"] = PublicBaseUrl,
             ["Mail:Dispatch"] = "false",
+            ["Accounts:Sweep"] = "false",
         };
         if (connectionString is not null)
         {

@@ -70,6 +70,20 @@ public sealed class Account
 
     public void SetPasswordHash(string passwordHash) => PasswordHash = passwordHash;
 
+    // The address is confirmed (#250). Of age by the year of birth, the account is active, otherwise it waits for the
+    // operator's approval (#256): whoever might be a minor counts as one. False if it was confirmed before.
+    public bool Confirm(DateTime now)
+    {
+        if (Status != AccountStatus.Unconfirmed)
+        {
+            return false;
+        }
+
+        ConfirmedAt = now;
+        Status = BirthYear is { } year && !AccountProfile.IsMinor(year, now.Year) ? AccountStatus.Active : AccountStatus.AwaitingApproval;
+        return true;
+    }
+
     public void SetTestDouble(bool usesTestDouble) => UsesTestDouble = usesTestDouble;
 }
 

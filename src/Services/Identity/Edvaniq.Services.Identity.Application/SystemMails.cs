@@ -6,6 +6,9 @@ public interface IMailOutbox
 {
     void Add(OutgoingMail mail);
 
+    // Whether a mail of this kind waits for the account.
+    Task<bool> AnyWaitingForAsync(Guid accountId, MailKind kind, CancellationToken cancellationToken);
+
     // Whether a mail waits since before this time, a sign that the mail service is away.
     Task<bool> AnyWaitingSinceAsync(DateTime before, CancellationToken cancellationToken);
 }
@@ -15,6 +18,10 @@ public interface IAccountTokens
     void Add(AccountToken token);
 
     Task<AccountToken?> FindByHashAsync(string hash, CancellationToken cancellationToken);
+
+    // Marks the token with this hash used, if it has the purpose and is neither used nor expired, in one statement: of
+    // two uses at once only one gets it. Returns its account, null if it was no such token.
+    Task<Guid?> TryUseAsync(string hash, TokenPurpose purpose, DateTime now, CancellationToken cancellationToken);
 
     // Of the account and purpose, made since then, newest first.
     Task<IReadOnlyList<AccountToken>> SinceAsync(Guid accountId, TokenPurpose purpose, DateTime since, CancellationToken cancellationToken);

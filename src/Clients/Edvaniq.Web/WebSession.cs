@@ -281,12 +281,21 @@ internal sealed class LoginOptions
 
     // Registrations (#249) a client address may send in an hour.
     public int RegistrationsPerClientPerHour { get; set; }
+
+    // Confirmation links (#250) a client address may try in a minute.
+    public int ConfirmationsPerClientPerMinute { get; set; }
+
+    // New confirmation links a client address may ask for in ten minutes. Identity limits them per account too.
+    public int ResendsPerClientPer10Minutes { get; set; }
 }
 
 internal static class LoginLimit
 {
-    // The limit of POST /api/identity/accounts, a route of the section ReverseProxy names it as RateLimiterPolicy.
+    // The limits of the account routes without login (#249, #250). A route of the section ReverseProxy names its limit
+    // as RateLimiterPolicy.
     public const string RegistrationPolicy = "registration";
+    public const string ConfirmationPolicy = "confirmation";
+    public const string ResendPolicy = "confirmation-resend";
 
     public static IServiceCollection AddLoginLimit(this IServiceCollection services)
     {
@@ -294,6 +303,8 @@ internal static class LoginLimit
             .BindConfiguration(LoginOptions.Section)
             .Validate(options => options.PerClientPerMinute > 0, "Login:PerClientPerMinute must be above 0.")
             .Validate(options => options.RegistrationsPerClientPerHour > 0, "Login:RegistrationsPerClientPerHour must be above 0.")
+            .Validate(options => options.ConfirmationsPerClientPerMinute > 0, "Login:ConfirmationsPerClientPerMinute must be above 0.")
+            .Validate(options => options.ResendsPerClientPer10Minutes > 0, "Login:ResendsPerClientPer10Minutes must be above 0.")
             .ValidateOnStart();
 
         // The client address is the browser's, behind nginx from X-Forwarded-For (Program.cs).
@@ -310,34 +321,28 @@ internal static class LoginLimit
 
                 return ValueTask.CompletedTask;
             };
-            options.AddPolicy(WebLogin.RateLimitPolicy, context =>
-            {
-                var limits = context.RequestServices.GetRequiredService<Microsoft.Extensions.Options.IOptions<LoginOptions>>().Value;
-                return RateLimitPartition.GetFixedWindowLimiter(
-                    "login:" + context.Connection.RemoteIpAddress,
-                    _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = limits.PerClientPerMinute,
-                        Window = TimeSpan.FromMinutes(1),
-                        QueueLimit = 0,
-                    });
-            });
-            options.AddPolicy(RegistrationPolicy, context =>
-            {
-                var limits = context.RequestServices.GetRequiredService<Microsoft.Extensions.Options.IOptions<LoginOptions>>().Value;
-                return RateLimitPartition.GetFixedWindowLimiter(
-                    "registration:" + context.Connection.RemoteIpAddress,
-                    _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = limits.RegistrationsPerClientPerHour,
-                        Window = TimeSpan.FromHours(1),
-                        QueueLimit = 0,
-                    });
-            });
+            PerClient(options, WebLogin.RateLimitPolicy, limits => limits.PerClientPerMinute, TimeSpan.FromMinutes(1));
+            PerClient(options, RegistrationPolicy, limits => limits.RegistrationsPerClientPerHour, TimeSpan.FromHours(1));
+            PerClient(options, ConfirmationPolicy, limits => limits.ConfirmationsPerClientPerMinute, TimeSpan.FromMinutes(1));
+            PerClient(options, ResendPolicy, limits => limits.ResendsPerClientPer10Minutes, TimeSpan.FromMinutes(10));
         });
 
         return services;
     }
+
+    private static void PerClient(Microsoft.AspNetCore.RateLimiting.RateLimiterOptions options, string policy, Func<LoginOptions, int> permits, TimeSpan window) =>
+        options.AddPolicy(policy, context =>
+        {
+            var limits = context.RequestServices.GetRequiredService<Microsoft.Extensions.Options.IOptions<LoginOptions>>().Value;
+            return RateLimitPartition.GetFixedWindowLimiter(
+                policy + ":" + context.Connection.RemoteIpAddress,
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = permits(limits),
+                    Window = window,
+                    QueueLimit = 0,
+                });
+        });
 }
 
 // The answer of GET /session/user.

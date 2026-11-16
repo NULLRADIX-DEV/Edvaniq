@@ -3,7 +3,7 @@ using Edvaniq.Services.Identity.Application;
 namespace Edvaniq.Services.Identity.Api.Accounts;
 
 // dotnet Edvaniq.Services.Identity.Api.dll account set <name> [--test-double], with the password on stdin (docs/tokens.md#teamkonto-anlegen),
-// or account delete <name>.
+// account delete <name> or account confirm <email>.
 // Creates the account or gives it a new password, so running it twice changes nothing but the hash. The password is
 // never an argument, which would show up in the process list and the shell history, and never in the output.
 internal static partial class AccountCommand
@@ -19,6 +19,11 @@ internal static partial class AccountCommand
 
     public static async Task<int> RunAsync(IServiceProvider services, string[] args, TextReader input, TextWriter output, TextWriter error)
     {
+        if (args is ["account", "confirm", var email])
+        {
+            return await ConfirmAsync(services, email, output, error);
+        }
+
         if (args is ["account", "delete", var deleted])
         {
             return await DeleteAsync(services, deleted, output, error);
@@ -33,7 +38,7 @@ internal static partial class AccountCommand
         if (name is null)
         {
             await error.WriteLineAsync(
-                $"Usage: account set <name> [{TestDoubleOption}], with the password on stdin, or account delete <name>.");
+                $"Usage: account set <name> [{TestDoubleOption}], with the password on stdin, account delete <name> or account confirm <email>.");
             return Invalid;
         }
 
@@ -79,6 +84,28 @@ internal static partial class AccountCommand
             return Failed;
         }
     }
+
+    // Confirms the address of a user account by hand while no mail service is set up (#247), with the age rule of a
+    // confirmation by link. Prints neither the address nor anything else of the account.
+    private static async Task<int> ConfirmAsync(IServiceProvider services, string email, TextWriter output, TextWriter error)
+    {
+        try
+        {
+            using var scope = services.CreateScope();
+            var confirmed = await scope.ServiceProvider.GetRequiredService<Confirmation>().ConfirmByOperatorAsync(email, CancellationToken.None);
+            await output.WriteLineAsync(confirmed ? "confirmed" : "no account");
+            return Ok;
+        }
+        catch (Exception exception)
+        {
+            LogConfirmFailed(services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(AccountCommand)), exception);
+            await error.WriteLineAsync("Confirming the account failed, see the log above.");
+            return Failed;
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Critical, Message = "Confirming the account failed")]
+    private static partial void LogConfirmFailed(ILogger logger, Exception exception);
 
     [LoggerMessage(Level = LogLevel.Critical, Message = "Setting the account failed")]
     private static partial void LogFailed(ILogger logger, Exception exception);
