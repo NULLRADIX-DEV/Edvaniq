@@ -78,12 +78,11 @@ public sealed class SessionStarts(
             return new SessionStart(SessionStartResult.NoBonusTopic);
         }
 
-        // The session takes the goal of the plan its topic came from. The default goal must be in the database for it,
-        // it may not be there yet.
-        var goal = await goals.DefaultAsync(cancellationToken);
-        if (goal.Id != today.LearningGoalId)
+        // The session takes the goal of the plan its topic came from. The plan follows the default goal, which may not
+        // be in the database yet.
+        if (today.LearningGoalId == LearningGoal.DefaultIdFor(currentUser.Id))
         {
-            throw new InvalidOperationException("Today's plan is not of the default learning goal.");
+            await goals.DefaultAsync(cancellationToken);
         }
 
         var now = time.GetUtcNow();

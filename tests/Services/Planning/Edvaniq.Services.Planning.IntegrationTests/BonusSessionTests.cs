@@ -207,6 +207,27 @@ public sealed class BonusSessionTests(ServiceFactory service) : IClassFixture<Se
         Assert.Equal(HttpStatusCode.NotFound, (await GetAsync(bobToken, $"/sessions/{aliceBonus.Id}")).Status);
     }
 
+    // With a second goal the session goes with the goal of the plan its topic came from (inPlan, #281).
+    [Fact]
+    public async Task SecondGoal_TheSessionTakesTheGoalOfThePlan()
+    {
+        var (user, token) = NewUser();
+        var topic = Guid.NewGuid();
+        AddTopic(user, token, topic, "weakness", 30);
+        using (var client = Client(token))
+        {
+            using var first = await client.PostAsJsonAsync("/learning-goals", new { kind = "FreeLearning", name = "Erstes Ziel" }, TestContext.Current.CancellationToken);
+            using var second = await client.PostAsJsonAsync("/learning-goals", new { kind = "FreeLearning", name = "Zweites Ziel" }, TestContext.Current.CancellationToken);
+            Assert.Equal((HttpStatusCode.Created, HttpStatusCode.Created), (first.StatusCode, second.StatusCode));
+        }
+
+        var plan = await PlanAsync(token);
+        var (status, bonus) = await StartBonusAsync(token);
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.Equal((plan.LearningGoalId, topic), (bonus!.LearningGoalId, bonus.TopicId));
+    }
+
     private async Task<Plan> FinishThePlanAsync(string token)
     {
         foreach (var block in (await PlanAsync(token)).Blocks)
@@ -296,12 +317,12 @@ public sealed class BonusSessionTests(ServiceFactory service) : IClassFixture<Se
             : (response.StatusCode, null);
     }
 
-    private sealed record Plan(DateOnly StudyDay, List<PlannedBlock> Blocks, Guid? NextBlockId, string DailyGoal);
+    private sealed record Plan(DateOnly StudyDay, Guid LearningGoalId, List<PlannedBlock> Blocks, Guid? NextBlockId, string DailyGoal);
 
     private sealed record PlannedBlock(Guid Id, Guid TopicId, string Kind, int Minutes, bool Done);
 
     private sealed record Session(
-        Guid Id, Guid BlockId, Guid TopicId, string Kind, int Minutes, DateOnly StudyDay, DateTime StartedAt, bool Existing, string Outcome, bool Bonus, List<Step> Steps);
+        Guid Id, Guid BlockId, Guid TopicId, string Kind, int Minutes, DateOnly StudyDay, Guid LearningGoalId, DateTime StartedAt, bool Existing, string Outcome, bool Bonus, List<Step> Steps);
 
     private sealed record Step(string Kind, bool Empty, int? Questions);
 
