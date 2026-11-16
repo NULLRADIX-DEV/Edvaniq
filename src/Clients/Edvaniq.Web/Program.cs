@@ -44,7 +44,7 @@ builder.Services.AddReverseProxy()
 var app = builder.Build();
 
 app.UseForwardedHeaders();
-app.UseSecurityHeaders();
+app.UseSecurityHeaders(app.Environment.IsDevelopment());
 app.UseNoStore();
 
 // Configure the HTTP request pipeline.

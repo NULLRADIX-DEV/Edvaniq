@@ -13,12 +13,20 @@ public sealed class ShellPage : IAsyncDisposable
     private readonly IBrowserContext context;
     private readonly List<string> log = [];
     private readonly List<string> requests = [];
+    private readonly List<string> violations = [];
 
     public ShellPage(IBrowserContext context, IPage page)
     {
         this.context = context;
         Page = page;
-        page.Console += (_, message) => Remember($"console {message.Type}: {message.Text}");
+        page.Console += (_, message) =>
+        {
+            Remember($"console {message.Type}: {message.Text}");
+            if (message.Text.Contains("Content Security Policy", StringComparison.Ordinal))
+            {
+                Violated($"console: {message.Text}");
+            }
+        };
         page.PageError += (_, error) => Remember($"page error: {error}");
         page.RequestFailed += (_, request) => Remember($"request failed: {request.Url} {request.Failure}");
         page.Request += (_, request) =>
@@ -44,6 +52,30 @@ public sealed class ShellPage : IAsyncDisposable
                 return [.. requests];
             }
         }
+    }
+
+    // What the content security policy blocked (#352), as the browser reported it in the console and as the page heard of
+    // it (securitypolicyviolation).
+    public IReadOnlyList<string> PolicyViolations
+    {
+        get
+        {
+            lock (violations)
+            {
+                return [.. violations];
+            }
+        }
+    }
+
+    // The listener runs before any script of the page and outside its policy, like everything Playwright adds.
+    public async Task WatchPolicyAsync()
+    {
+        await context.ExposeFunctionAsync("edvaniqPolicyViolated", (string violation) => Violated($"event: {violation}"));
+        await context.AddInitScriptAsync(
+            """
+            document.addEventListener('securitypolicyviolation', e =>
+                window.edvaniqPolicyViolated(`${e.effectiveDirective} blocked ${e.blockedURI} in ${e.sourceFile}:${e.lineNumber}`));
+            """);
     }
 
     // Opens the address and waits until the shell is interactive. Only then the prerendered page has turned into the
@@ -97,6 +129,14 @@ public sealed class ShellPage : IAsyncDisposable
         lock (log)
         {
             log.Add(line);
+        }
+    }
+
+    private void Violated(string violation)
+    {
+        lock (violations)
+        {
+            violations.Add(violation);
         }
     }
 

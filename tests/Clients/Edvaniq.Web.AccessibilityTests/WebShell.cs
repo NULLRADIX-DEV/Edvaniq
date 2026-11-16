@@ -3,6 +3,7 @@ using System.Net;
 using Edvaniq.Testing;
 using Edvaniq.Web.IntegrationTests;
 
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
@@ -151,15 +152,20 @@ public sealed class WebShell : IAsyncLifetime
             ViewportSize = new ViewportSize { Width = width, Height = 800 },
             Locale = locale,
         });
-        return new ShellPage(context, await context.NewPageAsync());
+        var page = new ShellPage(context, await context.NewPageAsync());
+        await page.WatchPolicyAsync();
+        return page;
     }
 
     // The host logs every retry against the missing gateway with a stack trace, which only buries the test results. All
     // signed-in pages log in from the same address within a minute, more than the login limit lets through.
+    // The host runs as on the server, so the pages load under the policy of Production (#352). Only the shell's files
+    // come from the build output, as in Development.
     private static (WebFactory Host, string Address) Start(string gatewayAddress)
     {
         var host = new WebFactory(gatewayAddress, configure: builder =>
         {
+            builder.UseEnvironment("Production").UseStaticWebAssets();
             builder.UseSetting("Logging:LogLevel:Default", "None");
             builder.UseSetting("Logging:LogLevel:Microsoft.AspNetCore", "None");
             builder.UseSetting("Login:PerClientPerMinute", "1000");

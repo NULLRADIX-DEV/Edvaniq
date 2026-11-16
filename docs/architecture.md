@@ -135,7 +135,7 @@ Jede Antwort des Web-Hosts trägt die Header aus der Tabelle, auch Fehlerantwort
 
 | Header | Wert |
 |---|---|
-| `Content-Security-Policy` | `frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'` |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'nonce-…'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'` |
 | `X-Frame-Options` | `DENY` |
 | `X-Content-Type-Options` | `nosniff` |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` |
@@ -143,9 +143,11 @@ Jede Antwort des Web-Hosts trägt die Header aus der Tabelle, auch Fehlerantwort
 | `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` |
 | `X-Robots-Tag` | `noindex, nofollow` |
 
-Damit lässt sich die Shell in keiner fremden Seite einbetten. Das Basis-Element und Formulare zeigen nur auf die eigene Seite, Plug-in-Inhalte sind gesperrt, und der Browser errät keinen Inhaltstyp. Kamera, Mikrofon und Standort sind für die Seite ausgeschaltet.
+Damit lässt sich die Shell in keiner fremden Seite einbetten und bettet selbst keine ein. Das Basis-Element und Formulare zeigen nur auf die eigene Seite, Plug-in-Inhalte sind gesperrt, und der Browser errät keinen Inhaltstyp. Kamera, Mikrofon und Standort sind für die Seite ausgeschaltet.
 
-Eine Route kann in ihren Metadaten unter `ContentSecurityPolicy` eine eigene Richtlinie nennen. Sie gilt nur, wenn sie jede Richtlinie der Shell mit demselben Wert oder `'none'` enthält, also höchstens strenger ist, sonst bleibt die der Shell. Was ein Service selbst schickt, ersetzt der Web-Host immer. Heute nutzt das nur die Route, die eine hochgeladene Datei zurückgibt ([Original öffnen](#original-öffnen)).
+Skripte, Styles, Bilder, Schriften und Abfragen kommen nur vom Web-Host selbst. WebAssembly braucht `'wasm-unsafe-eval'`. Das einzige Inline-Skript ist die Import-Map der Seite, sie trägt den Nonce aus der Richtlinie ihrer Antwort, der für jede Antwort neu ist. Ein eingeschleustes Inline-Skript oder ein Event-Handler im HTML läuft deshalb nicht. Inline-Styles gibt es keine, Komponenten stylen nur über Klassen. Seiten speichert der Browser nicht (`Cache-Control: no-store`), sonst käme eine alte Seite mit einem Nonce zurück, der nicht mehr gilt. In Development erlaubt `connect-src` zusätzlich `ws://localhost:*` und `wss://localhost:*` für das Neuladen von `dotnet watch`.
+
+Eine Route kann in ihren Metadaten unter `ContentSecurityPolicy` eine eigene Richtlinie nennen. Sie gilt nur, wenn sie jede Richtlinie der Shell mit demselben Wert oder `'none'` enthält, also höchstens strenger ist, sonst bleibt die der Shell. Fehlt ihr eine Abrufrichtlinie wie `script-src`, zählt wie im Browser ihr `default-src`. Was ein Service selbst schickt, ersetzt der Web-Host immer. Heute nutzt das nur die Route, die eine hochgeladene Datei zurückgibt ([Original öffnen](#original-öffnen)).
 
 Bis zum Start mit echten Nutzern soll keine Suchmaschine die Shell aufnehmen. Das sagt `X-Robots-Tag`, und jede Seite wiederholt es als `<meta name="robots">`. Eine `robots.txt`, die das Crawlen verbietet, gibt es bewusst nicht: Dann käme der Crawler nie bis zu dieser Bitte und könnte eine verlinkte Adresse trotzdem listen.
 

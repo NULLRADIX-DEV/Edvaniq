@@ -67,7 +67,7 @@ public sealed partial class SummaryPageTests(WebShell shell)
     }
 
     // POST of the standard one is pending first and ready on the next read, the short one is ready at once.
-    private static async Task AnswerSummariesAsync(IPage browser)
+    internal static async Task AnswerSummariesAsync(IPage browser)
     {
         await Material.AnswerAsync(browser, documents: [new[] { Material.Document("Ready") }], topics: [Material.Topics]);
         await browser.RouteAsync(SummaryRoute(), route =>
