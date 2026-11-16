@@ -35,6 +35,7 @@ public sealed class ViewStateTests : BunitContext
         Services.AddQuietAnswerSync();
         Services.AddSingleton<IReturnSignal>(new FakeReturnSignal());
         Services.AddSingleton<ITodayPlan>(plans);
+        Services.AddSingleton<ILearningGoals>(FakeLearningGoals.WithOne());
         Services.AddSingleton<ILearningMaterial>(material);
         Services.AddSingleton<IQuiz>(quiz);
         JSInterop.Mode = JSRuntimeMode.Loose;

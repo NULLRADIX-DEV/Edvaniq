@@ -160,6 +160,7 @@ public sealed class DelayedUpdateTests : BunitContext
     private IRenderedComponent<TodayPlanView> RenderHome(FakeTodayPlan plans, AnswerSync sync)
     {
         Services.AddSingleton<ITodayPlan>(plans);
+        Services.AddSingleton<ILearningGoals>(FakeLearningGoals.WithOne());
         Services.AddSingleton<ILearningMaterial>(new FakeLearningMaterial().Topics(Topics));
         Services.AddSingleton(sync);
         SetRendererInfo(new RendererInfo("WebAssembly", isInteractive: true));

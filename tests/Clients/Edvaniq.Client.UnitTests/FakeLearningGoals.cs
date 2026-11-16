@@ -10,6 +10,12 @@ internal sealed class FakeLearningGoals : ILearningGoals
 
     public List<NewLearningGoal> Created { get; } = [];
 
+    public int ListCalls { get; private set; }
+
+    // A user who already has a goal, the plan follows it.
+    public static FakeLearningGoals WithOne() => new FakeLearningGoals().List(new LearningGoalInfo(
+        Guid.NewGuid(), LearningGoalValues.FreeLearning, "Biologie", null, null, null, "de", null, DateTime.UnixEpoch, InPlan: true));
+
     public FakeLearningGoals List(params LearningGoalInfo[] goals) => List(CallOutcome<IReadOnlyList<LearningGoalInfo>>.Ok(goals));
 
     public FakeLearningGoals List(CallOutcome<IReadOnlyList<LearningGoalInfo>> outcome)
@@ -24,8 +30,11 @@ internal sealed class FakeLearningGoals : ILearningGoals
         return this;
     }
 
-    public Task<CallOutcome<IReadOnlyList<LearningGoalInfo>>> ListAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(Next(lists, CallOutcome<IReadOnlyList<LearningGoalInfo>>.Ok([])));
+    public Task<CallOutcome<IReadOnlyList<LearningGoalInfo>>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        ListCalls++;
+        return Task.FromResult(Next(lists, CallOutcome<IReadOnlyList<LearningGoalInfo>>.Ok([])));
+    }
 
     // A goal made of what was sent, unless the test queued an answer.
     public Task<CallOutcome<LearningGoalInfo>> CreateAsync(NewLearningGoal goal, CancellationToken cancellationToken = default)

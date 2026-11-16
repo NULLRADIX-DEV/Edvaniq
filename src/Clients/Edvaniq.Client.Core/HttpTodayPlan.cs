@@ -42,7 +42,8 @@ internal sealed record PlanBody(
     IReadOnlyList<Guid>? ShortenedTopicIds = null,
     IReadOnlyList<Guid>? NotReadyTopicIds = null,
     DateOnly? ExamDate = null,
-    int? DaysToExam = null)
+    int? DaysToExam = null,
+    string? DailyGoal = null)
 {
     public TodayPlan ToPlan() => new(
         StudyDay,
@@ -52,7 +53,13 @@ internal sealed record PlanBody(
         ShortenedTopicIds ?? [],
         NotReadyTopicIds ?? [],
         ExamDate,
-        DaysToExam);
+        DaysToExam,
+        DailyGoal switch
+        {
+            "reached" => Core.DailyGoal.Reached,
+            "open" => Core.DailyGoal.Open,
+            _ => Core.DailyGoal.None,
+        });
 
     public static PlanEmpty? EmptyOf(string? reason) => reason switch
     {
@@ -63,14 +70,14 @@ internal sealed record PlanBody(
     };
 }
 
-internal sealed record BlockBody(Guid TopicId, int Minutes, string? Kind = null)
+internal sealed record BlockBody(Guid TopicId, int Minutes, string? Kind = null, bool Done = false)
 {
     public PlanBlock ToBlock() => new(TopicId, Minutes, Kind switch
     {
         "learn" => BlockKind.Learn,
         "review" => BlockKind.Review,
         _ => null,
-    });
+    }, Done);
 }
 
 // Source-generated for the trimmed browser app. A plan without its day, blocks or mastery flag fails.

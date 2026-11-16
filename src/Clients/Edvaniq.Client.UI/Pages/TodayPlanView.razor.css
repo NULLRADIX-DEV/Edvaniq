@@ -37,3 +37,9 @@
 .plan-status {
     overflow-wrap: anywhere;
 }
+
+/* Said in words, the colour only adds to it. */
+.plan-done {
+    font-weight: 600;
+    color: var(--color-right);
+}

@@ -1,10 +1,11 @@
 @using System.Globalization
 
 @* The head of "Heute" (#382): today's minutes and blocks as the list below has them, and the days to the exam of the goal
-   in the plan. Later parts of Home (progress ring, cards due, "Jetzt lernen") go in here too. *@
+   in the plan. The progress ring is #383. Later parts of Home (cards due, "Jetzt lernen") go in here too. *@
 <div class="today-summary">
     @if (Plan.Blocks.Count > 0)
     {
+        <ProgressRing Done="Plan.Blocks.Count(block => block.Done)" Total="Plan.Blocks.Count" />
         <p class="today-total"><span class="today-label">@FeedbackTexts.Plan.SummaryLabel:</span> @Total</p>
     }
     @if (Countdown is { } countdown)

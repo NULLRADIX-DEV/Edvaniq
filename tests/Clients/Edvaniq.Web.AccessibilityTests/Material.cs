@@ -82,7 +82,8 @@ internal static class Material
 
     // Today's plan as Planning answers it: a review of the topic and learn time for both subtopics, one of them the
     // long word. Without blocks it says why with emptyReason.
-    public static object Plan(string? emptyReason = null, bool masteryAvailable = true, int? daysToExam = null) => new
+    // The first `done` blocks are finished (#383), all three reach the goal.
+    public static object Plan(string? emptyReason = null, bool masteryAvailable = true, int? daysToExam = null, int done = 0) => new
     {
         studyDay = new DateOnly(2026, 11, 11),
         learningGoalId = Guid.Empty,
@@ -90,10 +91,11 @@ internal static class Material
             ? []
             : new[]
             {
-                new { topicId = TopicId, minutes = 10, kind = "review" },
-                new { topicId = Guid.Parse("6a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"), minutes = 20, kind = "learn" },
-                new { topicId = Guid.Parse("7b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e"), minutes = 15, kind = "learn" },
+                new { topicId = TopicId, minutes = 10, kind = "review", done = done > 0 },
+                new { topicId = Guid.Parse("6a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"), minutes = 20, kind = "learn", done = done > 1 },
+                new { topicId = Guid.Parse("7b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e"), minutes = 15, kind = "learn", done = done > 2 },
             },
+        dailyGoal = emptyReason is not null ? "none" : done >= 3 ? "reached" : "open",
         emptyReason,
         masteryAvailable,
         shortenedTopicIds = emptyReason is not null ? Array.Empty<Guid>() : [Guid.Parse("7b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e")],
@@ -104,10 +106,15 @@ internal static class Material
     };
 
     // Answers the plan and the topics in the browser, each call takes the next plan of the list and the last one stays.
-    public static async Task AnswerPlanAsync(IPage page, params object[] plans)
+    // The user has a goal and no material in the analysis.
+    public static Task AnswerPlanAsync(IPage page, params object[] plans) =>
+        AnswerPlanAsync(page, Goals, Document("Ready"), plans);
+
+    public static async Task AnswerPlanAsync(IPage page, object[] goals, object document, params object[] plans)
     {
         var calls = 0;
-        await AnswerAsync(page, documents: [new[] { Document("Ready") }], topics: [Topics]);
+        await AnswerAsync(page, documents: [new[] { document }], topics: [Topics]);
+        await AnswerGoalListAsync(page, goals);
         await page.RouteAsync("**/api/planning/plan/today", route =>
             FulfillAsync(route, plans[Math.Min(Interlocked.Increment(ref calls) - 1, plans.Length - 1)]));
     }
