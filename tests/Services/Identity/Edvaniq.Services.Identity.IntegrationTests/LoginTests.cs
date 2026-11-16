@@ -16,7 +16,7 @@ using Microsoft.IdentityModel.Tokens;
 namespace Edvaniq.Services.Identity.IntegrationTests;
 
 // The login of a team account: POST /connect/token with grant_type=password from the web host (docs/tokens.md). Every
-// test uses an account name of its own, so the throttle of one test never meets another.
+// test uses an account name of its own, so the lock of one test never meets another.
 public sealed class LoginTests(IdentityDatabase database) : IClassFixture<IdentityDatabase>
 {
     private static readonly string Password = NewPassword();
@@ -151,27 +151,75 @@ public sealed class LoginTests(IdentityDatabase database) : IClassFixture<Identi
         await AssertErrorAsync(response, HttpStatusCode.BadRequest, "invalid_request");
     }
 
-    // After AttemptsPerMinute tries the account is closed for the rest of the minute, even for the right password, and
-    // another spelling of the name counts against the same account.
+    // #252: MaxFailures wrong logins within the window lock the login for LockedFor, even with the right password, and
+    // another spelling of the name counts against the same one. Afterwards the right password works again by itself.
     [Fact]
-    public async Task TooManyAttempts_AreThrottled_PerNormalizedName()
+    public async Task FailedLogins_LockTheLogin_ThenItOpensAgain()
     {
-        await using var identity = new IdentityFactory(connectionString: database.ConnectionString);
-        await CreateAccountAsync(identity, "throttled");
+        var time = new Edvaniq.Testing.TestTime();
+        await using var identity = new IdentityFactory(connectionString: database.ConnectionString, time: time);
+        await CreateAccountAsync(identity, "locked");
         await CreateAccountAsync(identity, "bystander");
 
-        for (var attempt = 0; attempt < LoginThrottle.AttemptsPerMinute; attempt++)
+        for (var attempt = 0; attempt < LoginLock.MaxFailures; attempt++)
         {
-            using var wrong = await identity.LoginAsync(attempt % 2 == 0 ? "throttled" : "Throttled", "the wrong password");
+            using var wrong = await identity.LoginAsync(attempt % 2 == 0 ? "locked" : "Locked", "the wrong password");
             await AssertErrorAsync(wrong, HttpStatusCode.BadRequest, "invalid_grant");
         }
 
-        using var throttled = await identity.LoginAsync(" THROTTLED ", Password);
-        await AssertErrorAsync(throttled, HttpStatusCode.TooManyRequests, "too_many_attempts");
-        Assert.NotNull(throttled.Headers.RetryAfter);
+        using (var locked = await identity.LoginAsync(" LOCKED ", Password))
+        {
+            await AssertErrorAsync(locked, HttpStatusCode.TooManyRequests, "locked");
+            Assert.Equal(LoginLock.LockedFor, locked.Headers.RetryAfter?.Delta);
+        }
 
-        using var other = await identity.LoginAsync("bystander", Password);
-        Assert.Equal(HttpStatusCode.OK, other.StatusCode);
+        using (var other = await identity.LoginAsync("bystander", Password))
+        {
+            Assert.Equal(HttpStatusCode.OK, other.StatusCode);
+        }
+
+        time.Advance(LoginLock.LockedFor - TimeSpan.FromSeconds(1));
+        using (var still = await identity.LoginAsync("locked", Password))
+        {
+            await AssertErrorAsync(still, HttpStatusCode.TooManyRequests, "locked");
+        }
+
+        time.Advance(TimeSpan.FromSeconds(1));
+        using var open = await identity.LoginAsync("locked", Password);
+        Assert.Equal(HttpStatusCode.OK, open.StatusCode);
+    }
+
+    // Failures further apart than the window don't add up, and a login that goes through starts counting anew.
+    [Fact]
+    public async Task FailuresApart_OrBeforeASuccess_DontLock()
+    {
+        var time = new Edvaniq.Testing.TestTime();
+        await using var identity = new IdentityFactory(connectionString: database.ConnectionString, time: time);
+        await CreateAccountAsync(identity, "careful");
+
+        for (var attempt = 0; attempt < LoginLock.MaxFailures - 1; attempt++)
+        {
+            using var wrong = await identity.LoginAsync("careful", "the wrong password");
+        }
+
+        time.Advance(LoginLock.Window);
+        using (var wrong = await identity.LoginAsync("careful", "the wrong password"))
+        {
+            await AssertErrorAsync(wrong, HttpStatusCode.BadRequest, "invalid_grant");
+        }
+
+        using (var right = await identity.LoginAsync("careful", Password))
+        {
+            Assert.Equal(HttpStatusCode.OK, right.StatusCode);
+        }
+
+        for (var attempt = 0; attempt < LoginLock.MaxFailures - 1; attempt++)
+        {
+            using var wrong = await identity.LoginAsync("careful", "the wrong password");
+        }
+
+        using var stillOpen = await identity.LoginAsync("careful", Password);
+        Assert.Equal(HttpStatusCode.OK, stillOpen.StatusCode);
     }
 
     private static string NewPassword() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(18));
@@ -243,23 +291,28 @@ public sealed class LoginTests(IdentityDatabase database) : IClassFixture<Identi
         }
     }
 
-    // Spellings of one address share their attempts, another address keeps its own.
+    // Spellings of one address share their failures, another address keeps its own, and an address without an account
+    // is locked the same way: the lock says nothing about whether an account exists.
     [Fact]
-    public async Task TooManyAttempts_AreThrottled_PerAddress()
+    public async Task FailedLogins_LockPerAddress_KnownOrNot()
     {
         await using var identity = new IdentityFactory(connectionString: database.ConnectionString);
-        var email = $"throttled-{Guid.NewGuid():N}@example.org";
+        var email = $"locked-{Guid.NewGuid():N}@example.org";
+        var unknown = $"nobody-{Guid.NewGuid():N}@example.org";
         var other = $"bystander-{Guid.NewGuid():N}@example.org";
         await AddUserAsync(identity, email, AccountStatus.Active);
         await AddUserAsync(identity, other, AccountStatus.Active);
 
-        for (var attempt = 0; attempt < LoginThrottle.AttemptsPerMinute; attempt++)
+        for (var attempt = 0; attempt < LoginLock.MaxFailures; attempt++)
         {
             using var wrong = await identity.LoginAsync(attempt % 2 == 0 ? email : email.ToUpperInvariant(), "the wrong password");
+            using var nobody = await identity.LoginAsync(unknown, "the wrong password");
         }
 
-        using var throttled = await identity.LoginAsync(email, Password);
-        await AssertErrorAsync(throttled, HttpStatusCode.TooManyRequests, "too_many_attempts");
+        using var locked = await identity.LoginAsync(email, Password);
+        using var lockedUnknown = await identity.LoginAsync(unknown, Password);
+        await AssertErrorAsync(locked, HttpStatusCode.TooManyRequests, "locked");
+        await AssertErrorAsync(lockedUnknown, HttpStatusCode.TooManyRequests, "locked");
         using var bystander = await identity.LoginAsync(other, Password);
         Assert.Equal(HttpStatusCode.OK, bystander.StatusCode);
     }
