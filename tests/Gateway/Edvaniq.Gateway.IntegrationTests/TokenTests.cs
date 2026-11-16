@@ -12,11 +12,12 @@ using Yarp.ReverseProxy;
 
 namespace Edvaniq.Gateway.IntegrationTests;
 
-// The gateway lets nothing through to a service without a valid token. Only the token endpoint of Identity, the status
+// The gateway lets nothing through to a service without a valid token. Only the open routes of Identity, the status
 // check, health and the 404 for unknown paths answer without one.
 public sealed class TokenTests
 {
-    private const string TokenRoute = "identity-token";
+    // Open by design: the token endpoint, and registering without an account (#249).
+    private static readonly string[] OpenRoutes = ["identity-token", "identity-accounts"];
 
     // Goes through the routes of appsettings.json, so a new route is covered without a change here.
     [Fact]
@@ -26,7 +27,7 @@ public sealed class TokenTests
         await using var gateway = new GatewayFactory(stub.Address, identityAddress: stub.Address);
         var routes = gateway.Services.GetRequiredService<IProxyStateLookup>().GetRoutes()
             .Select(route => route.Config)
-            .Where(route => route.RouteId != TokenRoute)
+            .Where(route => !OpenRoutes.Contains(route.RouteId))
             .ToList();
         using var client = gateway.CreateClient();
 
@@ -46,7 +47,7 @@ public sealed class TokenTests
     }
 
     [Fact]
-    public void OnlyTheTokenEndpoint_IsAnonymous()
+    public void OnlyTheOpenRoutes_AreAnonymous()
     {
         using var gateway = new GatewayFactory("http://127.0.0.1:9");
 
@@ -54,7 +55,7 @@ public sealed class TokenTests
             .Where(route => route.Config.AuthorizationPolicy is not null)
             .Select(route => $"{route.Config.RouteId}={route.Config.AuthorizationPolicy}");
 
-        Assert.Equal([$"{TokenRoute}=anonymous"], open);
+        Assert.Equal(OpenRoutes.Select(route => $"{route}=anonymous").Order(), open.Order());
     }
 
     public static TheoryData<string> BadTokens() =>
