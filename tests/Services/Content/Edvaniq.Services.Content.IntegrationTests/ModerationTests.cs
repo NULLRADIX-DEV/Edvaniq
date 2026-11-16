@@ -10,6 +10,7 @@ using Edvaniq.Services.Content.Contracts;
 using Edvaniq.Services.Content.Domain;
 using Edvaniq.Services.Content.Infrastructure;
 using Edvaniq.Services.Content.Infrastructure.Ai;
+using Edvaniq.Services.Content.UnitTests;
 using Edvaniq.Testing;
 
 using Microsoft.EntityFrameworkCore;
@@ -221,6 +222,36 @@ public sealed partial class ModerationTests(ServiceFactory service) : IClassFixt
         var summary = Query(db => db.TopicSummaries.IgnoreQueryFilters().AsNoTracking().Single(item => item.TopicId == topic));
         Assert.Equal((SummaryStatus.Failed, (string?)null), (summary.Status, summary.Text));
         Assert.Equal(DocumentFailures.SummaryInappropriate.Text, summary.FailureReason);
+    }
+
+    // #328: the injection of the reference set is school material with instructions in it. The check passes it like
+    // any other, and topics and questions are checked and go on without anything the injection asks for. The check
+    // itself guards against unfit content, not injection: the classifier reads the material as it is.
+    [Fact]
+    public async Task InjectionOfTheReferenceSet_PassesTheCheck_AndGoesOnUnchanged()
+    {
+        var reference = Assert.Single(ReferenceSet.Load().Documents, document => document.Kind == "injection");
+        var forbidden = reference.Forbidden!;
+        using var client = ClientFor(NewUser());
+        var id = await PasteAsync(client, reference.Text);
+
+        await AnalyzeAsync(id);
+        var topics = Assert.Single(await ReportedAsync(id)).Topics;
+        service.Knowledge.TakeOver(Assert.Single(await ReportedAsync(id)));
+        await Pools().FinishAsync(id, Cancel);
+
+        Assert.Equal(DocumentStatus.Ready, Stored(id).Status);
+        Assert.Equal(
+            [ModerationCheck.Task, ContentAi.TopicsTask, ModerationCheck.Task],
+            asked.Take(3));
+        Assert.Contains(ContentAi.QuestionsTask, asked);
+        Assert.Equal(ModerationCheck.Task, asked[^1]);
+        Assert.All(topics, topic => Assert.DoesNotContain(forbidden, word => topic.Name.Contains(word, StringComparison.OrdinalIgnoreCase)));
+        var questions = (await OutboxAsync<ItemsGenerated>(id)).SelectMany(generated => generated.Items).Select(item => item.Question!).ToList();
+        Assert.NotEmpty(questions);
+        Assert.All(questions, question => Assert.All(
+            question.Options.Append(question.Text).Append(question.Explanation),
+            text => Assert.DoesNotContain(forbidden, word => text.Contains(word, StringComparison.OrdinalIgnoreCase))));
     }
 
     public void Dispose() => ai.Dispose();

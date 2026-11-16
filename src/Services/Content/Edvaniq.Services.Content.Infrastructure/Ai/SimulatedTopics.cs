@@ -11,6 +11,9 @@ namespace Edvaniq.Services.Content.Infrastructure.Ai;
 // to none. Material without headings gets a topic per section, named after the first three words. Five topics at most.
 // Key terms come from sentences of the form "X ist ..." or "X sind ...": X is the term, the whole sentence its definition,
 // on the topic or subtopic the section belongs to, three at most each.
+//
+// On purpose this double is gullible (SimulatedFence): once anything gets out of the material block, its one topic is
+// ContentAi.SimulatedHijack with every section.
 internal sealed partial class SimulatedTopics : ISimulatedAnswer
 {
     private const int MaxTopics = 5;
@@ -22,6 +25,12 @@ internal sealed partial class SimulatedTopics : ISimulatedAnswer
         var sections = SectionPattern().Matches(prompt.User)
             .Select(match => (Number: int.Parse(match.Groups[1].Value), Lines: match.Groups[2].Value.Split('\n', StringSplitOptions.TrimEntries)))
             .ToList();
+        if (!SimulatedFence.Holds(prompt.User))
+        {
+            var hijacked = new Topic(ContentAi.SimulatedHijack, [.. sections.Select(section => section.Number).DefaultIfEmpty(1)], [], []);
+            return JsonSerializer.Serialize(new { topics = new[] { hijacked } }, JsonSerializerOptions.Web);
+        }
+
         var topics = new List<Topic>();
         List<int>? current = null;
         List<KeyTerm>? terms = null;
