@@ -8,9 +8,17 @@ namespace Edvaniq.Client.Core;
 
 // Talks to Assessment through the web host, which wants a login. The HttpClient carries the base address of the host and
 // keeps the session cookie, its timeout is longer than the host's own wait for the gateway.
-public sealed class HttpQuiz(HttpClient http) : IQuiz
+public sealed class HttpQuiz(HttpClient http) : IQuiz, IBlockQuiz
 {
     public const string AttemptsPath = "api/assessment/attempts";
+
+    public const string QuizzesPath = "api/assessment/quizzes";
+
+    public Task<CallOutcome<BlockQuiz>> OpenAsync(Guid topicId, Guid blockId, int size, CancellationToken cancellationToken = default) =>
+        CallAsync(
+            token => http.PostAsync(QuizzesPath, JsonContent.Create(new QuizBody(topicId, blockId, size), QuizJson.Default.QuizBody), token),
+            QuizJson.Default.BlockQuiz,
+            cancellationToken);
 
     public Task<CallOutcome<AskedQuestion>> AskAsync(Guid topicId, CancellationToken cancellationToken = default) =>
         CallAsync(
@@ -75,6 +83,7 @@ public sealed class HttpQuiz(HttpClient http) : IQuiz
     private static bool Valid<T>(T value) => value switch
     {
         AskedQuestion question => question.Options.Count >= 2,
+        BlockQuiz quiz => quiz.Questions.Count > 0 && quiz.Questions.All(question => question.Options.Count >= 2),
         GradedAnswer graded => (graded.Option is { } option ? option >= 0
                 : graded.Options is { Count: > 0 } options ? options.All(chosen => chosen >= 0)
                 : graded.Revealed)
@@ -92,6 +101,8 @@ internal sealed record ChoicesBody(IReadOnlyList<int> Options, int ResponseTimeM
 
 internal sealed record RevealBody(bool ShowSolution, int ResponseTimeMs);
 
+internal sealed record QuizBody(Guid TopicId, Guid BlockId, int Size);
+
 // Source-generated for the trimmed browser app. An answer without the fields that make a question or a grade fails.
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, RespectRequiredConstructorParameters = true)]
 [JsonSerializable(typeof(AskBody))]
@@ -100,4 +111,6 @@ internal sealed record RevealBody(bool ShowSolution, int ResponseTimeMs);
 [JsonSerializable(typeof(RevealBody))]
 [JsonSerializable(typeof(AskedQuestion))]
 [JsonSerializable(typeof(GradedAnswer))]
+[JsonSerializable(typeof(QuizBody))]
+[JsonSerializable(typeof(BlockQuiz))]
 internal sealed partial class QuizJson : JsonSerializerContext;

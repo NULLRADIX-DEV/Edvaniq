@@ -5,15 +5,16 @@ using Edvaniq.Testing;
 
 namespace Edvaniq.Web.IntegrationTests;
 
-// The practice page reaches Assessment only through two routes of the web host: asking a question of a topic and
-// answering it. Only signed in, only POST, and the attempt only as a Guid. The backend sees the user's token, never the
-// browser's cookie.
+// The practice page and the block quiz reach Assessment only through three routes of the web host: opening the quiz of a
+// block, asking a question of a topic and answering it. Only signed in, only POST, and the attempt only as a Guid. The
+// backend sees the user's token, never the browser's cookie.
 public sealed class QuizRouteTests
 {
     private const string Attempt = "0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01";
 
     [Theory]
     [InlineData("/api/assessment/attempts", "/assessment/attempts")]
+    [InlineData("/api/assessment/quizzes", "/assessment/quizzes")]
     [InlineData($"/api/assessment/attempts/{Attempt}/answer", $"/assessment/attempts/{Attempt}/answer")]
     public async Task AfterLogin_TheCallReachesAssessment_WithTheUsersToken(string path, string arrives)
     {
@@ -35,6 +36,7 @@ public sealed class QuizRouteTests
 
     [Theory]
     [InlineData("/api/assessment/attempts")]
+    [InlineData("/api/assessment/quizzes")]
     [InlineData($"/api/assessment/attempts/{Attempt}/answer")]
     public async Task WithoutLogin_IsRefused_AndNothingIsForwarded(string path)
     {
@@ -71,6 +73,9 @@ public sealed class QuizRouteTests
     [InlineData("POST", "/api/assessment/topics")]
     [InlineData("GET", "/api/assessment/topics")]
     [InlineData("POST", "/api/assessment/questions")]
+    [InlineData("GET", "/api/assessment/quizzes")]
+    [InlineData("POST", "/api/assessment/quizzes/weaknesses")]
+    [InlineData("POST", $"/api/assessment/quizzes/{Attempt}")]
     public async Task OtherMethodsAndPaths_AreNotForwarded(string method, string path)
     {
         await using var gateway = await StubService.StartAsync("gateway-stub");
