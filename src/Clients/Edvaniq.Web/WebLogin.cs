@@ -6,10 +6,12 @@ using Microsoft.Extensions.Options;
 
 namespace Edvaniq.Web;
 
-// POST /session/login with name and password as JSON. The web host asks Identity for the user's token (password grant,
-// docs/tokens.md) with its own client secret and keeps the token in the session cookie. The browser only learns how it
-// went: 204 signed in, 401 name or password wrong (the same for both, nobody learns whether an account exists), 429 too
-// many attempts with Retry-After, 502 when Identity gave no usable answer. Neither password nor token gets into a log.
+// POST /session/login with name and password as JSON, the name a team account's or the address of a user account (#251).
+// The web host asks Identity for the user's token (password grant, docs/tokens.md) with its own client secret and keeps
+// the token in the session cookie. The browser only learns how it went, as a problem with a code: 204 signed in, 401
+// invalid_credentials (the same for a wrong login and a wrong password, nobody learns whether an account exists), 403
+// unconfirmed or awaiting_approval (only after the right password), 429 too_many_attempts with Retry-After, 502 when
+// Identity gave no usable answer. Neither password nor token gets into a log.
 internal static class WebLogin
 {
     public const string RateLimitPolicy = "login";
@@ -44,15 +46,24 @@ internal static class WebLogin
                 await WebSession.SignInUserAsync(context, result.Token!, requestedAt + result.Lifetime);
                 return Results.NoContent();
             case LoginOutcome.WrongCredentials:
-                return Results.StatusCode(StatusCodes.Status401Unauthorized);
+                return Refused(StatusCodes.Status401Unauthorized, "invalid_credentials", "Anmeldename oder Passwort stimmen nicht.");
+            case LoginOutcome.Unconfirmed:
+                return Refused(
+                    StatusCodes.Status403Forbidden, "unconfirmed", "Bestätige zuerst deine E-Mail-Adresse mit dem Link aus unserer Mail.");
+            case LoginOutcome.AwaitingApproval:
+                return Refused(StatusCodes.Status403Forbidden, "awaiting_approval", "Dein Konto muss noch freigegeben werden.");
             case LoginOutcome.TooManyAttempts:
                 context.Response.Headers.RetryAfter = ((int)Math.Ceiling(result.Lifetime.TotalSeconds)).ToString(
                     System.Globalization.CultureInfo.InvariantCulture);
-                return Results.StatusCode(StatusCodes.Status429TooManyRequests);
+                return Refused(
+                    StatusCodes.Status429TooManyRequests, "too_many_attempts", "Zu viele Versuche. Warte kurz und versuch es dann noch einmal.");
             default:
                 return Results.StatusCode(StatusCodes.Status502BadGateway);
         }
     }
+
+    private static IResult Refused(int status, string code, string title) =>
+        TypedResults.Problem(statusCode: status, title: title, extensions: new Dictionary<string, object?> { ["code"] = code });
 }
 
 internal sealed record LoginRequest(string? Name, string? Password);
@@ -61,6 +72,13 @@ internal enum LoginOutcome
 {
     SignedIn,
     WrongCredentials,
+
+    // The right password, but the address isn't confirmed yet (#250).
+    Unconfirmed,
+
+    // The right password, but a minor's account waits for the operator (#256).
+    AwaitingApproval,
+
     TooManyAttempts,
     Unavailable,
 }
@@ -115,7 +133,13 @@ internal sealed class IdentityLogin(
                 return new LoginResult(LoginOutcome.TooManyAttempts, Lifetime: response.Headers.RetryAfter?.Delta ?? TimeSpan.FromMinutes(1));
             }
 
-            var error = status == StatusCodes.Status400BadRequest ? await ErrorAsync(response, timeout.Token) : null;
+            var (error, reason) = status == StatusCodes.Status400BadRequest ? await ErrorAsync(response, timeout.Token) : (null, null);
+            // Identity names a reason only after the right password (docs/tokens.md).
+            if (error == "invalid_grant" && reason is "unconfirmed" or "awaiting_approval")
+            {
+                return new LoginResult(reason == "unconfirmed" ? LoginOutcome.Unconfirmed : LoginOutcome.AwaitingApproval);
+            }
+
             if (error is "invalid_grant" or "invalid_request")
             {
                 return new LoginResult(LoginOutcome.WrongCredentials);
@@ -133,15 +157,16 @@ internal sealed class IdentityLogin(
         }
     }
 
-    private static async Task<string?> ErrorAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    private static async Task<(string? Error, string? Reason)> ErrorAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         try
         {
-            return (await response.Content.ReadFromJsonAsync<TokenError>(cancellationToken))?.Error;
+            var answer = await response.Content.ReadFromJsonAsync<TokenError>(cancellationToken);
+            return (answer?.Error, answer?.Reason);
         }
         catch (JsonException)
         {
-            return null;
+            return (null, null);
         }
     }
 
@@ -149,5 +174,7 @@ internal sealed class IdentityLogin(
         [property: JsonPropertyName("access_token")] string? AccessToken,
         [property: JsonPropertyName("expires_in")] int ExpiresIn);
 
-    private sealed record TokenError([property: JsonPropertyName("error")] string? Error);
+    private sealed record TokenError(
+        [property: JsonPropertyName("error")] string? Error,
+        [property: JsonPropertyName("reason")] string? Reason);
 }

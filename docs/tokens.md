@@ -57,6 +57,18 @@ Eine erfolgreiche Antwort ist `200` mit `access_token`, `token_type` (`Bearer`) 
 | 400 | `invalid_grant` mit `reason` | das Passwort stimmt, aber das Konto darf sich noch nicht anmelden: `unconfirmed` (Adresse nicht bestätigt) oder `awaiting_approval` (wartet auf die Freigabe). Nur mit dem richtigen Passwort kommt `reason` mit, sonst wüsste jeder, dass es die Adresse gibt. |
 | 429 | `too_many_attempts` | zu viele Versuche für dieses Konto in kurzer Zeit, `Retry-After` nennt die Wartezeit in Sekunden |
 
+Der Browser meldet sich über den Web-Host an: `POST /session/login` mit `{"name": "…", "password": "…"}`, wobei `name` ein Teamname oder eine E-Mail-Adresse ist. Der Web-Host übersetzt die Antwort von Identity in ein Problem mit einem `code`, den Satz für den Nutzer trägt `title`:
+
+| Antwort | `code` | Bedeutung |
+|---|---|---|
+| 204 | | angemeldet, das Token liegt verschlüsselt im Sitzungs-Cookie |
+| 400 | | Name oder Passwort fehlen |
+| 401 | `invalid_credentials` | Anmeldename oder Passwort falsch, gleich für eine unbekannte Adresse |
+| 403 | `unconfirmed` | Adresse noch nicht bestätigt, nur nach dem richtigen Passwort |
+| 403 | `awaiting_approval` | das Konto wartet auf die Freigabe, nur nach dem richtigen Passwort |
+| 429 | `too_many_attempts` | zu viele Versuche, `Retry-After` nennt die Wartezeit. Die Grenze des Web-Hosts je Client-Adresse antwortet ebenfalls mit 429 und `Retry-After`, ohne `code`. |
+| 502 | | Identity hat keine brauchbare Antwort gegeben |
+
 ## Kontoarten
 
 Identity kennt zwei Arten von Konten, für die Token ist das gleich: Beide bekommen dasselbe Token mit ihrer Konto-ID als `sub`, mit denselben Claims, und kein Service merkt einen Unterschied.

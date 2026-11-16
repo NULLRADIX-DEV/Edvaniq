@@ -51,6 +51,9 @@ public sealed class StubService : IAsyncDisposable
 
     public IReadOnlyDictionary<string, string> LastLoginRequest { get; private set; } = new Dictionary<string, string>();
 
+    // Why Identity refuses the right name and password, like "unconfirmed" (docs/tokens.md), null to let them in.
+    public string? LoginRefusal { get; set; }
+
     // How logins are answered: 200 lets UserName with Password in and refuses everything else like Identity, 429 says
     // too many attempts with Retry-After 42, any other status comes without a body.
     public int LoginStatus
@@ -112,6 +115,8 @@ public sealed class StubService : IAsyncDisposable
                 stub.LastLoginRequest = form.ToDictionary(field => field.Key, field => field.Value.ToString());
                 switch (stub.LoginStatus)
                 {
+                    case StatusCodes.Status200OK when form["username"] == UserName && form["password"] == Password && stub.LoginRefusal is { } reason:
+                        return Results.BadRequest(new Dictionary<string, string> { ["error"] = "invalid_grant", ["reason"] = reason });
                     case StatusCodes.Status200OK when form["username"] == UserName && form["password"] == Password:
                         return Results.Ok(new Dictionary<string, object>
                         {
