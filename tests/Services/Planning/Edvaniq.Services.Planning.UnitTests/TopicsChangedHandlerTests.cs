@@ -1,6 +1,11 @@
+using Edvaniq.BuildingBlocks.Application;
+using Edvaniq.BuildingBlocks.Contracts;
 using Edvaniq.Services.Knowledge.Contracts;
 using Edvaniq.Services.Planning.Application;
+using Edvaniq.Services.Planning.Contracts;
 using Edvaniq.Services.Planning.Domain;
+
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Edvaniq.Services.Planning.UnitTests;
 
@@ -203,6 +208,88 @@ public class TopicsChangedHandlerTests
         Assert.DoesNotContain(store.Topics, known => known.TopicId == topic);
     }
 
+    // #412: a topic gone from the goal takes its done blocks along, on every day, and of no other topic, goal or user.
+    [Fact]
+    public async Task RemovedTopic_TakesItsDoneBlocksAlong()
+    {
+        var store = new FakeKnownTopics();
+        var cleanup = new FakeCleanup();
+        var (gone, kept) = (Guid.NewGuid(), Guid.NewGuid());
+        await HandleAsync(store, Changed(First, [gone, kept]), cleanup);
+        var ofKept = Done(kept);
+        var ofOtherGoal = Done(gone, goal: Guid.NewGuid());
+        var ofBob = Done(gone, owner: "bob");
+        cleanup.DoneBlocks.AddRange([Done(gone), ofKept, ofOtherGoal, ofBob]);
+
+        await HandleAsync(store, Changed(First.AddSeconds(1), [kept]), cleanup);
+
+        Assert.Equal([ofKept, ofOtherGoal, ofBob], cleanup.DoneBlocks);
+        Assert.Empty(cleanup.Outbox.Events);
+    }
+
+    // Hidden is no removal, a topic that moved to another goal neither, and an older state changes nothing.
+    [Fact]
+    public async Task HiddenMovedOrOlder_ClearsNothingUp()
+    {
+        var store = new FakeKnownTopics();
+        var cleanup = new FakeCleanup();
+        var (hidden, moved, late) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        await HandleAsync(store, Changed(First, [hidden, moved, late]), cleanup);
+        cleanup.DoneBlocks.AddRange([Done(hidden), Done(moved), Done(late)]);
+        cleanup.Sessions.Add(Running(hidden));
+
+        await HandleAsync(store, Changed(First.AddSeconds(1), [moved], goal: Guid.NewGuid()), cleanup);
+        await HandleAsync(store, Changed(First.AddSeconds(2), [late], [hidden]), cleanup);
+        await HandleAsync(store, Changed(First.AddSeconds(1), []), cleanup);
+
+        Assert.Equal(0, cleanup.Calls);
+        Assert.Equal(3, cleanup.DoneBlocks.Count);
+        Assert.True(cleanup.Sessions[0].IsActive);
+    }
+
+    // The session running on the topic is broken off and says so, a bonus review too. Ended sessions stay as they are.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RemovedTopic_BreaksOffTheSessionRunningOnIt(bool bonus)
+    {
+        var store = new FakeKnownTopics();
+        var cleanup = new FakeCleanup();
+        var gone = Guid.NewGuid();
+        await HandleAsync(store, Changed(First, [gone]), cleanup);
+        var ended = Running(gone);
+        ended.Complete(First.AddMinutes(10));
+        var running = bonus ? Session.StartBonus(Guid.NewGuid(), "alice", Goal, Guid.NewGuid(), Today, gone, First.AddMinutes(20)) : Running(gone);
+        cleanup.Sessions.AddRange([ended, running]);
+
+        await HandleAsync(store, Changed(First.AddSeconds(1), []), cleanup);
+
+        Assert.Equal((SessionOutcome.Aborted, Now), (running.Outcome, running.EndedAt));
+        Assert.Equal(SessionOutcome.Completed, ended.Outcome);
+        var sent = Assert.IsType<SessionCompleted>(Assert.Single(cleanup.Outbox.Events));
+        Assert.Equal(Fields(SessionEnds.EventOf(running, running.UnitStartedAt(cleanup.Sessions))), Fields(sent));
+        Assert.Equal((running.Id, false, Now), (sent.SessionId, sent.Completed, sent.EndedAt));
+    }
+
+    // A session on a topic that stays, in another goal or of another user runs on.
+    [Fact]
+    public async Task SessionOnAnotherTopicGoalOrUser_RunsOn()
+    {
+        var gone = Guid.NewGuid();
+        foreach (var session in new[] { Running(Guid.NewGuid()), Running(gone, goal: Guid.NewGuid()), Running(gone, owner: "bob") })
+        {
+            var store = new FakeKnownTopics();
+            var cleanup = new FakeCleanup();
+            cleanup.Sessions.Add(session);
+            await HandleAsync(store, Changed(First, [gone]), cleanup);
+
+            await HandleAsync(store, Changed(First.AddSeconds(1), []), cleanup);
+
+            Assert.True(session.IsActive);
+            Assert.Empty(cleanup.Outbox.Events);
+        }
+    }
+
     private static TopicsChanged Changed(
         DateTime changedAt, Guid[] topicIds, Guid[]? hidden = null, TopicParent[]? parents = null, Guid? goal = null) =>
         new("alice", goal ?? Goal, changedAt, topicIds, hidden ?? [], parents);
@@ -210,8 +297,57 @@ public class TopicsChangedHandlerTests
     private static bool IsFoundation(FakeKnownTopics store, Guid topicId) =>
         store.Topics.Single(topic => topic.TopicId == topicId).IsFoundation;
 
-    private static Task HandleAsync(FakeKnownTopics store, TopicsChanged integrationEvent) =>
-        new TopicsChangedHandler(store).HandleAsync(integrationEvent, TestContext.Current.CancellationToken);
+    private static Task HandleAsync(FakeKnownTopics store, TopicsChanged integrationEvent, FakeCleanup? cleanup = null) =>
+        new TopicsChangedHandler(store, cleanup ?? new FakeCleanup(), cleanup?.Outbox ?? new FakeOutbox(), new FixedTime(Now), NullLogger<TopicsChangedHandler>.Instance)
+            .HandleAsync(integrationEvent, TestContext.Current.CancellationToken);
+
+    private static readonly DateTime Now = First.AddHours(1);
+    private static readonly DateOnly Today = new(2026, 11, 11);
+
+    private static DoneBlock Done(Guid topic, string owner = "alice", Guid? goal = null) =>
+        DoneBlock.Create(Guid.NewGuid(), owner, goal ?? Goal, Today, new Block(topic, 15), First);
+
+    private static Session Running(Guid topic, string owner = "alice", Guid? goal = null) =>
+        Session.Start(Guid.NewGuid(), owner, goal ?? Goal, Today, DayBlocks.WithIds(owner, goal ?? Goal, Today, [new Block(topic, 15)])[0], First);
+
+    private sealed class FakeCleanup : ITopicCleanup
+    {
+        public List<DoneBlock> DoneBlocks { get; } = [];
+
+        public List<Session> Sessions { get; } = [];
+
+        public FakeOutbox Outbox { get; } = new();
+
+        public int Calls { get; private set; }
+
+        public Task<int> RemoveDoneBlocksAsync(string ownerId, Guid learningGoalId, IReadOnlyCollection<Guid> topicIds, CancellationToken cancellationToken)
+        {
+            Calls++;
+            var count = DoneBlocks.RemoveAll(block => block.OwnerId == ownerId && block.LearningGoalId == learningGoalId && topicIds.Contains(block.TopicId));
+            return Task.FromResult(count);
+        }
+
+        public Task<Session?> ActiveSessionAsync(string ownerId, CancellationToken cancellationToken) =>
+            Task.FromResult(Sessions.FirstOrDefault(session => session.OwnerId == ownerId && session.IsActive));
+
+        public Task<IReadOnlyList<Session>> OnBlockAsync(string ownerId, Guid blockId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Session>>([.. Sessions.Where(session => session.OwnerId == ownerId && session.BlockId == blockId)]);
+    }
+
+    private static (string, Guid, DateTime, bool, string, DateTime?) Fields(SessionCompleted sent) =>
+        (sent.UserId, sent.SessionId, sent.EndedAt, sent.Completed, string.Join(',', sent.IntroducedTopicIds), sent.UnitStartedAt);
+
+    private sealed class FixedTime(DateTime now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class FakeOutbox : IEventOutbox
+    {
+        public List<IIntegrationEvent> Events { get; } = [];
+
+        public void Add(IIntegrationEvent integrationEvent) => Events.Add(integrationEvent);
+    }
 
     private sealed class FakeKnownTopics : IKnownTopics
     {
