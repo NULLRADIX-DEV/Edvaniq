@@ -4,8 +4,8 @@
 @inject IBlockQuiz Quizzes
 @inject ILearningMaterial Material
 
-@* The quiz of a block: its questions one after another, each through a QuestionCard, then how many were right. The
-   session runner (#396) puts this in its quiz step and takes the tally from OnFinished. *@
+@* The quiz of a block: its questions one after another through QuestionSteps, then how many were right. The session
+   runner (#396) puts this in its quiz step and takes the tally from OnFinished. *@
 
 <div class="quiz-status" role="status">
     @switch (State)
@@ -22,7 +22,7 @@
         case ViewState.LoadFailed:
             <ConnectionProblem Title="@FeedbackTexts.BlockQuiz.LoadFailed" TraceId="@loadTrace" />
             break;
-        case ViewState.Question when !Current.IsKnownType:
+        case ViewState.Question when !run!.Current.IsKnownType:
             <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.Quiz.UnknownType" class="quiz-unknown-type">
                 <p>@FeedbackTexts.Quiz.UnknownTypeHint</p>
             </Notice>
@@ -31,7 +31,7 @@
 </div>
 
 @* Before the questions, not in their run: the quiz is shorter or repeats one (#387, #388). *@
-@if (State is ViewState.Question && quiz is { PoolTooSmall: true })
+@if (State is ViewState.Question && poolTooSmall)
 {
     <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.BlockQuiz.PoolTooSmall" class="block-quiz-small-pool">
         <p>@FeedbackTexts.BlockQuiz.PoolTooSmallHint</p>
@@ -54,25 +54,7 @@
                       Href="themen" LinkText="@FeedbackTexts.Quiz.BackToTopics" />
         break;
     case ViewState.Question:
-        <p class="block-quiz-progress" id="block-quiz-progress" tabindex="-1" @ref="progressText">@ProgressText</p>
-        <progress class="block-quiz-bar" max="@quiz!.Questions.Count" value="@(index + 1)" aria-labelledby="block-quiz-progress"></progress>
-        @if (Current.IsKnownType)
-        {
-            <QuestionCard Question="Current" Round="index" TopicId="TopicId" Documents="documents" FocusOnShow="moved"
-                          OnGraded="Graded" OnGone="Gone">
-                <Next>
-                    <div class="quiz-actions">
-                        <button type="button" class="button" @onclick="MoveOn">@(IsLast ? FeedbackTexts.BlockQuiz.ToResult : FeedbackTexts.BlockQuiz.Next)</button>
-                    </div>
-                </Next>
-            </QuestionCard>
-        }
-        else
-        {
-            <div class="quiz-actions">
-                <button type="button" class="button" @onclick="MoveOn">@(IsLast ? FeedbackTexts.BlockQuiz.ToResult : FeedbackTexts.BlockQuiz.Skip)</button>
-            </div>
-        }
+        <QuestionSteps Run="run!" TopicId="TopicId" Documents="documents" FocusOnShow="retried" OnMoved="MovedAsync" OnGone="Gone" />
         break;
     case ViewState.Done:
         <section class="block-quiz-done" aria-labelledby="block-quiz-done-heading">
@@ -114,17 +96,12 @@
     private bool loading = true;
     private CallResult? openFailure;
     private string? loadTrace;
-    private BlockQuiz? quiz;
-    private int index;
+    private QuestionRun? run;
+    private bool poolTooSmall;
 
-    // How each question went: true right, false wrong or solution shown, null not answered (a type the app can't show).
-    private bool?[] outcomes = [];
-
-    // After the user moved on the focus follows, never on the first load.
-    private bool moved;
-    private bool focusProgress;
+    // Opened again after a failure: the user did something, so the first question takes the focus. Never on the first load.
+    private bool retried;
     private bool focusDone;
-    private ElementReference progressText;
     private ElementReference doneHeading;
 
     private enum ViewState
@@ -145,27 +122,13 @@
         { openFailure: CallResult.NotReady } => ViewState.NotReady,
         { openFailure: CallResult.NotFound } => ViewState.NotFound,
         { openFailure: not null } => ViewState.LoadFailed,
-        { quiz: not null } when index < quiz.Questions.Count => ViewState.Question,
-        { quiz: not null } => ViewState.Done,
+        { run.IsDone: false } => ViewState.Question,
+        { run: not null } => ViewState.Done,
         _ => ViewState.Loading,
     };
 
-    // Made once per quiz: the card starts afresh whenever it gets another instance.
-    private AskedQuestion[] asked = [];
-
-    private AskedQuestion Current => asked[index];
-
-    // No open question after this one: what was answered before is not asked again.
-    private bool IsLast => NextOpen(index + 1) == quiz!.Questions.Count;
-
-    private string ProgressText =>
-        string.Format(CultureInfo.InvariantCulture, FeedbackTexts.BlockQuiz.Progress, index + 1, quiz!.Questions.Count);
-
-    private QuizTally Tally =>
-        new(outcomes.Count(outcome => outcome == true), outcomes.Count(outcome => outcome is not null), outcomes.Length);
-
     private string TallyText =>
-        string.Format(CultureInfo.InvariantCulture, FeedbackTexts.BlockQuiz.Tally, Tally.Right, Tally.Total);
+        string.Format(CultureInfo.InvariantCulture, FeedbackTexts.BlockQuiz.Tally, run!.Tally.Right, run.Tally.Total);
 
     protected override void OnInitialized() => documents = new DocumentLookup(Material);
 
@@ -182,19 +145,15 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        var progress = focusProgress;
-        var done = focusDone;
-        focusProgress = focusDone = false;
+        if (!focusDone)
+        {
+            return;
+        }
+
+        focusDone = false;
         try
         {
-            if (done)
-            {
-                await doneHeading.FocusAsync();
-            }
-            else if (progress)
-            {
-                await progressText.FocusAsync();
-            }
+            await doneHeading.FocusAsync();
         }
         catch (JSException)
         {
@@ -226,13 +185,10 @@
         if (outcome is { Result: CallResult.Ok, Value: { } opened })
         {
             // Back to a quiz begun before: what was answered then counts, it goes on with the first open question.
-            quiz = opened;
-            asked = [.. opened.Questions.Select(question => question.Asked)];
-            outcomes = [.. opened.Questions.Select(question => question.Answered ? question.Correct ?? false : (bool?)null)];
-            index = NextOpen(0);
-            moved = retry;
-            focusProgress = retry && index < opened.Questions.Count && !Current.IsKnownType;
-            if (index == opened.Questions.Count)
+            retried = retry;
+            poolTooSmall = opened.PoolTooSmall;
+            run = new QuestionRun(opened.Questions.Select(question => new RunQuestion(question.Asked, question.Answered, question.Correct)));
+            if (run.IsDone)
             {
                 await FinishAsync(focus: retry);
             }
@@ -244,43 +200,24 @@
         loadTrace = outcome.TraceId;
     }
 
-    // The first question from here not answered yet, or the end.
-    private int NextOpen(int from)
+    private async Task MovedAsync()
     {
-        var next = from;
-        while (next < quiz!.Questions.Count && quiz.Questions[next].Answered)
-        {
-            next++;
-        }
-
-        return next;
-    }
-
-    private void Graded(GradedAnswer graded) => outcomes[index] = graded.Correct;
-
-    private async Task MoveOn()
-    {
-        index = NextOpen(index + 1);
-        moved = true;
-        if (index == quiz!.Questions.Count)
+        if (run!.IsDone)
         {
             await FinishAsync(focus: true);
-            return;
         }
-
-        // The card puts the focus on the question, a question the app can't show has only the progress to land on.
-        focusProgress = !Current.IsKnownType;
     }
 
     private async Task FinishAsync(bool focus)
     {
         focusDone = focus;
-        await OnFinished.InvokeAsync(Tally);
+        await OnFinished.InvokeAsync(run!.Tally);
     }
 
     private void Gone()
     {
-        quiz = null;
+        run = null;
+        poolTooSmall = false;
         openFailure = CallResult.NotFound;
     }
 
