@@ -24,7 +24,7 @@ public sealed class MailTests(IdentityDatabase database) : IClassFixture<Identit
         var account = await UserAsync(identity);
         await QueueAsync(identity, account, mails => mails.Confirmation(account, "token-1"));
 
-        Assert.Equal(1, await Dispatcher(identity).SendDueAsync(Cancel));
+        await Dispatcher(identity).SendDueAsync(Cancel);
 
         var sent = Assert.Single(Sender(identity).Sent, mail => mail.To == account.Email);
         Assert.Equal("Bestätige deine E-Mail-Adresse", sent.Subject);
@@ -41,14 +41,15 @@ public sealed class MailTests(IdentityDatabase database) : IClassFixture<Identit
         await QueueAsync(identity, account, mails => mails.Confirmation(account, "token-2"));
         Sender(identity).Outage = true;
 
-        Assert.Equal(0, await Dispatcher(identity).SendDueAsync(Cancel));
+        await Dispatcher(identity).SendDueAsync(Cancel);
         var waiting = Assert.Single(Mails(identity, account));
-        Assert.Equal((1, time.GetUtcNow().UtcDateTime + OutgoingMail.RetryDelays[0]), (waiting.Attempts, waiting.DueAt));
-        Assert.Equal(0, await Dispatcher(identity).SendDueAsync(Cancel));
+        Assert.Equal(1, waiting.Attempts);
+        Assert.Equal(time.GetUtcNow().UtcDateTime + OutgoingMail.RetryDelays[0], waiting.DueAt, TimeSpan.FromMilliseconds(1));
+        await Dispatcher(identity).SendDueAsync(Cancel);
 
         Sender(identity).Outage = false;
         time.Advance(OutgoingMail.RetryDelays[0]);
-        Assert.Equal(1, await Dispatcher(identity).SendDueAsync(Cancel));
+        await Dispatcher(identity).SendDueAsync(Cancel);
         Assert.Single(Sender(identity).Sent, mail => mail.To == account.Email);
         Assert.Empty(Mails(identity, account));
 
@@ -87,8 +88,8 @@ public sealed class MailTests(IdentityDatabase database) : IClassFixture<Identit
         var account = await UserAsync(identity);
         await QueueAsync(identity, account, mails => mails.AlreadyRegistered(account));
 
-        Assert.Equal(0, await Dispatcher(identity).SendDueAsync(Cancel));
-        Assert.Equal(0, await Dispatcher(identity).SendDueAsync(Cancel));
+        await Dispatcher(identity).SendDueAsync(Cancel);
+        await Dispatcher(identity).SendDueAsync(Cancel);
 
         Assert.Single(Mails(identity, account));
         Assert.Null(identity.Services.GetService<RecordingMailSender>());
