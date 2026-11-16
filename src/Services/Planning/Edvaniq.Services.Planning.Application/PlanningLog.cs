@@ -58,6 +58,15 @@ public static partial class PlanningLog
         Message = "No bonus review started, LearningEngine could not be asked for the mastery")]
     public static partial void BonusWithoutMastery(ILogger logger);
 
+    // #412: a topic left its learning goal, what was planned on it goes too.
+    [LoggerMessage(EventId = 41717, EventName = "SessionAbortedTopicRemoved", Level = LogLevel.Information,
+        Message = "Session {SessionId} broken off, its topic {TopicId} left learning goal {LearningGoalId}")]
+    public static partial void SessionAbortedTopicRemoved(ILogger logger, Guid sessionId, Guid topicId, Guid learningGoalId);
+
+    [LoggerMessage(EventId = 41718, EventName = "DoneBlocksOfRemovedTopics", Level = LogLevel.Information,
+        Message = "{TopicCount} topics left learning goal {LearningGoalId}, {BlockCount} done blocks on them removed")]
+    public static partial void DoneBlocksRemoved(ILogger logger, int topicCount, Guid learningGoalId, int blockCount);
+
     // Event ids of the queries to other services, each logs where it fails.
     public static class Queries
     {

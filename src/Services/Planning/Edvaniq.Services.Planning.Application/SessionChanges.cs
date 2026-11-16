@@ -1,5 +1,4 @@
 using Edvaniq.BuildingBlocks.Application;
-using Edvaniq.Services.Planning.Contracts;
 using Edvaniq.Services.Planning.Domain;
 
 using Microsoft.Extensions.Logging;
@@ -70,13 +69,7 @@ public sealed class SessionChanges(
     {
         if (ended)
         {
-            outbox.Add(new SessionCompleted(
-                session.OwnerId,
-                session.Id,
-                session.EndedAt!.Value,
-                session.Outcome == SessionOutcome.Completed,
-                session.IntroducedTopicIds(),
-                unitStartedAt ?? session.StartedAt));
+            outbox.Add(SessionEnds.EventOf(session, unitStartedAt));
         }
 
         return ended;
