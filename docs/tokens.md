@@ -108,13 +108,14 @@ dotnet Edvaniq.Services.Identity.Api.dll account set <name> --test-double < pass
 
 Mit `--test-double` ist das Konto für automatische Tests markiert, die Ausgabe endet dann mit `--test-double`. Seine Tokens tragen `test_double: true`. Content merkt sich das an jedem Dokument, das mit so einem Token eingefügt oder hochgeladen wird, und der Worker analysiert es mit der simulierten KI statt mit dem eingestellten Anbieter. So läuft ein Test gegen das ausgelieferte System ohne Kosten und mit festen Antworten. Setzen kann die Markierung nur dieser Befehl, keine Anfrage und kein Feld im Body. Ein `account set` ohne die Option nimmt sie wieder weg, schon eingefügte Dokumente behalten ihre.
 
-## Teamkonto löschen
+## Konto löschen
 
 ```bash
-dotnet Edvaniq.Services.Identity.Api.dll account delete <name>
+dotnet Edvaniq.Services.Identity.Api.dll account delete <name oder email>
 ```
 
-Der Befehl entfernt das Konto und schickt im selben Speichern `UserDeleted` mit der ID des Kontos, also dem `sub` seiner Tokens. Daraufhin entfernt jeder Service alle Daten des Nutzers ([Nutzer löschen](service-internals.md#nutzer-löschen)). Gesendet wird über die Outbox: Der Befehl selbst braucht keinen Broker, die laufende Identity-Api schickt das Ereignis. Er schreibt nur `deleted <name>` und endet mit 0. Gibt es den Namen nicht, schreibt er `no account <name>`, schickt nichts und endet ebenfalls mit 0, ein zweiter Lauf ist also harmlos. Bei einem anderen Fehler endet er mit 1.
+Der Befehl entfernt ein Teamkonto über seinen Namen oder ein Nutzerkonto über seine Adresse (mit `@`, wie bei der Anmeldung), samt seinen Mails und Links, auf Anfrage eines Nutzers also auch dessen Konto. Er und schickt im selben Speichern `UserDeleted` mit der ID des Kontos, also dem `sub` seiner Tokens. Daraufhin entfernt jeder Service alle Daten des Nutzers ([Nutzer löschen](service-internals.md#nutzer-löschen)). Gesendet wird über die Outbox: Der Befehl selbst braucht keinen Broker, die laufende Identity-Api schickt das Ereignis. Er schreibt nur `deleted <name>` und endet mit 0. Gibt es den Namen nicht, schreibt er `no account <name>`, schickt nichts und endet ebenfalls mit 0, ein zweiter Lauf ist also harmlos. Bei einem anderen Fehler endet er mit 1.
+
 ## Einladungscodes
 
 Registrieren kann sich nur, wer einen Einladungscode hat (#249). Die Codes verwaltet der Betreiber mit einem Befehl der Api, es gibt dafür keinen Weg über HTTP:
@@ -164,3 +165,17 @@ dotnet Edvaniq.Services.Identity.Api.dll account confirm <email>
 ```
 
 Der Befehl schreibt `confirmed` oder, wenn es kein unbestätigtes Konto mit der Adresse gibt, `no account`, sonst nichts.
+
+## Freigabe Minderjähriger
+
+Wer laut Geburtsjahr minderjährig sein könnte, braucht die schriftliche Einwilligung der Eltern. Die Regel nimmt nur das Geburtsjahr und entscheidet im Zweifel für minderjährig: Volljährig ist ein Konto erst, wenn das Geburtsjahr mindestens 19 Jahre zurückliegt. Ein volljähriges Konto ist nach der Bestätigung sofort aktiv, ein minderjähriges wartet. Bei der Anmeldung bekommt es `awaiting_approval` mit einem Hinweis, wie es weitergeht.
+
+Ist die Einwilligung da, gibt der Betreiber das Konto frei. Edvaniq speichert davon nur das Datum der Freigabe, nicht die Einwilligung selbst:
+
+```bash
+dotnet Edvaniq.Services.Identity.Api.dll account pending
+dotnet Edvaniq.Services.Identity.Api.dll account approve <email>
+dotnet Edvaniq.Services.Identity.Api.dll account revoke <email>
+```
+
+`account pending` listet die wartenden Konten mit Adresse, Geburtsjahr und Datum der Bestätigung, die Adresse nur auf der Konsole, nie im Log. `account approve` gibt ein wartendes Konto frei und schreibt `approved`. `account revoke` nimmt eine Freigabe zurück, das Konto wartet dann wieder, und schreibt `revoked`. Gibt es kein passendes Konto, schreiben beide `no account`. Ein Token, das vor dem Widerruf ausgestellt wurde, gilt bis zu seinem Ablauf weiter, höchstens eine Stunde.

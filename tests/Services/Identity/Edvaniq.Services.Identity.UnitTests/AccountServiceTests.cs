@@ -132,5 +132,8 @@ public sealed class AccountServiceTests
         public Task<bool> SaveUnlessTakenAsync(CancellationToken cancellationToken) => Task.FromResult(true);
 
         public Task LockByEmailAsync(string email, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<IReadOnlyList<Account>> AwaitingApprovalAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Account>>([.. All.Where(account => account.Status == AccountStatus.AwaitingApproval)]);
     }
 }

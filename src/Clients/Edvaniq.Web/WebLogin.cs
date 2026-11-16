@@ -51,7 +51,10 @@ internal static class WebLogin
                 return Refused(
                     StatusCodes.Status403Forbidden, "unconfirmed", "Bestätige zuerst deine E-Mail-Adresse mit dem Link aus unserer Mail.");
             case LoginOutcome.AwaitingApproval:
-                return Refused(StatusCodes.Status403Forbidden, "awaiting_approval", "Dein Konto muss noch freigegeben werden.");
+                return Refused(
+                    StatusCodes.Status403Forbidden,
+                    "awaiting_approval",
+                    "Für alle unter 18 brauchen wir die Zustimmung deiner Eltern. Sobald sie bei uns ist, schalten wir dein Konto frei.");
             case LoginOutcome.TooManyAttempts:
                 context.Response.Headers.RetryAfter = ((int)Math.Ceiling(result.Lifetime.TotalSeconds)).ToString(
                     System.Globalization.CultureInfo.InvariantCulture);

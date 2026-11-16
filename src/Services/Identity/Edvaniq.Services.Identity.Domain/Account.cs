@@ -84,6 +84,33 @@ public sealed class Account
         return true;
     }
 
+    // The operator lets a minor in, after the parents' written consent (#268). Only the date is kept, nothing of the
+    // consent. False if the account doesn't wait for it.
+    public bool Approve(DateTime now)
+    {
+        if (Status != AccountStatus.AwaitingApproval)
+        {
+            return false;
+        }
+
+        ApprovedAt = now;
+        Status = AccountStatus.Active;
+        return true;
+    }
+
+    // The operator takes an approval back: the account waits again and can't log in. False if it wasn't approved.
+    public bool Revoke()
+    {
+        if (Status != AccountStatus.Active || ApprovedAt is null)
+        {
+            return false;
+        }
+
+        ApprovedAt = null;
+        Status = AccountStatus.AwaitingApproval;
+        return true;
+    }
+
     public void SetTestDouble(bool usesTestDouble) => UsesTestDouble = usesTestDouble;
 }
 

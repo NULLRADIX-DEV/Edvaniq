@@ -26,6 +26,12 @@ internal sealed class Accounts(IdentityDbContext db) : IAccounts
 
     public Task SaveAsync(CancellationToken cancellationToken) => db.SaveChangesAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Account>> AwaitingApprovalAsync(CancellationToken cancellationToken) =>
+        await db.Accounts.AsNoTracking()
+            .Where(account => account.Status == AccountStatus.AwaitingApproval)
+            .OrderBy(account => account.ConfirmedAt)
+            .ToListAsync(cancellationToken);
+
     // A locking read: a second transaction that wants the row waits until this one ends.
     public Task LockByEmailAsync(string email, CancellationToken cancellationToken) =>
         db.Database.ExecuteSqlInterpolatedAsync($"SELECT Id FROM Accounts WHERE Email = {email} FOR UPDATE", cancellationToken);
