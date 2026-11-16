@@ -305,6 +305,60 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                     b.ToTable("AiUsageDays");
                 });
 
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.Card", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Back")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Front")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<string>("ModelId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("PromptVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.HasIndex("TopicId");
+
+                    b.ToTable("Cards");
+                });
+
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.DemoGoal", b =>
                 {
                     b.Property<string>("OwnerId")
@@ -785,6 +839,15 @@ namespace Edvaniq.Services.Content.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("Edvaniq.Services.Content.Domain.AiAnswer", b =>
+                {
+                    b.HasOne("Edvaniq.Services.Content.Domain.Document", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Edvaniq.Services.Content.Domain.Card", b =>
                 {
                     b.HasOne("Edvaniq.Services.Content.Domain.Document", null)
                         .WithMany()

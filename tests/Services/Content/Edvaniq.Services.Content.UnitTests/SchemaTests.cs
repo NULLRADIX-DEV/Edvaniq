@@ -11,7 +11,9 @@ public class SchemaTests
     public static TheoryData<string, string> Tasks => new()
     {
         { TopicAnalysis.Schema, TopicAnalysis.System(LearnerProfile.Default) },
-        { QuestionGeneration.Schema, QuestionGeneration.System(LearnerProfile.Default) },
+        { QuestionGeneration.CardsSchema, QuestionGeneration.System(LearnerProfile.Default) },
+        { QuestionGeneration.Schema, QuestionGeneration.System(LearnerProfile.Default, 1) },
+        { QuestionGeneration.Schema, QuestionGeneration.ForNewMaterial(LearnerProfile.Default, 1) },
     };
 
     [Theory]

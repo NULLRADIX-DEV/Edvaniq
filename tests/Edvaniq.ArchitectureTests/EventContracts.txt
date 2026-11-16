@@ -22,6 +22,9 @@ Content.DocumentAnalyzed.UserId: string
 Content.DocumentDeleted.DocumentId: Guid
 Content.DocumentDeleted.LearningGoalId: Guid?
 Content.DocumentDeleted.UserId: string
+Content.GeneratedCard.Back: string
+Content.GeneratedCard.Front: string
+Content.GeneratedItem.Card: GeneratedCard?
 Content.GeneratedItem.DocumentId: Guid
 Content.GeneratedItem.ItemId: Guid
 Content.GeneratedItem.Kind: ItemKind
@@ -36,6 +39,7 @@ Content.GeneratedQuestion.Explanation: string
 Content.GeneratedQuestion.Options: IReadOnlyList<string>
 Content.GeneratedQuestion.Text: string
 Content.GeneratedQuestion.Type: QuestionType?
+Content.ItemKind.Card: = 1
 Content.ItemKind.Question: = 0
 Content.ItemsGenerated.DocumentId: Guid
 Content.ItemsGenerated.Items: IReadOnlyList<GeneratedItem>

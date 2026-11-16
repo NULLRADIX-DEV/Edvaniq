@@ -90,6 +90,9 @@ internal static partial class ContentLog
     [LoggerMessage(EventId = 33931, Level = LogLevel.Information, Message = "Document {DocumentId} is ready: {Topics} new question pools with {Questions} questions in {DurationMs} ms")]
     public static partial void PoolsMade(ILogger logger, Guid documentId, int topics, int questions, long durationMs);
 
+    [LoggerMessage(EventId = 33990, Level = LogLevel.Warning, Message = "Topic {TopicId} of document {DocumentId} gets its question pool without cards: the AI brought none that held up")]
+    public static partial void PoolWithoutCards(ILogger logger, Guid topicId, Guid documentId);
+
     // Where a round broke off, without the exception's message: a parser or a provider may quote the material in it.
     public static string Describe(Exception exception) =>
         exception.TargetSite is { } site ? $"{exception.GetType().Name} in {site.DeclaringType?.Name}.{site.Name}" : exception.GetType().Name;

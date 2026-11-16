@@ -247,10 +247,14 @@ public sealed partial class ModerationTests(ServiceFactory service) : IClassFixt
         Assert.Contains(ContentAi.QuestionsTask, asked);
         Assert.Equal(ModerationCheck.Task, asked[^1]);
         Assert.All(topics, topic => Assert.DoesNotContain(forbidden, word => topic.Name.Contains(word, StringComparison.OrdinalIgnoreCase)));
-        var questions = (await OutboxAsync<ItemsGenerated>(id)).SelectMany(generated => generated.Items).Select(item => item.Question!).ToList();
-        Assert.NotEmpty(questions);
-        Assert.All(questions, question => Assert.All(
-            question.Options.Append(question.Text).Append(question.Explanation),
+        // Questions and cards (#340) alike: no text of either follows the injection.
+        var items = (await OutboxAsync<ItemsGenerated>(id)).SelectMany(generated => generated.Items).ToList();
+        Assert.Contains(items, item => item.Kind == ItemKind.Question);
+        Assert.Contains(items, item => item.Kind == ItemKind.Card);
+        Assert.All(items, item => Assert.All(
+            item.Kind == ItemKind.Card
+                ? [item.Card!.Front, item.Card.Back]
+                : item.Question!.Options.Append(item.Question.Text).Append(item.Question.Explanation),
             text => Assert.DoesNotContain(forbidden, word => text.Contains(word, StringComparison.OrdinalIgnoreCase))));
     }
 

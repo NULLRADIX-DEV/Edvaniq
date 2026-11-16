@@ -17,7 +17,7 @@ public static class QuestionGeneration
     // Goes with every question. A new prompt needs a new version, QuestionGenerationTests holds them together.
     // The version covers every variant of System and ForNewMaterial, so version, the profile stored at the document and the
     // numbers asked for give the exact prompt.
-    public const string PromptVersion = "questions-6";
+    public const string PromptVersion = "questions-7";
 
     // As many as the prompt asks for. Fewer may be left after the check, QuestionTopUps tops the pool up (#339).
     public const int MaxQuestions = 20;
@@ -37,6 +37,13 @@ public static class QuestionGeneration
 
     public const int ExplanationMaxLength = 1000;
 
+    // As many cards as a new pool asks for (#340).
+    public const int MaxCards = 10;
+
+    public const int FrontMaxLength = 500;
+
+    public const int BackMaxLength = 1000;
+
     // The names of the types in the answer.
     public const string SingleChoice = "single";
 
@@ -49,8 +56,14 @@ public static class QuestionGeneration
 
     // The prompt for a pool that has these many questions already, 0 for a new one. The number changes the prompt, so a
     // top-up round never gets the stored answer of the round before (AiAnswers).
+    // Only the new pool asks for cards as well (#340), a top-up wants questions alone.
     public static string System(LearnerProfile profile, int have) =>
-        Prompt(profile, HowMany(have), have == 0 ? "Mische drei Arten, von jeder mindestens 5 Fragen:" : "Mische drei Arten:");
+        have == 0
+            ? Prompt(profile, HowMany(have), "Mische drei Arten, von jeder mindestens 5 Fragen:", Cards(profile))
+            : Prompt(profile, HowMany(have), "Mische drei Arten:");
+
+    // Whether the prompt asks for cards, so the answer must bring some.
+    public static bool AsksForCards(string system) => system.Contains(CardsMarker, StringComparison.Ordinal);
 
     // The prompt for material a topic with a pool gets from another document (#915): only these sections, the topic has
     // questions on other material.
@@ -64,7 +77,31 @@ public static class QuestionGeneration
             "Mische drei Arten:");
     }
 
-    private static string Prompt(LearnerProfile profile, string howMany, string mix) => $$"""
+    private static string Prompt(LearnerProfile profile, string howMany, string mix, string? cards = null) => cards is null
+        ? Questions(profile, howMany, mix) + $$"""
+
+            Antworte nur mit JSON in dieser Form:
+            {"questions":[{{QuestionExample}}]}
+            """
+        : Questions(profile, howMany, mix) + $$"""
+
+            {{cards}}
+            Antworte nur mit JSON in dieser Form:
+            {"questions":[{{QuestionExample}}],"cards":[{"front":"Vorderseite","back":"Rückseite","section":1}]}
+            """;
+
+    private const string QuestionExample =
+        $$"""{"type":"{{SingleChoice}}","text":"Frage","options":["A","B"],"answers":[0],"explanation":"Erklärung","difficulty":1,"section":1}""";
+
+    private const string CardsMarker = "Schreib außerdem bis zu ";
+
+    private static string Cards(LearnerProfile profile) => $"""
+        {CardsMarker}{MaxCards} Lernkarten zu den wichtigsten Begriffen und Zusammenhängen des Themas, die sich allein aus dem Material beantworten lassen.
+        Die Vorderseite stellt eine kurze Frage oder nennt einen Begriff, die Rückseite gibt die Antwort in ein bis drei Sätzen. Keine zwei Karten fragen dasselbe.
+        Schreib die Karten auf {profile.LanguageName}. Jede Karte hat die Nummer des Abschnitts, aus dem sie stammt.
+        """;
+
+    private static string Questions(LearnerProfile profile, string howMany, string mix) => $$"""
         {{Task}}
         Du schreibst Quizfragen zu einem Thema aus Lernmaterial, damit ein Lernender prüfen kann, ob er es verstanden hat.
         Das Material steht in der Nachricht des Nutzers zwischen <material> und </material>, aufgeteilt in nummerierte Abschnitte <section id="n">.
@@ -82,8 +119,6 @@ public static class QuestionGeneration
         Jede Frage hat ihre Art, eine kurze Erklärung der Lösung, eine Schwierigkeit und die Nummer des Abschnitts, aus dem sie stammt.
         Die Erklärung nennt die Lösung bei ihrem Inhalt, nie bei Buchstabe, Nummer oder Stelle einer Option. Bei Wahr/Falsch sagt sie, ob die Aussage stimmt und warum.
         "answers" nennt die Stellen aller richtigen Optionen, ab 0 gezählt.
-        Antworte nur mit JSON in dieser Form:
-        {"questions":[{"type":"{{SingleChoice}}","text":"Frage","options":["A","B"],"answers":[0],"explanation":"Erklärung","difficulty":1,"section":1}]}
         """;
 
     private static string HowMany(int have)
@@ -110,6 +145,25 @@ public static class QuestionGeneration
               "answers":{"type":"array","items":{"type":"integer"}},
               "explanation":{"type":"string"},
               "difficulty":{"type":"integer"},
+              "section":{"type":"integer"}}}}}}
+        """;
+
+    // The form of the first answer of a pool, with the cards (#340).
+    public const string CardsSchema = """
+        {"type":"object","additionalProperties":false,"required":["questions","cards"],"properties":{
+          "questions":{"type":"array","items":{"type":"object","additionalProperties":false,
+            "required":["type","text","options","answers","explanation","difficulty","section"],"properties":{
+              "type":{"type":"string","enum":["single","multiple","truefalse"]},
+              "text":{"type":"string"},
+              "options":{"type":"array","items":{"type":"string"}},
+              "answers":{"type":"array","items":{"type":"integer"}},
+              "explanation":{"type":"string"},
+              "difficulty":{"type":"integer"},
+              "section":{"type":"integer"}}}},
+          "cards":{"type":"array","items":{"type":"object","additionalProperties":false,
+            "required":["front","back","section"],"properties":{
+              "front":{"type":"string"},
+              "back":{"type":"string"},
               "section":{"type":"integer"}}}}}}
         """;
 
@@ -141,6 +195,45 @@ public static class QuestionGeneration
             return null;
         }
     }
+
+    // The valid cards of the answer, checked like the questions: one that lacks a side or a known section, has a side too
+    // long or both sides the same is dropped, one that asks the same as an earlier card (SameQuestion of the front) left
+    // out, at most MaxCards. Null if the answer is no JSON object, empty if it has no cards or none holds up.
+    public static IReadOnlyList<CardDraft>? ReadCards(string answer, IReadOnlyList<Guid> sectionIds)
+    {
+        try
+        {
+            using var json = JsonDocument.Parse(answer);
+            if (json.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            if (!json.RootElement.TryGetProperty("cards", out var all) || all.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            return [.. all.EnumerateArray()
+                .Select(card => CheckCard(card, sectionIds))
+                .OfType<CardDraft>()
+                .DistinctBy(card => SameQuestion(card.Front))
+                .Take(MaxCards)];
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static CardDraft? CheckCard(JsonElement card, IReadOnlyList<Guid> sectionIds) =>
+        card.ValueKind == JsonValueKind.Object
+        && Text(card, "front", FrontMaxLength) is { } front
+        && Text(card, "back", BackMaxLength) is { } back
+        && Number(card, "section") is { } section && section >= 1 && section <= sectionIds.Count
+        && SameQuestion(front) is { Length: > 0 } same && same != SameQuestion(back)
+            ? new CardDraft(sectionIds[section - 1], front, back)
+            : null;
 
     // Two questions ask the same if their texts are equal once case, punctuation and spacing are gone. Plain and the same
     // on every run, no AI and no embeddings: it catches the repeats a model really writes, a reworded repeat gets through.
@@ -303,3 +396,6 @@ public sealed record QuestionDraft(
         };
     }
 }
+
+// A card that passed the check, with the section it comes from (#340).
+public sealed record CardDraft(Guid SectionId, string Front, string Back);

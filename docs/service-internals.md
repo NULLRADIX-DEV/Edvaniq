@@ -247,7 +247,7 @@ Ein Nutzer löscht sein Dokument mit `DELETE /documents/{id}`. Das Team kann ein
 dotnet Edvaniq.Services.Content.Api.dll document delete <id>
 ```
 
-Der Befehl startet keinen Webserver und hat keinen Weg über HTTP. Er sucht den Eigentümer des Dokuments und löscht dann in dessen Namen, genau wie der Endpunkt: Datei, Abschnitte und Fragenpools gehen mit, und `DocumentDeleted` landet im selben Speichern in der Outbox. Die laufende Content-Api schickt das Ereignis, Knowledge und Assessment entfernen, was aus dem Dokument entstanden ist. Er schreibt nur `deleted <id>` und endet mit 0. Gibt es das Dokument nicht, schreibt er `no document <id>`, schickt nichts und endet ebenfalls mit 0, ein zweiter Lauf ist also harmlos. Fehlt die ID oder ist sie keine GUID, endet er mit 2, bei einem anderen Fehler mit 1.
+Der Befehl startet keinen Webserver und hat keinen Weg über HTTP. Er sucht den Eigentümer des Dokuments und löscht dann in dessen Namen, genau wie der Endpunkt: Datei, Abschnitte, Fragenpools und Karten gehen mit, und `DocumentDeleted` landet im selben Speichern in der Outbox. Die laufende Content-Api schickt das Ereignis, Knowledge und Assessment entfernen, was aus dem Dokument entstanden ist. Er schreibt nur `deleted <id>` und endet mit 0. Gibt es das Dokument nicht, schreibt er `no document <id>`, schickt nichts und endet ebenfalls mit 0, ein zweiter Lauf ist also harmlos. Fehlt die ID oder ist sie keine GUID, endet er mit 2, bei einem anderen Fehler mit 1.
 
 ## Fehlende Fragen nachholen (Betreiber)
 
@@ -299,7 +299,7 @@ Schalter und Budget sitzen vor dem `IChatClient` des Content-Workers (`AiGate`),
 
 ## Logzeilen des Workers
 
-Die Zeilen zu Fragenpools, Nachfüllen und Zusammenfassungen haben feste Event-IDs, so findet man den Weg eines Dokuments, Themas oder einer Zusammenfassung im Log über seine ID. Content nutzt 33900 bis 33999: 33900 bis 33908 das Nachfüllen, 33910 bis 33921 die Zeilen jedes KI-Aufrufs (Ausfall, Pause, Budget, Ablehnung, Kosten), 33930 bis 33937 die Fragenpools und 33950 bis 33957 die Zusammenfassungen. Fertige Pools (`PoolsMade`) und fertige Zusammenfassungen (`LogReady`) nennen ihre Dauer.
+Die Zeilen zu Fragenpools, Nachfüllen und Zusammenfassungen haben feste Event-IDs, so findet man den Weg eines Dokuments, Themas oder einer Zusammenfassung im Log über seine ID. Content nutzt 33900 bis 33999: 33900 bis 33908 das Nachfüllen, 33910 bis 33921 die Zeilen jedes KI-Aufrufs (Ausfall, Pause, Budget, Ablehnung, Kosten), 33930 bis 33937 die Fragenpools, 33950 bis 33957 die Zusammenfassungen und 33990 die Karten (ein Pool ohne Karten). Fertige Pools (`PoolsMade`) und fertige Zusammenfassungen (`LogReady`) nennen ihre Dauer.
 
 Jeder KI-Aufruf schreibt eine Zeile `AiUsage` mit Zweck (`topics`, `questions`, `topup`, `summary`), Aufruf-ID, Versuchen, Tokens, Kosten, Dauer, Prompt und Modell, dazu das Thema oder die Zusammenfassung, um die es ging. Dieselben Werte stehen je Versuch in `AiAttempts`, die Aufruf-ID führt vom Log zu den Zeilen. Material, Prompts und Antworten der KI stehen nie im Log, auch nicht in einer Fehlermeldung: Bricht eine Runde ab, nennt die Zeile nur Art und Ort des Fehlers. `LogPrivacyTests` prüft das mit einem Wort, das nur im Material und in den Antworten vorkommt.
 
@@ -309,7 +309,7 @@ Kein Dokument bleibt für immer „in Analyse“. Die Grenzen des Content-Worker
 
 | Schlüssel | Standard | Wofür |
 |---|---|---|
-| `AiTimeout` | 2 min | ein Aufruf der KI, danach gilt er als Ausfall |
+| `AiTimeout` | 4 min | ein Aufruf der KI, danach gilt er als Ausfall |
 | `TopicsTimeout` | 10 min | Warten auf die Themen von Knowledge, danach scheitert das Dokument |
 | `TopicBatchCharacters` | 40.000 | Material je Aufruf für die Themen, ein längeres Dokument geht in Teilen zur KI ([Architektur](architecture.md)) |
 | `Timeout` | 60 min | ein ganzer Lauf, gezählt ab Einfügen, Upload oder Neustart, muss größer als `TopicsTimeout` sein |
@@ -327,7 +327,7 @@ Die Content-Api lehnt früher ab, wo sie kann, mit 429, der Meldung in `title` u
 
 ## Tageskontingent an Generierungen
 
-Eine Generierung ist ein KI-Auftrag, der Lerninhalt zu einem Thema erzeugt, heute der Fragenpool eines Themas und jede Runde, die ihn auffüllt. Später zählen Karten und Zusammenfassungen dazu. Die Themenanalyse eines Dokuments zählt nicht, sie gehört zu den verarbeiteten Seiten. Jeder Nutzer hat je Lerntag eine bestimmte Zahl, Standard 20 (`Content:GenerationsPerDay`).
+Eine Generierung ist ein KI-Auftrag, der Lerninhalt zu einem Thema erzeugt, heute der Fragenpool eines Themas samt seinen Karten (#340) und jede Runde, die ihn auffüllt. Später zählen Zusammenfassungen dazu. Die Themenanalyse eines Dokuments zählt nicht, sie gehört zu den verarbeiteten Seiten. Jeder Nutzer hat je Lerntag eine bestimmte Zahl, Standard 20 (`Content:GenerationsPerDay`).
 
 Bevor der Worker die erste Frage eines Dokuments stellt, zählt er die Themen, die noch einen Pool brauchen. Passen sie nicht in den Rest des Tages, fragt er die KI gar nicht, und das Dokument scheitert mit einer Meldung, die Themen, freie Generierungen und den Zeitpunkt der Rücksetzung nennt. Sonst bucht jedes Thema seine Generierung im selben Speichern wie sein Pool (`GenerationCharges`, eindeutig je Thema und Runde, der Pool ist Runde 0). Scheitert die KI, wird nichts gespeichert und nichts gebucht, ein Neustart bucht kein Thema doppelt.
 

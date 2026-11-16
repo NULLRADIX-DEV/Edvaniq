@@ -13,6 +13,7 @@ namespace Edvaniq.Services.Content.Infrastructure.Ai;
 // 1 to 3 in turn, so every pool has all of them. How many comes from the prompt's randomness. Each question is numbered,
 // so none repeats another. True/false takes its options in English when the prompt asks for them so. The questions never
 // quote the material's sentences, so text slipped into the material can't turn up in them as such.
+// A prompt for a new pool gets cards as well (#340), one per section label and at least five, again without the material.
 //
 // On purpose this double is gullible (SimulatedFence): once anything gets out of the material block, it answers with
 // Hijacked.
@@ -30,7 +31,9 @@ internal sealed partial class SimulatedQuestions : ISimulatedAnswer
         if (!SimulatedFence.Holds(prompt.User))
         {
             var hijacked = new Question(QuestionGeneration.SingleChoice, Hijacked, [Hijacked, "Alles erledigt"], [0], Hijacked, 1, 1);
-            return JsonSerializer.Serialize(new { questions = new[] { hijacked } }, JsonSerializerOptions.Web);
+            return QuestionGeneration.AsksForCards(prompt.System)
+                ? JsonSerializer.Serialize(new { questions = new[] { hijacked }, cards = new[] { new Card(Hijacked, Hijacked + " erledigt", 1) } }, JsonSerializerOptions.Web)
+                : JsonSerializer.Serialize(new { questions = new[] { hijacked } }, JsonSerializerOptions.Web);
         }
 
         var labels = Labels(SectionPattern().Matches(prompt.User)
@@ -46,10 +49,24 @@ internal sealed partial class SimulatedQuestions : ISimulatedAnswer
             .Select(index => QuestionOf(index, labels[index % labels.Count], trueFalse))
             .ToList();
 
-        return JsonSerializer.Serialize(new { questions }, JsonSerializerOptions.Web);
+        if (!QuestionGeneration.AsksForCards(prompt.System))
+        {
+            return JsonSerializer.Serialize(new { questions }, JsonSerializerOptions.Web);
+        }
+
+        // A card per section label, at least SimulatedCards, each numbered like the questions.
+        var cards = Enumerable.Range(0, Math.Clamp(labels.Count, SimulatedCards, QuestionGeneration.MaxCards))
+            .Select(index => CardOf(index, labels[index % labels.Count]))
+            .ToList();
+        return JsonSerializer.Serialize(new { questions, cards }, JsonSerializerOptions.Web);
     }
 
     private const string EnglishTrueFalse = "\"True\" und \"False\"";
+
+    private const int SimulatedCards = 5;
+
+    private static Card CardOf(int index, (int Section, string Text) label) =>
+        new($"Karte {index + 1}: Worum geht es im Material?", $"Um {label.Text}.", label.Section);
 
     private static Question QuestionOf(int index, (int Section, string Text) label, string[] trueFalse)
     {
@@ -69,6 +86,8 @@ internal sealed partial class SimulatedQuestions : ISimulatedAnswer
 
     // A label fits a question's text, an option is shorter.
     private static string Option(string label) => label[..Math.Min(label.Length, QuestionGeneration.OptionMaxLength)].TrimEnd();
+
+    private sealed record Card(string Front, string Back, int Section);
 
     private sealed record Question(
         string Type, string Text, string[] Options, int[] Answers, string Explanation, int Difficulty, int Section);

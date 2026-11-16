@@ -205,7 +205,7 @@ public sealed class QuestionPools(
 
         // Every AI call comes before the one save, nothing holds the database meanwhile. A topic without questions fails
         // the document and nothing of the others goes out. An outage postpones it, then all its topics are asked again.
-        var made = new List<(Job Job, List<GeneratedItem> Items)>();
+        var made = new List<(Job Job, List<GeneratedItem> Items, List<GeneratedItem> Cards)>();
         LearnerProfile? profile = null;
         foreach (var job in needed)
         {
@@ -220,7 +220,7 @@ public sealed class QuestionPools(
             var system = job.Pool is null
                 ? QuestionGeneration.System(profile)
                 : QuestionGeneration.ForNewMaterial(profile, job.Room);
-            var (items, failure, attempts, flagged) = await QuestionRequests.AskAsync(
+            var (items, cards, failure, attempts, flagged) = await QuestionRequests.AskAsync(
                 document, system, job.Material, texts, AiAttempt.Questions, job.Topic.Id, ai, testDouble, answers, moderation, AiTimeout, cancellationToken);
             if (items is null)
             {
@@ -242,12 +242,17 @@ public sealed class QuestionPools(
                 return true;
             }
 
-            made.Add((job, items));
+            if (job.Pool is null && cards.Count == 0)
+            {
+                ContentLog.PoolWithoutCards(logger, job.Topic.Id, documentId);
+            }
+
+            made.Add((job, items, cards));
         }
 
         var outbox = scope.ServiceProvider.GetRequiredService<IEventOutbox>();
         var now = time.GetUtcNow().UtcDateTime;
-        foreach (var (job, items) in made)
+        foreach (var (job, items, cards) in made)
         {
             var topic = job.Topic;
             if (job.Pool is not { } pool)
@@ -260,7 +265,10 @@ public sealed class QuestionPools(
                     quota.Charge(document, topic.Id);
                 }
 
-                outbox.Add(new ItemsGenerated(document.OwnerId, document.Id, topic.Position, items, topic.Id));
+                // The cards go out with the questions and stay here for Flashcards (#340).
+                db.Cards.AddRange(cards.Select(card => Card.Of(
+                    pool, card.ItemId, card.SectionId, card.ModelId, card.PromptVersion, card.Card!.Front, card.Card.Back, now)));
+                outbox.Add(new ItemsGenerated(document.OwnerId, document.Id, topic.Position, [.. items, .. cards], topic.Id));
                 continue;
             }
 

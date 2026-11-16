@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Contracts;
 using Edvaniq.Services.Content.Domain;
@@ -55,6 +57,23 @@ public class DemoReplayTests
                 Assert.All(Enum.GetValues<QuestionType>(), type => Assert.True(questions.Count(question => question.Type == type) >= 5, $"{name}: {type}"));
                 Assert.Equal([1, 2, 3], questions.Select(question => question.Difficulty).Distinct().Order());
             }
+        }
+    }
+
+    // #340: the demo pools bring their cards, all of them through the check.
+    [Fact]
+    public void EveryTopic_GetsCards_ThatAllHoldUp()
+    {
+        foreach (var (name, texts) in TopicMaterial())
+        {
+            var ids = texts.Select(_ => Guid.NewGuid()).ToList();
+            var answer = Assert.IsType<string>(DemoReplay.Answer(QuestionGeneration.System(Profile), QuestionGeneration.User(texts)));
+
+            var cards = QuestionGeneration.ReadCards(answer, ids);
+
+            Assert.NotNull(cards);
+            Assert.True(cards.Count >= 4, $"{name}: {cards.Count} cards");
+            Assert.Equal(Regex.Matches(answer, "\"front\"").Count, cards.Count);
         }
     }
 

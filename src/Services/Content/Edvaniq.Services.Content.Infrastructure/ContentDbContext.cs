@@ -42,6 +42,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
     public DbSet<TopicSummarySection> TopicSummarySections => Set<TopicSummarySection>();
 
+    public DbSet<Card> Cards => Set<Card>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         var document = modelBuilder.Entity<Document>();
@@ -161,6 +163,16 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         summary.HasIndex(item => new { item.Status, item.NextAttemptAt });
         summary.HasMany(item => item.Sections).WithOne().HasForeignKey(item => item.SummaryId).OnDelete(DeleteBehavior.Cascade);
         summary.Navigation(item => item.Sections).UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        // #340: the cards wait for Flashcards and go with their document.
+        var card = modelBuilder.Entity<Card>();
+        card.Property(item => item.Id).ValueGeneratedNever();
+        card.HasOne<Document>().WithMany().HasForeignKey(item => item.DocumentId).OnDelete(DeleteBehavior.Cascade);
+        card.Property(item => item.ModelId).HasMaxLength(AiAttempt.ModelMaxLength);
+        card.Property(item => item.PromptVersion).HasMaxLength(AiAttempt.PromptVersionMaxLength);
+        card.Property(item => item.Front).HasMaxLength(QuestionGeneration.FrontMaxLength);
+        card.Property(item => item.Back).HasMaxLength(QuestionGeneration.BackMaxLength);
+        card.HasIndex(item => item.TopicId);
 
         var summarySection = modelBuilder.Entity<TopicSummarySection>();
         summarySection.Property(item => item.Id).ValueGeneratedNever();

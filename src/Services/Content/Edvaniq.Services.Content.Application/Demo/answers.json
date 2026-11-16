@@ -1,5 +1,5 @@
 {
-  "versions": { "topics": "topics-5", "questions": "questions-6", "summary": "summary-1" },
+  "versions": { "topics": "topics-5", "questions": "questions-7", "summary": "summary-1" },
   "topics": [
     {
       "document": "Suchen in Listen", "title": "Lineare Suche", "headings": ["Suchen in Listen", "Lineare Suche"],
@@ -212,6 +212,68 @@
       { "type": "truefalse", "text": "Der Speicherbedarf wird ebenfalls in O-Notation angegeben.", "options": ["Wahr", "Falsch"], "answers": [0], "explanation": "Wahr: Wie die Laufzeit gibt man auch den Speicherbedarf in O-Notation an.", "difficulty": 2 },
       { "type": "truefalse", "text": "Das schnellste Verfahren braucht immer auch am wenigsten Speicher.", "options": ["Wahr", "Falsch"], "answers": [1], "explanation": "Falsch: Mergesort ist schneller als Bubblesort, braucht aber mehr Speicher, man muss abwägen.", "difficulty": 2 },
       { "type": "truefalse", "text": "Der Speicherbedarf zählt den Speicher, den ein Algorithmus zusätzlich zur Eingabe braucht.", "options": ["Wahr", "Falsch"], "answers": [0], "explanation": "Wahr: Gemeint ist der zusätzliche Speicher abhängig von der Eingabegröße n.", "difficulty": 3 }
+    ]
+  },
+  "cards": {
+    "Lineare Suche": [
+      { "front": "Wie arbeitet die lineare Suche?", "back": "Sie vergleicht den gesuchten Wert der Reihe nach mit jedem Element der Liste, bis sie ihn findet oder die Liste endet." },
+      { "front": "Braucht die lineare Suche eine sortierte Liste?", "back": "Nein, sie funktioniert mit jeder Liste, auch mit einer unsortierten." },
+      { "front": "Wie viele Vergleiche braucht die lineare Suche im schlechtesten Fall bei n Elementen?", "back": "Genau n Vergleiche, wenn der Wert ganz hinten oder gar nicht in der Liste steht." },
+      { "front": "Was gibt die Funktion lineare_suche zurück, wenn der Wert nicht vorkommt?", "back": "Den Wert -1." }
+    ],
+    "Binäre Suche": [
+      { "front": "Was ist die Voraussetzung für die binäre Suche?", "back": "Die Liste muss sortiert sein." },
+      { "front": "Womit vergleicht die binäre Suche den gesuchten Wert zuerst?", "back": "Mit dem mittleren Element des Suchbereichs, danach sucht sie nur in der passenden Hälfte weiter." },
+      { "front": "Wie viele Vergleiche braucht die binäre Suche höchstens bei einer Million Elementen?", "back": "Höchstens etwa 20, weil jeder Vergleich den Suchbereich halbiert." },
+      { "front": "Was passiert, wenn man die binäre Suche auf eine unsortierte Liste anwendet?", "back": "Sie liefert falsche Ergebnisse, weil sie Teile der Liste überspringt, in denen der Wert stehen könnte." }
+    ],
+    "Bubblesort": [
+      { "front": "Wie arbeitet Bubblesort?", "back": "Es geht die Liste immer wieder durch und vertauscht benachbarte Elemente, die in der falschen Reihenfolge stehen." },
+      { "front": "Was steht nach jedem Durchgang von Bubblesort am Ende der Liste?", "back": "Das größte noch unsortierte Element, es steigt auf wie eine Blase." },
+      { "front": "Wie viele Vergleiche braucht Bubblesort ungefähr bei n Elementen?", "back": "Ungefähr n² Vergleiche." },
+      { "front": "Wie viel zusätzlichen Speicher braucht Bubblesort?", "back": "Nur O(1), es sortiert innerhalb der Liste." }
+    ],
+    "Sortieren durch Einfügen": [
+      { "front": "Wie arbeitet Sortieren durch Einfügen (Insertionsort)?", "back": "Es fügt jedes neue Element an der richtigen Stelle in den schon sortierten Teil der Liste ein, wie beim Ordnen von Spielkarten auf der Hand." },
+      { "front": "Wann ist Sortieren durch Einfügen besonders schnell?", "back": "Wenn die Liste schon fast sortiert ist, weil kaum ein Element weit wandern muss." },
+      { "front": "Was ist der schlechteste Fall für Sortieren durch Einfügen?", "back": "Eine umgekehrt sortierte Liste, dann braucht es ungefähr n² / 2 Vergleiche." },
+      { "front": "Ist Sortieren durch Einfügen stabil?", "back": "Ja, Elemente mit gleichem Sortierschlüssel behalten ihre Reihenfolge." }
+    ],
+    "Mergesort": [
+      { "front": "Nach welchem Prinzip arbeitet Mergesort?", "back": "Nach „Teile und herrsche“: Liste halbieren, jede Hälfte sortieren und die sortierten Hälften mischen." },
+      { "front": "Wie heißt das Zusammenfügen zweier sortierter Hälften bei Mergesort?", "back": "Mischen, englisch merge." },
+      { "front": "Welche Laufzeit hat Mergesort?", "back": "Ungefähr n · log2(n) Schritte, also O(n · log n)." },
+      { "front": "Was ist ein Nachteil von Mergesort?", "back": "Es braucht beim Mischen zusätzlichen Speicher für eine zweite Liste, also O(n)." }
+    ],
+    "Stabilität": [
+      { "front": "Wann heißt ein Sortierverfahren stabil?", "back": "Wenn Elemente mit gleichem Sortierschlüssel nach dem Sortieren in derselben Reihenfolge stehen wie vorher." },
+      { "front": "Wofür ist Stabilität beim Sortieren wichtig?", "back": "Wenn man nacheinander nach mehreren Merkmalen sortiert, etwa erst nach Vornamen und dann nach Nachnamen." },
+      { "front": "Welche der drei Verfahren Bubblesort, Sortieren durch Einfügen und Mergesort sind stabil?", "back": "Alle drei." },
+      { "front": "Klassenliste erst nach Vornamen, dann stabil nach Nachnamen sortiert: Wie stehen Personen mit gleichem Nachnamen?", "back": "Alphabetisch nach Vornamen." }
+    ],
+    "Laufzeit und Schrittzahl": [
+      { "front": "Wie gibt man die Laufzeit eines Algorithmus an?", "back": "Als Zahl der Grundschritte für eine Eingabe der Größe n, etwa Vergleiche, Zuweisungen oder Rechenoperationen." },
+      { "front": "Warum zählt man Schritte statt Sekunden?", "back": "Weil Sekunden vom Rechner abhängen." },
+      { "front": "Welchen Fall betrachtet man bei der Laufzeit meistens?", "back": "Den schlechtesten Fall, also die Eingabe, bei der der Algorithmus am längsten braucht." },
+      { "front": "Was ist der schlechteste Fall der linearen Suche?", "back": "Ein Wert, der nicht in der Liste steht, dann braucht sie n Vergleiche." }
+    ],
+    "O-Notation": [
+      { "front": "Wann liegt f(n) in O(g(n))?", "back": "Wenn es eine Konstante c und eine Startgröße n0 gibt, sodass f(n) ≤ c · g(n) für alle n ≥ n0 gilt." },
+      { "front": "Was lässt die O-Notation weg?", "back": "Konstante Faktoren und kleine Glieder, sie beschreibt nur, wie schnell der Aufwand wächst." },
+      { "front": "In welcher Klasse liegt ein Algorithmus mit 3n² + 5n + 2 Schritten?", "back": "In O(n²), weil für große n das Glied n² den Aufwand bestimmt." },
+      { "front": "Beschreibt die O-Notation die genaue Schrittzahl?", "back": "Nein, nur das Wachstum des Aufwands bei größer werdender Eingabe." }
+    ],
+    "Komplexitätsklassen": [
+      { "front": "Welche Komplexitätsklasse hat die binäre Suche?", "back": "O(log n), logarithmisch." },
+      { "front": "Welche Komplexitätsklasse hat der Zugriff auf ein Listenelement über seinen Index?", "back": "O(1), konstant." },
+      { "front": "Welches Beispiel nennt das Material für exponentielles Wachstum O(2^n)?", "back": "Das Ausprobieren aller Teilmengen einer Menge." },
+      { "front": "Wie groß sind log2(n), n · log2(n) und n² für n = 1000?", "back": "Etwa 10, etwa 10 000 und eine Million." }
+    ],
+    "Speicherbedarf": [
+      { "front": "Was gibt der Speicherbedarf eines Algorithmus an?", "back": "Wie viel zusätzlichen Speicher er abhängig von der Eingabegröße n braucht." },
+      { "front": "Wie viel zusätzlichen Speicher braucht Mergesort?", "back": "O(n), weil es beim Mischen eine zweite Liste braucht." },
+      { "front": "Wie viel zusätzlichen Speicher braucht Bubblesort?", "back": "O(1), weil es innerhalb der Liste sortiert." },
+      { "front": "Was muss man bei Algorithmen oft gegeneinander abwägen?", "back": "Schnelle Laufzeit und wenig Speicher." }
     ]
   },
   "summaries": {
