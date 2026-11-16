@@ -482,6 +482,27 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(topics.Count, (await GeneratedAsync(id)).Count);
     }
 
+    // #427: an AI that repeats its questions still fills every pool, each question only once.
+    [Fact]
+    public async Task RepeatedQuestions_AreSentOnce_AndEveryTopicGetsItsPool()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        Simulated.Fault = SimulatedFault.DuplicateItems;
+
+        await AnalyzeAsync(id, withQuestions: true);
+
+        var generated = await GeneratedAsync(id);
+        Assert.Equal(Assert.Single(await ReportedAsync(id)).Topics.Count, generated.Count);
+        Assert.All(generated, items =>
+        {
+            var texts = items.Items.Where(item => item.Question is not null).Select(item => QuestionGeneration.SameQuestion(item.Question!.Text)).ToList();
+            Assert.Equal(texts.Count, texts.Distinct().Count());
+            Assert.InRange(texts.Count, QuestionPool.MinQuestions, QuestionGeneration.MaxQuestions);
+        });
+        Assert.Equal(DocumentStatus.Ready, Stored(id).Status);
+    }
+
     [Fact]
     public async Task TwoAnalyzersOnOneDocument_ReportItsTopicsOnce()
     {

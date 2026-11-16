@@ -76,6 +76,26 @@ public sealed class QuestionTopUpTests(QuestionTopUpFactory service) : IClassFix
         Assert.False(await DueAsync(topic));
     }
 
+    // #427: a top-up from an AI that repeats its questions sends each new one once and still fills the pool.
+    [Fact]
+    public async Task RepeatedQuestions_InATopUp_AreSentOnce()
+    {
+        script.Answers.Enqueue(Questions("Erste", 5));
+        using var client = ClientFor(NewUser());
+        var (document, topic) = await PooledAsync(client);
+        var simulated = ai.Services.GetRequiredService<SimulatedChatClient>();
+        simulated.Fault = SimulatedFault.DuplicateItems;
+        simulated.FaultWhen = prompt => prompt.System.StartsWith(ContentAi.QuestionsTask, StringComparison.Ordinal);
+
+        Assert.True(await TopUpAsync(topic));
+
+        var sent = await GeneratedAsync(document);
+        Assert.Equal([5, 15], sent.Select(generated => generated.Items.Count));
+        var texts = sent.SelectMany(generated => generated.Items).Select(item => QuestionGeneration.SameQuestion(item.Question!.Text)).ToList();
+        Assert.Equal(texts.Count, texts.Distinct().Count());
+        Assert.Equal(20, Pool(topic).Questions);
+    }
+
     // An AI that brings nothing new three times leaves the pool as it is, with a log line, and Assessment gets nothing
     // more.
     [Fact]

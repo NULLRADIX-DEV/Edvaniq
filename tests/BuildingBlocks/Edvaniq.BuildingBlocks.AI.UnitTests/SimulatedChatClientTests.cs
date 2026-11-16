@@ -118,6 +118,24 @@ public class SimulatedChatClientTests
         Assert.StartsWith("""{"echo":""", answer.Text);
     }
 
+    // An answer can't be cut into items by the client, so it gets the fault and repeats them itself (#427). FaultWhen
+    // keeps it from the prompts it doesn't aim at.
+    [Fact]
+    public async Task DuplicateItems_ReachesTheAnswer_OnlyWhereTheFaultIsAimed()
+    {
+        var client = new SimulatedChatClient([new Check(), new Echo()], SimulatedFault.DuplicateItems)
+        {
+            FaultWhen = prompt => prompt.Task == "edvaniq:check",
+        };
+
+        var aimed = await client.AskAsync(
+            Prompt, text => text, new StructuredRequest(TimeSpan.FromSeconds(5), Task: "edvaniq:check"), TimeProvider.System, TestContext.Current.CancellationToken);
+        var other = await client.GetResponseAsync(Prompt, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal("checked checked", aimed.Value);
+        Assert.StartsWith("""{"echo":""", other.Text);
+    }
+
     [Fact]
     public async Task PromptWithoutAnswer_IsATestSetupError()
     {
@@ -150,7 +168,7 @@ public class SimulatedChatClientTests
     {
         public bool Answers(SimulatedPrompt prompt) => prompt.Task == "edvaniq:check";
 
-        public string Answer(SimulatedPrompt prompt) => "checked";
+        public string Answer(SimulatedPrompt prompt) => prompt.Fault == SimulatedFault.DuplicateItems ? "checked checked" : "checked";
     }
 
     // Echoes the user message with a number from the prompt's randomness.
