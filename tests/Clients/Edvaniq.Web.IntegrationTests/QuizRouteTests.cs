@@ -5,8 +5,8 @@ using Edvaniq.Testing;
 
 namespace Edvaniq.Web.IntegrationTests;
 
-// The practice page and the block quiz reach Assessment only through three routes of the web host: opening the quiz of a
-// block, asking a question of a topic and answering it. Only signed in, only POST, and the attempt only as a Guid. The
+// The practice page, the block quiz and the new topic unit reach Assessment only through four routes of the web host:
+// opening the quiz of a block, the check questions of a new topic, asking a question of a topic and answering it. Only signed in, only POST, and the attempt only as a Guid. The
 // backend sees the user's token, never the browser's cookie.
 public sealed class QuizRouteTests
 {
@@ -15,6 +15,7 @@ public sealed class QuizRouteTests
     [Theory]
     [InlineData("/api/assessment/attempts", "/assessment/attempts")]
     [InlineData("/api/assessment/quizzes", "/assessment/quizzes")]
+    [InlineData("/api/assessment/check-questions", "/assessment/check-questions")]
     [InlineData($"/api/assessment/attempts/{Attempt}/answer", $"/assessment/attempts/{Attempt}/answer")]
     public async Task AfterLogin_TheCallReachesAssessment_WithTheUsersToken(string path, string arrives)
     {
@@ -37,6 +38,7 @@ public sealed class QuizRouteTests
     [Theory]
     [InlineData("/api/assessment/attempts")]
     [InlineData("/api/assessment/quizzes")]
+    [InlineData("/api/assessment/check-questions")]
     [InlineData($"/api/assessment/attempts/{Attempt}/answer")]
     public async Task WithoutLogin_IsRefused_AndNothingIsForwarded(string path)
     {
@@ -76,6 +78,9 @@ public sealed class QuizRouteTests
     [InlineData("GET", "/api/assessment/quizzes")]
     [InlineData("POST", "/api/assessment/quizzes/weaknesses")]
     [InlineData("POST", $"/api/assessment/quizzes/{Attempt}")]
+    [InlineData("GET", "/api/assessment/check-questions")]
+    [InlineData("PUT", "/api/assessment/check-questions")]
+    [InlineData("POST", "/api/assessment/check-questions/more")]
     public async Task OtherMethodsAndPaths_AreNotForwarded(string method, string path)
     {
         await using var gateway = await StubService.StartAsync("gateway-stub");

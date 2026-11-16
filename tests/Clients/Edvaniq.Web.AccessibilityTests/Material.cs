@@ -235,6 +235,65 @@ internal static class Material
         });
     }
 
+    // A new topic's unit (#358): the standard summary at once, then two check questions (right are "In den Thylakoiden"
+    // and "Wahr") or, without a pool, none. Each check-questions call and each answer lands in its list.
+    public static async Task AnswerNewTopicUnitAsync(IPage page, bool pool, List<string> started, List<string> sent)
+    {
+        Guid single = Guid.Parse("2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d01"), trueFalse = Guid.Parse("2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d02");
+        static object Question(Guid id, string type, string text, string[] options) =>
+            new { id, topicId = TopicId, questionId = Guid.NewGuid(), type, text, options, difficulty = 1 };
+
+        await AnswerAsync(page, documents: [new[] { Document("Ready") }], topics: [Topics]);
+        await page.RouteAsync("**/api/content/topics/*/summaries/standard", route => FulfillAsync(route, new
+        {
+            topicId = TopicId,
+            length = "standard",
+            status = "ready",
+            text = "Die Photosynthese wandelt Licht in chemische Energie um.\nSie läuft in den Chloroplasten ab.",
+            failureCode = (string?)null,
+            aiGenerated = true,
+            createdAt = new DateTime(2026, 11, 15, 9, 0, 0, DateTimeKind.Utc),
+            sources = Array.Empty<object>(),
+        }));
+        await page.RouteAsync("**/api/assessment/check-questions", route =>
+        {
+            started.Add(route.Request.PostData ?? "");
+            return FulfillAsync(route, pool
+                ? new
+                {
+                    topicId = TopicId,
+                    status = "ready",
+                    questions = new[]
+                    {
+                        Question(single, "singleChoice", "Wo findet die Lichtreaktion statt?", ["Im Zellkern", "In den Thylakoiden"]),
+                        Question(trueFalse, "trueFalse", "Die Lichtreaktion braucht Licht.", ["Wahr", "Falsch"]),
+                    },
+                }
+                : new { topicId = TopicId, status = "notReady", questions = Array.Empty<object>() });
+        });
+        await page.RouteAsync("**/api/assessment/attempts/*/answer", route =>
+        {
+            sent.Add(route.Request.PostData ?? "");
+            var id = Guid.Parse(route.Request.Url.Split('/')[^2]);
+            var chosen = JsonDocument.Parse(route.Request.PostData!).RootElement.GetProperty("option").GetInt32();
+            var right = id == single ? 1 : 0;
+            return FulfillAsync(route, new
+            {
+                id,
+                topicId = TopicId,
+                questionId = Guid.NewGuid(),
+                option = chosen,
+                revealed = false,
+                correct = chosen == right,
+                answer = right,
+                answers = new[] { right },
+                explanation = "So steht es im Skript.",
+                responseTimeMs = 1000,
+                answeredAt = DateTime.UtcNow,
+            });
+        });
+    }
+
     // A block's quiz with one question of each type (#357). Right are "In den Thylakoiden", "Licht" with "Wasser" and
     // "Wahr". Each answer is graded from what was sent to its attempt, and lands in sent.
     public static async Task AnswerBlockQuizAsync(IPage page, List<string> sent)
