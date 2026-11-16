@@ -20,7 +20,8 @@ namespace Edvaniq.Services.Content.Infrastructure;
 // before, with an ItemsGenerated of the same topic. Pool, event and the round's charge go out in one save. Each round
 // with an answer takes one generation of the user's daily quota. While the quota is used up, the budget is reached or the
 // operator stopped the AI, nothing is asked and a log line says why. An outage waits like a document (#300), and a pool
-// that stays short after QuestionPool.MaxTopUps rounds is left as it is. The document stays ready all along.
+// that stays short after QuestionPool.MaxTopUps rounds is left as it is. The document stays ready all along. Demo
+// material ships whole with its answers (#411), its pools are never topped up.
 public sealed class QuestionTopUps(
     IServiceScopeFactory scopes,
     IChatClient ai,
@@ -93,7 +94,7 @@ public sealed class QuestionTopUps(
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ContentDbContext>();
         var ready = db.Documents.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
-            .Where(document => document.Status == DocumentStatus.Ready)
+            .Where(document => document.Status == DocumentStatus.Ready && document.Origin != DocumentOrigin.Demo)
             .Select(document => document.Id);
         var due = await db.QuestionPools.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .Where(pool => pool.Questions < QuestionPool.MinQuestions && !pool.TopUpStopped)
@@ -119,7 +120,7 @@ public sealed class QuestionTopUps(
             ? null
             : await db.Documents.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
                 .SingleOrDefaultAsync(item => item.Id == pool.DocumentId, cancellationToken);
-        if (pool is not { WantsTopUp: true } || pool.NextTopUpAt > now || document is not { Status: DocumentStatus.Ready })
+        if (pool is not { WantsTopUp: true } || pool.NextTopUpAt > now || document is not { Status: DocumentStatus.Ready } || document.Origin == DocumentOrigin.Demo)
         {
             return false;
         }
