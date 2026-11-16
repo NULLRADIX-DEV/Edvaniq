@@ -1,0 +1,282 @@
+@using System.Globalization
+@using Microsoft.JSInterop
+@implements IDisposable
+@inject IBlockQuiz Quizzes
+@inject ILearningMaterial Material
+
+@* The quiz of a block: its questions one after another, each through a QuestionCard, then how many were right. The
+   session runner (#396) puts this in its quiz step and takes the tally from OnFinished. *@
+
+<div class="quiz-status" role="status">
+    @switch (State)
+    {
+        case ViewState.Loading:
+            <Loading Text="@FeedbackTexts.Quiz.Loading" />
+            break;
+        case ViewState.NotReady:
+            <EmptyState Title="@FeedbackTexts.Quiz.NoQuestions" Hint="@FeedbackTexts.Quiz.NoQuestionsHint" />
+            break;
+        case ViewState.NotFound:
+            <Notice Kind="NoticeKind.Error" Title="@FeedbackTexts.Quiz.TopicGone" class="quiz-topic-gone" />
+            break;
+        case ViewState.LoadFailed:
+            <ConnectionProblem Title="@FeedbackTexts.BlockQuiz.LoadFailed" TraceId="@loadTrace" />
+            break;
+        case ViewState.Question when !Current.IsKnownType:
+            <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.Quiz.UnknownType" class="quiz-unknown-type">
+                <p>@FeedbackTexts.Quiz.UnknownTypeHint</p>
+            </Notice>
+            break;
+    }
+</div>
+
+@switch (State)
+{
+    case ViewState.NotReady:
+        <StateActions ActionText="@FeedbackTexts.Quiz.AskAgain" OnAction="OpenAsync"
+                      Href="themen" LinkText="@FeedbackTexts.Quiz.OtherTopic" />
+        break;
+    case ViewState.NotFound:
+        <StateActions Href="themen" LinkText="@FeedbackTexts.Quiz.BackToTopics" />
+        break;
+    case ViewState.LoadFailed:
+        <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="OpenAsync"
+                      Href="themen" LinkText="@FeedbackTexts.Quiz.BackToTopics" />
+        break;
+    case ViewState.Question:
+        <p class="block-quiz-progress" id="block-quiz-progress" tabindex="-1" @ref="progressText">@ProgressText</p>
+        <progress class="block-quiz-bar" max="@quiz!.Questions.Count" value="@(index + 1)" aria-labelledby="block-quiz-progress"></progress>
+        @if (Current.IsKnownType)
+        {
+            <QuestionCard Question="Current" Round="index" TopicId="TopicId" Documents="documents" FocusOnShow="moved"
+                          OnGraded="Graded" OnGone="Gone">
+                <Next>
+                    <div class="quiz-actions">
+                        <button type="button" class="button" @onclick="MoveOn">@(IsLast ? FeedbackTexts.BlockQuiz.ToResult : FeedbackTexts.BlockQuiz.Next)</button>
+                    </div>
+                </Next>
+            </QuestionCard>
+        }
+        else
+        {
+            <div class="quiz-actions">
+                <button type="button" class="button" @onclick="MoveOn">@(IsLast ? FeedbackTexts.BlockQuiz.ToResult : FeedbackTexts.BlockQuiz.Skip)</button>
+            </div>
+        }
+        break;
+    case ViewState.Done:
+        <section class="block-quiz-done" aria-labelledby="block-quiz-done-heading">
+            <h2 id="block-quiz-done-heading" tabindex="-1" @ref="doneHeading">@FeedbackTexts.BlockQuiz.Done</h2>
+            <p class="block-quiz-tally"><strong>@TallyText</strong></p>
+            <p>@FeedbackTexts.BlockQuiz.DoneHint</p>
+        </section>
+        @AfterDone
+        break;
+}
+
+@code {
+    // How many questions a block's quiz gets until the runner takes the number from the block (#396).
+    public const int DefaultSize = 10;
+
+    [Parameter, EditorRequired]
+    public Guid TopicId { get; set; }
+
+    [Parameter, EditorRequired]
+    public Guid BlockId { get; set; }
+
+    // Only counts when the quiz is made. Once it is there, the questions are the ones it has.
+    [Parameter]
+    public int Size { get; set; } = DefaultSize;
+
+    // Once all questions are through, with what this view counted. It's the display only: what a session counts comes
+    // from Planning's result (#403).
+    [Parameter]
+    public EventCallback<QuizTally> OnFinished { get; set; }
+
+    // The caller's way on below the tally.
+    [Parameter]
+    public RenderFragment? AfterDone { get; set; }
+
+    private readonly CancellationTokenSource life = new();
+    private DocumentLookup documents = default!;
+    private (Guid Topic, Guid Block)? loaded;
+
+    private bool loading = true;
+    private CallResult? openFailure;
+    private string? loadTrace;
+    private BlockQuiz? quiz;
+    private int index;
+
+    // How each question went: true right, false wrong or solution shown, null not answered (a type the app can't show).
+    private bool?[] outcomes = [];
+
+    // After the user moved on the focus follows, never on the first load.
+    private bool moved;
+    private bool focusProgress;
+    private bool focusDone;
+    private ElementReference progressText;
+    private ElementReference doneHeading;
+
+    private enum ViewState
+    {
+        Loading,
+        SignedOut,
+        NotReady,
+        NotFound,
+        LoadFailed,
+        Question,
+        Done,
+    }
+
+    private ViewState State => this switch
+    {
+        { loading: true } => ViewState.Loading,
+        { openFailure: CallResult.SignedOut } => ViewState.SignedOut,
+        { openFailure: CallResult.NotReady } => ViewState.NotReady,
+        { openFailure: CallResult.NotFound } => ViewState.NotFound,
+        { openFailure: not null } => ViewState.LoadFailed,
+        { quiz: not null } when index < quiz.Questions.Count => ViewState.Question,
+        { quiz: not null } => ViewState.Done,
+        _ => ViewState.Loading,
+    };
+
+    // Made once per quiz: the card starts afresh whenever it gets another instance.
+    private AskedQuestion[] asked = [];
+
+    private AskedQuestion Current => asked[index];
+
+    // No open question after this one: what was answered before is not asked again.
+    private bool IsLast => NextOpen(index + 1) == quiz!.Questions.Count;
+
+    private string ProgressText =>
+        string.Format(CultureInfo.InvariantCulture, FeedbackTexts.BlockQuiz.Progress, index + 1, quiz!.Questions.Count);
+
+    private QuizTally Tally =>
+        new(outcomes.Count(outcome => outcome == true), outcomes.Count(outcome => outcome is not null), outcomes.Length);
+
+    private string TallyText =>
+        string.Format(CultureInfo.InvariantCulture, FeedbackTexts.BlockQuiz.Tally, Tally.Right, Tally.Total);
+
+    protected override void OnInitialized() => documents = new DocumentLookup(Material);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loaded == (TopicId, BlockId))
+        {
+            return;
+        }
+
+        loaded = (TopicId, BlockId);
+        await OpenAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var progress = focusProgress;
+        var done = focusDone;
+        focusProgress = focusDone = false;
+        try
+        {
+            if (done)
+            {
+                await doneHeading.FocusAsync();
+            }
+            else if (progress)
+            {
+                await progressText.FocusAsync();
+            }
+        }
+        catch (JSException)
+        {
+            // The element went away between render and focus, nothing to do.
+        }
+    }
+
+    // Safe to call again: Assessment keeps the quiz of the block and brings the same questions.
+    private async Task OpenAsync()
+    {
+        var retry = !loading;
+        loading = true;
+        CallOutcome<BlockQuiz> outcome;
+        try
+        {
+            outcome = await Quizzes.OpenAsync(TopicId, BlockId, Size, life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            loading = false;
+        }
+
+        openFailure = null;
+        loadTrace = null;
+        if (outcome is { Result: CallResult.Ok, Value: { } opened })
+        {
+            // Back to a quiz begun before: what was answered then counts, it goes on with the first open question.
+            quiz = opened;
+            asked = [.. opened.Questions.Select(question => question.Asked)];
+            outcomes = [.. opened.Questions.Select(question => question.Answered ? question.Correct ?? false : (bool?)null)];
+            index = NextOpen(0);
+            moved = retry;
+            focusProgress = retry && index < opened.Questions.Count && !Current.IsKnownType;
+            if (index == opened.Questions.Count)
+            {
+                await FinishAsync(focus: retry);
+            }
+
+            return;
+        }
+
+        openFailure = outcome.Result is CallResult.SignedOut or CallResult.NotReady or CallResult.NotFound ? outcome.Result : CallResult.Failed;
+        loadTrace = outcome.TraceId;
+    }
+
+    // The first question from here not answered yet, or the end.
+    private int NextOpen(int from)
+    {
+        var next = from;
+        while (next < quiz!.Questions.Count && quiz.Questions[next].Answered)
+        {
+            next++;
+        }
+
+        return next;
+    }
+
+    private void Graded(GradedAnswer graded) => outcomes[index] = graded.Correct;
+
+    private async Task MoveOn()
+    {
+        index = NextOpen(index + 1);
+        moved = true;
+        if (index == quiz!.Questions.Count)
+        {
+            await FinishAsync(focus: true);
+            return;
+        }
+
+        // The card puts the focus on the question, a question the app can't show has only the progress to land on.
+        focusProgress = !Current.IsKnownType;
+    }
+
+    private async Task FinishAsync(bool focus)
+    {
+        focusDone = focus;
+        await OnFinished.InvokeAsync(Tally);
+    }
+
+    private void Gone()
+    {
+        quiz = null;
+        openFailure = CallResult.NotFound;
+    }
+
+    public void Dispose()
+    {
+        life.Cancel();
+        life.Dispose();
+    }
+}

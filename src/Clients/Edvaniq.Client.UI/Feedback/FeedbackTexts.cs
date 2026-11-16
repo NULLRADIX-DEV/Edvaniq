@@ -212,6 +212,26 @@ public static class FeedbackTexts
         public const string BackToTopics = "Zurück zu den Themen";
     }
 
+    // The quiz of a block, question after question (#357). {0} and {1} are numbers.
+    public static class BlockQuiz
+    {
+        public const string Progress = "Frage {0} von {1}";
+
+        public const string Next = "Nächste Frage";
+
+        public const string Skip = "Weiter";
+
+        public const string ToResult = "Zum Ergebnis";
+
+        public const string LoadFailed = "Das Quiz ließ sich gerade nicht laden.";
+
+        public const string Done = "Quiz geschafft.";
+
+        public const string Tally = "{0} von {1} Fragen richtig.";
+
+        public const string DoneHint = "Mit den Erklärungen von heute fällt es dir beim nächsten Mal leichter.";
+    }
+
     // The newest text and the topics on the topics page.
     public static class Material
     {
