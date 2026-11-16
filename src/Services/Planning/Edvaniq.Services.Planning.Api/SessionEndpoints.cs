@@ -17,6 +17,10 @@ internal static class SessionEndpoints
 
     public const string AnswersUnavailable = "Die Antworten können gerade nicht geladen werden. Versuch es gleich noch einmal.";
 
+    public const string NoBonusTopic = "Für eine Bonus-Wiederholung gibt es gerade kein geübtes Thema mit Fragen. Lern zuerst ein Thema aus deinem Plan.";
+
+    public const string BonusUnavailable = "Die Bonus-Wiederholung lässt sich gerade nicht zusammenstellen. Versuch es gleich noch einmal.";
+
     public static IEndpointRouteBuilder MapSessionEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/sessions");
@@ -31,6 +35,20 @@ internal static class SessionEndpoints
                 SessionStartResult.Existing => Results.Ok(SessionResponse.From(start.Session!, existing: true)),
                 SessionStartResult.BlockDone => Results.Problem(title: BlockDone, statusCode: StatusCodes.Status409Conflict),
                 _ => Results.Problem(title: BlockGone, statusCode: StatusCodes.Status404NotFound),
+            };
+        });
+
+        // A bonus review after the plan is done (#408), on the weakest topic, outside the daily goal. 201, or 200 with
+        // Existing as above. 409 when no topic fits, 503 when LearningEngine can't be asked.
+        group.MapPost("/bonus", async (SessionStarts starts, CancellationToken cancellationToken) =>
+        {
+            var start = await starts.StartBonusAsync(cancellationToken);
+            return start.Result switch
+            {
+                SessionStartResult.Started => Results.Created($"/sessions/{start.Session!.Id}", SessionResponse.From(start.Session, existing: false)),
+                SessionStartResult.Existing => Results.Ok(SessionResponse.From(start.Session!, existing: true)),
+                SessionStartResult.MasteryUnavailable => Results.Problem(title: BonusUnavailable, statusCode: StatusCodes.Status503ServiceUnavailable),
+                _ => Results.Problem(title: NoBonusTopic, statusCode: StatusCodes.Status409Conflict),
             };
         });
 
@@ -117,7 +135,8 @@ internal sealed record AdvanceRequest(int? Step);
 // while it runs. Steps: the fixed order of the session (#377), each "review", "introductionUnit" or "quiz", Empty when
 // there is nothing to do in it (the review until M4), Questions the size the client passes to POST /quizzes of
 // Assessment for the quiz. CurrentStep: the index in Steps the user is at. Outcome: "running", "aborted" (#393) or "completed" (#395).
-// ActiveSeconds: the active learning time up to the last signal (#394).
+// ActiveSeconds: the active learning time up to the last signal (#394). Bonus: a bonus review (#408), its block is no
+// block of the plan.
 internal sealed record SessionResponse(
     Guid Id,
     Guid BlockId,
@@ -132,7 +151,8 @@ internal sealed record SessionResponse(
     IReadOnlyList<StepResponse> Steps,
     int CurrentStep,
     string Outcome,
-    int ActiveSeconds)
+    int ActiveSeconds,
+    bool Bonus)
 {
     public static SessionResponse From(Session session, bool existing) =>
         new(
@@ -154,7 +174,8 @@ internal sealed record SessionResponse(
                 SessionOutcome.Completed => "completed",
                 _ => "running",
             },
-            session.ActiveSeconds);
+            session.ActiveSeconds,
+            session.IsBonus);
 
     private static string NameOf(SessionStepKind kind) => kind switch
     {
@@ -171,7 +192,7 @@ internal sealed record StepResponse(string Kind, bool Empty, int? Questions);
 // mastery before and after, the block's topic first; null otherwise, never an old value (#406). MasteryAvailable: false
 // when LearningEngine couldn't be asked. DailyGoal as in /plan/today. NextStep: kind "block" with the block "Jetzt lernen"
 // goes on with, or "bonusReview" when nothing is open. TopicRemoved (#406): the topic left the goal since, its mastery
-// will never come, Complete stays false.
+// will never come, Complete stays false. Bonus as in SessionResponse.
 internal sealed record SessionResultResponse(
     Guid SessionId,
     string Outcome,
@@ -183,7 +204,8 @@ internal sealed record SessionResultResponse(
     IReadOnlyList<TopicChangeResponse>? Topics,
     string DailyGoal,
     NextStepResponse NextStep,
-    bool TopicRemoved)
+    bool TopicRemoved,
+    bool Bonus)
 {
     public static SessionResultResponse From(SessionResultLookup lookup)
     {
@@ -207,7 +229,8 @@ internal sealed record SessionResultResponse(
             lookup.NextBlock is { } next
                 ? new NextStepResponse("block", next.Id, next.Block.TopicId, next.Block.Kind == BlockKind.Review ? "review" : "learn", next.Block.Minutes)
                 : new NextStepResponse("bonusReview", null, null, null, null),
-            lookup.TopicRemoved);
+            lookup.TopicRemoved,
+            session.IsBonus);
     }
 }
 

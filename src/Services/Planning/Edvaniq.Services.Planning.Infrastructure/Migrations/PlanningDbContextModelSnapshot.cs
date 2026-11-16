@@ -329,6 +329,9 @@ namespace Edvaniq.Services.Planning.Infrastructure.Migrations
                     b.Property<DateTime?>("EndedAt")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<bool>("IsBonus")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(16)

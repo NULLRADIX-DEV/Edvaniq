@@ -46,6 +46,18 @@ public static partial class PlanningLog
         Message = "Result of session {SessionId} comes without mastery, LearningEngine could not be asked")]
     public static partial void ResultWithoutMastery(ILogger logger, Guid sessionId);
 
+    [LoggerMessage(EventId = 41714, EventName = "BonusReviewStarted", Level = LogLevel.Information,
+        Message = "Bonus review {SessionId} started as block {BlockId} ({Minutes} min)")]
+    public static partial void BonusStarted(ILogger logger, Guid sessionId, Guid blockId, int minutes);
+
+    [LoggerMessage(EventId = 41715, EventName = "BonusReviewWithoutTopic", Level = LogLevel.Information,
+        Message = "No bonus review started, no introduced topic has a ready question pool")]
+    public static partial void BonusWithoutTopic(ILogger logger);
+
+    [LoggerMessage(EventId = 41716, EventName = "BonusReviewWithoutMastery", Level = LogLevel.Warning,
+        Message = "No bonus review started, LearningEngine could not be asked for the mastery")]
+    public static partial void BonusWithoutMastery(ILogger logger);
+
     // Event ids of the queries to other services, each logs where it fails.
     public static class Queries
     {

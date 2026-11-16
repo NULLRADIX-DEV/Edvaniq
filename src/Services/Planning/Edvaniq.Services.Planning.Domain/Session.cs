@@ -5,7 +5,7 @@ namespace Edvaniq.Services.Planning.Domain;
 // The run through one block of the plan (docs/spec/glossary.md#session). Bound to the block and its topic from the
 // moment it starts. A user has at most one active session: ActiveOwnerId is the owner while it runs and null once it
 // ended, and the database keeps it unique, so even two starts at once leave one. Broken off it ends as Aborted (#393),
-// finished as Completed (#395).
+// finished as Completed (#395). A bonus review after the plan is done is a session too (IsBonus, #408).
 public sealed class Session : IOwnedByUser
 {
     private Session(
@@ -35,8 +35,12 @@ public sealed class Session : IOwnedByUser
 
     public Guid LearningGoalId { get; private set; }
 
-    // The block of the plan (DayBlocks), with the day it was planned for.
+    // The block of the plan (DayBlocks), with the day it was planned for. A bonus review has a block id of its own that
+    // is never in a plan.
     public Guid BlockId { get; private set; }
+
+    // A bonus review after the plan was done (#408): no block of the plan, it never makes a block done.
+    public bool IsBonus { get; private set; }
 
     public DateOnly StudyDay { get; private set; }
 
@@ -107,6 +111,18 @@ public sealed class Session : IOwnedByUser
             Stored(startedAt));
     }
 
+    // A bonus review on the topic (BonusReview.TopicOf), with a new block id: started again, it is a new review with a
+    // quiz of its own. The topic was introduced already, so there is no introduction unit.
+    public static Session StartBonus(Guid id, string ownerId, Guid learningGoalId, Guid blockId, DateOnly studyDay, Guid topicId, DateTime startedAt)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(ownerId);
+        return new Session(
+            id, ownerId, learningGoalId, blockId, studyDay, topicId, BlockKind.Review, BonusReview.Minutes, topicIsNew: false, currentStep: 0, Stored(startedAt))
+        {
+            IsBonus = true,
+        };
+    }
+
     // Ends the session as broken off. False when it ended already, then nothing changes.
     public bool Abort(DateTime endedAt)
     {
@@ -133,9 +149,9 @@ public sealed class Session : IOwnedByUser
         return true;
     }
 
-    // The block as it was planned, done once the session is finished.
+    // The block as it was planned, done once the session is finished. A bonus review has none.
     public DoneBlock ToDoneBlock() =>
-        DoneBlock.Create(BlockId, OwnerId, LearningGoalId, StudyDay, new Block(TopicId, Minutes, Kind), EndedAt
+        IsBonus ? throw new InvalidOperationException("A bonus review is no block of the plan.") : DoneBlock.Create(BlockId, OwnerId, LearningGoalId, StudyDay, new Block(TopicId, Minutes, Kind), EndedAt
             ?? throw new InvalidOperationException("A session that runs has no done block."));
 
     // The topic whose unit "Neues Thema" was finished in this session (docs/spec/events.md#felder): when finished, or

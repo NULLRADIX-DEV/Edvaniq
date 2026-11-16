@@ -41,7 +41,12 @@ public sealed class SessionChanges(
                     return false;
                 }
 
-                doneBlocks.Add(session.ToDoneBlock());
+                // A bonus review makes no block done, so the daily goal stays as it is (#408).
+                if (!session.IsBonus)
+                {
+                    doneBlocks.Add(session.ToDoneBlock());
+                }
+
                 return Ended(session, true, unitStartedAt);
             },
             cancellationToken);

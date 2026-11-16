@@ -68,6 +68,7 @@ public sealed class TodayPlans(
             NextBlockId: NextBlock.Of(blocks, started)?.Id)
         {
             Standings = mastery ?? new Dictionary<Guid, TopicStanding>(),
+            Topics = topics,
         };
 
         List<WeekDayBlocks> days =
@@ -114,6 +115,12 @@ public sealed record TodayPlanResult(
     public DailyGoalState DailyGoal => Domain.DailyGoal.Of(Blocks);
 
     public IReadOnlyDictionary<Guid, TopicStanding> Standings { get; init; } = new Dictionary<Guid, TopicStanding>();
+
+    // The goal's topics that aren't hidden, the ones the plan was worked out from.
+    public IReadOnlyList<Guid> Topics { get; init; } = [];
+
+    // The topic of a bonus review (#408), null when none fits.
+    public Guid? BonusTopic => BonusReview.TopicOf(Topics, Standings, Plan.NotReady);
 
     public bool IsNew(Guid topicId) => TodayPlanner.IsNew(topicId, Standings);
 }
