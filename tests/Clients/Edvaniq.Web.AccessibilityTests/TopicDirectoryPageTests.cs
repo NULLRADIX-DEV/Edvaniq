@@ -127,7 +127,7 @@ public sealed class TopicDirectoryPageTests(WebShell shell)
         page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = name, Exact = true });
 
     // The visible topics of Material plus a hidden one, a key term, and one section on pages 3 to 4 of the document.
-    private static async Task AnswerAsync(IPage page)
+    internal static async Task AnswerAsync(IPage page)
     {
         object[] topics =
         [

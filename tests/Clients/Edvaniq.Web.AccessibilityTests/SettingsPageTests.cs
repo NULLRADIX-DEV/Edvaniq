@@ -48,7 +48,7 @@ public sealed class SettingsPageTests(WebShell shell)
     }
 
     // Planning as the page sees it: 60 minutes by default, a stored week comes back as sent.
-    private static Task AnswerAsync(IPage page, List<string> sent) =>
+    internal static Task AnswerAsync(IPage page, List<string> sent) =>
         page.RouteAsync("**/api/planning/daily-budget", route =>
         {
             var body = route.Request.Method == "PUT" ? route.Request.PostData ?? "{}" : null;
