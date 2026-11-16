@@ -51,6 +51,10 @@ internal sealed partial class SimulatedQuestions : ISimulatedAnswer
         var questions = Enumerable.Range(0, prompt.Random().Next(15, 21))
             .Select(index => QuestionOf(index, labels[index % labels.Count], trueFalse))
             .ToList();
+        if (prompt.Fault == SimulatedFault.DuplicateItems)
+        {
+            questions = [.. questions.SelectMany(question => new[] { question, question })];
+        }
 
         return JsonSerializer.Serialize(new { questions }, JsonSerializerOptions.Web);
     }

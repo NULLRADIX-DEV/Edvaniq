@@ -34,6 +34,7 @@ public sealed class SimulatedChatClient(IEnumerable<ISimulatedAnswer> answers, S
         }
 
         var fault = FaultWhen is null || FaultWhen(prompt) ? Fault : SimulatedFault.None;
+        prompt.Fault = fault;
         switch (fault)
         {
             case SimulatedFault.Outage:

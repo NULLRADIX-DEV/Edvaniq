@@ -22,6 +22,9 @@ public sealed class SimulatedPrompt
 
     public string User => TextOf(ChatRole.User);
 
+    // The fault that hits this request, for the faults only an answer can make (DuplicateItems).
+    public SimulatedFault Fault { get; internal set; }
+
     // The task the request named (AiRequest.Task), null if none.
     public string? Task { get; }
 

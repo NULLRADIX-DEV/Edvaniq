@@ -13,4 +13,8 @@ public enum SimulatedFault
 
     // Every answer is cut in half, so it is no valid JSON.
     InvalidOutput,
+
+    // An answer that lists items gives each of them twice, valid but repeated. The answer decides what an item is
+    // (SimulatedPrompt.Fault), one without a list ignores it.
+    DuplicateItems,
 }
