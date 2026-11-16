@@ -3,7 +3,7 @@ using Edvaniq.Services.Identity.Application;
 namespace Edvaniq.Services.Identity.Api.Accounts;
 
 // dotnet Edvaniq.Services.Identity.Api.dll account set <name> [--test-double], with the password on stdin (docs/tokens.md#teamkonto-anlegen),
-// account delete <name>, account confirm <email>, and for the approval of minors account approve <email>, account
+// account delete <name or email>, account confirm <email>, and for the approval of minors account approve <email>, account
 // revoke <email> and account pending.
 // Creates the account or gives it a new password, so running it twice changes nothing but the hash. The password is
 // never an argument, which would show up in the process list and the shell history, and never in the output.
@@ -44,7 +44,7 @@ internal static partial class AccountCommand
         if (name is null)
         {
             await error.WriteLineAsync(
-                $"Usage: account set <name> [{TestDoubleOption}], with the password on stdin, account delete <name>, account confirm <email>, account approve <email>, account revoke <email> or account pending.");
+                $"Usage: account set <name> [{TestDoubleOption}], with the password on stdin, account delete <name or email>, account confirm <email>, account approve <email>, account revoke <email> or account pending.");
             return Invalid;
         }
 

@@ -216,7 +216,7 @@ Die Adresse von NATS kommt nur von außen, als `ConnectionStrings:nats`. Lokal s
 
 ## Nutzer löschen
 
-Wird ein Konto gelöscht, müssen die Daten des Nutzers aus jedem Service verschwinden, nicht nur aus Identity. Identity sendet dafür `UserDeleted` aus `Identity.Contracts` mit der `UserId`, also dem `sub` seiner Tokens und damit der `OwnerId` seiner Zeilen. Heute löscht der Betreiber ein Teamkonto mit `account delete` ([Teamkonto löschen](tokens.md#teamkonto-löschen)), Identity schickt das Ereignis im selben Speichern über seine Outbox.
+Wird ein Konto gelöscht, müssen die Daten des Nutzers aus jedem Service verschwinden, nicht nur aus Identity. Identity sendet dafür `UserDeleted` aus `Identity.Contracts` mit der `UserId`, also dem `sub` seiner Tokens und damit der `OwnerId` seiner Zeilen. Heute löscht der Betreiber ein Konto mit `account delete` ([Konto löschen](tokens.md#konto-löschen)), Identity schickt das Ereignis im selben Speichern über seine Outbox.
 
 Jeder Service aus der Vorlage hört mit dem `UserDeletedHandler` darauf, der `IUserDataRemover` aufruft. Der Handler ist zugleich die `IUserDeletion` des Service, also alles, was beim Löschen eines Nutzers passiert. Braucht ein Service mehr als den Remover, etwa Content für die Dateien, gehört das in dessen `DeleteAsync`. `AddInfrastructure` registriert beides:
 

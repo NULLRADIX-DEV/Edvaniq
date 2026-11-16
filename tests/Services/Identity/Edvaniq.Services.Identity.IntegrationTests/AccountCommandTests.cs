@@ -106,6 +106,34 @@ public sealed class AccountCommandTests(IdentityDatabase database) : IClassFixtu
         Assert.Single(await DeletedUsersAsync(identity), user => user == account.Id.ToString("D"));
     }
 
+    // A user account goes by its address, in any spelling, the same way: UserDeleted in the same save, its mails go along.
+    [Fact]
+    public async Task Delete_ByAddress_RemovesTheUserAccount()
+    {
+        await using var identity = new IdentityFactory(connectionString: database.ConnectionString);
+        var email = $"gone-{Guid.NewGuid():N}@example.org";
+        var user = Domain.Account.CreateUser(email, "Lernfuchs", 2000, "hash", DateTime.UtcNow);
+        using (var scope = identity.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+            db.Accounts.Add(user);
+            db.OutgoingMails.Add(Domain.OutgoingMail.For(user, Domain.MailKind.AlreadyRegistered, DateTime.UtcNow));
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var (exitCode, output, _) = await DeleteAsync(identity, email.ToUpperInvariant());
+        var (_, againOutput, _) = await DeleteAsync(identity, email);
+
+        Assert.Equal(AccountCommand.Ok, exitCode);
+        Assert.Equal($"deleted {email.ToUpperInvariant()}", output.Trim());
+        Assert.Equal($"no account {email}", againOutput.Trim());
+        Assert.Single(await DeletedUsersAsync(identity), deleted => deleted == user.Id.ToString("D"));
+        using var check = identity.Services.CreateScope();
+        var context = check.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        Assert.False(await context.Accounts.AnyAsync(account => account.Id == user.Id, TestContext.Current.CancellationToken));
+        Assert.False(await context.OutgoingMails.AnyAsync(mail => mail.AccountId == user.Id, TestContext.Current.CancellationToken));
+    }
+
     private static async Task<(int ExitCode, string Output, string Error)> DeleteAsync(IdentityFactory identity, string name)
     {
         using var output = new StringWriter();
