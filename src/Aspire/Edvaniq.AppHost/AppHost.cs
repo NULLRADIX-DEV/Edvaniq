@@ -108,10 +108,15 @@ var gateway = builder.AddProject<Projects.Edvaniq_Gateway>("gateway")
     .WithReference(notificationsApi);
 
 // Frontend
-builder.AddProject<Projects.Edvaniq_Web>("web")
+var web = builder.AddProject<Projects.Edvaniq_Web>("web")
     .WithExternalHttpEndpoints()
     .WithReference(gateway)
     .WithEnvironment("BackendToken__ClientSecret", webClientSecret);
+
+// Identity's mails link to the web app. Locally they are only kept in memory (#248), no mail leaves the machine.
+identityApi
+    .WithEnvironment("Mail__Provider", "Recording")
+    .WithEnvironment("Mail__PublicBaseUrl", web.GetEndpoint("http"));
 
 builder.Build().Run();
 

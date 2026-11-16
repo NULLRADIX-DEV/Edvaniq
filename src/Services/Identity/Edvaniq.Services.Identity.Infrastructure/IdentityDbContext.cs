@@ -15,6 +15,8 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
 
     public DbSet<InviteCode> InviteCodes => Set<InviteCode>();
 
+    public DbSet<OutgoingMail> OutgoingMails => Set<OutgoingMail>();
+
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
         var account = modelBuilder.Entity<Account>();
@@ -37,5 +39,16 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
         invite.Ignore(item => item.Status);
         invite.HasIndex(item => item.Label).IsUnique();
         invite.HasIndex(item => item.CodeHash).IsUnique();
+
+        // #248: system mails on their way, gone with their account.
+        var mail = modelBuilder.Entity<OutgoingMail>();
+        mail.Property(item => item.Kind).HasConversion<string>().HasMaxLength(32);
+        mail.Property(item => item.To).HasMaxLength(AccountEmail.MaxLength);
+        mail.Property(item => item.Subject).HasMaxLength(OutgoingMail.SubjectMaxLength);
+        mail.Property(item => item.Body).HasMaxLength(OutgoingMail.BodyMaxLength);
+        mail.Ignore(item => item.ExpiresAt);
+        mail.HasOne<Account>().WithMany().HasForeignKey(item => item.AccountId).OnDelete(DeleteBehavior.Cascade);
+        mail.HasIndex(item => item.DueAt);
+        mail.HasIndex(item => item.CreatedAt);
     }
 }
