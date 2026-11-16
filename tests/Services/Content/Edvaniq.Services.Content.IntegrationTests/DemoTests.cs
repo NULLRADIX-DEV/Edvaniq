@@ -108,6 +108,46 @@ public sealed class DemoTests(ServiceFactory service) : IClassFixture<ServiceFac
         // #414: resetting needs the right as well.
         using var reset = await plain.DeleteAsync("/demo", Cancel);
         Assert.Equal(HttpStatusCode.Forbidden, reset.StatusCode);
+        using var resetAgain = await plain.PostAsync("/demo/reset", null, Cancel);
+        Assert.Equal(HttpStatusCode.Forbidden, resetAgain.StatusCode);
+    }
+
+    // #412: back to the start in the same goal. Only the demo documents go, each with DocumentDeleted, so the other
+    // services drop what came of them; the user's own material stays.
+    [Fact]
+    public async Task Reset_PutsFreshDemoDocuments_IntoTheSameGoal_OthersStay()
+    {
+        var alice = NewUser();
+        using var client = ClientFor(alice, testDouble: true);
+        using (var none = await client.PostAsync("/demo/reset", null, Cancel))
+        {
+            Assert.Equal(HttpStatusCode.NotFound, none.StatusCode);
+        }
+
+        var first = await CreateAsync(client, alice, HttpStatusCode.Created);
+        using (var pasted = await client.PostAsJsonAsync("/documents", new { text = TestTexts.Lesson, confirmation = "material-1" }, Cancel))
+        {
+            Assert.Equal(HttpStatusCode.Created, pasted.StatusCode);
+        }
+
+        using var reset = await client.PostAsync("/demo/reset", null, Cancel);
+        Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+        var second = (await reset.Content.ReadFromJsonAsync<DemoDto>(Cancel))!;
+        await AnalyzeAsync(second, new NoAi());
+
+        Assert.Equal(first.LearningGoalId, second.LearningGoalId);
+        Assert.Equal(DemoMaterial.Documents.Select(document => document.Title), second.Documents.Select(document => document.Title));
+        Assert.Empty(first.Documents.Select(document => document.Id).Intersect(second.Documents.Select(document => document.Id)));
+        foreach (var document in first.Documents)
+        {
+            Assert.Single(await OutboxAsync<DocumentDeleted>(document.Id));
+        }
+
+        Assert.All(second.Documents, document =>
+            Assert.Equal(DocumentStatus.Ready, Query(db => db.Documents.IgnoreQueryFilters().Single(item => item.Id == document.Id)).Status));
+        Assert.Equal(1, Query(db => db.Documents.IgnoreQueryFilters().Count(document => document.OwnerId == alice && document.Origin == DocumentOrigin.Material)));
+        Assert.Equal(DemoMaterial.Documents.Count, Query(db => db.Documents.IgnoreQueryFilters().Count(document => document.OwnerId == alice && document.Origin == DocumentOrigin.Demo)));
+        Assert.Equal(second.Documents.Select(document => document.Id), (await client.GetFromJsonAsync<DemoDto>("/demo", Cancel))!.Documents.Select(document => document.Id));
     }
 
     // #414: requests at the same moment make one demo, the others get it back.

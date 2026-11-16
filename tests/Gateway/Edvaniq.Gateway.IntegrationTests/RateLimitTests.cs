@@ -27,6 +27,9 @@ public sealed partial class RateLimitTests
         // The demo asks no AI, and a user has one (#411).
         { "content", "POST", "/content/demo", null },
         { "content", "DELETE", "/content/demo", null },
+
+        // A reset only puts the demo back, no AI either (#412).
+        { "content", "POST", "/content/demo/reset", null },
         { "assessment", "POST", "/assessment/attempts", "answers" },
         { "assessment", "POST", $"/assessment/attempts/{Guid.Empty}/answer", "answers" },
         { "assessment", "POST", "/assessment/check-questions", "answers" },

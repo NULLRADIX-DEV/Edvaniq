@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using Edvaniq.BuildingBlocks.Contracts;
 using Edvaniq.BuildingBlocks.Messaging;
+using Edvaniq.Services.Assessment.Domain;
 using Edvaniq.Services.Assessment.Infrastructure;
 using Edvaniq.Services.Identity.Contracts;
 using Edvaniq.Services.Knowledge.Contracts;
@@ -63,6 +64,29 @@ public sealed class KnownTopicTests(ServiceFactory service) : IClassFixture<Serv
         {
             Broker.DropsDuplicates = true;
         }
+    }
+
+    // #412: a topic that leaves the goal takes its block quizzes along, those of the topics that stay are kept.
+    [Fact]
+    public async Task RemovedTopic_TakesItsBlockQuizzes_OthersStay()
+    {
+        var alice = NewUser("alice");
+        var goal = Guid.NewGuid();
+        var (removed, kept) = (Guid.NewGuid(), Guid.NewGuid());
+        await DeliverAsync(new TopicsChanged(alice, goal, First, [removed, kept], []));
+        var (gone, stays) = (BlockQuiz.Create(alice, Guid.NewGuid(), removed, Seed.Now), BlockQuiz.Create(alice, Guid.NewGuid(), kept, Seed.Now));
+        using (var scope = service.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AssessmentDbContext>();
+            db.BlockQuizzes.AddRange(gone, stays);
+            db.Attempts.Add(Attempt.AskIn(gone, await service.AddQuestionAsync(alice), Seed.Now));
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await DeliverAsync(new TopicsChanged(alice, goal, First.AddSeconds(1), [kept], []));
+
+        Assert.Equal([stays.Id], Query(db => db.BlockQuizzes.IgnoreQueryFilters().Where(quiz => quiz.OwnerId == alice).Select(quiz => quiz.Id).ToList()));
+        Assert.False(Query(db => db.Attempts.IgnoreQueryFilters().Any(attempt => attempt.QuizId == gone.Id)));
     }
 
     [Fact]
