@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -246,7 +247,8 @@ public static class QuestionGeneration
         var key = new StringBuilder(text.Length);
         foreach (var letter in text.ToLowerInvariant())
         {
-            if (char.IsLetterOrDigit(letter))
+            // Super- and subscript digits count too (#1107): O(n) and O(n²) are different answers.
+            if (char.IsLetterOrDigit(letter) || char.GetUnicodeCategory(letter) == UnicodeCategory.OtherNumber)
             {
                 key.Append(letter);
             }

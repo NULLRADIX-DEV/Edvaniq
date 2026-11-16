@@ -29,6 +29,15 @@ public class QuestionQualityTests
         Assert.False(QuestionQuality.Of(close, Source).Distinct);
     }
 
+    // #1107: options apart only by a superscript are apart.
+    [Fact]
+    public void Options_ApartOnlyByASuperscript_AreDistinct()
+    {
+        var question = Choice("Wie wächst der Aufwand?", ["O(n²)", "O(n)", "O(n³)"], 0);
+
+        Assert.True(QuestionQuality.Of(question, Source).Distinct);
+    }
+
     [Fact]
     public void Explanation_NamingTheAnswer_Explains_AndOneWithoutDoesNot()
     {
