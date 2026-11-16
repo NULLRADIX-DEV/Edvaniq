@@ -50,9 +50,13 @@ public sealed class TopicDirectoryTests : BunitContext
         Assert.Equal([Photosynthese], directory.TermCalls);
     }
 
-    [Fact]
-    public void OpenTopic_ShowsTermsAndSources_ByDocument_InOrder()
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("ja-JP")]
+    [InlineData("")]
+    public void OpenTopic_ShowsTermsAndSources_ByDocument_InOrder(string culture)
     {
+        using var _ = Cultures.Use(culture);
         var directory = Directory();
         directory.WithTerms(Photosynthese, CallOutcome<IReadOnlyList<KeyTermInfo>>.Ok(
             [new KeyTermInfo("Chlorophyll", "Grüner Farbstoff, der Licht aufnimmt.", Pdf, Sections[0])]));

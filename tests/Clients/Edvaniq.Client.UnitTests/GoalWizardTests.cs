@@ -59,9 +59,13 @@ public sealed class GoalWizardTests : BunitContext
     }
 
     // AC1 and AC2: every field reaches Planning, exam fields only with an exam.
-    [Fact]
-    public void Exam_SendsEveryField()
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("ja-JP")]
+    [InlineData("")]
+    public void Exam_SendsEveryField(string culture)
     {
+        using var _ = Cultures.Use(culture);
         var page = Render<GoalWizard>();
         FillExam(page);
         Next(page);

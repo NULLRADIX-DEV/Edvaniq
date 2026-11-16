@@ -32,6 +32,16 @@ public sealed class GoalListPageTests(WebShell shell)
         await CheckAsync(page.Page, $"{Path} with goals at {width} px");
     }
 
+    // #1070: the browser app only has the culture data of the browser's language, the date stays German anyway.
+    [Fact]
+    public async Task Date_IsGerman_InAJapaneseBrowser()
+    {
+        await using var page = await shell.OpenSignedInAsync(Path, WebShell.PhoneWidth, prepare: browser =>
+            Material.AnswerGoalListAsync(browser, Material.Goals), locale: "ja-JP");
+        await Assertions.Expect(page.Page.Locator(".goal-card .goal-exam").First).ToHaveTextAsync("Klausur am 1. März 2027");
+        await CheckAsync(page.Page, $"{Path} in a Japanese browser");
+    }
+
     [Fact]
     public async Task WithoutGoals_LeadsToTheAssistant()
     {

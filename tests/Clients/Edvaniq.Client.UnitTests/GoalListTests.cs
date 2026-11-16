@@ -34,9 +34,13 @@ public sealed class GoalListTests : BunitContext
     }
 
     // AC1: name, kind and date, and the way to material and topics.
-    [Fact]
-    public void Goals_ShowNameKindAndDate()
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("ja-JP")]
+    [InlineData("")]
+    public void Goals_ShowNameKindAndDate(string culture)
     {
+        using var _ = Cultures.Use(culture);
         goals.List(Bio, Csharp);
 
         var page = Render<GoalList>();
