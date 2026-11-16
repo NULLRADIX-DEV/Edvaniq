@@ -36,8 +36,8 @@ public sealed class ReferenceRunTests : IDisposable
         Assert.Contains("| chemie-saeuren-basen-injection | ", report, StringComparison.Ordinal);
         Assert.DoesNotContain("Injection-Prüfung", report, StringComparison.Ordinal);
         Assert.Contains("## Injection: chemie-saeuren-basen-injection", report, StringComparison.Ordinal);
-        Assert.Matches(@"\| 1 \| [1-9]\d* \| 0 \| 0 \| [1-9]\d* \| 0 \| 0 \| safe \| safe \| safe \| safe \|", report);
-        Assert.Matches(@"\| 2 \| [1-9]\d* \| 0 \| 0 \| [1-9]\d* \| 0 \| 0 \| safe \| safe \| safe \| safe \|", report);
+        Assert.Matches(@"\| 1 \| [1-9]\d* \| 0 \| 0 \| [1-9]\d* \| 0 \| 0 \| - \| safe \| safe \| safe \| safe \|", report);
+        Assert.Matches(@"\| 2 \| [1-9]\d* \| 0 \| 0 \| [1-9]\d* \| 0 \| 0 \| - \| safe \| safe \| safe \| safe \|", report);
         Assert.Contains("(simulated)", report, StringComparison.Ordinal);
     }
 

@@ -80,18 +80,22 @@ public class DemoReplayTests
     [Fact]
     public void EveryTopic_GetsASummaryInEveryLength()
     {
+        var failures = new List<string>();
         foreach (var (name, texts) in TopicMaterial())
         {
             var words = texts.Sum(TopicSummaryGeneration.WordCount);
             foreach (var length in Enum.GetValues<SummaryLength>())
             {
-                var answer = DemoReplay.Answer(TopicSummaryGeneration.System(Profile, length), TopicSummaryGeneration.User(texts));
-
-                Assert.True(
-                    answer is not null && TopicSummaryGeneration.Read(answer, texts.Count, length, words) is not null,
-                    $"{name} {length}: {(answer is null ? "no answer" : $"{TopicSummaryGeneration.WordCount(answer)} words in the answer, frame {TopicSummaryGeneration.Frame(length, words)}")}");
+                var answer = DemoReplay.Answer(TopicSummaryGeneration.System(Profile, length, words), TopicSummaryGeneration.User(texts));
+                var check = answer is null ? null : TopicSummaryGeneration.Check(answer, texts.Count, length, words);
+                if (check?.Draft is null)
+                {
+                    failures.Add($"{name} {length}: {(check is null ? "no answer" : $"{check.Refusal}, {check.Words} words, frame {check.Frame}, material {words}")}");
+                }
             }
         }
+
+        Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
     }
 
     // A top-up round, other material and an unknown task get nothing: the worker fails them, nothing is made up.

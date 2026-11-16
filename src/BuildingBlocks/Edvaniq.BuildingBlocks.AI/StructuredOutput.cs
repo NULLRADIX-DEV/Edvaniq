@@ -55,7 +55,8 @@ public static class StructuredOutput
             tries.Add(new AiTry(
                 tries.Count + 1, startedAt, time.GetElapsedTime(started), response.ModelId,
                 response.Usage?.InputTokenCount ?? 0, response.Usage?.OutputTokenCount ?? 0, AiCost.Of(response),
-                value is null ? AiTryOutcome.Unusable : AiTryOutcome.Answered));
+                value is null ? AiTryOutcome.Unusable : AiTryOutcome.Answered,
+                response.Usage?.ReasoningTokenCount, response.FinishReason?.Value));
             if (value is not null)
             {
                 return new StructuredAnswer<T>(value, tries.Count, usage, model, null, tries);
@@ -116,7 +117,8 @@ public sealed record StructuredAnswer<T>(
 // One request to the provider. ModelId is the one that answered, null when it didn't say or nothing came back. Cost is
 // null when it is unknown: a failed attempt, or a model without a price.
 public sealed record AiTry(
-    int Number, DateTime StartedAt, TimeSpan Duration, string? ModelId, long InputTokens, long OutputTokens, decimal? Cost, AiTryOutcome Outcome);
+    int Number, DateTime StartedAt, TimeSpan Duration, string? ModelId, long InputTokens, long OutputTokens, decimal? Cost, AiTryOutcome Outcome,
+    long? ReasoningTokens = null, string? FinishReason = null);
 
 public enum AiTryOutcome
 {

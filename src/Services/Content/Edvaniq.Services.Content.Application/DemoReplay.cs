@@ -50,14 +50,14 @@ public static partial class DemoReplay
     private static readonly string FirstRound = $"Schreib {QuestionGeneration.MaxQuestions} Fragen,";
 
     private static SummaryLength? LengthOf(string system) =>
-        WordFrame().Match(system) is { Success: true } match
+        LengthLine().Match(system) is { Success: true } match
             ? Enum.GetValues<SummaryLength>()
                 .Cast<SummaryLength?>()
-                .FirstOrDefault(length => TopicSummaryGeneration.WordsOf(length!.Value) == (int.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value)))
+                .FirstOrDefault(length => TopicSummaryGeneration.NameOf(length!.Value) == match.Groups[1].Value.Trim())
             : null;
 
-    [GeneratedRegex(@"Zusammenfassung mit (\d+) bis (\d+) Wörtern")]
-    private static partial Regex WordFrame();
+    [GeneratedRegex(@"^Länge: (.+)$", RegexOptions.Multiline)]
+    private static partial Regex LengthLine();
 
     private static Replay Load()
     {

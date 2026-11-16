@@ -129,6 +129,9 @@ internal sealed class OpenAiCompatibleChatClient(IHttpClientFactory httpClients,
                     InputTokenCount = Count(usage, "prompt_tokens"),
                     OutputTokenCount = Count(usage, "completion_tokens"),
                     TotalTokenCount = Count(usage, "total_tokens"),
+                    ReasoningTokenCount = usage.TryGetProperty("completion_tokens_details", out var details) && details.ValueKind == JsonValueKind.Object
+                        ? Count(details, "reasoning_tokens")
+                        : null,
                 }
                 : null,
         };
