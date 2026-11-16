@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Hosting;
 
 namespace Edvaniq.Web.IntegrationTests;
 
-// #249: registering goes through the web host without a session and without any token: Identity's endpoint is open,
+// #249, #250: registering and confirming go through the web host without a session and without any token: Identity's endpoint is open,
 // the browser's cookie stays here. A client address may register only a few times an hour.
 public sealed class RegistrationRouteTests
 {
@@ -46,6 +46,26 @@ public sealed class RegistrationRouteTests
         Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
         Assert.NotNull(refused.Headers.RetryAfter?.Delta);
         Assert.Equal(2, gateway.Requests - gateway.TokenRequests);
+    }
+
+    // #250: confirming and asking for a new link go the same way, each with its own limit per client address.
+    [Theory]
+    [InlineData("/api/identity/accounts/confirmations", "/identity/accounts/confirmations", "Login:ConfirmationsPerClientPerMinute")]
+    [InlineData("/api/identity/accounts/confirmations/resend", "/identity/accounts/confirmations/resend", "Login:ResendsPerClientPer10Minutes")]
+    public async Task ConfirmationRoutes_ReachIdentity_WithoutToken_AndHaveTheirLimit(string path, string forwarded, string limit)
+    {
+        await using var gateway = await StubService.StartAsync("gateway-stub");
+        await using var web = new WebFactory(gateway.Address, configure: builder => builder.UseSetting(limit, "1"));
+        using var browser = web.CreateBrowser();
+
+        using var response = await browser.PostAsJsonAsync(path, new { token = "t" }, TestContext.Current.CancellationToken);
+        using var refused = await browser.PostAsJsonAsync(path, new { token = "t" }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var echo = (await response.Content.ReadFromJsonAsync<Echo>(TestContext.Current.CancellationToken))!;
+        Assert.Equal(("POST", forwarded, "", ""), (echo.Method, echo.Path, echo.Authorization, echo.Cookie));
+        Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
+        Assert.Equal(0, gateway.TokenRequests);
     }
 
     [Theory]

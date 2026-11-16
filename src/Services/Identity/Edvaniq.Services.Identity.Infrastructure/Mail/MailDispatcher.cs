@@ -13,6 +13,9 @@ internal sealed class MailOutbox(IdentityDbContext db) : IMailOutbox
 {
     public void Add(OutgoingMail mail) => db.OutgoingMails.Add(mail);
 
+    public Task<bool> AnyWaitingForAsync(Guid accountId, MailKind kind, CancellationToken cancellationToken) =>
+        db.OutgoingMails.AnyAsync(mail => mail.AccountId == accountId && mail.Kind == kind, cancellationToken);
+
     public Task<bool> AnyWaitingSinceAsync(DateTime before, CancellationToken cancellationToken) =>
         db.OutgoingMails.AnyAsync(mail => mail.CreatedAt <= before, cancellationToken);
 }

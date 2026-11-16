@@ -24,10 +24,10 @@ public sealed record RegistrationResult(string? Refusal, string? Detail, bool Ma
 // Registration with an invitation code (#249, #255). Everything is checked before the code is redeemed, so a typo costs
 // no code. Redeeming and creating the account go in one transaction. The answer never tells whether the address has an
 // account already: then the code is redeemed all the same, so a second try with it says nothing either, and the address
-// gets a mail that it has an account. An unconfirmed account with the address is replaced. The new account can't log in
-// until its address is confirmed (#250).
+// gets a mail that it has an account. An unconfirmed account with the address is replaced. A new account gets the link
+// to confirm its address (#250) and can't log in before.
 public sealed class Registration(
-    IAccounts accounts, InviteService invites, SystemMails mails, IIdentityTransactions transactions, TimeProvider time)
+    IAccounts accounts, InviteService invites, SystemMails mails, Confirmation confirmation, IIdentityTransactions transactions, TimeProvider time)
 {
     public const string InviteMissing = "invite_missing";
     public const string InviteInvalid = "invite_invalid";
@@ -80,6 +80,7 @@ public sealed class Registration(
                 var account = Account.CreateUser(
                     email, AccountProfile.NormalizePseudonym(request.Pseudonym)!, request.BirthYear!.Value, passwordHash, now);
                 accounts.Add(account);
+                confirmation.Send(account);
             }
 
             // Two registrations of one address at once: the second finds it taken on saving and answers like for any

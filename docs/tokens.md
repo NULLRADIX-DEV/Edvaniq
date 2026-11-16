@@ -132,3 +132,21 @@ Identity prüft zuerst alles, was der Nutzer eingegeben hat, und löst erst dana
 Die Antwort ist `202` mit `{"mailDelayed": false}`, gleich, ob es die Adresse schon gibt oder nicht, und sie dauert in beiden Fällen gleich lang, weil das Passwort immer gehasht wird. Gibt es ein bestätigtes Konto mit der Adresse, verbraucht die Registrierung den Code trotzdem und schickt an die Adresse eine Mail, dass sie schon ein Konto hat. So verrät weder die Antwort noch ein zweiter Versuch mit demselben Code, wer registriert ist. Ein noch unbestätigtes Konto mit der Adresse ersetzt die neue Registrierung, sonst könnte jemand eine fremde Adresse belegen. `mailDelayed` ist `true`, wenn Mails gerade länger warten als sonst (siehe System-Mails). Ein neues Konto ist unbestätigt und kann sich erst nach der Bestätigung seiner Adresse anmelden.
 
 Eine Ablehnung ist ein Problem mit Status 400, dem Satz für den Nutzer als `title` und einem `code`: `invite_missing`, `invite_invalid`, `invite_redeemed`, `invite_revoked`, `email_invalid`, `password_rules`, `pseudonym_invalid` oder `birth_year_invalid`. Zu viele Registrierungen von einer Client-Adresse beantwortet der Web-Host mit 429 und `Retry-After`. Die Grenze ist hoch genug für eine Schulklasse hinter einem gemeinsamen Anschluss, der eigentliche Schutz ist der Einladungscode.
+
+## Bestätigung der Adresse
+
+Nach der Registrierung bekommt die Adresse eine Mail mit einem Link, der ab dem Versand 24 Stunden gilt und nur einmal, auch wenn er zweimal gleichzeitig benutzt wird. Die Seite hinter dem Link schickt das Token aus dem Fragment an `POST /api/identity/accounts/confirmations` mit `{"token": "…"}`. Die Antwort ist `204`, danach kann sich das Konto anmelden. Ein abgelaufener, schon benutzter oder unbekannter Link ergibt 400 mit dem `code` `token_expired`, `token_used` oder `token_invalid`. Identity speichert vom Token nur den SHA-256-Hash.
+
+Wer laut Geburtsjahr minderjährig sein könnte, also das Geburtsjahr liegt weniger als 19 Jahre zurück, ist nach der Bestätigung noch nicht aktiv: Das Konto wartet auf die Freigabe durch den Betreiber, eine Anmeldung ergibt bis dahin `awaiting_approval`.
+
+Einen neuen Link fordert man mit `POST /api/identity/accounts/confirmations/resend` und `{"email": "…"}` an. Die Antwort ist immer `202` mit `{"mailDelayed": …}`, ob es die Adresse gibt, ob sie schon bestätigt ist oder ob zu oft gefragt wurde, bleibt offen. Ein neuer Link macht ältere ungültig. Je Konto gibt es höchstens einen pro Minute und fünf am Tag, den ersten mitgezählt, und keinen, solange die vorige Mail noch nicht verschickt ist. Viele Anfragen gleichzeitig zählen wie nacheinander. Dazu kommt die Grenze des Web-Hosts je Client-Adresse.
+
+Ein Konto, dessen Adresse nicht binnen 7 Tagen bestätigt ist, löscht Identity samt seinen Mails und Links. Es hat sich nie angemeldet, andere Services haben also nichts davon. Abgelaufene Bestätigungslinks verschwinden eine Woche nach ihrem Ablauf, bis dahin antworten sie mit `token_expired`.
+
+Solange kein Mail-Dienst eingerichtet ist, bestätigt der Betreiber eine Adresse von Hand, mit derselben Altersregel:
+
+```bash
+dotnet Edvaniq.Services.Identity.Api.dll account confirm <email>
+```
+
+Der Befehl schreibt `confirmed` oder, wenn es kein unbestätigtes Konto mit der Adresse gibt, `no account`, sonst nichts.

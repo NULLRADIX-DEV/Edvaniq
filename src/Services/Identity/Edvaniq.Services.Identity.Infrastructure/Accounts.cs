@@ -14,6 +14,9 @@ internal sealed class Accounts(IdentityDbContext db) : IAccounts
     public Task<Account?> FindAsync(string name, CancellationToken cancellationToken) =>
         db.Accounts.FirstOrDefaultAsync(account => account.Name == name, cancellationToken);
 
+    public Task<Account?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
+        db.Accounts.FirstOrDefaultAsync(account => account.Id == id, cancellationToken);
+
     public Task<Account?> FindByEmailAsync(string email, CancellationToken cancellationToken) =>
         db.Accounts.FirstOrDefaultAsync(account => account.Email == email, cancellationToken);
 
@@ -22,6 +25,10 @@ internal sealed class Accounts(IdentityDbContext db) : IAccounts
     public void Remove(Account account) => db.Accounts.Remove(account);
 
     public Task SaveAsync(CancellationToken cancellationToken) => db.SaveChangesAsync(cancellationToken);
+
+    // A locking read: a second transaction that wants the row waits until this one ends.
+    public Task LockByEmailAsync(string email, CancellationToken cancellationToken) =>
+        db.Database.ExecuteSqlInterpolatedAsync($"SELECT Id FROM Accounts WHERE Email = {email} FOR UPDATE", cancellationToken);
 
     // The unique indexes on name and address decide which of two at once comes first.
     public async Task<bool> SaveUnlessTakenAsync(CancellationToken cancellationToken)
