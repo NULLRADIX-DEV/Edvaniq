@@ -125,5 +125,7 @@ public sealed class AccountServiceTests
         public void Remove(Account account) => All.Remove(account);
 
         public Task SaveAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<bool> SaveUnlessTakenAsync(CancellationToken cancellationToken) => Task.FromResult(true);
     }
 }

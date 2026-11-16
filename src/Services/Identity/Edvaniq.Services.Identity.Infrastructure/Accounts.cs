@@ -3,10 +3,14 @@ using Edvaniq.Services.Identity.Domain;
 
 using Microsoft.EntityFrameworkCore;
 
+using MySql.Data.MySqlClient;
+
 namespace Edvaniq.Services.Identity.Infrastructure;
 
 internal sealed class Accounts(IdentityDbContext db) : IAccounts
 {
+    private const int DuplicateKey = 1062;
+
     public Task<Account?> FindAsync(string name, CancellationToken cancellationToken) =>
         db.Accounts.FirstOrDefaultAsync(account => account.Name == name, cancellationToken);
 
@@ -18,4 +22,34 @@ internal sealed class Accounts(IdentityDbContext db) : IAccounts
     public void Remove(Account account) => db.Accounts.Remove(account);
 
     public Task SaveAsync(CancellationToken cancellationToken) => db.SaveChangesAsync(cancellationToken);
+
+    // The unique indexes on name and address decide which of two at once comes first.
+    public async Task<bool> SaveUnlessTakenAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is MySqlException { Number: DuplicateKey })
+        {
+            db.ChangeTracker.Clear();
+            return false;
+        }
+    }
+}
+
+// A transaction on Identity's database. Every save in it joins it (ServiceDbContext saves in a transaction of its own
+// only when none is open).
+internal sealed class IdentityTransactions(IdentityDbContext db) : IIdentityTransactions
+{
+    public async Task<IIdentityTransaction> BeginAsync(CancellationToken cancellationToken) =>
+        new Transaction(await db.Database.BeginTransactionAsync(cancellationToken));
+
+    private sealed class Transaction(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction inner) : IIdentityTransaction
+    {
+        public Task CommitAsync(CancellationToken cancellationToken) => inner.CommitAsync(cancellationToken);
+
+        public ValueTask DisposeAsync() => inner.DisposeAsync();
+    }
 }

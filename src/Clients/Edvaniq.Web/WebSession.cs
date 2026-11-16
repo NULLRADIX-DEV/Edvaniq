@@ -278,15 +278,22 @@ internal sealed class LoginOptions
     public const string Section = "Login";
 
     public int PerClientPerMinute { get; set; }
+
+    // Registrations (#249) a client address may send in an hour.
+    public int RegistrationsPerClientPerHour { get; set; }
 }
 
 internal static class LoginLimit
 {
+    // The limit of POST /api/identity/accounts, a route of the section ReverseProxy names it as RateLimiterPolicy.
+    public const string RegistrationPolicy = "registration";
+
     public static IServiceCollection AddLoginLimit(this IServiceCollection services)
     {
         services.AddOptions<LoginOptions>()
             .BindConfiguration(LoginOptions.Section)
             .Validate(options => options.PerClientPerMinute > 0, "Login:PerClientPerMinute must be above 0.")
+            .Validate(options => options.RegistrationsPerClientPerHour > 0, "Login:RegistrationsPerClientPerHour must be above 0.")
             .ValidateOnStart();
 
         // The client address is the browser's, behind nginx from X-Forwarded-For (Program.cs).
@@ -312,6 +319,18 @@ internal static class LoginLimit
                     {
                         PermitLimit = limits.PerClientPerMinute,
                         Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                    });
+            });
+            options.AddPolicy(RegistrationPolicy, context =>
+            {
+                var limits = context.RequestServices.GetRequiredService<Microsoft.Extensions.Options.IOptions<LoginOptions>>().Value;
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    "registration:" + context.Connection.RemoteIpAddress,
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = limits.RegistrationsPerClientPerHour,
+                        Window = TimeSpan.FromHours(1),
                         QueueLimit = 0,
                     });
             });
