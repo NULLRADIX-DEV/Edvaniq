@@ -23,7 +23,7 @@ public sealed class SecurityHeaderTests
 
     // 16 random bytes in base64.
     private static readonly Regex ShellPolicyPattern =
-        new("^" + Regex.Escape(ShellPolicy).Replace(Regex.Escape("{nonce}"), "(?<nonce>[A-Za-z0-9+/]{22}==)", StringComparison.Ordinal) + "$");
+        new("^" + Regex.Escape(ShellPolicy).Replace(Regex.Escape("{nonce}"), "(?<nonce>[A-Za-z0-9_-]{22})", StringComparison.Ordinal) + "$");
 
     private static readonly (string Name, string Value)[] Expected =
     [
@@ -147,6 +147,24 @@ public sealed class SecurityHeaderTests
         Assert.Contains($"nonce=\"{nonce}\"", importMap.Value, StringComparison.Ordinal);
         Assert.Single(Regex.Matches(page, "<script(?![^>]*\\bsrc=)[^>]*>"));
         Assert.NotEqual(nonce, NonceOf(second));
+    }
+
+    // Razor encodes "+" and "/" in an attribute. A nonce of base64url without padding has neither, so the page carries
+    // it as the header does. With plain base64 about every third answer broke this.
+    [Fact]
+    public async Task TheNonce_HasNothingHtmlEncodes()
+    {
+        await using var web = Web("http://127.0.0.1:9");
+        using var browser = web.CreateBrowser();
+
+        for (var i = 0; i < 40; i++)
+        {
+            using var response = await browser.GetAsync("/", TestContext.Current.CancellationToken);
+            var nonce = NonceOf(response);
+            Assert.Matches("^[A-Za-z0-9_-]{22}$", nonce);
+            var page = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+            Assert.Contains($"nonce=\"{nonce}\"", page, StringComparison.Ordinal);
+        }
     }
 
     // A page holds the nonce of its own answer. A copy from the cache would come back under a newer policy and lose its
