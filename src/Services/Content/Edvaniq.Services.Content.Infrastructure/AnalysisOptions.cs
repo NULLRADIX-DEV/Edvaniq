@@ -10,8 +10,9 @@ public sealed class AnalysisOptions
 {
     public const string Section = "Content:Analysis";
 
-    // How long the AI may take for one call. A provider that hangs fails the call instead of the worker.
-    public TimeSpan AiTimeout { get; set; } = TimeSpan.FromMinutes(2);
+    // How long the AI may take for one call. A provider that hangs fails the call instead of the worker. A questions
+    // answer with cards takes the current model a good 2 minutes, so 4.
+    public TimeSpan AiTimeout { get; set; } = TimeSpan.FromMinutes(4);
 
     // How much material goes into one call for the topics. A longer document is asked in parts (TopicBatches).
     public int TopicBatchCharacters { get; set; } = TopicBatches.DefaultBatchCharacters;

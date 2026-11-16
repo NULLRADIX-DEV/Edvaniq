@@ -309,7 +309,7 @@ Kein Dokument bleibt für immer „in Analyse“. Die Grenzen des Content-Worker
 
 | Schlüssel | Standard | Wofür |
 |---|---|---|
-| `AiTimeout` | 2 min | ein Aufruf der KI, danach gilt er als Ausfall |
+| `AiTimeout` | 4 min | ein Aufruf der KI, danach gilt er als Ausfall |
 | `TopicsTimeout` | 10 min | Warten auf die Themen von Knowledge, danach scheitert das Dokument |
 | `TopicBatchCharacters` | 40.000 | Material je Aufruf für die Themen, ein längeres Dokument geht in Teilen zur KI ([Architektur](architecture.md)) |
 | `Timeout` | 60 min | ein ganzer Lauf, gezählt ab Einfügen, Upload oder Neustart, muss größer als `TopicsTimeout` sein |
