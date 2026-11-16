@@ -26,6 +26,9 @@ public sealed class IdentityFactory(
     // Content's worker, a client whose tokens are only for other services' internal endpoints.
     public const string InternalClientId = "content";
 
+    // The web app the links in mails lead to.
+    public const string PublicBaseUrl = "https://app.edvaniq.test/";
+
     public string ClientSecret { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 
     public string InternalClientSecret { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
@@ -93,6 +96,9 @@ public sealed class IdentityFactory(
             ["Tokens:SigningKey"] = NewSigningKey(),
             [$"Tokens:Clients:{ClientId}:Secret"] = ClientSecret,
             [$"Tokens:Clients:{InternalClientId}:Secret"] = InternalClientSecret,
+            ["Mail:Provider"] = "Recording",
+            ["Mail:PublicBaseUrl"] = PublicBaseUrl,
+            ["Mail:Dispatch"] = "false",
         };
         if (connectionString is not null)
         {

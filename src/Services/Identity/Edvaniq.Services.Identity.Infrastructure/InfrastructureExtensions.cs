@@ -2,10 +2,13 @@ using Edvaniq.BuildingBlocks.Application;
 using Edvaniq.BuildingBlocks.Infrastructure;
 using Edvaniq.BuildingBlocks.Messaging;
 using Edvaniq.Services.Identity.Application;
+using Edvaniq.Services.Identity.Infrastructure.Mail;
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace Edvaniq.Services.Identity.Infrastructure;
 
@@ -27,6 +30,7 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<AccountDeletion>();
         builder.Services.AddScoped<IInviteCodes, InviteCodes>();
         builder.Services.AddScoped<InviteService>();
+        builder.AddMail();
 
         // Only the outbox and its dispatcher, Identity listens to nobody. Without ConnectionStrings:nats UserDeleted waits
         // in the outbox.
@@ -37,6 +41,26 @@ public static class InfrastructureExtensions
             .AddMySqlReadinessCheck(DatabaseName);
 
         return builder;
+    }
+
+    // System mails (#248): the outbox in the database, the sender of Mail:Provider and the worker between them. The
+    // address of the web app is checked at the start, a mail with a wrong link must never go out.
+    private static void AddMail(this IHostApplicationBuilder builder)
+    {
+        builder.Services.AddOptions<MailOptions>().BindConfiguration(MailOptions.Section).ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<MailOptions>, MailOptionsValidation>();
+        builder.Services.AddSingleton(services => new MailLinks(services.GetRequiredService<IOptions<MailOptions>>().Value.BaseAddress));
+        builder.Services.AddScoped<IMailOutbox, MailOutbox>();
+        builder.Services.AddScoped<IAccountTokens, AccountTokens>();
+        builder.Services.AddScoped<SystemMails>();
+        if (builder.Configuration.GetValue<MailProvider>($"{MailOptions.Section}:{nameof(MailOptions.Provider)}") == MailProvider.Recording)
+        {
+            builder.Services.AddSingleton<RecordingMailSender>();
+            builder.Services.AddSingleton<IMailSender>(services => services.GetRequiredService<RecordingMailSender>());
+        }
+
+        builder.Services.AddSingleton<MailDispatcher>();
+        builder.Services.AddHostedService(services => services.GetRequiredService<MailDispatcher>());
     }
 
     // Brings the database to the latest migration and returns the exit code.
