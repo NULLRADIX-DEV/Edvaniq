@@ -180,6 +180,21 @@ public static class FeedbackTexts
         public const string NoQuestionsHint =
             "Sie entstehen nach dem Einfügen im Hintergrund und brauchen meist ein paar Minuten. Versuch es gleich noch einmal oder wähl ein anderes Thema.";
 
+        // A topic the user made themselves (#317): questions only come from material, so nothing is promised (#388).
+        public const string NoQuestionsOwnTopic = "Zu diesem Thema gibt es keine Fragen.";
+
+        public const string NoQuestionsOwnTopicHint =
+            "Fragen entstehen aus deinem Material. Zu einem Thema, das du selbst angelegt hast, gibt es noch keins. Wähl ein anderes Thema.";
+
+        // The way to the summary while there are no questions, or while they come again (#388).
+        public const string ReadSummary = "Zusammenfassung lesen";
+
+        // All questions of the topic were answered lately, so they come a second time (#387, #388).
+        public const string Repeated = "Du hast alle Fragen zu diesem Thema in letzter Zeit beantwortet.";
+
+        public const string RepeatedHint =
+            "Die Fragen kommen jetzt ein zweites Mal. Lies die Zusammenfassung oder wähl ein anderes Thema, wenn du Abwechslung willst.";
+
         public const string TopicGone = "Dieses Thema gibt es nicht oder nicht mehr.";
 
         public const string LoadFailed = "Die Frage ließ sich gerade nicht laden.";
@@ -224,6 +239,11 @@ public static class FeedbackTexts
         public const string ToResult = "Zum Ergebnis";
 
         public const string LoadFailed = "Das Quiz ließ sich gerade nicht laden.";
+
+        // The topic had too few questions for the quiz (#387, #388).
+        public const string PoolTooSmall = "Zu diesem Thema gibt es erst wenige Fragen.";
+
+        public const string PoolTooSmallHint = "Einzelne Fragen kommen deshalb doppelt, oder das Quiz ist kürzer.";
 
         public const string Done = "Quiz geschafft.";
 

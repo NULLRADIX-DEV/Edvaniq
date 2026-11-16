@@ -19,6 +19,7 @@ public sealed class QuizTests : BunitContext
     private static readonly Guid Subtopic = Guid.Parse("6a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d");
     private static readonly Guid Attempt = Guid.Parse("0b6f7a1e-6a5d-4a8e-9a11-2b9f1c3d4e01");
     private static readonly Guid NextAttempt = Guid.Parse("7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e02");
+    private static readonly Guid Document = Guid.Parse("1e2d3c4b-5a69-4788-9a0b-1c2d3e4f5a6b");
 
     private static readonly AskedQuestion Question = new(
         Attempt, Topic, Guid.NewGuid(), "Wo findet die Lichtreaktion statt?", ["Im Zellkern", "In den Thylakoiden", "Im Cytoplasma"], 1);
@@ -202,10 +203,60 @@ public sealed class QuizTests : BunitContext
         Assert.Equal("themen", page.Find(".state-actions a").GetAttribute("href"));
         Assert.Equal("Anderes Thema wählen", page.Find(".state-actions a").TextContent);
 
+        var summary = page.Find(".state-actions .quiz-summary-link");
+        Assert.Equal($"themen/{Topic:D}/zusammenfassung", summary.GetAttribute("href"));
+        Assert.Equal("Zusammenfassung lesen zu „Photosynthese“", summary.TextContent);
+
         page.Find(".state-actions button").Click();
 
         Assert.Equal("Wo findet die Lichtreaktion statt?", page.Find("legend").TextContent);
         AssertFocused(page, "legend");
+    }
+
+    // #388: a topic the user made has no document, so no questions are on their way. Nothing is promised, there is no
+    // asking again, only the way to another topic.
+    [Fact]
+    public void OwnTopic_WithoutQuestions_PromisesNone()
+    {
+        var page = RenderPage(
+            new FakeQuiz().Ask(new CallOutcome<AskedQuestion>(CallResult.NotReady)),
+            material: new FakeLearningMaterial().Topics(new TopicInfo(Topic, "Eigenes Thema", [])));
+
+        var status = page.Find("[role=status]").TextContent;
+        Assert.Contains("Zu diesem Thema gibt es keine Fragen.", status);
+        Assert.Contains("selbst angelegt", status);
+        Assert.DoesNotContain("ein paar Minuten", status);
+        Assert.Empty(page.FindAll(".state-actions button"));
+        Assert.Empty(page.FindAll(".quiz-summary-link"));
+        Assert.Equal("Anderes Thema wählen", page.Find(".state-actions a").TextContent);
+    }
+
+    // #388: the questions come a second time. The hint stays with each of them and leads elsewhere, the live region says
+    // it once, when they start to come again.
+    [Fact]
+    public void RepeatedQuestions_SayItOnce_AndShowTheWaysOn()
+    {
+        var quiz = new FakeQuiz().Ask(Question).Ask(Next with { Repeated = true }).Ask(Question with { Id = Guid.NewGuid(), Repeated = true })
+            .Answer(Graded(option: 1, answer: 1)).Answer(Graded(option: 1, answer: 1));
+        var page = RenderPage(quiz);
+        Assert.Empty(page.FindAll(".quiz-repeated"));
+
+        Answer(page, 1);
+        page.Find(".quiz-actions button").Click();
+
+        var hint = page.Find(".quiz-repeated");
+        Assert.Contains("in letzter Zeit beantwortet", hint.TextContent);
+        Assert.Equal(
+            [$"themen/{Topic:D}/zusammenfassung", "themen"],
+            hint.QuerySelectorAll("a").Select(link => link.GetAttribute("href")));
+        Assert.Contains("in letzter Zeit beantwortet", page.Find("[role=status]").TextContent);
+
+        Answer(page, 1);
+        page.Find(".quiz-actions button").Click();
+
+        Assert.Single(page.FindAll(".quiz-repeated"));
+        Assert.DoesNotContain("in letzter Zeit beantwortet", page.Find("[role=status]").TextContent);
+        Assert.Equal("Wo findet die Lichtreaktion statt?", page.Find("legend").TextContent);
     }
 
     [Fact]
@@ -396,7 +447,7 @@ public sealed class QuizTests : BunitContext
     {
         Services.AddSingleton<IQuiz>(quiz);
         Services.AddSingleton<ILearningMaterial>(material ?? new FakeLearningMaterial()
-            .Topics(new TopicInfo(Topic, "Photosynthese", [new SubtopicInfo(Subtopic, "Lichtreaktion")])));
+            .Topics(new TopicInfo(Topic, "Photosynthese", [new SubtopicInfo(Subtopic, "Lichtreaktion", Document)], Document)));
         JSInterop.Mode = JSRuntimeMode.Loose;
         SetRendererInfo(new RendererInfo("WebAssembly", isInteractive: true));
         return Render<Practice>(parameters => parameters.Add(p => p.TopicId, topic ?? Topic));

@@ -125,7 +125,7 @@ public sealed class ReturnTests : BunitContext
     public void Quiz_NotReady_AsksAgainOnReturn()
     {
         var quiz = new FakeQuiz().Ask(new CallOutcome<AskedQuestion>(CallResult.NotReady)).Ask(Question);
-        var page = RenderQuiz(quiz, new FakeLearningMaterial().Topics(new TopicInfo(Topic, "Photosynthese", [])));
+        var page = RenderQuiz(quiz, new FakeLearningMaterial().Topics(new TopicInfo(Topic, "Photosynthese", [], Newest)));
         Assert.Contains("noch keine Fragen", page.Find("[role=status]").TextContent);
 
         signal.Return();
