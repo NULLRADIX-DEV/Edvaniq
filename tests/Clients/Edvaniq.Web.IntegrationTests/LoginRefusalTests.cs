@@ -45,7 +45,7 @@ public sealed class LoginRefusalTests
     }
 
     [Fact]
-    public async Task TooManyAttempts_Is429_WithItsCode()
+    public async Task LockedLogin_Is429_WithItsCode()
     {
         await using var gateway = await StubService.StartAsync("gateway-stub");
         gateway.LoginStatus = 429;
@@ -55,7 +55,7 @@ public sealed class LoginRefusalTests
         using var response = await LoginAsync(browser, "lena@example.org", "ein langes Passwort");
 
         Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
-        Assert.Equal("too_many_attempts", (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("code").GetString());
+        Assert.Equal("locked", (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("code").GetString());
     }
 
     // The address goes to Identity as the login, as typed.

@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace Edvaniq.Services.Identity.Domain;
 
 // Creating an account and logging in both go through Normalize, so "Ben" and " ben " are the same account and the
-// login throttle counts them together.
+// login lock counts them together.
 public static partial class AccountName
 {
     // The normalized name, or null if it is not a valid one.

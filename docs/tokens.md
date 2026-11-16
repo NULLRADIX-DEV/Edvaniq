@@ -55,7 +55,7 @@ Eine erfolgreiche Antwort ist `200` mit `access_token`, `token_type` (`Bearer`) 
 | 400 | `unauthorized_client` | der Client darf keinen Login anfragen |
 | 400 | `invalid_grant` | Name, Adresse oder Passwort falsch. Ob es das Konto gibt, sagt die Antwort nicht. |
 | 400 | `invalid_grant` mit `reason` | das Passwort stimmt, aber das Konto darf sich noch nicht anmelden: `unconfirmed` (Adresse nicht bestätigt) oder `awaiting_approval` (wartet auf die Freigabe). Nur mit dem richtigen Passwort kommt `reason` mit, sonst wüsste jeder, dass es die Adresse gibt. |
-| 429 | `too_many_attempts` | zu viele Versuche für dieses Konto in kurzer Zeit, `Retry-After` nennt die Wartezeit in Sekunden |
+| 429 | `locked` | die Anmeldung ist nach zu vielen Fehlversuchen gesperrt, auch mit dem richtigen Passwort, `Retry-After` nennt die Wartezeit in Sekunden |
 
 Der Browser meldet sich über den Web-Host an: `POST /session/login` mit `{"name": "…", "password": "…"}`, wobei `name` ein Teamname oder eine E-Mail-Adresse ist. Der Web-Host übersetzt die Antwort von Identity in ein Problem mit einem `code`, den Satz für den Nutzer trägt `title`:
 
@@ -66,8 +66,10 @@ Der Browser meldet sich über den Web-Host an: `POST /session/login` mit `{"name
 | 401 | `invalid_credentials` | Anmeldename oder Passwort falsch, gleich für eine unbekannte Adresse |
 | 403 | `unconfirmed` | Adresse noch nicht bestätigt, nur nach dem richtigen Passwort |
 | 403 | `awaiting_approval` | das Konto wartet auf die Freigabe, nur nach dem richtigen Passwort |
-| 429 | `too_many_attempts` | zu viele Versuche, `Retry-After` nennt die Wartezeit. Die Grenze des Web-Hosts je Client-Adresse antwortet ebenfalls mit 429 und `Retry-After`, ohne `code`. |
+| 429 | `locked` | die Anmeldung ist gesperrt, `Retry-After` nennt die Wartezeit. Die Grenze des Web-Hosts je Client-Adresse antwortet ebenfalls mit 429 und `Retry-After`, ohne `code`. |
 | 502 | | Identity hat keine brauchbare Antwort gegeben |
+
+Nach 5 Fehlversuchen innerhalb von 15 Minuten sperrt Identity die Anmeldung für 15 Minuten (#252). Gezählt wird je Anmeldename bzw. Adresse, gleich ob es dazu ein Konto gibt, die Sperre verrät also nichts über ein Konto. Während der Sperre scheitert auch das richtige Passwort. Danach geht die Anmeldung von selbst wieder, und eine erfolgreiche Anmeldung setzt den Zähler zurück. Die Sperre lebt nur im Speicher von Identity, ein Neustart hebt sie auf.
 
 ## Kontoarten
 

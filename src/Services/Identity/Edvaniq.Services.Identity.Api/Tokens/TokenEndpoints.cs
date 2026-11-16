@@ -28,7 +28,7 @@ internal static class TokenEndpoints
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<SigningKey>();
         builder.Services.AddSingleton<TokenIssuer>();
-        builder.Services.AddSingleton<LoginThrottle>();
+        builder.Services.AddSingleton<LoginLock>();
         return builder;
     }
 
@@ -56,7 +56,7 @@ internal static class TokenEndpoints
     }
 
     private static async Task<IResult> IssueAsync(
-        HttpContext context, TokenIssuer issuer, LoginThrottle throttle, CancellationToken cancellationToken)
+        HttpContext context, TokenIssuer issuer, LoginLock loginLock, CancellationToken cancellationToken)
     {
         // No answer of the token endpoint may end up in a cache (RFC 6749, section 5.1).
         context.Response.Headers.CacheControl = "no-store";
@@ -110,15 +110,24 @@ internal static class TokenEndpoints
             return Error("invalid_request");
         }
 
-        if (!throttle.TryAttempt(username, out var retryAfter))
+        // Locked after too many failures (#252), whatever the password: the answer is the same for any login.
+        if (loginLock.IsLocked(username, out var retryAfter))
         {
             context.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
-            return TypedResults.Json(new TokenError("too_many_attempts"), statusCode: StatusCodes.Status429TooManyRequests);
+            return TypedResults.Json(new TokenError("locked"), statusCode: StatusCodes.Status429TooManyRequests);
         }
 
         // Resolved only here: the database comes with it, and a client's own token must not depend on it.
         var accounts = context.RequestServices.GetRequiredService<AccountService>();
         var result = await accounts.AuthenticateAsync(username, password, cancellationToken);
+        if (result.Refusal == LoginRefusal.InvalidCredentials)
+        {
+            loginLock.Failed(username);
+        }
+        else
+        {
+            loginLock.Clear(username);
+        }
 
         // A wrong login and a wrong password get the same answer. Why a known account can't log in yet comes as reason,
         // only after the right password (docs/tokens.md).

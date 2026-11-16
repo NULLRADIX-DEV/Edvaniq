@@ -128,7 +128,7 @@ public sealed class StubService : IAsyncDisposable
                         return Results.BadRequest(new Dictionary<string, string> { ["error"] = "invalid_grant" });
                     case StatusCodes.Status429TooManyRequests:
                         response.Headers.RetryAfter = "42";
-                        return Results.Json(new Dictionary<string, string> { ["error"] = "too_many_attempts" }, statusCode: 429);
+                        return Results.Json(new Dictionary<string, string> { ["error"] = "locked" }, statusCode: 429);
                     case var status:
                         return Results.StatusCode(status);
                 }
