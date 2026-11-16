@@ -12,7 +12,7 @@ public class SchemaTests
     {
         { TopicAnalysis.Schema, TopicAnalysis.System(LearnerProfile.Default) },
         { QuestionGeneration.CardsSchema, QuestionGeneration.System(LearnerProfile.Default) },
-        { QuestionGeneration.Schema, QuestionGeneration.System(LearnerProfile.Default, 1) },
+        { QuestionGeneration.Schema, QuestionGeneration.System(LearnerProfile.Default, 1, QuestionGeneration.MaxQuestions) },
         { QuestionGeneration.Schema, QuestionGeneration.ForNewMaterial(LearnerProfile.Default, 1) },
     };
 

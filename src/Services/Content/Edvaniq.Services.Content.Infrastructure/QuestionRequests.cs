@@ -21,12 +21,14 @@ internal static class QuestionRequests
     // The questions are checked before they go anywhere (#298): flagged ones come back as null with Flagged, a check
     // that fails as null with its failure, so nothing goes out unchecked. A prompt that asks for cards too (#340) gets
     // them in Cards, checked the same way. An answer with questions but no card is asked again once, then its questions
-    // are taken without cards: the questions matter more.
+    // are taken without cards: the questions matter more. Known are the texts of the questions the topic has (#1106), the
+    // prompt tells them after the material.
     public static async Task<(List<GeneratedItem>? Items, List<GeneratedItem> Cards, Exception? Failure, int Attempts, bool Flagged)> AskAsync(
         Document document,
         string system,
         IReadOnlyList<Guid> sectionIds,
         IReadOnlyDictionary<Guid, string> texts,
+        IReadOnlyList<string> known,
         string purpose,
         Guid topicId,
         IChatClient ai,
@@ -47,7 +49,7 @@ internal static class QuestionRequests
             chat,
             [
                 new ChatMessage(ChatRole.System, system),
-                new ChatMessage(ChatRole.User, QuestionGeneration.User(sectionIds.Select(id => texts[id]))),
+                new ChatMessage(ChatRole.User, QuestionGeneration.User(sectionIds.Select(id => texts[id]), known)),
             ],
             Read,
             new StructuredRequest(timeout, withCards ? ContentAi.QuestionsWithCardsFormat : ContentAi.QuestionsFormat),
@@ -120,6 +122,13 @@ internal static class QuestionRequests
     // The texts of the questions that go out for the pool's topic, kept for later rounds (#1106).
     public static IEnumerable<PoolQuestion> TextsOf(QuestionPool pool, IEnumerable<GeneratedItem> items) =>
         items.Select(item => PoolQuestion.Of(pool, QuestionGeneration.KeyOf(item.Question!.Text), item.SectionId, item.Question.Text));
+
+    // The texts of the questions the topic has, empty for a pool from before #1106.
+    public static async Task<List<string>> KnownTextsAsync(ContentDbContext db, Guid topicId, CancellationToken cancellationToken) =>
+        await db.PoolQuestions.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .Where(question => question.TopicId == topicId)
+            .Select(question => question.Text)
+            .ToListAsync(cancellationToken);
 
     // Every key the topic has: those of the pool and those of material added later.
     public static async Task<HashSet<string>> KeysOfAsync(ContentDbContext db, QuestionPool pool, CancellationToken cancellationToken)

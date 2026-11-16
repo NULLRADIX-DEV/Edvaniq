@@ -31,8 +31,8 @@ public static partial class DemoReplay
 
         if (system.StartsWith(QuestionGeneration.Task, StringComparison.Ordinal))
         {
-            return replay.File.Versions.Questions == QuestionGeneration.PromptVersion && system.Contains(FirstRound, StringComparison.Ordinal)
-                ? replay.QuestionsOf(sections, QuestionGeneration.AsksForCards(system))
+            return replay.File.Versions.Questions == QuestionGeneration.PromptVersion && QuestionGeneration.AsksForCards(system)
+                ? replay.QuestionsOf(sections, withCards: true)
                 : null;
         }
 
@@ -45,9 +45,6 @@ public static partial class DemoReplay
 
         return null;
     }
-
-    // The first round asks for all questions, a top-up names how many there are already.
-    private static readonly string FirstRound = $"Schreib {QuestionGeneration.MaxQuestions} Fragen,";
 
     private static SummaryLength? LengthOf(string system) =>
         LengthLine().Match(system) is { Success: true } match

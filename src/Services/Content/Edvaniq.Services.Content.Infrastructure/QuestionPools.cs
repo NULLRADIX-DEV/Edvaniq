@@ -170,7 +170,7 @@ public sealed class QuestionPools(
                     continue;
                 }
 
-                needed.Add(new Job(topic, material, null, new HashSet<string>()));
+                needed.Add(new Job(topic, material, null, new HashSet<string>(), [], QuestionGeneration.TargetFor(material.Select(id => texts[id]))));
                 continue;
             }
 
@@ -195,7 +195,9 @@ public sealed class QuestionPools(
                 continue;
             }
 
-            needed.Add(new Job(topic, fresh, pool, known));
+            needed.Add(new Job(
+                topic, fresh, pool, known, await QuestionRequests.KnownTextsAsync(db, topic.Id, cancellationToken),
+                QuestionGeneration.CountForNewMaterial(fresh.Select(id => texts[id]))));
         }
 
         // The daily quota before the first AI call: every topic that gets a pool or new material is one generation, all
@@ -224,10 +226,10 @@ public sealed class QuestionPools(
             }
 
             var system = job.Pool is null
-                ? QuestionGeneration.System(profile)
+                ? QuestionGeneration.System(profile, 0, job.Wanted)
                 : QuestionGeneration.ForNewMaterial(profile, job.Room);
             var (items, cards, failure, attempts, flagged) = await QuestionRequests.AskAsync(
-                document, system, job.Material, texts, AiAttempt.Questions, job.Topic.Id, ai, testDouble, answers, moderation, AiTimeout, cancellationToken);
+                document, system, job.Material, texts, job.KnownTexts, AiAttempt.Questions, job.Topic.Id, ai, testDouble, answers, moderation, AiTimeout, cancellationToken);
             if (items is null)
             {
                 if (failure is not null)
@@ -263,7 +265,7 @@ public sealed class QuestionPools(
             var topic = job.Topic;
             if (job.Pool is not { } pool)
             {
-                pool = QuestionPool.For(document, topic.Id, now, QuestionRequests.KeysOf(items));
+                pool = QuestionPool.For(document, topic.Id, now, QuestionRequests.KeysOf(items), job.Wanted);
                 db.QuestionPools.Add(pool);
                 db.PoolMaterials.AddRange(job.Material.Select(section => PoolMaterial.Of(pool, section)));
                 db.PoolQuestions.AddRange(QuestionRequests.TextsOf(pool, items));
@@ -308,10 +310,12 @@ public sealed class QuestionPools(
     }
 
     // What the AI is asked for one topic: a new pool from its material (Pool null), or questions on material of this
-    // document that a topic with a pool wasn't asked about yet, at most Room of them, none it Knows.
-    private sealed record Job(KnowledgeTopic Topic, List<Guid> Material, QuestionPool? Pool, IReadOnlySet<string> Known)
+    // document that a topic with a pool wasn't asked about yet, at most Room of them, none it Knows. Wanted is how many
+    // the size of the material asks for (#1106), KnownTexts the questions of the topic the prompt names.
+    private sealed record Job(
+        KnowledgeTopic Topic, List<Guid> Material, QuestionPool? Pool, IReadOnlySet<string> Known, IReadOnlyList<string> KnownTexts, int Wanted)
     {
-        public int Room => Math.Min(QuestionPool.PerNewMaterial, QuestionPool.MaxAll - Known.Count);
+        public int Room => Math.Min(Wanted, QuestionPool.MaxAll - Known.Count);
     }
 
     // Empty while Knowledge has none, and when it can't be asked: the next round asks again, until TopicsTimeout.

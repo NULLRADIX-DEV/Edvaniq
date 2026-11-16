@@ -129,7 +129,7 @@ public class DemoReplayTests
     {
         var (_, texts) = TopicMaterial().First();
 
-        Assert.Null(DemoReplay.Answer(QuestionGeneration.System(Profile, 15), QuestionGeneration.User(texts)));
+        Assert.Null(DemoReplay.Answer(QuestionGeneration.System(Profile, 15, QuestionGeneration.MaxQuestions), QuestionGeneration.User(texts)));
         Assert.Null(DemoReplay.Answer(QuestionGeneration.System(Profile), QuestionGeneration.User(["Ein ganz anderer Text."])));
         Assert.Null(DemoReplay.Answer("edvaniq:unknown", QuestionGeneration.User(texts)));
     }

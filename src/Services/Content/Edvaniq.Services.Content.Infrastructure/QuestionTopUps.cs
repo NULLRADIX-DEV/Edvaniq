@@ -160,7 +160,8 @@ public sealed class QuestionTopUps(
         }
 
         var (items, _, failure, attempts, _) = await QuestionRequests.AskAsync(
-            document, QuestionGeneration.System(profile, pool.Questions ?? 0), material, texts, AiAttempt.TopUp, pool.TopicId, ai, testDouble, answers, moderation,
+            document, QuestionGeneration.System(profile, pool.Questions ?? 0, Math.Max(pool.Goal, QuestionGeneration.MinTarget)), material, texts,
+            await QuestionRequests.KnownTextsAsync(db, topicId, cancellationToken), AiAttempt.TopUp, pool.TopicId, ai, testDouble, answers, moderation,
             AiTimeout, cancellationToken);
         now = time.GetUtcNow().UtcDateTime;
         if (failure is not null)

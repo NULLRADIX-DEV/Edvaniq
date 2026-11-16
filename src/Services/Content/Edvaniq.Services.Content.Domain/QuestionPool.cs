@@ -76,9 +76,15 @@ public sealed class QuestionPool : IOwnedByUser
     // Short below three quarters of its goal, under 15 of 20. QuestionTopUps.WaitingAsync asks the database the same.
     public bool WantsTopUp => Questions * 4 < Goal * 3 && !TopUpStopped;
 
-    public static QuestionPool For(Document document, Guid topicId, DateTime createdAt, IReadOnlyCollection<string> keys)
+    // Target is how many the prompt asked for, by the size of the material (#1106). Null leaves it at MaxQuestions.
+    public static QuestionPool For(Document document, Guid topicId, DateTime createdAt, IReadOnlyCollection<string> keys, int? target = null)
     {
-        var pool = new QuestionPool(topicId, document.Id, document.OwnerId, createdAt) { Questions = 0 };
+        if (target is < 1 or > MaxQuestions)
+        {
+            throw new ArgumentOutOfRangeException(nameof(target), target, $"A pool is meant to have 1 to {MaxQuestions} questions.");
+        }
+
+        var pool = new QuestionPool(topicId, document.Id, document.OwnerId, createdAt) { Questions = 0, Target = target };
         pool.Note(keys);
         return pool;
     }

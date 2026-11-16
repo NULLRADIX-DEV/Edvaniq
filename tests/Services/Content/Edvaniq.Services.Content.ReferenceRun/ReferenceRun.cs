@@ -207,7 +207,8 @@ public static partial class ReferenceRun
                     var pool = await AskAsync(
                         result,
                         [
-                            new ChatMessage(ChatRole.System, QuestionGeneration.System(LearnerProfile.Default)),
+                            new ChatMessage(ChatRole.System, QuestionGeneration.System(
+                                LearnerProfile.Default, 0, QuestionGeneration.TargetFor(topic.SectionIds.Select(id => textOf[id])))),
                             new ChatMessage(ChatRole.User, QuestionGeneration.User(topic.SectionIds.Select(id => textOf[id]))),
                         ],
                         answerText => QuestionGeneration.Read(answerText, topic.SectionIds) is { Count: > 0 } drafts
