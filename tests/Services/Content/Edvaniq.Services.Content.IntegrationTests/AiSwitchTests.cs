@@ -101,8 +101,8 @@ public sealed class AiSwitchTests(ServiceFactory service) : IClassFixture<Servic
         await SplitAsync(fresh);
         await Analyzer().AnalyzeAsync(fresh, Cancel);
 
-        // The check of the material (#298) and the topics.
-        Assert.Equal(2, asked);
+        // The check of the material (#298), the topics and the check of the topics.
+        Assert.Equal(3, asked);
         Assert.NotNull(Stored(fresh).AnalyzedAt);
     }
 
