@@ -1,0 +1,285 @@
+@using System.Globalization
+@using Microsoft.JSInterop
+@implements IDisposable
+@inject ICheckQuestions Checks
+@inject ILearningMaterial Material
+
+@* The learning unit for a new topic (#358): the summary, then two or three check questions, then how it went. Without
+   check questions it ends with the summary. The session runner (#396) puts this in its step and takes the result from
+   OnFinished. *@
+
+@* A new element for each step, read out as new. *@
+@if (State is not ViewState.Gone and not ViewState.SignedOut)
+{
+    <p class="unit-step" tabindex="-1" @key="StepText" @ref="stepText">@StepText</p>
+}
+
+<div class="quiz-status" role="status">
+    @switch (State)
+    {
+        case ViewState.LoadingChecks:
+            <Loading Text="@FeedbackTexts.NewTopicUnit.LoadingChecks" />
+            break;
+        case ViewState.ChecksFailed:
+            <ConnectionProblem Title="@FeedbackTexts.NewTopicUnit.ChecksFailed" TraceId="@checksTrace" />
+            break;
+        case ViewState.Gone:
+            <Notice Kind="NoticeKind.Error" Title="@FeedbackTexts.Quiz.TopicGone" class="quiz-topic-gone" />
+            break;
+        case ViewState.Questions when !run!.Current.IsKnownType:
+            <Notice Kind="NoticeKind.Info" Title="@FeedbackTexts.Quiz.UnknownType" class="quiz-unknown-type">
+                <p>@FeedbackTexts.Quiz.UnknownTypeHint</p>
+            </Notice>
+            break;
+    }
+</div>
+
+@switch (State)
+{
+    case ViewState.Summary:
+        <SummaryView TopicId="TopicId" Embedded OnStateChanged="state => summary = state" />
+        <div class="unit-actions">
+            <button type="button" class="button" @onclick="GoOnAsync">@FeedbackTexts.NewTopicUnit.ToChecks</button>
+        </div>
+        break;
+    case ViewState.ChecksFailed:
+        <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="LoadChecksAsync" />
+        break;
+    case ViewState.Gone:
+        <StateActions Href="themen" LinkText="@FeedbackTexts.Quiz.BackToTopics" />
+        break;
+    case ViewState.Questions:
+        <QuestionSteps Run="run!" TopicId="TopicId" Documents="documents" FocusOnShow OnMoved="MovedAsync" OnGone="Gone" />
+        break;
+    case ViewState.NoChecks:
+        <section class="unit-no-checks" aria-labelledby="unit-no-checks-heading">
+            <h2 id="unit-no-checks-heading" tabindex="-1" @ref="noChecksHeading">@FeedbackTexts.NewTopicUnit.NoChecks</h2>
+            <p>@FeedbackTexts.NewTopicUnit.NoChecksHint</p>
+            <div class="unit-actions">
+                <button type="button" class="button" @onclick="() => FinishAsync(null)">@FeedbackTexts.NewTopicUnit.Finish</button>
+            </div>
+        </section>
+        break;
+    case ViewState.Done:
+        <section class="unit-done" aria-labelledby="unit-done-heading">
+            <h2 id="unit-done-heading" tabindex="-1" @ref="doneHeading">@FeedbackTexts.NewTopicUnit.Done</h2>
+            <p class="unit-summary-line">@(result!.SummaryShown ? FeedbackTexts.NewTopicUnit.SummaryRead : FeedbackTexts.NewTopicUnit.SummaryMissing)</p>
+            <p class="unit-tally"><strong>@TallyText</strong></p>
+            <p>@FeedbackTexts.NewTopicUnit.DoneHint</p>
+        </section>
+        @AfterDone
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid TopicId { get; set; }
+
+    // The session the unit belongs to, if it runs in one. Assessment keeps it at the attempts.
+    [Parameter]
+    public Guid? SessionId { get; set; }
+
+    [Parameter]
+    public EventCallback<NewTopicUnitResult> OnFinished { get; set; }
+
+    // The caller's way on below the result.
+    [Parameter]
+    public RenderFragment? AfterDone { get; set; }
+
+    private readonly CancellationTokenSource life = new();
+    private DocumentLookup documents = default!;
+    private Guid? loaded;
+
+    private SummaryState summary = SummaryState.Pending;
+    private bool summaryShown;
+    private bool onChecks;
+
+    // Every call to check-questions makes new attempts: one per unit, again only after a failure. A retry after a timeout
+    // that got through at the server leaves its attempts open, they just stay unanswered.
+    private bool loadingChecks;
+    private CheckQuestions? checks;
+    private CallResult? checksFailure;
+    private string? checksTrace;
+    private QuestionRun? run;
+    private bool gone;
+    private NewTopicUnitResult? result;
+
+    private bool focusStep;
+    private bool focusNoChecks;
+    private bool focusDone;
+    private ElementReference stepText;
+    private ElementReference noChecksHeading;
+    private ElementReference doneHeading;
+
+    private enum ViewState
+    {
+        Summary,
+        LoadingChecks,
+        ChecksFailed,
+        SignedOut,
+        Gone,
+        Questions,
+        NoChecks,
+        Done,
+    }
+
+    private ViewState State => this switch
+    {
+        { gone: true } => ViewState.Gone,
+        { result: not null } => ViewState.Done,
+        { onChecks: false } => ViewState.Summary,
+        { loadingChecks: true } => ViewState.LoadingChecks,
+        { checksFailure: CallResult.SignedOut } => ViewState.SignedOut,
+        { checksFailure: not null } => ViewState.ChecksFailed,
+        { run: not null } => ViewState.Questions,
+        { checks: not null } => ViewState.NoChecks,
+        _ => ViewState.LoadingChecks,
+    };
+
+    private string StepText => State switch
+    {
+        ViewState.Summary => Step(1, FeedbackTexts.NewTopicUnit.SummaryStep),
+        ViewState.Done => Step(3, FeedbackTexts.NewTopicUnit.DoneStep),
+        _ => Step(2, FeedbackTexts.NewTopicUnit.ChecksStep),
+    };
+
+    private string TallyText => result!.Check is { } check
+        ? string.Format(CultureInfo.InvariantCulture, FeedbackTexts.NewTopicUnit.Tally, check.Right, check.Total)
+        : FeedbackTexts.NewTopicUnit.NoTally;
+
+    private static string Step(int number, string name) =>
+        string.Format(CultureInfo.InvariantCulture, FeedbackTexts.NewTopicUnit.Step, number, name);
+
+    protected override void OnInitialized() => documents = new DocumentLookup(Material);
+
+    protected override void OnParametersSet()
+    {
+        if (loaded == TopicId)
+        {
+            return;
+        }
+
+        // Another topic is another unit.
+        loaded = TopicId;
+        summary = SummaryState.Pending;
+        summaryShown = onChecks = loadingChecks = gone = false;
+        checks = null;
+        checksFailure = null;
+        checksTrace = null;
+        run = null;
+        result = null;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (summary == SummaryState.Gone && !gone)
+        {
+            gone = true;
+            StateHasChanged();
+            return;
+        }
+
+        var target = focusDone ? doneHeading : focusNoChecks ? noChecksHeading : focusStep ? stepText : (ElementReference?)null;
+        focusDone = focusNoChecks = focusStep = false;
+        if (target is not { } element)
+        {
+            return;
+        }
+
+        try
+        {
+            await element.FocusAsync();
+        }
+        catch (JSException)
+        {
+            // The element went away between render and focus, nothing to do.
+        }
+    }
+
+    // The way on is always there, also while the summary is still coming or can't come: the unit never gets stuck on it.
+    private async Task GoOnAsync()
+    {
+        if (onChecks)
+        {
+            return;
+        }
+
+        summaryShown = summary == SummaryState.Ready;
+        onChecks = true;
+        await LoadChecksAsync();
+    }
+
+    private async Task LoadChecksAsync()
+    {
+        if (loadingChecks || checks is not null)
+        {
+            return;
+        }
+
+        loadingChecks = true;
+        checksFailure = null;
+        checksTrace = null;
+        focusStep = true;
+        CallOutcome<CheckQuestions> outcome;
+        try
+        {
+            outcome = await Checks.StartAsync(TopicId, SessionId, life.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            loadingChecks = false;
+        }
+
+        switch (outcome)
+        {
+            case { Result: CallResult.Ok, Value: { } check }:
+                // The card or the hint takes the focus from here.
+                focusStep = false;
+                checks = check;
+                if (check.Ready && check.Questions.Count > 0)
+                {
+                    run = new QuestionRun(check.Questions.Select(question => new RunQuestion(question)));
+                }
+                else
+                {
+                    focusNoChecks = true;
+                }
+
+                break;
+            case { Result: CallResult.NotFound }:
+                gone = true;
+                break;
+            default:
+                checksFailure = outcome.Result == CallResult.SignedOut ? CallResult.SignedOut : CallResult.Failed;
+                checksTrace = outcome.TraceId;
+                break;
+        }
+    }
+
+    private async Task MovedAsync()
+    {
+        if (run!.IsDone)
+        {
+            await FinishAsync(run.Tally);
+        }
+    }
+
+    private async Task FinishAsync(QuizTally? check)
+    {
+        result = new NewTopicUnitResult(summaryShown, check);
+        focusDone = true;
+        await OnFinished.InvokeAsync(result);
+    }
+
+    private void Gone() => gone = true;
+
+    public void Dispose()
+    {
+        life.Cancel();
+        life.Dispose();
+    }
+}

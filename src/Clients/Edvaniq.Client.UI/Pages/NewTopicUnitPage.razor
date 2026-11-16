@@ -1,0 +1,28 @@
+@page "/themen/{TopicId:guid}/einheit"
+@attribute [Authorize]
+
+<PageTitle>Neues Thema – Edvaniq</PageTitle>
+
+@* A way to the new topic unit on its own, for checks and tests. Nothing links here: the session runner (#396) puts
+   NewTopicUnitView into its step directly. Loading the page again starts a new unit with new check questions. *@
+<h1>Neues Thema</h1>
+
+@if (RendererInfo.IsInteractive)
+{
+    <NewTopicUnitView TopicId="TopicId">
+        <AfterDone>
+            <div class="unit-way">
+                <a href="">Zur Startseite</a>
+            </div>
+        </AfterDone>
+    </NewTopicUnitView>
+}
+else
+{
+    <PageLoading />
+}
+
+@code {
+    [Parameter]
+    public Guid TopicId { get; set; }
+}
