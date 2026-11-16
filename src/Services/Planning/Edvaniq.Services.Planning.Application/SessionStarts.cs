@@ -34,6 +34,70 @@ public sealed class SessionStarts(
         return start;
     }
 
+    // A bonus review (#408) on the weakest topic, outside the plan, so whether the plan is done is up to the client
+    // (nextStep "bonusReview"). Like a block, a user with an active session gets that one back.
+    public async Task<SessionStart> StartBonusAsync(CancellationToken cancellationToken)
+    {
+        var start = await TryStartBonusAsync(cancellationToken);
+        switch (start.Result)
+        {
+            case SessionStartResult.Started:
+                PlanningLog.BonusStarted(logger, start.Session!.Id, start.Session.BlockId, start.Session.Minutes);
+                break;
+            case SessionStartResult.Existing:
+                PlanningLog.SessionGoesOn(logger, start.Session!.Id);
+                break;
+            case SessionStartResult.MasteryUnavailable:
+                PlanningLog.BonusWithoutMastery(logger);
+                break;
+            default:
+                PlanningLog.BonusWithoutTopic(logger);
+                break;
+        }
+
+        return start;
+    }
+
+    private async Task<SessionStart> TryStartBonusAsync(CancellationToken cancellationToken)
+    {
+        if (await sessions.ActiveAsync(cancellationToken) is { } active)
+        {
+            return new SessionStart(SessionStartResult.Existing, active);
+        }
+
+        // Without LearningEngine no topic is known to be introduced, so none would fit: that's no reason to send the user
+        // away. Without Assessment every pool counts as ready, as in the plan.
+        var today = await plans.TodayAsync(cancellationToken);
+        if (!today.MasteryAvailable)
+        {
+            return new SessionStart(SessionStartResult.MasteryUnavailable);
+        }
+
+        if (today.BonusTopic is not { } topic)
+        {
+            return new SessionStart(SessionStartResult.NoBonusTopic);
+        }
+
+        // The session takes the goal of the plan its topic came from. The plan follows the default goal, which may not
+        // be in the database yet.
+        if (today.LearningGoalId == LearningGoal.DefaultIdFor(currentUser.Id))
+        {
+            await goals.DefaultAsync(cancellationToken);
+        }
+
+        var now = time.GetUtcNow();
+        var session = Session.StartBonus(
+            Guid.CreateVersion7(now), currentUser.Id, today.LearningGoalId, Guid.CreateVersion7(now), today.Plan.StudyDay, topic, now.UtcDateTime);
+        if (await sessions.TryAddAsync(session, cancellationToken))
+        {
+            return new SessionStart(SessionStartResult.Started, session);
+        }
+
+        return await sessions.ActiveAsync(cancellationToken) is { } winner
+            ? new SessionStart(SessionStartResult.Existing, winner)
+            : throw new InvalidOperationException("A session start lost against an active session that is gone.");
+    }
+
     private async Task<SessionStart> TryStartAsync(Guid blockId, CancellationToken cancellationToken)
     {
         if (await sessions.ActiveAsync(cancellationToken) is { } active)
@@ -88,4 +152,10 @@ public enum SessionStartResult
     BlockNotFound,
 
     BlockDone,
+
+    // Bonus review only (#408): no introduced topic with a ready question pool.
+    NoBonusTopic,
+
+    // Bonus review only: LearningEngine couldn't be asked, so the weakest topic isn't known.
+    MasteryUnavailable,
 }

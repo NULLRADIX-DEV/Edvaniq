@@ -42,6 +42,7 @@ public sealed class IsolationTests(ServiceFactory service) : IClassFixture<Servi
         .Item("POST", "/sessions/{id:guid}/advance", new { step = 1 })
         .Item("POST", "/sessions/{id:guid}/activity")
         .Exempt("POST", "/sessions", "A block id in the body.", nameof(OtherUser_CannotStartAForeignBlock))
+        .Exempt("POST", "/sessions/bonus", "No id in the request, only the caller's own topics.", nameof(BonusSessionTests.EachUser_GetsABonusReviewOnTheirOwnTopics))
         .Exempt("GET", "/sessions/active", "Only the caller's own state, no id in the request.", nameof(OtherUser_SeesNothingOfAForeignPlanOrSession));
 
     private static IsolationCheck Examples(IsolationCheck check) => check

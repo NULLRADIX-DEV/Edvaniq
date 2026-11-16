@@ -10,7 +10,7 @@ internal sealed class StartedBlocks(PlanningDbContext db) : IStartedBlocks
     public async Task<IReadOnlySet<Guid>> OnAsync(Guid learningGoalId, DateOnly studyDay, CancellationToken cancellationToken)
     {
         var ids = await db.Sessions.AsNoTracking()
-            .Where(session => session.LearningGoalId == learningGoalId && session.StudyDay == studyDay)
+            .Where(session => session.LearningGoalId == learningGoalId && session.StudyDay == studyDay && !session.IsBonus)
             .Select(session => session.BlockId)
             .ToListAsync(cancellationToken);
         return ids.ToHashSet();

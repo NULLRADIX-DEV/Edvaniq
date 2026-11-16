@@ -33,6 +33,7 @@ public sealed partial class RateLimitTests
         { "assessment", "POST", "/assessment/quizzes", "answers" },
         { "assessment", "POST", "/assessment/quizzes/weaknesses", "answers" },
         { "planning", "POST", "/planning/sessions", "sessions" },
+        { "planning", "POST", "/planning/sessions/bonus", "sessions" },
         { "planning", "POST", $"/planning/sessions/{Guid.Empty}/abort", "sessions" },
         { "planning", "POST", $"/planning/sessions/{Guid.Empty}/complete", "sessions" },
         { "planning", "POST", $"/planning/sessions/{Guid.Empty}/advance", "sessions" },
