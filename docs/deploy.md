@@ -98,7 +98,7 @@ Hinter dem Proxy übernimmt der Web-Host Schema und Client-Adresse aus `X-Forwar
 
 ## Speicher
 
-Jeder Container hat eine feste Speichergrenze ohne Swap (`mem_limit` und `memswap_limit`). Produktive Prozesse und der Broker haben 256 MB, die Skelett-Prozesse 128 MB und MySQL 1536 MB, davon 1 GB InnoDB-Cache. Zusammen sind das 4992 MB, und das liegt unter der Obergrenze von 6 GB für die ganze App. Den Rest brauchen Docker selbst und ein laufender Migrationsschritt.
+Jeder Container hat eine feste Speichergrenze ohne Swap (`mem_limit` und `memswap_limit`), die CI prüft das für jeden Dienst. Produktive Prozesse und der Broker haben 256 MB, die Skelett-Prozesse 128 MB und MySQL 1536 MB, davon 1 GB InnoDB-Cache. Zusammen sind das 4992 MB, und das liegt unter der Obergrenze von 6 GB für die ganze App. Den Rest brauchen Docker selbst und ein laufender Migrationsschritt.
 
 Braucht ein Container mehr als seine Grenze, beendet der Kernel nur ihn, und Docker startet ihn neu. .NET kennt die Grenze und hält seinen Heap bei 75 % davon. Jeder Prozess schreibt beim Start `GC memory limit: <n> MiB` ins Log, bei 256 MB sind das 192 MiB. Braucht ein Prozess dauerhaft mehr, überschreibst du seine Grenze im Dienst. Die Summe muss dann weiter unter 6 GB bleiben.
 
