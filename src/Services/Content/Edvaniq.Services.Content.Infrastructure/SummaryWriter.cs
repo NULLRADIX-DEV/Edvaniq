@@ -103,7 +103,9 @@ public sealed partial class SummaryWriter(
             .Where(section => sectionIds.Contains(section.Id)).ToDictionaryAsync(section => section.Id, cancellationToken);
         var documents = await db.Documents.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
             .Where(document => documentIds.Contains(document.Id)).ToDictionaryAsync(document => document.Id, cancellationToken);
+        // In the order of the material, the database gives the sections in none.
         var material = summary.Sections
+            .OrderBy(section => section.Position)
             .Where(section => stored.ContainsKey(section.SectionId) && documents.ContainsKey(section.DocumentId))
             .Select(section => (Position: section.Position, Text: Text(documents[section.DocumentId], stored[section.SectionId])))
             .ToList();

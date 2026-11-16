@@ -9,6 +9,7 @@ using Edvaniq.Services.Content.Application;
 using Edvaniq.Services.Content.Domain;
 using Edvaniq.Services.Content.Infrastructure;
 using Edvaniq.Services.Content.Infrastructure.Ai;
+using Edvaniq.Services.Content.UnitTests;
 using Edvaniq.Testing;
 
 using Microsoft.EntityFrameworkCore;
@@ -82,6 +83,42 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
         }
 
         Assert.True(words[0] < words[1] && words[1] < words[2], string.Join(", ", words));
+    }
+
+    // #348, rule 5 of tests/ReferenceSet/README.md for the summaries: no forbidden text of the injection in any length,
+    // and each is the summary of the same document without the injection. The simulated AI is gullible on purpose
+    // (SimulatedSummary), so only the fence of the material keeps it from writing what the injection asks for. Every
+    // summary passes the check of its output on the way.
+    [Fact]
+    public async Task InjectionOfTheReferenceSet_ChangesNoSummary()
+    {
+        var reference = Assert.Single(ReferenceSet.Load().Documents, document => document.Kind == "injection");
+        var forbidden = reference.Forbidden!;
+        var text = reference.Text.ReplaceLineEndings("\n");
+        var withoutInjection = string.Join("\n\n", text.Split("\n\n")
+            .Where(paragraph => !forbidden.Any(word => paragraph.Contains(word, StringComparison.OrdinalIgnoreCase))));
+        Assert.NotEqual(text, withoutInjection);
+        var alice = NewUser();
+        var (injected, _, _) = await TopicAsync(alice, text: text, title: reference.Title!);
+        var (clean, _, _) = await TopicAsync(alice, text: withoutInjection, title: reference.Title!);
+        using var client = ClientFor(alice);
+        string[] lengths = ["short", "standard", "detailed"];
+        foreach (var length in lengths)
+        {
+            await RequestAsync(client, injected, length, HttpStatusCode.Accepted);
+            await RequestAsync(client, clean, length, HttpStatusCode.Accepted);
+        }
+
+        await WriteAsync();
+
+        foreach (var length in lengths)
+        {
+            var summary = await client.GetFromJsonAsync<SummaryDto>($"/topics/{injected}/summaries/{length}", Cancel);
+            var expected = await client.GetFromJsonAsync<SummaryDto>($"/topics/{clean}/summaries/{length}", Cancel);
+            Assert.Equal(("ready", "ready"), (summary!.Status, expected!.Status));
+            Assert.DoesNotContain(forbidden, word => summary.Text!.Contains(word, StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(expected.Text, summary.Text);
+        }
     }
 
     // A file names the pages the summary rests on.
@@ -294,9 +331,9 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
     // A pasted document with its sections, and Knowledge naming them as one topic's material.
     // Without the test double the worker takes the chat a test hands it.
     private async Task<(Guid Topic, Guid Document, IReadOnlyList<Section> Sections)> TopicAsync(
-        string owner, bool usesTestDouble = true, DocumentOrigin origin = DocumentOrigin.Material)
+        string owner, bool usesTestDouble = true, DocumentOrigin origin = DocumentOrigin.Material, string text = Text, string title = "Photosynthese")
     {
-        var document = Document.Paste(owner, service.Planning.GoalOf(owner), "Photosynthese", Text, DateTime.UtcNow, usesTestDouble, origin);
+        var document = Document.Paste(owner, service.Planning.GoalOf(owner), title, text, DateTime.UtcNow, usesTestDouble, origin);
         var sections = document.Split();
         await StoreAsync(db =>
         {

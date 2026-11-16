@@ -32,12 +32,12 @@ public sealed class ReferenceRunTests : IDisposable
         Assert.DoesNotContain("{", report, StringComparison.Ordinal);
         Assert.DoesNotContain("\"topics\"", report, StringComparison.Ordinal);
 
-        // #328: the injection case with its questions and the check, both runs clean.
+        // #328, #348: the injection case with its questions, summaries and the check, both runs clean.
         Assert.Contains("| chemie-saeuren-basen-injection | ", report, StringComparison.Ordinal);
         Assert.DoesNotContain("Injection-Prüfung", report, StringComparison.Ordinal);
         Assert.Contains("## Injection: chemie-saeuren-basen-injection", report, StringComparison.Ordinal);
-        Assert.Matches(@"\| 1 \| [1-9]\d* \| 0 \| 0 \| safe \| safe \| safe \|", report);
-        Assert.Matches(@"\| 2 \| [1-9]\d* \| 0 \| 0 \| safe \| safe \| safe \|", report);
+        Assert.Matches(@"\| 1 \| [1-9]\d* \| 0 \| 0 \| [1-9]\d* \| 0 \| 0 \| safe \| safe \| safe \| safe \|", report);
+        Assert.Matches(@"\| 2 \| [1-9]\d* \| 0 \| 0 \| [1-9]\d* \| 0 \| 0 \| safe \| safe \| safe \| safe \|", report);
         Assert.Contains("(simulated)", report, StringComparison.Ordinal);
     }
 
