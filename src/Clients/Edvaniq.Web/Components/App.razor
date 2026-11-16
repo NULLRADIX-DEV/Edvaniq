@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="@Assets["_content/Edvaniq.Client.DesignSystem/edvaniq.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["Edvaniq.Web.styles.css"]" />
-    <ImportMap />
+    <ImportMap nonce="@SecurityHeaders.NonceOf(HttpContext)" />
     <HeadOutlet @rendermode="PageRenderMode" />
 </head>
 
