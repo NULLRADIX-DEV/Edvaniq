@@ -50,7 +50,7 @@ account = os.environ.get("SMOKE_ACCOUNT", "")
 password = os.environ.get("SMOKE_PASSWORD", "")
 deadline = time.monotonic() + 180
 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
-# The text of PlanFlowTests: with the simulated AI every topic of it gets questions.
+# The text of FlowSteps in the event flow tests: with the simulated AI every topic of it gets questions.
 text = """# Photosynthese
 ## Lichtreaktion
 Licht spaltet Wasser.
