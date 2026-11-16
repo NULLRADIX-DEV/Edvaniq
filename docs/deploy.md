@@ -70,6 +70,18 @@ Ein Rollback macht Migrationen nicht rückgängig. Dafür gibt es die Sicherung 
 
 Angemeldete Nutzer bleiben bei Deploy, Rollback und Neustart angemeldet. Das Sitzungs-Cookie verschlüsselt der Web-Host mit Schlüsseln, die nicht im Image liegen, sondern in einem Verzeichnis der Betriebsumgebung, das `deploy/compose.yml` nach `/keys` einbindet. Jeder neue Container liest dort dieselben Schlüssel und erkennt die Cookies seines Vorgängers. Gesichert werden sie mit den übrigen Daten der App. Der CI-Job „Container images“ prüft, dass nur `db` seine Daten und `web` seine Schlüssel einbindet.
 
+## Auf einen getaggten Stand zurück
+
+Vor einer Demo oder einem anderen wichtigen Termin soll es einen Stand geben, zu dem man samt Daten sicher zurückkommt, auch wenn danach mehrere Deploys kamen. Dafür bekommt ein Commit von `main`, der auf dem Server lief und dessen Smoke-Test grün war, einen Tag `stand-<JJJJ-MM-TT>`, etwa `stand-2026-11-16`. Die Images hängen ohnehin am Commit, der Tag gibt ihm nur einen Namen.
+
+Zurück geht es in drei Schritten, zusammen in unter 30 Minuten:
+
+1. Den Commit des Tags normal ausrollen. Das Feld „commit“ nimmt nur einen Hash, den liefert `git rev-parse stand-2026-11-16^{commit}`. Danach läuft der Code des Tags, die Datenbanken stehen aber noch auf dem neueren Stand. Das geht, weil Migrationen abwärtsverträglich sind und ein älteres Image die Datenbank nie herunterstuft.
+2. Jemand mit Server-Zugang spielt alle Datenbanken aus der Sicherung zurück, die der erste Deploy nach dem Tag angelegt hat. Sie enthält alle Daten bis zu dem Moment, in dem der getaggte Stand verlassen wurde, im Schema des Tags. Alle Services kommen aus derselben Sicherung, damit ihre Ereignisse zueinander passen. Wie das geht, steht im Betriebshandbuch.
+3. Denselben Commit noch einmal ausrollen. Sein Smoke-Test geht den Kernfluss von außen durch und zeigt, dass Code und Daten zusammenpassen.
+
+Was nach dem Verlassen des Tags an Daten dazukam, ist danach weg, und mit den Datenbanken verschwinden auch die Migrationen, die später kamen. Bevor du wieder `main` ausrollst, muss der Fehler dort behoben sein, sonst wiederholt sich der Absprung.
+
 ## Migrationen
 
 Das Schema ändert sich nur im Deploy, nie beim Start eines Service. Ein Migrationsschritt ist ein eigener Dienst in `deploy/compose.yml`, so wie lokal die Ressource `<name>-migrate` im AppHost. Er nutzt das Image der API mit dem Befehl `migrate` und gehört zum Profil `migrate`, deshalb startet ihn `compose up` nie. Dazu kommen `restart: "no"` und kein Health-Check. Die CI prüft, dass jedes `AddMigration` im AppHost so einen Dienst hat.
