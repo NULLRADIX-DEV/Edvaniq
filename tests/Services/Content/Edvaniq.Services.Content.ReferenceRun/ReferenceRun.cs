@@ -215,10 +215,15 @@ public static partial class ReferenceRun
                         var summary = await AskAsync(
                             result,
                             [
-                                new ChatMessage(ChatRole.System, TopicSummaryGeneration.System(LearnerProfile.Default, length)),
+                                new ChatMessage(ChatRole.System, TopicSummaryGeneration.System(LearnerProfile.Default, length, materialWords)),
                                 new ChatMessage(ChatRole.User, TopicSummaryGeneration.User(material)),
                             ],
-                            answerText => TopicSummaryGeneration.Read(answerText, material.Count, length, materialWords),
+                            answerText =>
+                            {
+                                var check = TopicSummaryGeneration.Check(answerText, material.Count, length, materialWords);
+                                round.Refuse(length, check);
+                                return check.Draft;
+                            },
                             new StructuredRequest(AnswerTimeout, ContentAi.SummaryFormat));
                         if (summary is null)
                         {
@@ -309,12 +314,12 @@ public static partial class ReferenceRun
             report.AppendLine();
             report.AppendLine("Je Lauf die Fragen und die Zusammenfassungen in allen Längen zu allen Themen und das Urteil der Prüfung. Verbotener Text zählt nach Regel 5 in Text, Optionen und Erklärung einer Frage und im Text einer Zusammenfassung.");
             report.AppendLine();
-            report.AppendLine("| Lauf | Fragen | mit verbotenem Text | unverwertbar | Zusammenfassungen | mit verbotenem Text | unverwertbar | Prüfung Material | Prüfung Themen | Prüfung Fragen | Prüfung Zusammenfassungen |");
-            report.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|");
+            report.AppendLine("| Lauf | Fragen | mit verbotenem Text | unverwertbar | Zusammenfassungen | mit verbotenem Text | unverwertbar | abgelehnte Versuche | Prüfung Material | Prüfung Themen | Prüfung Fragen | Prüfung Zusammenfassungen |");
+            report.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|---|");
             foreach (var round in result.Rounds)
             {
                 report.AppendLine(Invariant(
-                    $"| {round.Run} | {round.QuestionCount} | {round.Violations} | {round.Unusable} | {round.SummaryCount} | {round.SummaryViolations} | {round.SummaryUnusable} | {round.Material} | {round.Topics} | {round.Questions} | {round.Summaries} |"));
+                    $"| {round.Run} | {round.QuestionCount} | {round.Violations} | {round.Unusable} | {round.SummaryCount} | {round.SummaryViolations} | {round.SummaryUnusable} | {round.Refusals} | {round.Material} | {round.Topics} | {round.Questions} | {round.Summaries} |"));
             }
         }
 
@@ -392,6 +397,19 @@ public static partial class ReferenceRun
             Violations == 0 && Unusable == 0 && QuestionCount > 0
             && SummaryViolations == 0 && SummaryUnusable == 0 && SummaryCount > 0
             && new[] { Material, Topics, Questions, Summaries }.All(verdict => verdict == Safe);
+
+        // Every attempt at a summary the check refused, as "length reason words/frame", "-" for none.
+        public string Refusals => refusals.Count == 0 ? "-" : string.Join(", ", refusals);
+
+        private readonly List<string> refusals = [];
+
+        public void Refuse(SummaryLength length, SummaryCheck check)
+        {
+            if (check.Refusal is { } refusal)
+            {
+                refusals.Add(Invariant($"{TopicSummaryGeneration.NameOf(length)} {refusal} {check.Words}/{check.Frame.Min}-{check.Frame.Max}"));
+            }
+        }
 
         public void Score(SummaryDraft? summary, IReadOnlyList<string> forbidden)
         {

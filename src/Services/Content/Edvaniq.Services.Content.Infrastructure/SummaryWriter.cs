@@ -131,6 +131,7 @@ public sealed partial class SummaryWriter(
         // Through AiAnswers like every AI call of a document (#306): the same material asked again costs nothing. The first
         // document stands for the material there and in the cost log, and decides about the test double.
         var chat = ContentAi.For(first, ai, testDouble);
+        var checks = new List<SummaryCheck>();
         var answer = await answers.AskAsync(
             first,
             AiAttempt.Summary,
@@ -138,10 +139,15 @@ public sealed partial class SummaryWriter(
             AiReference.Summary(summary.Id),
             chat,
             [
-                new ChatMessage(ChatRole.System, TopicSummaryGeneration.System(profile, summary.Length)),
+                new ChatMessage(ChatRole.System, TopicSummaryGeneration.System(profile, summary.Length, materialWords)),
                 new ChatMessage(ChatRole.User, TopicSummaryGeneration.User(material.Select(item => item.Text))),
             ],
-            text => TopicSummaryGeneration.Read(text, material.Count, summary.Length, materialWords),
+            text =>
+            {
+                var check = TopicSummaryGeneration.Check(text, material.Count, summary.Length, materialWords);
+                checks.Add(check);
+                return check.Draft;
+            },
             new StructuredRequest(AiTimeout, ContentAi.SummaryFormat),
             cancellationToken);
 
@@ -161,8 +167,16 @@ public sealed partial class SummaryWriter(
 
         if (answer.Value is not { } draft)
         {
+            // Why each attempt didn't hold up, with what it cost, never its text: too long, too short or reasoning.
+            foreach (var (check, attempt) in checks.Zip(answer.Tries.Where(attempt => attempt.Outcome == AiTryOutcome.Unusable)))
+            {
+                LogRefused(
+                    summary.Id, attempt.Number, check.Refusal, check.Words, check.Frame.Min, check.Frame.Max, material.Count,
+                    attempt.OutputTokens, attempt.ReasoningTokens, attempt.FinishReason);
+            }
+
             LogUnusable(summary.Id, answer.Attempts);
-            await FailAsync(db, summary, DocumentFailures.SummaryFailed, cancellationToken);
+            await FailAsync(db, summary, DocumentFailures.SummaryUnusable, cancellationToken);
             return;
         }
 
@@ -251,6 +265,10 @@ public sealed partial class SummaryWriter(
 
     [LoggerMessage(EventId = 33952, Level = LogLevel.Warning, Message = "The AI answered no usable summary {SummaryId} in {Attempts} attempts, it is marked as failed")]
     private partial void LogUnusable(Guid summaryId, int attempts);
+
+    [LoggerMessage(EventId = 33958, Level = LogLevel.Warning, Message = "Attempt {Attempt} of summary {SummaryId} is refused ({Refusal}): {Words} words for a frame of {Min} to {Max}, {Sections} sections, {OutputTokens} output tokens, {ReasoningTokens} of them reasoning, finish {FinishReason}")]
+    private partial void LogRefused(
+        Guid summaryId, int attempt, SummaryRefusal? refusal, int words, int min, int max, int sections, long outputTokens, long? reasoningTokens, string? finishReason);
 
     [LoggerMessage(EventId = 33953, Level = LogLevel.Warning, Message = "Planning could not be asked for the learning goal of summary {SummaryId}, it is marked as failed")]
     private partial void LogGoalUnavailable(Guid summaryId);

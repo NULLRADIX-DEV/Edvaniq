@@ -78,11 +78,38 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
             var summary = await client.GetFromJsonAsync<SummaryDto>($"/topics/{topic}/summaries/{length}", Cancel);
             Assert.Equal("ready", summary!.Status);
             var count = TopicSummaryGeneration.WordCount(summary.Text!);
-            Assert.InRange(count, TopicSummaryGeneration.WordsOf(frame).Min, TopicSummaryGeneration.WordsOf(frame).Max);
+            Assert.True(TopicSummaryGeneration.Fits(count, TopicSummaryGeneration.Frame(frame, TopicSummaryGeneration.WordCount(Text))), $"{length}: {count}");
             words.Add(count);
         }
 
         Assert.True(words[0] < words[1] && words[1] < words[2], string.Join(", ", words));
+    }
+
+    // An answer that doesn't hold up, twice, fails the summary with its own reason, and the log says per attempt why and
+    // what it cost, never the text.
+    [Fact]
+    public async Task UnusableAnswer_FailsWithItsReason_AndTheLogSaysWhy()
+    {
+        var alice = NewUser();
+        var (topic, _, _) = await TopicAsync(alice, usesTestDouble: false);
+        using var client = ClientFor(alice);
+        await RequestAsync(client, topic, "short", HttpStatusCode.Accepted);
+
+        await WriteAsync(new WordySummaries(service.Services.GetRequiredService<TestDoubleAi>().Client));
+
+        var summary = await client.GetFromJsonAsync<SummaryDto>($"/topics/{topic}/summaries/short", Cancel);
+        Assert.Equal(("failed", "Unknown", TopicSummary.Unusable), (summary!.Status, summary.FailureCode, summary.FailureReason));
+        var id = Query(db => db.TopicSummaries.IgnoreQueryFilters().Single(item => item.TopicId == topic).Id);
+        var refused = service.Logs.Entries
+            .Where(entry => entry.Message.Contains($"of summary {id} is refused", StringComparison.Ordinal))
+            .ToList();
+        Assert.Equal(StructuredOutput.DefaultAttempts, refused.Count);
+        Assert.All(refused, entry =>
+        {
+            Assert.Contains("(TooLong): 500 words", entry.Message, StringComparison.Ordinal);
+            Assert.Contains("900 output tokens, 200 of them reasoning", entry.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("Wortreich", entry.Message, StringComparison.Ordinal);
+        });
     }
 
     // #348, rule 5 of tests/ReferenceSet/README.md for the summaries: no forbidden text of the injection in any length,
@@ -375,6 +402,26 @@ public sealed class SummaryTests(ServiceFactory service) : IClassFixture<Service
             messages.First().Text.StartsWith(ContentAi.SummaryTask, StringComparison.Ordinal)
                 ? throw new AiProviderException(HttpStatusCode.ServiceUnavailable, null)
                 : base.GetResponseAsync(messages, options, cancellationToken);
+    }
+
+    // Every summary far longer than any frame, as a model may write it.
+    private sealed class WordySummaries(IChatClient inner) : DelegatingChatClient(inner)
+    {
+        public override async Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            var list = messages.ToList();
+            if (!list[0].Text.StartsWith(ContentAi.SummaryTask, StringComparison.Ordinal))
+            {
+                return await base.GetResponseAsync(list, options, cancellationToken);
+            }
+
+            var text = string.Join(' ', Enumerable.Repeat("Wortreich", 500));
+            return new ChatResponse(new ChatMessage(ChatRole.Assistant, $$"""{"summary":"{{text}}","sections":[1]}"""))
+            {
+                Usage = new UsageDetails { InputTokenCount = 100, OutputTokenCount = 900, ReasoningTokenCount = 200 },
+            };
+        }
     }
 
     private int SummaryCalls(Guid document) =>

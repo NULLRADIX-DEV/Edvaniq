@@ -169,6 +169,24 @@ public class OpenAiCompatibleChatClientTests
         Assert.Equal(12, response.Usage?.InputTokenCount);
         Assert.Equal(3, response.Usage?.OutputTokenCount);
         Assert.Equal(15, response.Usage?.TotalTokenCount);
+        Assert.Null(response.Usage?.ReasoningTokenCount);
+    }
+
+    // A model that thinks before it answers counts that in its output tokens, the details say how much of it.
+    [Fact]
+    public async Task Answer_ReadsTheReasoningTokens()
+    {
+        var stub = new AiStub().Answer(HttpStatusCode.OK, """
+            {"id":"1","model":"vendor/model-1","choices":[{"message":{"role":"assistant","content":"Text"},"finish_reason":"length"}],
+             "usage":{"prompt_tokens":12,"completion_tokens":900,"total_tokens":912,"completion_tokens_details":{"reasoning_tokens":700}}}
+            """);
+        using var host = stub.Host();
+
+        var response = await AiStub.Client(host).GetResponseAsync(Prompt, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(900, response.Usage?.OutputTokenCount);
+        Assert.Equal(700, response.Usage?.ReasoningTokenCount);
+        Assert.Equal(ChatFinishReason.Length, response.FinishReason);
     }
 
     // The provider says what it billed only when asked for it in ExtraBody. The client keeps that field and reads the

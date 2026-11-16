@@ -40,7 +40,7 @@ public sealed class TopicSummary : IOwnedByUser
 
     public const string NoMaterial = "Zu diesem Thema gibt es noch kein Material, aus dem eine Zusammenfassung entstehen kann.";
 
-    public const string Failed = "Die Zusammenfassung ließ sich gerade nicht erstellen. Versuch es noch einmal.";
+    public const string Unusable = "Die KI hat keine brauchbare Zusammenfassung geliefert. Versuch es noch einmal.";
 
     // Set while failed, from the fixed list (DocumentFailures). The text goes to the user as it is.
     public FailureCode? FailureCode { get; private set; }
