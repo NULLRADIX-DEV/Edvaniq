@@ -34,6 +34,8 @@ public static class ContentAi
 
     public static readonly ChatResponseFormat QuestionsFormat = FormatOf(QuestionGeneration.Schema, "questions");
 
+    public static readonly ChatResponseFormat QuestionsWithCardsFormat = FormatOf(QuestionGeneration.CardsSchema, "questions");
+
     public static readonly ChatResponseFormat SummaryFormat = FormatOf(TopicSummaryGeneration.Schema, "summary");
 
     public static TBuilder AddContentAi<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder

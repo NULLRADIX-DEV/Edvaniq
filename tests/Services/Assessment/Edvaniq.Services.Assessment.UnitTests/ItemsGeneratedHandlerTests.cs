@@ -106,7 +106,7 @@ public class ItemsGeneratedHandlerTests
     [Fact]
     public async Task Card_IsLeftToFlashcards()
     {
-        await HandleAsync(Event(Item() with { Kind = (ItemKind)1, Question = null }));
+        await HandleAsync(Event(Item() with { Kind = ItemKind.Card, Question = null, Card = new GeneratedCard("Was spaltet Licht?", "Wasser.") }));
 
         Assert.Empty(questions.Added);
         Assert.Empty(logger.Lines);

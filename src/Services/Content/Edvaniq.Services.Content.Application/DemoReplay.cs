@@ -6,10 +6,10 @@ using Edvaniq.Services.Content.Domain;
 namespace Edvaniq.Services.Content.Application;
 
 // Answers the worker's AI calls for the demo material (#411) from Demo/answers.json, written for it by hand: the topics
-// of each document, the questions of each topic and its summaries. A prompt is known by its task and its sections, not
-// by its exact text, so the order in which Knowledge names a topic's sections doesn't matter. A prompt the answers don't
-// know, a top-up round or an answer for another prompt version gets null: the caller fails it, and the demo tests say
-// which answers to write.
+// of each document, the questions and cards of each topic and its summaries. A prompt is known by its task and its
+// sections, not by its exact text, so the order in which Knowledge names a topic's sections doesn't matter. A prompt the
+// answers don't know, a top-up round or an answer for another prompt version gets null: the caller fails it, and the
+// demo tests say which answers to write.
 public static partial class DemoReplay
 {
     private static readonly Lazy<Replay> Answers = new(Load);
@@ -32,7 +32,7 @@ public static partial class DemoReplay
         if (system.StartsWith(QuestionGeneration.Task, StringComparison.Ordinal))
         {
             return replay.File.Versions.Questions == QuestionGeneration.PromptVersion && system.Contains(FirstRound, StringComparison.Ordinal)
-                ? replay.QuestionsOf(sections)
+                ? replay.QuestionsOf(sections, QuestionGeneration.AsksForCards(system))
                 : null;
         }
 
@@ -104,7 +104,7 @@ public static partial class DemoReplay
                 JsonSerializerOptions.Web);
         }
 
-        public string? QuestionsOf(IReadOnlyList<string> prompt)
+        public string? QuestionsOf(IReadOnlyList<string> prompt, bool withCards)
         {
             if (TopicOf(prompt) is not { } topic || !File.Questions.TryGetValue(topic.Title, out var questions))
             {
@@ -127,6 +127,9 @@ public static partial class DemoReplay
                         difficulty = question.Difficulty,
                         section,
                     }),
+                    cards = withCards && File.Cards.TryGetValue(topic.Title, out var cards)
+                        ? cards.Select(card => new { front = card.Front, back = card.Back, section })
+                        : null,
                 },
                 JsonSerializerOptions.Web);
         }
@@ -161,6 +164,7 @@ public sealed record DemoAnswersFile(
     DemoVersions Versions,
     IReadOnlyList<DemoTopic> Topics,
     IReadOnlyDictionary<string, IReadOnlyList<DemoQuestion>> Questions,
+    IReadOnlyDictionary<string, IReadOnlyList<DemoCard>> Cards,
     IReadOnlyDictionary<string, DemoSummaries> Summaries);
 
 public sealed record DemoVersions(string Topics, string Questions, string Summary);
@@ -171,5 +175,7 @@ public sealed record DemoTopic(string Document, string Title, IReadOnlyList<stri
 public sealed record DemoTerm(string Term, string Heading, string Definition);
 
 public sealed record DemoQuestion(string Type, string Text, IReadOnlyList<string> Options, IReadOnlyList<int> Answers, string Explanation, int Difficulty);
+
+public sealed record DemoCard(string Front, string Back);
 
 public sealed record DemoSummaries(string Short, string Standard, string Detailed);

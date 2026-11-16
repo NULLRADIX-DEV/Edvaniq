@@ -158,7 +158,7 @@ public sealed class QuestionTopUps(
             return await SaveAsync(db, document, cancellationToken);
         }
 
-        var (items, failure, attempts, _) = await QuestionRequests.AskAsync(
+        var (items, _, failure, attempts, _) = await QuestionRequests.AskAsync(
             document, QuestionGeneration.System(profile, pool.Questions ?? 0), material, texts, AiAttempt.TopUp, pool.TopicId, ai, testDouble, answers, moderation,
             AiTimeout, cancellationToken);
         now = time.GetUtcNow().UtcDateTime;

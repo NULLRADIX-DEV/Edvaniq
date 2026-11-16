@@ -283,10 +283,13 @@ public sealed class QuestionTopUpTests(QuestionTopUpFactory service) : IClassFix
             }
         }
 
-        return JsonSerializer.Serialize(new { questions }, JsonSerializerOptions.Web);
+        // The first round asks for cards as well (#340), top-ups leave them out.
+        return JsonSerializer.Serialize(new { questions, cards = new[] { new { front = "Karte", back = "Rückseite", section = 1 } } }, JsonSerializerOptions.Web);
     }
 
-    private Task<List<ItemsGenerated>> GeneratedAsync(Guid documentId) => OutboxAsync<ItemsGenerated>(documentId);
+    // The questions only, the cards of a new pool (#340) left out.
+    private async Task<List<ItemsGenerated>> GeneratedAsync(Guid documentId) =>
+        [.. (await OutboxAsync<ItemsGenerated>(documentId)).Select(generated => generated with { Items = [.. generated.Items.Where(item => item.Kind == ItemKind.Question)] })];
 
     private async Task<List<T>> OutboxAsync<T>(Guid documentId)
     {

@@ -22,6 +22,7 @@ public class QuestionGenerationTests
         ["questions-4"] = "25c8cf6f8d7b2ad1c194785a5edf474fa0765b2b6ed51ddd024e5d8a716f511f",
         ["questions-5"] = "9d65c8528b48b05089186f559eb5fd082f102bb7b8c12952384c6fe56cf25c0c",
         ["questions-6"] = "9a64160c5cd6905daa08da09f78978b0ac4b7aa734a599302988a06f93d1ec24",
+        ["questions-7"] = "906b1a61690810f388e5c6d54e80896b396bb21aeb48e239a8ea93aea9d05de3",
     };
 
     private static readonly Guid[] Sections = [Guid.NewGuid(), Guid.NewGuid()];
@@ -348,6 +349,89 @@ public class QuestionGenerationTests
     [InlineData("{\"topics\":[]}")]
     public void Read_GivesNull_ForAnAnswerOfAnotherForm(string answer) =>
         Assert.Null(QuestionGeneration.Read(answer, Sections));
+
+    // #340: a new pool asks for cards in the language of the goal, a top-up and new material don't.
+    [Fact]
+    public void System_AsksForCards_OnlyForANewPool()
+    {
+        Assert.All(LearnerProfile.All, profile =>
+        {
+            var system = QuestionGeneration.System(profile);
+            Assert.True(QuestionGeneration.AsksForCards(system));
+            Assert.Contains($"Schreib außerdem bis zu {QuestionGeneration.MaxCards} Lernkarten", system);
+            Assert.Contains($"Schreib die Karten auf {(profile.Language == LearnerProfile.English ? "Englisch" : "Deutsch")}.", system);
+            Assert.Contains("\"cards\":[{\"front\":", system);
+        });
+        Assert.All(
+            Enumerable.Range(1, QuestionGeneration.MaxQuestions - 1),
+            have => Assert.False(QuestionGeneration.AsksForCards(QuestionGeneration.System(LearnerProfile.Default, have))));
+        Assert.False(QuestionGeneration.AsksForCards(QuestionGeneration.ForNewMaterial(LearnerProfile.Default, 1)));
+    }
+
+    private const string ValidCard = """{"front":"Was spaltet Licht?","back":"Wasser, in der Lichtreaktion.","section":2}""";
+
+    [Fact]
+    public void ReadCards_GivesAValidCard_WithItsSection() =>
+        Assert.Equal(
+            new CardDraft(Sections[1], "Was spaltet Licht?", "Wasser, in der Lichtreaktion."),
+            Assert.Single(QuestionGeneration.ReadCards(Cards(ValidCard), Sections)!));
+
+    // The same check as for questions (#338): anything missing, of the wrong kind, out of range or too long drops the card,
+    // and so does a card whose back only repeats its front.
+    [Theory]
+    [InlineData("front", "null")]
+    [InlineData("front", "\"\"")]
+    [InlineData("front", "\"   \"")]
+    [InlineData("front", "1")]
+    [InlineData("back", "null")]
+    [InlineData("back", "\"\"")]
+    [InlineData("back", "[\"Wasser\"]")]
+    [InlineData("section", "0")]
+    [InlineData("section", "3")]
+    [InlineData("section", "1.5")]
+    [InlineData("section", "\"1\"")]
+    [InlineData("section", "null")]
+    [InlineData("back", "\"was spaltet LICHT\"")]
+    public void ReadCards_DropsABrokenCard(string field, string value) =>
+        Assert.Empty(QuestionGeneration.ReadCards(Cards(With(ValidCard, field, value)), Sections)!);
+
+    [Fact]
+    public void ReadCards_DropsATooLongSide()
+    {
+        Assert.Empty(QuestionGeneration.ReadCards(Cards(With(ValidCard, "front", $"\"{new string('a', QuestionGeneration.FrontMaxLength + 1)}\"")), Sections)!);
+        Assert.Empty(QuestionGeneration.ReadCards(Cards(With(ValidCard, "back", $"\"{new string('a', QuestionGeneration.BackMaxLength + 1)}\"")), Sections)!);
+        Assert.Single(QuestionGeneration.ReadCards(Cards(With(ValidCard, "back", $"\"{new string('a', QuestionGeneration.BackMaxLength)}\"")), Sections)!);
+    }
+
+    // Duplicates like questions: a card whose front reads the same as an earlier one's goes, and no more than MaxCards stay.
+    [Fact]
+    public void ReadCards_KeepsTheFirstOfCardsThatAskTheSame_AndAtMostMaxCards()
+    {
+        var cards = QuestionGeneration.ReadCards(
+            Cards(ValidCard, With(With(ValidCard, "front", "\"was spaltet  LICHT\""), "back", "\"Anders.\""), With(ValidCard, "front", "\"Wozu Chlorophyll?\"")),
+            Sections)!;
+        Assert.Equal(["Was spaltet Licht?", "Wozu Chlorophyll?"], cards.Select(card => card.Front));
+
+        var many = Enumerable.Range(0, QuestionGeneration.MaxCards + 5).Select(number => With(ValidCard, "front", $"\"Karte {number}\"")).ToArray();
+        Assert.Equal(QuestionGeneration.MaxCards, QuestionGeneration.ReadCards(Cards(many), Sections)!.Count);
+    }
+
+    // No cards is no broken answer, the caller decides whether it asks again. Not JSON is.
+    [Theory]
+    [InlineData("{\"questions\":[]}", 0)]
+    [InlineData("{\"questions\":[],\"cards\":null}", 0)]
+    [InlineData("{\"questions\":[],\"cards\":[]}", 0)]
+    public void ReadCards_GivesNoCards_ForAnAnswerWithout(string answer, int count) =>
+        Assert.Equal(count, QuestionGeneration.ReadCards(answer, Sections)!.Count);
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("{\"cards\":")]
+    [InlineData("[]")]
+    public void ReadCards_GivesNull_ForNoJsonObject(string answer) =>
+        Assert.Null(QuestionGeneration.ReadCards(answer, Sections));
+
+    private static string Cards(params string[] cards) => $$"""{"questions":[{{Valid}}],"cards":[{{string.Join(',', cards)}}]}""";
 
     private static string Answer(params string[] questions) => $$"""{"questions":[{{string.Join(',', questions)}}]}""";
 

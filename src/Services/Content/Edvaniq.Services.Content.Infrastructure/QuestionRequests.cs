@@ -19,8 +19,10 @@ internal static class QuestionRequests
     // may just have had a bad moment. A provider that fails or takes too long ends at once. Every attempt goes into the
     // cost log, under the purpose and the topic. System is the variant of QuestionGeneration.System the caller needs.
     // The questions are checked before they go anywhere (#298): flagged ones come back as null with Flagged, a check
-    // that fails as null with its failure, so nothing goes out unchecked.
-    public static async Task<(List<GeneratedItem>? Items, Exception? Failure, int Attempts, bool Flagged)> AskAsync(
+    // that fails as null with its failure, so nothing goes out unchecked. A prompt that asks for cards too (#340) gets
+    // them in Cards, checked the same way. An answer with questions but no card is asked again once, then its questions
+    // are taken without cards: the questions matter more.
+    public static async Task<(List<GeneratedItem>? Items, List<GeneratedItem> Cards, Exception? Failure, int Attempts, bool Flagged)> AskAsync(
         Document document,
         string system,
         IReadOnlyList<Guid> sectionIds,
@@ -35,6 +37,8 @@ internal static class QuestionRequests
         CancellationToken cancellationToken)
     {
         var chat = ContentAi.For(document, ai, testDouble);
+        var withCards = QuestionGeneration.AsksForCards(system);
+        Drafts? withoutCards = null;
         var answer = await answers.AskAsync(
             document,
             purpose,
@@ -45,39 +49,70 @@ internal static class QuestionRequests
                 new ChatMessage(ChatRole.System, system),
                 new ChatMessage(ChatRole.User, QuestionGeneration.User(sectionIds.Select(id => texts[id]))),
             ],
-            text => QuestionGeneration.Read(text, sectionIds) is { Count: > 0 } drafts ? drafts : null,
-            new StructuredRequest(timeout, ContentAi.QuestionsFormat),
+            Read,
+            new StructuredRequest(timeout, withCards ? ContentAi.QuestionsWithCardsFormat : ContentAi.QuestionsFormat),
             cancellationToken);
-        if (answer.Failure is { } failure)
-        {
-            return (null, failure, answer.Attempts, false);
-        }
 
-        if (answer.Value is not { } drafts)
+        // The questions of an answer without cards beat no questions at all, even if the next attempt failed.
+        var drafts = answer.Value ?? withoutCards;
+        if (drafts is null)
         {
-            return (null, null, answer.Attempts, false);
+            return (null, [], answer.Failure, answer.Attempts, false);
         }
 
         var verdict = await moderation.CheckAsync(
             document,
             chat,
-            [.. drafts.Select(draft => string.Join('\n', [draft.Text, .. draft.Options, draft.Explanation]))],
+            [
+                .. drafts.Questions.Select(draft => string.Join('\n', [draft.Text, .. draft.Options, draft.Explanation])),
+                .. drafts.Cards.Select(card => string.Join('\n', card.Front, card.Back)),
+            ],
             AiReference.Topic(topicId),
             cancellationToken);
         if (verdict.Failure is not null || verdict.Flagged)
         {
-            return (null, verdict.Failure, answer.Attempts, verdict.Flagged);
+            return (null, [], verdict.Failure, answer.Attempts, verdict.Flagged);
         }
 
         var model = ContentAi.ModelOf(chat, answer.ModelId);
 
         // Shuffled here, so every pool and top-up sends its options in a random order (#1046).
-        return ([.. drafts.Select(draft => draft.Shuffled(Random.Shared)).Select(draft => new GeneratedItem(
-            Guid.NewGuid(), ItemKind.Question, document.Id, draft.SectionId, model, QuestionGeneration.PromptVersion,
-            new GeneratedQuestion(
-                draft.Text, draft.Options, draft.Answer, draft.Explanation, draft.Difficulty, draft.Type,
-                draft.Type == QuestionType.MultipleChoice ? draft.Answers : null)))], null, answer.Attempts, false);
+        return (
+            [.. drafts.Questions.Select(draft => draft.Shuffled(Random.Shared)).Select(draft => new GeneratedItem(
+                Guid.NewGuid(), ItemKind.Question, document.Id, draft.SectionId, model, QuestionGeneration.PromptVersion,
+                new GeneratedQuestion(
+                    draft.Text, draft.Options, draft.Answer, draft.Explanation, draft.Difficulty, draft.Type,
+                    draft.Type == QuestionType.MultipleChoice ? draft.Answers : null)))],
+            [.. drafts.Cards.Select(card => new GeneratedItem(
+                Guid.NewGuid(), ItemKind.Card, document.Id, card.SectionId, model, QuestionGeneration.PromptVersion, null,
+                new GeneratedCard(card.Front, card.Back)))],
+            null,
+            answer.Attempts,
+            false);
+
+        Drafts? Read(string text)
+        {
+            if (QuestionGeneration.Read(text, sectionIds) is not { Count: > 0 } questions)
+            {
+                return null;
+            }
+
+            if (!withCards)
+            {
+                return new Drafts(questions, []);
+            }
+
+            if (QuestionGeneration.ReadCards(text, sectionIds) is { Count: > 0 } cards)
+            {
+                return new Drafts(questions, cards);
+            }
+
+            withoutCards ??= new Drafts(questions, []);
+            return null;
+        }
     }
+
+    private sealed record Drafts(IReadOnlyList<QuestionDraft> Questions, IReadOnlyList<CardDraft> Cards);
 
     public static List<string> KeysOf(IEnumerable<GeneratedItem> items) =>
         [.. items.Select(item => QuestionGeneration.KeyOf(item.Question!.Text))];

@@ -527,6 +527,90 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(analyzed.Topics.Count + 1, UsageOf("questions", id).Attempts);
     }
 
+    // #340: every new pool brings cards in the same ItemsGenerated, each with its source, model and prompt version, and
+    // Content keeps them for Flashcards (M4) until its document or user goes.
+    [Fact]
+    public async Task NewPool_SendsCards_WithSourceModelAndPrompt_AndKeepsThem_UntilTheDocumentGoes()
+    {
+        var alice = $"alice-{Guid.NewGuid():N}";
+        using var client = ClientFor(alice);
+        var id = await PasteAsync(client, Text);
+
+        await AnalyzeAsync(id, withQuestions: true);
+
+        var sent = await OutboxAsync<ItemsGenerated>(id);
+        var sections = SectionIdsOf(id);
+        Assert.NotEmpty(sent);
+        Assert.All(sent, generated =>
+        {
+            var cards = generated.Items.Where(item => item.Kind == ItemKind.Card).ToList();
+            Assert.InRange(cards.Count, 1, QuestionGeneration.MaxCards);
+            Assert.All(cards, card =>
+            {
+                Assert.Equal((id, "Simulated", QuestionGeneration.PromptVersion), (card.DocumentId, card.ModelId, card.PromptVersion));
+                Assert.Contains(card.SectionId, sections);
+                Assert.Null(card.Question);
+                Assert.NotNull(card.Card);
+                Assert.False(string.IsNullOrWhiteSpace(card.Card.Front));
+                Assert.False(string.IsNullOrWhiteSpace(card.Card.Back));
+            });
+        });
+        var sentCards = sent.SelectMany(generated => generated.Items.Where(item => item.Kind == ItemKind.Card)
+            .Select(item => (item.ItemId, generated.TopicId!.Value, item.SectionId, item.ModelId, item.PromptVersion, item.Card!.Front, item.Card.Back)))
+            .OrderBy(card => card.ItemId).ToList();
+        var stored = Query(db => db.Cards.IgnoreQueryFilters().Where(card => card.DocumentId == id).OrderBy(card => card.Id).ToList());
+        Assert.Equal(sentCards, stored.Select(card => (card.Id, card.TopicId, card.SectionId, card.ModelId, card.PromptVersion, card.Front, card.Back)));
+        Assert.All(stored, card => Assert.Equal(alice, card.OwnerId));
+
+        using var deleted = await client.DeleteAsync($"/documents/{id}", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        Assert.Equal(0, Query(db => db.Cards.IgnoreQueryFilters().Count(card => card.DocumentId == id)));
+    }
+
+    // An answer with questions but no card that holds up is asked again once (#340). If the second has none either, the
+    // pool goes out with its questions alone: they matter more, the cards can follow with Flashcards (#498).
+    [Fact]
+    public async Task AnswerWithoutCards_IsAskedOnceMore_ThenThePoolGoesOutWithoutCards()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        var questions = new BrokenAnswers(failures: int.MaxValue, answer: """
+            {"questions":[
+              {"type":"single","text":"Was?","options":["A","B"],"answers":[0],"explanation":"Weil.","difficulty":1,"section":1}],
+             "cards":[{"front":"Gleich","back":"gleich","section":1},{"front":"Ohne Abschnitt","back":"Nichts.","section":99}]}
+            """);
+
+        await AnalyzeAsync(id, questions, withQuestions: true);
+
+        Assert.Equal(DocumentStatus.Ready, Stored(id).Status);
+        var analyzed = Assert.Single(await ReportedAsync(id));
+        var sent = await OutboxAsync<ItemsGenerated>(id);
+        Assert.Equal(analyzed.Topics.Count, sent.Count);
+        Assert.All(sent, generated => Assert.Equal(["Was?"], generated.Items.Select(item => item.Question!.Text)));
+        Assert.Equal(2 * analyzed.Topics.Count, questions.Calls);
+        Assert.Equal(0, Query(db => db.Cards.IgnoreQueryFilters().Count(card => card.DocumentId == id)));
+        Assert.Equal(analyzed.Topics.Count, logs.Entries.Count(entry => entry.Level == LogLevel.Warning
+            && entry.Message.Contains("gets its question pool without cards", StringComparison.Ordinal)));
+    }
+
+    // A second answer with cards is taken whole.
+    [Fact]
+    public async Task AnswerWithoutCards_ThenOneWithCards_TakesTheSecond()
+    {
+        using var client = ClientFor($"alice-{Guid.NewGuid():N}");
+        var id = await PasteAsync(client, Text);
+        var questions = new BrokenAnswers(failures: 1, answer: """
+            {"questions":[{"type":"single","text":"Was?","options":["A","B"],"answers":[0],"explanation":"Weil.","difficulty":1,"section":1}]}
+            """);
+
+        await AnalyzeAsync(id, questions, withQuestions: true);
+
+        Assert.Equal(DocumentStatus.Ready, Stored(id).Status);
+        var sent = await OutboxAsync<ItemsGenerated>(id);
+        Assert.Contains(sent, generated => generated.Items.Any(item => item.Kind == ItemKind.Card));
+        Assert.All(sent, generated => Assert.DoesNotContain(generated.Items, item => item.Question?.Text == "Was?"));
+    }
+
     // Fewer than 15 left after the check is no failure today: the pool takes what holds up and the document gets ready.
     // QuestionTopUps tops the pool up later (#339, QuestionTopUpTests), not the analysis.
     [Fact]
@@ -1535,6 +1619,12 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         return pools;
     }
 
+    private T Query<T>(Func<ContentDbContext, T> read)
+    {
+        using var scope = service.Services.CreateScope();
+        return read(scope.ServiceProvider.GetRequiredService<ContentDbContext>());
+    }
+
     private Document Stored(Guid documentId)
     {
         using var scope = service.Services.CreateScope();
@@ -1628,7 +1718,9 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
     private Task<List<DocumentAnalyzed>> ReportedAsync(Guid documentId) => OutboxAsync<DocumentAnalyzed>(documentId);
 
     // Every ItemsGenerated of the document in the outbox, sent or not.
-    private Task<List<ItemsGenerated>> GeneratedAsync(Guid documentId) => OutboxAsync<ItemsGenerated>(documentId);
+    // The questions only, the cards of a new pool (#340) left out.
+    private async Task<List<ItemsGenerated>> GeneratedAsync(Guid documentId) =>
+        [.. (await OutboxAsync<ItemsGenerated>(documentId)).Select(generated => generated with { Items = [.. generated.Items.Where(item => item.Kind == ItemKind.Question)] })];
 
     // The different question texts of the document, sorted. How many of each the AI gives may change with the material,
     // and with it the numbers the simulated AI puts in front of its questions, so they don't count.
