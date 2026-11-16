@@ -266,6 +266,7 @@ public sealed class QuestionPools(
                 pool = QuestionPool.For(document, topic.Id, now, QuestionRequests.KeysOf(items));
                 db.QuestionPools.Add(pool);
                 db.PoolMaterials.AddRange(job.Material.Select(section => PoolMaterial.Of(pool, section)));
+                db.PoolQuestions.AddRange(QuestionRequests.TextsOf(pool, items));
                 if (document.Origin != DocumentOrigin.Demo)
                 {
                     quota.Charge(document, topic.Id);
@@ -282,6 +283,7 @@ public sealed class QuestionPools(
             var fresh = QuestionRequests.Fresh(items, job.Known, job.Room);
             db.PoolMaterials.AddRange(job.Material.Select(section => PoolMaterial.Added(
                 pool, section, QuestionRequests.KeysOf(fresh.Where(item => item.SectionId == section)))));
+            db.PoolQuestions.AddRange(QuestionRequests.TextsOf(pool, fresh));
             var round = pool.NextRound();
             if (document.Origin != DocumentOrigin.Demo)
             {

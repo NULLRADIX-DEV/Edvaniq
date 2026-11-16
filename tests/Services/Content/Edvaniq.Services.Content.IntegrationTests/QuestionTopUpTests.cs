@@ -66,6 +66,9 @@ public sealed class QuestionTopUpTests(QuestionTopUpFactory service) : IClassFix
         var texts = sent.SelectMany(generated => generated.Items).Select(item => QuestionGeneration.SameQuestion(item.Question!.Text)).ToList();
         Assert.Equal(texts.Count, texts.Distinct().Count());
         Assert.All(sent[2].Items, item => Assert.Equal(QuestionGeneration.PromptVersion, item.PromptVersion));
+        Assert.Equal(
+            sent.SelectMany(generated => generated.Items).Select(item => item.Question!.Text).Order(),
+            Query(db => db.PoolQuestions.IgnoreQueryFilters().Where(question => question.TopicId == topic).Select(question => question.Text).ToList()).Order());
 
         var pool = Pool(topic);
         Assert.Equal((20, 2, false), (pool.Questions, pool.TopUps, pool.WantsTopUp));

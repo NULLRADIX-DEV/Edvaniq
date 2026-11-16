@@ -22,6 +22,8 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
 
     public DbSet<PoolMaterial> PoolMaterials => Set<PoolMaterial>();
 
+    public DbSet<PoolQuestion> PoolQuestions => Set<PoolQuestion>();
+
     public DbSet<AiAttempt> AiAttempts => Set<AiAttempt>();
 
     public DbSet<AiUsageDay> AiUsageDays => Set<AiUsageDay>();
@@ -98,6 +100,14 @@ public sealed class ContentDbContext(DbContextOptions<ContentDbContext> options,
         material.HasOne<QuestionPool>().WithMany().HasForeignKey(item => item.TopicId).OnDelete(DeleteBehavior.Cascade);
         material.HasOne<Section>().WithMany().HasForeignKey(item => item.SectionId).OnDelete(DeleteBehavior.Cascade);
         material.Property(item => item.QuestionKeys).HasColumnType("text");
+
+        // The texts of the questions a pool sent go with their section and with their pool, like the keys (#1106).
+        var question = modelBuilder.Entity<PoolQuestion>();
+        question.HasKey(item => new { item.TopicId, item.Key });
+        question.Property(item => item.Key).HasMaxLength(QuestionPool.KeyLength).IsFixedLength();
+        question.Property(item => item.Text).HasMaxLength(QuestionGeneration.TextMaxLength);
+        question.HasOne<QuestionPool>().WithMany().HasForeignKey(item => item.TopicId).OnDelete(DeleteBehavior.Cascade);
+        question.HasOne<Section>().WithMany().HasForeignKey(item => item.SectionId).OnDelete(DeleteBehavior.Cascade);
         pool.HasIndex(item => new { item.Questions, item.NextTopUpAt });
 
         // No foreign key to the document: what an attempt cost stays when the document goes.

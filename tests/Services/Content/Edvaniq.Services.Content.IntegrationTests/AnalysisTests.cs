@@ -293,6 +293,9 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         var topic = Assert.Single(await service.Knowledge.OfDocumentAsync(first, TestContext.Current.CancellationToken));
         var firstItems = await ItemIdsAsync(first);
         var repeated = (await GeneratedAsync(first)).SelectMany(pool => pool.Items).First().Question!.Text;
+        var firstTexts = (await GeneratedAsync(first)).SelectMany(pool => pool.Items).Where(item => item.Question is not null)
+            .Select(item => item.Question!.Text).Order().ToList();
+        Assert.Equal(firstTexts, TextsOf(topic.Id));
         var material = $"# Lichtreaktion\nIm Licht entsteht in den Blättern Energie für den Zucker.\n\n# Mehr\n{TestTexts.Lesson}";
         var answer = $$"""
             {"questions":[
@@ -319,6 +322,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(1, QuestionCalls(second));
         Assert.Equal(secondSections.Order(), MaterialOf(topic.Id).Where(secondSections.Contains).Order());
         Assert.Equal([0, 1], ChargesOf(topic.Id));
+        Assert.Equal(firstTexts.Append("Neu eins").Append("Neu zwei").Order(), TextsOf(topic.Id));
 
         // The same sections once more: no call.
         await ReopenAsync(second);
@@ -329,6 +333,7 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         using var deleted = await client.DeleteAsync($"/documents/{second}", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
         Assert.DoesNotContain(MaterialOf(topic.Id), secondSections.Contains);
+        Assert.Equal(firstTexts, TextsOf(topic.Id));
         var again = await AddMaterialAsync(client, material, topic);
         Assert.True(await Pools(new BrokenAnswers(failures: int.MaxValue, answer: answer)).FinishAsync(again, TestContext.Current.CancellationToken));
         Assert.Equal(["Neu eins", "Neu zwei"], Assert.Single(await GeneratedAsync(again)).Items.Select(item => item.Question!.Text));
@@ -362,6 +367,14 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         using var scope = service.Services.CreateScope();
         return [.. scope.ServiceProvider.GetRequiredService<ContentDbContext>().PoolMaterials.IgnoreQueryFilters()
             .Where(material => material.TopicId == topicId).Select(material => material.SectionId)];
+    }
+
+    // The texts Content keeps of the questions a topic got (#1106), in order.
+    private List<string> TextsOf(Guid topicId)
+    {
+        using var scope = service.Services.CreateScope();
+        return [.. scope.ServiceProvider.GetRequiredService<ContentDbContext>().PoolQuestions.IgnoreQueryFilters()
+            .Where(question => question.TopicId == topicId).Select(question => question.Text).AsEnumerable().Order()];
     }
 
     private List<int> ChargesOf(Guid topicId)

@@ -117,6 +117,10 @@ internal static class QuestionRequests
     public static List<string> KeysOf(IEnumerable<GeneratedItem> items) =>
         [.. items.Select(item => QuestionGeneration.KeyOf(item.Question!.Text))];
 
+    // The texts of the questions that go out for the pool's topic, kept for later rounds (#1106).
+    public static IEnumerable<PoolQuestion> TextsOf(QuestionPool pool, IEnumerable<GeneratedItem> items) =>
+        items.Select(item => PoolQuestion.Of(pool, QuestionGeneration.KeyOf(item.Question!.Text), item.SectionId, item.Question.Text));
+
     // Every key the topic has: those of the pool and those of material added later.
     public static async Task<HashSet<string>> KeysOfAsync(ContentDbContext db, QuestionPool pool, CancellationToken cancellationToken)
     {
