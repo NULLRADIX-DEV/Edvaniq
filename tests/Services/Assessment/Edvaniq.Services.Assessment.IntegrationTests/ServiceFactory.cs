@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 
 namespace Edvaniq.Services.Assessment.IntegrationTests;
@@ -53,8 +52,6 @@ public class ServiceFactory(MySqlTestServer mysql) : WebApplicationFactory<Progr
                 services.AddInMemoryTransport();
                 services.AddSingleton<ILoggerProvider>(Logs);
                 services.AddHttpClient<IWeaknesses, LearningEngineWeaknesses>().ConfigurePrimaryHttpMessageHandler(LearningEngine.Handler);
-
-                // Keeps the retries of a LearningEngine that is down short.
-                services.ConfigureAll<HttpStandardResilienceOptions>(options => options.Retry.Delay = TimeSpan.FromMilliseconds(1));
+                services.AddTestResilience();
             });
 }
