@@ -118,6 +118,9 @@ namespace Edvaniq.Services.Identity.Infrastructure.Migrations
                     b.Property<DateTime?>("ConfirmedAt")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<DateTime?>("ConsentedAt")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
@@ -141,6 +144,10 @@ namespace Edvaniq.Services.Identity.Infrastructure.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)");
 
+                    b.Property<string>("PrivacyVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
                     b.Property<string>("Pseudonym")
                         .HasMaxLength(32)
                         .HasColumnType("varchar(32)");
@@ -151,6 +158,10 @@ namespace Edvaniq.Services.Identity.Infrastructure.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("varchar(16)")
                         .HasDefaultValue("Active");
+
+                    b.Property<string>("TermsVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
 
                     b.Property<bool>("UsesTestDouble")
                         .HasColumnType("tinyint(1)");

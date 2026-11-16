@@ -287,6 +287,9 @@ internal sealed class LoginOptions
 
     // New confirmation links a client address may ask for in ten minutes. Identity limits them per account too.
     public int ResendsPerClientPer10Minutes { get; set; }
+
+    // Reads of the versions of the legal texts (#261) a client address may make in a minute.
+    public int LegalVersionsPerClientPerMinute { get; set; }
 }
 
 internal static class LoginLimit
@@ -296,6 +299,7 @@ internal static class LoginLimit
     public const string RegistrationPolicy = "registration";
     public const string ConfirmationPolicy = "confirmation";
     public const string ResendPolicy = "confirmation-resend";
+    public const string LegalVersionsPolicy = "legal-versions";
 
     public static IServiceCollection AddLoginLimit(this IServiceCollection services)
     {
@@ -305,6 +309,7 @@ internal static class LoginLimit
             .Validate(options => options.RegistrationsPerClientPerHour > 0, "Login:RegistrationsPerClientPerHour must be above 0.")
             .Validate(options => options.ConfirmationsPerClientPerMinute > 0, "Login:ConfirmationsPerClientPerMinute must be above 0.")
             .Validate(options => options.ResendsPerClientPer10Minutes > 0, "Login:ResendsPerClientPer10Minutes must be above 0.")
+            .Validate(options => options.LegalVersionsPerClientPerMinute > 0, "Login:LegalVersionsPerClientPerMinute must be above 0.")
             .ValidateOnStart();
 
         // The client address is the browser's, behind nginx from X-Forwarded-For (Program.cs).
@@ -325,6 +330,7 @@ internal static class LoginLimit
             PerClient(options, RegistrationPolicy, limits => limits.RegistrationsPerClientPerHour, TimeSpan.FromHours(1));
             PerClient(options, ConfirmationPolicy, limits => limits.ConfirmationsPerClientPerMinute, TimeSpan.FromMinutes(1));
             PerClient(options, ResendPolicy, limits => limits.ResendsPerClientPer10Minutes, TimeSpan.FromMinutes(10));
+            PerClient(options, LegalVersionsPolicy, limits => limits.LegalVersionsPerClientPerMinute, TimeSpan.FromMinutes(1));
         });
 
         return services;

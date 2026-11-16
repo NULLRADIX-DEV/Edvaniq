@@ -13,7 +13,12 @@ public interface IIdentityTransaction : IAsyncDisposable
     Task CommitAsync(CancellationToken cancellationToken);
 }
 
-public sealed record RegistrationRequest(string? Email, string? Password, string? InviteCode, string? Pseudonym, int? BirthYear);
+public sealed record RegistrationRequest(
+    string? Email, string? Password, string? InviteCode, string? Pseudonym, int? BirthYear, string? TermsVersion = null, string? PrivacyVersion = null);
+
+// The versions of the legal texts a registration has to agree to (#261), from the configuration until the texts come
+// with their versions (#260).
+public sealed record LegalVersions(string Terms, string Privacy);
 
 // Accepted, or refused with a code the client tells apart and a German sentence for the user.
 public sealed record RegistrationResult(string? Refusal, string? Detail, bool MailDelayed)
@@ -27,7 +32,13 @@ public sealed record RegistrationResult(string? Refusal, string? Detail, bool Ma
 // gets a mail that it has an account. An unconfirmed account with the address is replaced. A new account gets the link
 // to confirm its address (#250) and can't log in before.
 public sealed class Registration(
-    IAccounts accounts, InviteService invites, SystemMails mails, Confirmation confirmation, IIdentityTransactions transactions, TimeProvider time)
+    IAccounts accounts,
+    InviteService invites,
+    SystemMails mails,
+    Confirmation confirmation,
+    IIdentityTransactions transactions,
+    LegalVersions legal,
+    TimeProvider time)
 {
     public const string InviteMissing = "invite_missing";
     public const string InviteInvalid = "invite_invalid";
@@ -36,12 +47,14 @@ public sealed class Registration(
     public const string EmailInvalid = "email_invalid";
     public const string PasswordRules = "password_rules";
     public const string PseudonymInvalid = "pseudonym_invalid";
+    public const string ConsentMissing = "consent_missing";
+    public const string ConsentOutdated = "consent_outdated";
     public const string BirthYearInvalid = "birth_year_invalid";
 
     public async Task<RegistrationResult> RegisterAsync(RegistrationRequest request, CancellationToken cancellationToken)
     {
         var now = time.GetUtcNow().UtcDateTime;
-        if (Check(request, now.Year) is { } refused)
+        if ((CheckConsent(request) ?? Check(request, now.Year)) is { } refused)
         {
             return refused;
         }
@@ -79,6 +92,7 @@ public sealed class Registration(
 
                 var account = Account.CreateUser(
                     email, AccountProfile.NormalizePseudonym(request.Pseudonym)!, request.BirthYear!.Value, passwordHash, now);
+                account.Consent(legal.Terms, legal.Privacy, now);
                 accounts.Add(account);
                 confirmation.Send(account);
             }
@@ -93,6 +107,14 @@ public sealed class Registration(
 
         return new RegistrationResult(null, null, await mails.DelayedAsync(cancellationToken));
     }
+
+    // Before anything else: without agreeing to the current legal texts there is no account, and no code is spent.
+    private RegistrationResult? CheckConsent(RegistrationRequest request) =>
+        string.IsNullOrWhiteSpace(request.TermsVersion) || string.IsNullOrWhiteSpace(request.PrivacyVersion)
+            ? Refuse(ConsentMissing, "Bitte stimm den Nutzungsbedingungen und der Datenschutzerklärung zu.")
+            : request.TermsVersion != legal.Terms || request.PrivacyVersion != legal.Privacy
+                ? Refuse(ConsentOutdated, "Die Texte haben sich geändert. Lade die Seite neu und stimm der aktuellen Fassung zu.")
+                : null;
 
     private static RegistrationResult? Check(RegistrationRequest request, int currentYear)
     {

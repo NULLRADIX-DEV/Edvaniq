@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using Edvaniq.Services.Identity.Application;
+using Edvaniq.Services.Identity.Domain;
 
 namespace Edvaniq.Services.Identity.Api.Accounts;
 
@@ -55,6 +56,28 @@ internal static partial class AccountCommand
         {
             LogApprovalFailed(logger, exception);
             await error.WriteLineAsync("Changing the approval failed, see the log above.");
+            return Failed;
+        }
+    }
+
+    // account consent <email> (#261): the proof of what the user agreed to, to the console only.
+    private static async Task<int> ConsentAsync(IServiceProvider services, string email, TextWriter output, TextWriter error)
+    {
+        try
+        {
+            using var scope = services.CreateScope();
+            var account = AccountEmail.Normalize(email) is { } normalized
+                ? await scope.ServiceProvider.GetRequiredService<IAccounts>().FindByEmailAsync(normalized, CancellationToken.None)
+                : null;
+            await output.WriteLineAsync(account?.ConsentedAt is { } at
+                ? string.Create(CultureInfo.InvariantCulture, $"terms {account.TermsVersion} privacy {account.PrivacyVersion} at {at:yyyy-MM-ddTHH:mm:ssZ}")
+                : "no consent");
+            return Ok;
+        }
+        catch (Exception exception)
+        {
+            LogApprovalFailed(services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(AccountCommand)), exception);
+            await error.WriteLineAsync("Reading the consent failed, see the log above.");
             return Failed;
         }
     }

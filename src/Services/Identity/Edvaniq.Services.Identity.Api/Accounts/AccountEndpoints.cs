@@ -12,13 +12,24 @@ internal static class AccountEndpoints
         app.MapPost("/accounts", RegisterAsync).AllowAnonymous();
         app.MapPost("/accounts/confirmations", ConfirmAsync).AllowAnonymous();
         app.MapPost("/accounts/confirmations/resend", ResendAsync).AllowAnonymous();
+
+        // The versions a registration has to agree to (#261). The same for everyone and rarely new, so caches may keep
+        // it a few minutes.
+        app.MapGet("/legal-versions", (HttpContext context, LegalVersions legal) =>
+        {
+            context.Response.Headers.CacheControl = "public, max-age=300";
+            return TypedResults.Ok(new LegalVersionsAnswer(legal.Terms, legal.Privacy));
+        }).AllowAnonymous();
+
         return app;
     }
 
     private static async Task<IResult> RegisterAsync(RegistrationBody? body, Registration registration, CancellationToken cancellationToken)
     {
         var result = await registration.RegisterAsync(
-            new RegistrationRequest(body?.Email, body?.Password, body?.InviteCode, body?.Pseudonym, body?.BirthYear), cancellationToken);
+            new RegistrationRequest(
+                body?.Email, body?.Password, body?.InviteCode, body?.Pseudonym, body?.BirthYear, body?.AcceptedTermsVersion, body?.AcceptedPrivacyVersion),
+            cancellationToken);
         return result.Accepted
             ? TypedResults.Accepted((string?)null, new Accepted(result.MailDelayed))
             : Refused(result.Refusal!, result.Detail!);
@@ -39,11 +50,14 @@ internal static class AccountEndpoints
     private static async Task<IResult> ResendAsync(EmailBody? body, Confirmation confirmation, CancellationToken cancellationToken) =>
         TypedResults.Accepted((string?)null, new Accepted(await confirmation.ResendAsync(body?.Email, cancellationToken)));
 
+    private sealed record LegalVersionsAnswer(string TermsVersion, string PrivacyVersion);
+
     private sealed record TokenBody(string? Token);
 
     private sealed record EmailBody(string? Email);
 
-    private sealed record RegistrationBody(string? Email, string? Password, string? InviteCode, string? Pseudonym, int? BirthYear);
+    private sealed record RegistrationBody(
+        string? Email, string? Password, string? InviteCode, string? Pseudonym, int? BirthYear, string? AcceptedTermsVersion, string? AcceptedPrivacyVersion);
 
     // Whether the mail may come late (SystemMails.DelayedAsync), the same for a new address and a known one.
     private sealed record Accepted(bool MailDelayed);
