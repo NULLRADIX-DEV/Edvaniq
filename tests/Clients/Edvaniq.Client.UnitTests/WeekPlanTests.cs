@@ -30,9 +30,13 @@ public sealed class WeekPlanTests : BunitContext
 
     public WeekPlanTests() => Services.AddSingleton<IReturnSignal>(signal);
 
-    [Fact]
-    public void Days_ShowDate_BlocksOrNothing()
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("ja-JP")]
+    [InlineData("")]
+    public void Days_ShowDate_BlocksOrNothing(string culture)
     {
+        using var _ = Cultures.Use(culture);
         var page = Render(new FakeWeekPlan().Answer(Week(
             [new PlanBlock(Respiration, 5, BlockKind.Review), new PlanBlock(Photosynthesis, 25, BlockKind.Learn)],
             [],

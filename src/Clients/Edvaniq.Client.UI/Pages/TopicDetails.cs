@@ -24,8 +24,6 @@ public sealed record SourceGroup(string DocumentTitle, IReadOnlyList<string> Pla
 // asked once while the page lives, a new visit asks anew. A section of a document that is gone meanwhile is left out.
 public sealed class TopicDetailsLoader(ITopicDirectory directory, IReadOnlyList<DocumentInfo> documents)
 {
-    private static readonly CultureInfo German = CultureInfo.GetCultureInfo("de-DE");
-
     private readonly Dictionary<Guid, Task<CallOutcome<IReadOnlyList<DocumentSectionInfo>>>> sections = [];
 
     public async Task<TopicDetails> LoadAsync(Guid topicId, CancellationToken cancellationToken)
@@ -88,9 +86,9 @@ public sealed class TopicDetailsLoader(ITopicDirectory directory, IReadOnlyList<
 
     public static string Place(DocumentSectionInfo section) => section switch
     {
-        { PageFrom: { } from, PageTo: { } to } when to > from => string.Format(German, FeedbackTexts.TopicDirectory.Pages, from, to),
-        { PageFrom: { } page } => string.Format(German, FeedbackTexts.TopicDirectory.Page, page),
-        _ => string.Format(German, FeedbackTexts.TopicDirectory.Section, section.Position + 1),
+        { PageFrom: { } from, PageTo: { } to } when to > from => string.Format(CultureInfo.InvariantCulture, FeedbackTexts.TopicDirectory.Pages, from, to),
+        { PageFrom: { } page } => string.Format(CultureInfo.InvariantCulture, FeedbackTexts.TopicDirectory.Page, page),
+        _ => string.Format(CultureInfo.InvariantCulture, FeedbackTexts.TopicDirectory.Section, section.Position + 1),
     };
 
     // Only an answer that came through is kept, a failed one is asked again with the next topic or retry.

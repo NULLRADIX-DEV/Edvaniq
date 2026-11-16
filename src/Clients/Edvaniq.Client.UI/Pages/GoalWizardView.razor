@@ -282,7 +282,7 @@ else
 
     private string DateText =>
         DateOnly.TryParseExact(examDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var date)
-            ? date.ToString("d. MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("de-DE"))
+            ? GermanDates.Long(date)
             : FeedbackTexts.Goal.NoAnswer;
 
     protected override void OnInitialized()

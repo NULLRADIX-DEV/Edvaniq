@@ -1,4 +1,3 @@
-@using System.Globalization
 @inject IWeekPlan Plans
 @inject ILearningMaterial Material
 
@@ -105,8 +104,6 @@ else if (state == ViewState.Shown && IsEmpty)
 }
 
 @code {
-    private static readonly CultureInfo German = CultureInfo.GetCultureInfo("de-DE");
-
     private ViewState state = ViewState.Loading;
     private WeekPlan? plan;
     private Dictionary<Guid, string> names = [];
@@ -170,7 +167,7 @@ else if (state == ViewState.Shown && IsEmpty)
 
     private static string DayOf(DateOnly day, int index)
     {
-        var date = day.ToString("dddd, d. MMMM", German);
+        var date = $"{GermanDates.Weekday(day)}, {GermanDates.DayAndMonth(day)}";
         return index == 0 ? $"{FeedbackTexts.Week.Today}, {date}" : date;
     }
 

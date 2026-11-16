@@ -79,9 +79,10 @@ public sealed class WebShell : IAsyncLifetime
     // page's own browser context, so the context keeps the session cookie for the page.
     // A prepare step runs before the page loads, to intercept what the page asks for.
     // A reloading step runs before a load that broke off gets another go.
-    public async Task<ShellPage> OpenSignedInAsync(string path, int width, Func<IPage, Task>? prepare = null, Action? reloading = null)
+    public async Task<ShellPage> OpenSignedInAsync(
+        string path, int width, Func<IPage, Task>? prepare = null, Action? reloading = null, string locale = "de-DE")
     {
-        var page = await NewPageAsync(width);
+        var page = await NewPageAsync(width, locale);
         page.Reloading += reloading;
         try
         {
@@ -143,12 +144,12 @@ public sealed class WebShell : IAsyncLifetime
     }
 
     // Every page gets a context of its own, so no cookie or cache carries over from one test to the next.
-    private async Task<ShellPage> NewPageAsync(int width)
+    private async Task<ShellPage> NewPageAsync(int width, string locale = "de-DE")
     {
         var context = await browser!.NewContextAsync(new BrowserNewContextOptions
         {
             ViewportSize = new ViewportSize { Width = width, Height = 800 },
-            Locale = "de-DE",
+            Locale = locale,
         });
         return new ShellPage(context, await context.NewPageAsync());
     }

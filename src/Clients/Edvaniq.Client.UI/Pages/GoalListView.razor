@@ -62,8 +62,6 @@
 }
 
 @code {
-    private static readonly CultureInfo German = CultureInfo.GetCultureInfo("de-DE");
-
     private readonly CancellationTokenSource life = new();
     private ViewState state = ViewState.Loading;
     private IReadOnlyList<LearningGoalInfo> goals = [];
@@ -140,8 +138,8 @@
 
         var type = goal.ExamType is null ? FeedbackTexts.Goal.ExamTypeLabel : FeedbackTexts.Goal.ExamTypes.GetValueOrDefault(goal.ExamType, goal.ExamType);
         return goal.ExamDate is { } date
-            ? string.Format(German, FeedbackTexts.GoalList.ExamOn, type, date.ToString("d. MMMM yyyy", German))
-            : string.Format(German, FeedbackTexts.GoalList.ExamWithoutDate, type);
+            ? string.Format(CultureInfo.InvariantCulture, FeedbackTexts.GoalList.ExamOn, type, GermanDates.Long(date))
+            : string.Format(CultureInfo.InvariantCulture, FeedbackTexts.GoalList.ExamWithoutDate, type);
     }
 
     private enum ViewState

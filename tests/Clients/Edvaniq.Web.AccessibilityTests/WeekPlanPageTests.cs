@@ -29,6 +29,19 @@ public sealed class WeekPlanPageTests(WebShell shell)
         await AxeScan.AssertNoViolationsAsync(page.Page, $"{Path} with a plan at {width} px");
     }
 
+    // #1070: the browser app only has the culture data of the browser's language, the days stay German anyway.
+    [Fact]
+    public async Task Days_AreGerman_InAJapaneseBrowser()
+    {
+        await using var page = await shell.OpenSignedInAsync(Path, WebShell.PhoneWidth, prepare: browser =>
+            Material.AnswerWeekAsync(browser, Material.Week()), locale: "ja-JP");
+        await Assertions.Expect(page.Page.Locator(".week-day h2")).ToHaveTextAsync(
+            ["Heute, Mittwoch, 11. November", "Donnerstag, 12. November", "Freitag, 13. November"]);
+
+        await AssertNoSidewaysScrollAsync(page.Page);
+        await AxeScan.AssertNoViolationsAsync(page.Page, $"{Path} in a Japanese browser");
+    }
+
     [Fact]
     public async Task EmptyWeek_LeadsToANewLearningGoal()
     {
