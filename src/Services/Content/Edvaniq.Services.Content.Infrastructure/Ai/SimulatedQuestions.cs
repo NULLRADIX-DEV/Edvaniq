@@ -14,18 +14,12 @@ namespace Edvaniq.Services.Content.Infrastructure.Ai;
 // so none repeats another. True/false takes its options in English when the prompt asks for them so. The questions never
 // quote the material's sentences, so text slipped into the material can't turn up in them as such.
 //
-// On purpose this double is gullible, like a model that falls for injection: as soon as the user message holds anything
-// outside the one <material> block, or a tag inside it other than the sections, it does what the material says instead
-// and answers with Hijacked. Only the escaping of PromptMaterial keeps it from that, so a broken fence makes the
-// injection tests red. Don't "fix" it.
+// On purpose this double is gullible (SimulatedFence): once anything gets out of the material block, it answers with
+// Hijacked.
 internal sealed partial class SimulatedQuestions : ISimulatedAnswer
 {
     // What a hijacked model writes, taken from the injection of the reference set (tests/ReferenceSet).
     private const string Hijacked = ContentAi.SimulatedHijack;
-
-    private const string Open = "<material>\n";
-
-    private const string Close = "</material>";
 
     private const int LabelWords = 3;
 
@@ -33,7 +27,7 @@ internal sealed partial class SimulatedQuestions : ISimulatedAnswer
 
     public string Answer(SimulatedPrompt prompt)
     {
-        if (!Fenced(prompt.User))
+        if (!SimulatedFence.Holds(prompt.User))
         {
             var hijacked = new Question(QuestionGeneration.SingleChoice, Hijacked, [Hijacked, "Alles erledigt"], [0], Hijacked, 1, 1);
             return JsonSerializer.Serialize(new { questions = new[] { hijacked } }, JsonSerializerOptions.Web);
@@ -79,12 +73,6 @@ internal sealed partial class SimulatedQuestions : ISimulatedAnswer
     private sealed record Question(
         string Type, string Text, string[] Options, int[] Answers, string Explanation, int Difficulty, int Section);
 
-    // The message is the one block and nothing else, and inside it every '<' belongs to a section tag.
-    private static bool Fenced(string user) =>
-        user.StartsWith(Open, StringComparison.Ordinal)
-        && user.EndsWith(Close, StringComparison.Ordinal)
-        && !SectionTagPattern().Replace(user[Open.Length..^Close.Length], "").Contains('<', StringComparison.Ordinal);
-
     // Per section the last heading up to its end, or its own first words while there was none yet.
     private static List<(int Section, string Text)> Labels(List<(int Number, string[] Lines)> sections)
     {
@@ -111,7 +99,4 @@ internal sealed partial class SimulatedQuestions : ISimulatedAnswer
 
     [GeneratedRegex("<section id=\"(\\d+)\">\n(.*?)\n</section>", RegexOptions.Singleline)]
     private static partial Regex SectionPattern();
-
-    [GeneratedRegex("<section id=\"\\d+\">|</section>")]
-    private static partial Regex SectionTagPattern();
 }

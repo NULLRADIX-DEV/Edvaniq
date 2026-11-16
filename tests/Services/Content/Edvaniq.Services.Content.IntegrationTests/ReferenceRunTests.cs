@@ -31,6 +31,51 @@ public sealed class ReferenceRunTests : IDisposable
         // No answer of the AI, only topic names: nothing of its JSON.
         Assert.DoesNotContain("{", report, StringComparison.Ordinal);
         Assert.DoesNotContain("\"topics\"", report, StringComparison.Ordinal);
+
+        // #328: the injection case with its questions and the check, both runs clean.
+        Assert.Contains("| chemie-saeuren-basen-injection | ", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("Injection-Prüfung", report, StringComparison.Ordinal);
+        Assert.Contains("## Injection: chemie-saeuren-basen-injection", report, StringComparison.Ordinal);
+        Assert.Matches(@"\| 1 \| [1-9]\d* \| 0 \| 0 \| safe \| safe \| safe \|", report);
+        Assert.Matches(@"\| 2 \| [1-9]\d* \| 0 \| 0 \| safe \| safe \| safe \|", report);
+        Assert.Contains("(simulated)", report, StringComparison.Ordinal);
+    }
+
+    // The file goes into the public repo: it names the run by its label, never a provider or model.
+    [Fact]
+    public async Task Report_NamesTheLabel_NoModel()
+    {
+        using var output = new StringWriter();
+
+        await Run.RunAsync(["--label", "trial-1", "--out", file], Simulated, output, TestContext.Current.CancellationToken);
+
+        var report = await File.ReadAllTextAsync(file, TestContext.Current.CancellationToken);
+        Assert.Contains("`trial-1`", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("Simulated", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("Modell", report, StringComparison.Ordinal);
+    }
+
+    // A real provider needs a label and the model of the check, else nothing is asked and paid.
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task RealProvider_WithoutLabelOrCheck_StopsBeforeAnything(bool labelled, bool withModeration)
+    {
+        using var output = new StringWriter();
+        string[] args = labelled ? ["--label", "trial-1", "--out", file] : ["--out", file];
+
+        var exit = await Run.RunAsync(args, configuration => configuration.AddInMemoryCollection(
+        [
+            KeyValuePair.Create("Ai:Provider", (string?)"OpenAiCompatible"),
+            KeyValuePair.Create("Ai:OpenAiCompatible:Endpoint", (string?)"https://127.0.0.1:9/v1"),
+            KeyValuePair.Create("Ai:OpenAiCompatible:Model", (string?)"some-model"),
+            KeyValuePair.Create("Ai:OpenAiCompatible:ApiKey", (string?)"not-a-key"),
+            KeyValuePair.Create("Ai:Moderation:Model", withModeration ? "some-classifier" : null),
+        ]), output, TestContext.Current.CancellationToken);
+
+        Assert.Equal(Run.Stopped, exit);
+        Assert.StartsWith("Stopped:", output.ToString(), StringComparison.Ordinal);
+        Assert.False(File.Exists(file));
     }
 
     [Theory]
@@ -38,6 +83,8 @@ public sealed class ReferenceRunTests : IDisposable
     [InlineData("--max-cost", "-1")]
     [InlineData("--unknown", "x")]
     [InlineData("--runs")]
+    [InlineData("--label", "Mein Modell/1")]
+    [InlineData("--label")]
     public async Task WrongArguments_StopBeforeAnything(params string[] args)
     {
         using var output = new StringWriter();

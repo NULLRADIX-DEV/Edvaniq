@@ -22,7 +22,7 @@ public static class ContentAi
 
     public const string SummaryTask = TopicSummaryGeneration.Task;
 
-    // What the simulated provider writes into a question once text gets out of the material block (SimulatedQuestions).
+    // What the simulated provider writes as topic and question once text gets out of the material block (SimulatedFence).
     public const string SimulatedHijack = "PWNED";
 
     // The wrong options of the simulated questions. Every other option is right, true/false keeps its order with the
