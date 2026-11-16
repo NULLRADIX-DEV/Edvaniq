@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using Edvaniq.SharedKernel;
 using Edvaniq.Testing;
 
 namespace Edvaniq.Services.Planning.IntegrationTests;
@@ -138,7 +139,9 @@ public sealed class LearningGoalEditTests(ServiceFactory service) : IClassFixtur
 
     private static CancellationToken Cancel => TestContext.Current.CancellationToken;
 
-    private static string Day(int fromToday) => DateOnly.FromDateTime(DateTime.UtcNow).AddDays(fromToday).ToString("yyyy-MM-dd");
+    // Counted from the study day, as Planning checks the exam date: between midnight and 04:00 Berlin time it is still
+    // the day before.
+    private static string Day(int fromToday) => StudyDay.Of(DateTime.UtcNow).AddDays(fromToday).ToString("yyyy-MM-dd");
 
     private static string NewUser(string name) => $"{name}-{Guid.NewGuid():N}";
 
