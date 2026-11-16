@@ -48,15 +48,14 @@ public sealed class SessionResultRouteTests
         Assert.Equal(0, gateway.Requests);
     }
 
-    // Nothing else of the sessions goes through: not starting, finishing or reading one, and no id that isn't one.
+    // Nothing else of the sessions goes through here: not reading one, and no id that isn't one. Starting and moving on
+    // have their own routes (SessionRouteTests).
     [Theory]
     [InlineData("POST", Path)]
     [InlineData("DELETE", Path)]
     [InlineData("GET", "/api/planning/sessions/not-a-guid/result")]
     [InlineData("GET", $"/api/planning/sessions/{Id}")]
     [InlineData("GET", "/api/planning/sessions/active")]
-    [InlineData("POST", "/api/planning/sessions")]
-    [InlineData("POST", $"/api/planning/sessions/{Id}/complete")]
     [InlineData("GET", $"{Path}/more")]
     public async Task OtherMethodsAndPaths_AreNotForwarded(string method, string path)
     {
