@@ -56,6 +56,29 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
         Assert.Equal(expected, stored.Select(row => (row.Name, row.SectionId)).Order());
     }
 
+    // #314: topic names and key terms come from the user's material, so they stay out of the log, also on renaming.
+    [Fact]
+    public async Task AnalyzedDocument_AndARename_LogNoNameOfTheMaterial()
+    {
+        var alice = NewUser("alice");
+        var marker = $"Fluss{Guid.NewGuid():N}"[..16];
+        var section = Guid.NewGuid();
+        var analysis = new DocumentAnalyzed(alice, Guid.NewGuid(),
+        [
+            new($"Thema {marker}", null, [section], [new KeyTermSuggestion($"Begriff {marker}", section, $"Erklärung {marker}")]),
+            new($"Teil {marker}", 0, [Guid.NewGuid()]),
+        ]);
+
+        await DeliverAsync(analysis);
+        using var client = ClientFor(alice);
+        var topic = (await ListAsync(client))[0];
+        using var renamed = await client.PatchAsJsonAsync($"/topics/{topic.Id}", new { name = $"Neu {marker}" }, TestContext.Current.CancellationToken);
+
+        Assert.True(renamed.IsSuccessStatusCode, renamed.StatusCode.ToString());
+        Assert.NotEmpty(service.Logs.Entries);
+        service.Logs.AssertNone(marker);
+    }
+
     // A redelivery is dropped by the inbox, a second event for the same document by the handler.
     [Fact]
     public async Task AnalysisDeliveredTwice_OrSentTwice_AddsNoTopicTwice()
