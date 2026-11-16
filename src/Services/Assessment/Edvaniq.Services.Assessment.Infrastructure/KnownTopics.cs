@@ -40,5 +40,10 @@ internal sealed class KnownTopics(AssessmentDbContext db) : IKnownTopics
             .Where(attempt => attempt.OwnerId == topic.OwnerId && ids.Contains(attempt.QuestionId))
             .ToListAsync(cancellationToken));
         db.Questions.RemoveRange(questions);
+
+        // Its block quizzes have nothing left to ask (#412).
+        db.BlockQuizzes.RemoveRange(await db.BlockQuizzes.IgnoreQueryFilters([ServiceDbContext.OwnerFilter])
+            .Where(quiz => quiz.OwnerId == topic.OwnerId && quiz.TopicId == topic.TopicId)
+            .ToListAsync(cancellationToken));
     }
 }

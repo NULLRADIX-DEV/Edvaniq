@@ -14,6 +14,10 @@ public interface IDemo
 
     // Deletes the demo documents with everything made of them, and the demo itself. False if there was none.
     Task<bool> DeleteAsync(CancellationToken cancellationToken);
+
+    // Back to the start before a presentation (#412): the demo documents go as with DeleteAsync, fresh ones come into
+    // the same goal. Only the caller's demo documents, nothing else of theirs.
+    Task<DemoState> ResetAsync(LearningGoalInfo learningGoal, CancellationToken cancellationToken);
 }
 
 // The documents in the order of the material.

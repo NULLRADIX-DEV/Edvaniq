@@ -68,6 +68,15 @@ internal sealed class Demo(ContentDbContext db, IDocuments documents, ICurrentUs
         return await db.DemoGoals.ExecuteDeleteAsync(cancellationToken) > 0 || demoDocuments.Count > 0;
     }
 
+    // Delete and create again, so of two resets at the same time the second fails on the row's key and gets the demo
+    // of the first.
+    public async Task<DemoState> ResetAsync(LearningGoalInfo learningGoal, CancellationToken cancellationToken)
+    {
+        await DeleteAsync(cancellationToken);
+        db.ChangeTracker.Clear();
+        return (await CreateAsync(learningGoal, cancellationToken)).Demo;
+    }
+
     private async Task<IReadOnlyList<Document>> DocumentsAsync(CancellationToken cancellationToken) =>
         await db.Documents.AsNoTracking()
             .Where(document => document.Origin == DocumentOrigin.Demo)

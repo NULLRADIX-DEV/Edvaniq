@@ -7,7 +7,8 @@ namespace Edvaniq.Services.Content.Api;
 // itself (POST /planning/learning-goals, Content gives Planning no orders, rule 4) and hands its id to POST /demo, which
 // pastes the demo material into it. The worker analyzes it like any document, from the answers that ship with it, no
 // AI is asked. One demo per user: POST with a demo there gives it back. DELETE takes the demo documents with everything
-// made of them, the learning goal stays with Planning until it can be deleted (#519).
+// made of them, the learning goal stays with Planning until it can be deleted (#519). POST /demo/reset does both in the
+// goal the demo has.
 internal static class DemoEndpoints
 {
     public const string NotAllowed = "Das Demo-Lernziel ist für dieses Konto nicht freigeschaltet.";
@@ -66,6 +67,40 @@ internal static class DemoEndpoints
             !MayUse(caller, user, configuration) ? Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: NotAllowed)
             : await demo.DeleteAsync(cancellationToken) ? Results.NoContent()
             : Results.NotFound());
+
+        // #412: the same goal again, so the plan Planning keeps for it starts over with the new topics.
+        demo.MapPost("/reset", async (
+            IDemo demo,
+            ILearningGoals goals,
+            ITestDoubleCaller caller,
+            ICurrentUser user,
+            IConfiguration configuration,
+            CancellationToken cancellationToken) =>
+        {
+            if (!MayUse(caller, user, configuration))
+            {
+                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: NotAllowed);
+            }
+
+            if (await demo.FindAsync(cancellationToken) is not { } existing)
+            {
+                return Results.NotFound();
+            }
+
+            try
+            {
+                if (await goals.FindAsync(existing.LearningGoalId, cancellationToken) is not { } goal)
+                {
+                    return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: FileUploadEndpoint.GoalNotFound);
+                }
+
+                return Results.Ok(DemoResponse.From(await demo.ResetAsync(goal, cancellationToken)));
+            }
+            catch (LearningGoalUnavailableException)
+            {
+                return Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: Unavailable);
+            }
+        });
 
         return app;
     }
