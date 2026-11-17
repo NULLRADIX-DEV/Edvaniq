@@ -84,7 +84,7 @@ public sealed class LoggingTests
         await using var web = new WebFactory(gateway.Address, configure: builder => builder.UseEnvironment("Production"));
         using var browser = web.CreateBrowser(handleCookies: false);
 
-        using var registered = await browser.PostAsJsonAsync("/api/identity/accounts", new { email, password, inviteCode = code, pseudonym, birthYear = 1931 }, cancel);
+        using var registered = await browser.PostAsJsonAsync("/api/identity/accounts", new { email, password, inviteCode = code, pseudonym, birthYear = 1931, acceptedTermsVersion = "vorlaeufig-1", acceptedPrivacyVersion = "vorlaeufig-1" }, cancel);
         using var confirmed = await browser.PostAsJsonAsync("/api/identity/accounts/confirmations", new { token = confirmation }, cancel);
         using var resent = await browser.PostAsJsonAsync("/api/identity/accounts/confirmations/resend", new { email }, cancel);
         using var login = await LoginTests.LoginAsync(browser, email, password);

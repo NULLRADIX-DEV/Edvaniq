@@ -99,7 +99,7 @@ public sealed partial class LoggingTests(IdentityDatabase database) : IClassFixt
         }
 
         var client = identity.CreateClient();
-        using var registered = await client.PostAsJsonAsync("/accounts", new { email, password, inviteCode = code, pseudonym, birthYear }, cancel);
+        using var registered = await client.PostAsJsonAsync("/accounts", new { email, password, inviteCode = code, pseudonym, birthYear, acceptedTermsVersion = "vorlaeufig-1", acceptedPrivacyVersion = "vorlaeufig-1" }, cancel);
         await identity.Services.GetRequiredService<MailDispatcher>().SendDueAsync(cancel);
         var mail = Assert.Single(identity.Services.GetRequiredService<RecordingMailSender>().Sent, sent => sent.To == email.ToLowerInvariant());
         var link = Link().Match(mail.Body).Value;
