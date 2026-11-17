@@ -20,6 +20,25 @@ public sealed class TestLogs : ILoggerProvider, ISupportExternalScope
     public IReadOnlyList<TestLogEntry> Containing(params string[] values) =>
         [.. entries.Where(entry => values.Any(value => entry.Text.Contains(value, StringComparison.Ordinal)))];
 
+    // #314: fails if any entry shows one of the values, case ignored, and names each value with the entry it got into.
+    public void AssertNone(params string[] values)
+    {
+        if (values.Any(string.IsNullOrEmpty))
+        {
+            throw new ArgumentException("An empty value is in every entry.", nameof(values));
+        }
+
+        var found = entries
+            .SelectMany(entry => values
+                .Where(value => entry.Text.Contains(value, StringComparison.OrdinalIgnoreCase))
+                .Select(value => $"\"{value}\" in {entry.Category}: {entry.Message}"))
+            .ToList();
+        if (found.Count > 0)
+        {
+            throw new InvalidOperationException($"The log shows what it must not:{Environment.NewLine}{string.Join(Environment.NewLine, found)}");
+        }
+    }
+
     public ILogger CreateLogger(string categoryName) => new Collector(this, categoryName);
 
     public void SetScopeProvider(IExternalScopeProvider scopeProvider) => scopes = scopeProvider;

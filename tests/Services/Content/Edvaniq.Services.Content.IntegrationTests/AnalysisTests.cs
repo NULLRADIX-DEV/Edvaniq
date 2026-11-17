@@ -87,6 +87,33 @@ public sealed class AnalysisTests(ServiceFactory service) : IClassFixture<Servic
             await ShapeAsync(id, analyzed));
     }
 
+    // #314: from the pasted text over topics, moderation and questions to the ready document, neither the API nor the
+    // worker logs the material, a prompt or an answer of the AI: no sentence, no topic name, no question, no token.
+    [Fact]
+    public async Task Analysis_ToTheReadyDocument_LogsNoMaterialAndNoAnswer()
+    {
+        var marker = $"Fluss{Guid.NewGuid():N}"[..16];
+        var sentence = $"Das Kraftwerk {marker} spaltet Licht in Farben.";
+        var user = $"alice-{Guid.NewGuid():N}";
+        var token = TestTokens.Create(user);
+        using var client = service.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var id = await PasteAsync(client, $"# Thema {marker}\n\n{sentence}\n\n## Teil {marker}\n\n{sentence} Ganz genau.", title: $"Titel {marker}");
+
+        await AnalyzeAsync(id, withQuestions: true);
+
+        var found = await client.GetFromJsonAsync<DocumentDto>($"/documents/{id}", TestContext.Current.CancellationToken);
+        Assert.Equal("Ready", found!.Status);
+        var topics = Assert.Single(await ReportedAsync(id)).Topics.Select(topic => topic.Name).ToList();
+        var questions = await QuestionTextsAsync(id);
+        Assert.NotEmpty(questions);
+        Assert.NotEmpty(logs.Entries);
+        foreach (var log in new[] { logs, service.Logs })
+        {
+            log.AssertNone([marker, sentence, token, .. topics, .. questions]);
+        }
+    }
+
     // Questions only with the ids Knowledge gave the topics, the document is ready only with all of them.
     [Fact]
     public async Task EveryTopicWithItsId_GetsValidQuestions_WithSourceModelAndPrompt_AndThenTheDocumentIsReady()
