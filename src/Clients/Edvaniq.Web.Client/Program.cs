@@ -39,6 +39,7 @@ builder.Services.AddScoped<IMaterialQuota>(services => new HttpMaterialQuota(Wat
 builder.Services.AddScoped<ITopicDirectory>(services => new HttpTopicDirectory(Watched(services)));
 builder.Services.AddScoped<IQuiz>(services => new HttpQuiz(Watched(services)));
 builder.Services.AddScoped<IBlockQuiz>(services => new HttpQuiz(Watched(services)));
+builder.Services.AddScoped<ICheckQuestions>(services => new HttpQuiz(Watched(services)));
 builder.Services.AddScoped<ISources>(services => new HttpSources(Watched(services)));
 builder.Services.AddScoped<ITopicSummaries>(services => new HttpTopicSummaries(Watched(services)));
 builder.Services.AddScoped<ITodayPlan>(services => new HttpTodayPlan(Watched(services)));

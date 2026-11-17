@@ -1,3 +1,4 @@
+using System.Buffers.Text;
 using System.Security.Cryptography;
 
 using Yarp.ReverseProxy.Model;
@@ -47,7 +48,8 @@ public static class SecurityHeaders
     public static IApplicationBuilder UseSecurityHeaders(this IApplicationBuilder app, bool development = false) =>
         app.Use((context, next) =>
         {
-            context.Items[NonceKey] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
+            // Base64url without padding: nothing in it that HTML encodes in the attribute.
+            context.Items[NonceKey] = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(16));
             context.Response.OnStarting(state =>
             {
                 var context = (HttpContext)state;

@@ -68,6 +68,23 @@ public sealed class RegistrationRouteTests
         Assert.Equal(0, gateway.TokenRequests);
     }
 
+    // #261: the versions of the legal texts to agree to, open like registering, with a limit per client address.
+    [Fact]
+    public async Task LegalVersions_ReachIdentity_WithoutToken_AndHaveTheirLimit()
+    {
+        await using var gateway = await StubService.StartAsync("gateway-stub");
+        await using var web = new WebFactory(gateway.Address, configure: builder => builder.UseSetting("Login:LegalVersionsPerClientPerMinute", "1"));
+        using var browser = web.CreateBrowser();
+
+        using var response = await browser.GetAsync("/api/identity/legal-versions", TestContext.Current.CancellationToken);
+        using var refused = await browser.GetAsync("/api/identity/legal-versions", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var echo = (await response.Content.ReadFromJsonAsync<Echo>(TestContext.Current.CancellationToken))!;
+        Assert.Equal(("GET", "/identity/legal-versions", ""), (echo.Method, echo.Path, echo.Authorization));
+        Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
+    }
+
     [Theory]
     [InlineData("GET", Path)]
     [InlineData("POST", $"{Path}/someone")]

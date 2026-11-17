@@ -1,0 +1,37 @@
+.unit-step {
+    margin: 0 0 var(--space-2);
+    color: var(--color-ink-muted);
+    font-weight: 600;
+}
+
+.unit-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4);
+    margin-top: var(--space-4);
+}
+
+.button {
+    min-height: 2.75rem;
+}
+
+.unit-no-checks,
+.unit-done {
+    margin: var(--space-4) 0;
+    padding: var(--space-4);
+    background: var(--color-surface);
+    border-left: 4px solid var(--color-accent);
+    border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.unit-no-checks h2,
+.unit-done h2 {
+    margin-top: 0;
+    overflow-wrap: anywhere;
+}
+
+.unit-no-checks > :last-child,
+.unit-done > :last-child {
+    margin-bottom: 0;
+}

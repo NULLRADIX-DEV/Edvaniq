@@ -34,6 +34,10 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
         account.Property(item => item.Pseudonym).HasMaxLength(Account.PseudonymMaxLength);
         account.HasIndex(item => item.Email).IsUnique();
 
+        // #261: the versions of the legal texts agreed to at registration.
+        account.Property(item => item.TermsVersion).HasMaxLength(Account.LegalVersionMaxLength);
+        account.Property(item => item.PrivacyVersion).HasMaxLength(Account.LegalVersionMaxLength);
+
         // #245: invitation codes, only their hash. The status is computed from the two times.
         var invite = modelBuilder.Entity<InviteCode>();
         invite.Property(item => item.Label).HasMaxLength(InviteCode.LabelLength);

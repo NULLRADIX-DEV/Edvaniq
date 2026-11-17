@@ -32,6 +32,8 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<InviteService>();
         builder.Services.AddScoped<IIdentityTransactions, IdentityTransactions>();
         builder.Services.AddScoped<Confirmation>();
+        builder.Services.AddScoped<Approvals>();
+        builder.Services.AddSingleton(LegalVersionsOf(builder.Configuration));
         builder.Services.AddSingleton<AccountSweep>();
         builder.Services.AddHostedService(services => services.GetRequiredService<AccountSweep>());
         builder.Services.AddScoped<Registration>();
@@ -67,6 +69,17 @@ public static class InfrastructureExtensions
         builder.Services.AddSingleton<MailDispatcher>();
         builder.Services.AddHostedService(services => services.GetRequiredService<MailDispatcher>());
     }
+
+    // The versions of the legal texts every registration agrees to (#261), section Legal. Required, a registration must
+    // never store an empty version.
+    private static LegalVersions LegalVersionsOf(IConfiguration configuration) => new(
+        Required(configuration, "Legal:TermsVersion"),
+        Required(configuration, "Legal:PrivacyVersion"));
+
+    private static string Required(IConfiguration configuration, string key) =>
+        configuration[key] is { Length: > 0 and <= Domain.Account.LegalVersionMaxLength } value
+            ? value
+            : throw new InvalidOperationException($"{key} must be set, at most {Domain.Account.LegalVersionMaxLength} characters.");
 
     // Brings the database to the latest migration and returns the exit code.
     public static int RunMigrations(this IHost host) => host.RunMigrations<IdentityDbContext>();

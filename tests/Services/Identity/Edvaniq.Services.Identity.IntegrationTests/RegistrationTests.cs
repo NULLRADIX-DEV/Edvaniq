@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using Edvaniq.Services.Identity.Api.Accounts;
 using Edvaniq.Services.Identity.Application;
 using Edvaniq.Services.Identity.Domain;
 using Edvaniq.Services.Identity.Infrastructure;
@@ -17,6 +18,9 @@ namespace Edvaniq.Services.Identity.IntegrationTests;
 public sealed class RegistrationTests(IdentityDatabase database) : IClassFixture<IdentityDatabase>
 {
     private const string Password = "ein langes Passwort";
+
+    // The versions of the legal texts in appsettings.json until #260.
+    private const string Legal = "vorlaeufig-1";
 
     private static CancellationToken Cancel => TestContext.Current.CancellationToken;
 
@@ -183,10 +187,72 @@ public sealed class RegistrationTests(IdentityDatabase database) : IClassFixture
         Assert.DoesNotContain(Password, lines, StringComparison.Ordinal);
     }
 
+    // #261: without agreeing to the current versions of the legal texts there is no account, and the code stays open.
+    [Theory]
+    [InlineData(null, Legal, "consent_missing")]
+    [InlineData(Legal, "", "consent_missing")]
+    [InlineData("vorlaeufig-0", Legal, "consent_outdated")]
+    [InlineData(Legal, "vorlaeufig-0", "consent_outdated")]
+    public async Task WithoutCurrentConsent_IsRefused_AndKeepsTheCode(string? terms, string? privacy, string refusal)
+    {
+        await using var identity = new IdentityFactory(connectionString: database.ConnectionString);
+        var code = await CodeAsync(identity);
+        var email = NewEmail();
+
+        using var response = await RegisterAsync(identity, email, code, terms: terms, privacy: privacy);
+
+        await AssertRefusedAsync(response, refusal);
+        Assert.Null(Find(identity, email));
+        using var later = await RegisterAsync(identity, NewEmail(), code);
+        Assert.Equal(HttpStatusCode.Accepted, later.StatusCode);
+    }
+
+    // The versions agreed to and the time are kept at the account, the operator reads them with account consent.
+    [Fact]
+    public async Task Consent_IsKept_AndTheOperatorCanReadIt()
+    {
+        await using var identity = new IdentityFactory(connectionString: database.ConnectionString);
+        var email = NewEmail();
+
+        using (await RegisterAsync(identity, email, await CodeAsync(identity)))
+        {
+        }
+
+        var account = Single(identity, email);
+        Assert.Equal((Legal, Legal), (account.TermsVersion, account.PrivacyVersion));
+        Assert.NotNull(account.ConsentedAt);
+        using var output = new StringWriter();
+        Assert.Equal(AccountCommand.Ok, await AccountCommand.RunAsync(identity.Services, ["account", "consent", email], TextReader.Null, output, TextWriter.Null));
+        Assert.StartsWith($"terms {Legal} privacy {Legal} at ", output.ToString(), StringComparison.Ordinal);
+    }
+
+    // The client asks which versions to show for agreeing, instead of knowing them itself.
+    [Fact]
+    public async Task LegalVersions_AreOpenToAnyone()
+    {
+        await using var identity = new IdentityFactory(connectionString: database.ConnectionString);
+
+        using var response = await identity.CreateClient().GetAsync("/legal-versions", Cancel);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Cancel);
+        Assert.Equal((Legal, Legal), (body.GetProperty("termsVersion").GetString(), body.GetProperty("privacyVersion").GetString()));
+        Assert.Equal(TimeSpan.FromMinutes(5), response.Headers.CacheControl?.MaxAge);
+    }
+
     private static Task<HttpResponseMessage> RegisterAsync(
-        IdentityFactory identity, string email, string? code, string password = Password, string pseudonym = "Lernfuchs", int? birthYear = 2010) =>
+        IdentityFactory identity,
+        string email,
+        string? code,
+        string password = Password,
+        string pseudonym = "Lernfuchs",
+        int? birthYear = 2010,
+        string? terms = Legal,
+        string? privacy = Legal) =>
         identity.CreateClient().PostAsJsonAsync(
-            "/accounts", new { email, password, inviteCode = code, pseudonym, birthYear }, Cancel);
+            "/accounts",
+            new { email, password, inviteCode = code, pseudonym, birthYear, acceptedTermsVersion = terms, acceptedPrivacyVersion = privacy },
+            Cancel);
 
     private static async Task AssertRefusedAsync(HttpResponseMessage response, string refusal)
     {

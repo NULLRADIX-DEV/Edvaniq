@@ -18,6 +18,9 @@ public interface IAccounts
 
     Task SaveAsync(CancellationToken cancellationToken);
 
+    // The user accounts waiting for the operator's approval, oldest confirmation first.
+    Task<IReadOnlyList<Account>> AwaitingApprovalAsync(CancellationToken cancellationToken);
+
     // Locks the row of the account with this normalized address until the open transaction ends, if there is one.
     Task LockByEmailAsync(string email, CancellationToken cancellationToken);
 

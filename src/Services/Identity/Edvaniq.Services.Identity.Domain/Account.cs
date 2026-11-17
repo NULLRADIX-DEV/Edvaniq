@@ -9,6 +9,8 @@ public sealed class Account
 
     public const int PseudonymMaxLength = 32;
 
+    public const int LegalVersionMaxLength = 32;
+
     // Long enough for any hash format the PasswordHasher may write later.
     public const int PasswordHashMaxLength = 256;
 
@@ -36,6 +38,14 @@ public sealed class Account
 
     // Only the year, for the age rule (#256). Null for a team account.
     public int? BirthYear { get; private set; }
+
+    // The versions of terms of use and privacy notice the user agreed to at registration, and when (#261). Null for a
+    // team account.
+    public string? TermsVersion { get; private set; }
+
+    public string? PrivacyVersion { get; private set; }
+
+    public DateTime? ConsentedAt { get; private set; }
 
     // A team account is always active.
     public AccountStatus Status { get; private set; } = AccountStatus.Active;
@@ -70,6 +80,14 @@ public sealed class Account
 
     public void SetPasswordHash(string passwordHash) => PasswordHash = passwordHash;
 
+    // The agreement to these versions of the legal texts, kept as proof.
+    public void Consent(string termsVersion, string privacyVersion, DateTime now)
+    {
+        TermsVersion = termsVersion;
+        PrivacyVersion = privacyVersion;
+        ConsentedAt = now;
+    }
+
     // The address is confirmed (#250). Of age by the year of birth, the account is active, otherwise it waits for the
     // operator's approval (#256): whoever might be a minor counts as one. False if it was confirmed before.
     public bool Confirm(DateTime now)
@@ -81,6 +99,33 @@ public sealed class Account
 
         ConfirmedAt = now;
         Status = BirthYear is { } year && !AccountProfile.IsMinor(year, now.Year) ? AccountStatus.Active : AccountStatus.AwaitingApproval;
+        return true;
+    }
+
+    // The operator lets a minor in, after the parents' written consent (#268). Only the date is kept, nothing of the
+    // consent. False if the account doesn't wait for it.
+    public bool Approve(DateTime now)
+    {
+        if (Status != AccountStatus.AwaitingApproval)
+        {
+            return false;
+        }
+
+        ApprovedAt = now;
+        Status = AccountStatus.Active;
+        return true;
+    }
+
+    // The operator takes an approval back: the account waits again and can't log in. False if it wasn't approved.
+    public bool Revoke()
+    {
+        if (Status != AccountStatus.Active || ApprovedAt is null)
+        {
+            return false;
+        }
+
+        ApprovedAt = null;
+        Status = AccountStatus.AwaitingApproval;
         return true;
     }
 

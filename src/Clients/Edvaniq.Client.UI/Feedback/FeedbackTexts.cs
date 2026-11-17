@@ -252,6 +252,42 @@ public static class FeedbackTexts
         public const string DoneHint = "Mit den Erklärungen von heute fällt es dir beim nächsten Mal leichter.";
     }
 
+    // The learning unit for a new topic (#358): summary, check questions, result.
+    public static class NewTopicUnit
+    {
+        public const string Step = "Schritt {0} von 3: {1}";
+
+        public const string SummaryStep = "Zusammenfassung";
+
+        public const string ChecksStep = "Checkfragen";
+
+        public const string DoneStep = "Ergebnis";
+
+        public const string ToChecks = "Weiter zu den Checkfragen";
+
+        public const string LoadingChecks = "Checkfragen werden geladen …";
+
+        public const string ChecksFailed = "Die Checkfragen ließen sich gerade nicht laden.";
+
+        public const string NoChecks = "Für dieses Thema gibt es noch keine Checkfragen.";
+
+        public const string NoChecksHint = "Du kannst die Einheit mit der Zusammenfassung abschließen.";
+
+        public const string Finish = "Einheit abschließen";
+
+        public const string Done = "Einheit geschafft.";
+
+        public const string SummaryRead = "Zusammenfassung gelesen.";
+
+        public const string SummaryMissing = "Die Zusammenfassung war diesmal nicht verfügbar.";
+
+        public const string Tally = "{0} von {1} Checkfragen richtig.";
+
+        public const string NoTally = "Checkfragen gibt es für dieses Thema noch nicht.";
+
+        public const string DoneHint = "Damit hast du einen guten Einstieg in das Thema. Die nächsten Einheiten bauen darauf auf.";
+    }
+
     // The newest text and the topics on the topics page.
     public static class Material
     {

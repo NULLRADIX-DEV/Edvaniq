@@ -8,17 +8,35 @@ namespace Edvaniq.Client.Core;
 
 // Talks to Assessment through the web host, which wants a login. The HttpClient carries the base address of the host and
 // keeps the session cookie, its timeout is longer than the host's own wait for the gateway.
-public sealed class HttpQuiz(HttpClient http) : IQuiz, IBlockQuiz
+public sealed class HttpQuiz(HttpClient http) : IQuiz, IBlockQuiz, ICheckQuestions
 {
     public const string AttemptsPath = "api/assessment/attempts";
 
     public const string QuizzesPath = "api/assessment/quizzes";
+
+    public const string CheckQuestionsPath = "api/assessment/check-questions";
+
+    // Assessment's two words. Any other status, or "ready" without questions, didn't really get through.
+    private const string Ready = "ready";
+    private const string NotReady = "notReady";
 
     public Task<CallOutcome<BlockQuiz>> OpenAsync(Guid topicId, Guid blockId, int size, CancellationToken cancellationToken = default) =>
         CallAsync(
             token => http.PostAsync(QuizzesPath, JsonContent.Create(new QuizBody(topicId, blockId, size), QuizJson.Default.QuizBody), token),
             QuizJson.Default.BlockQuiz,
             cancellationToken);
+
+    public async Task<CallOutcome<CheckQuestions>> StartAsync(Guid topicId, Guid? sessionId, CancellationToken cancellationToken = default)
+    {
+        var outcome = await CallAsync(
+            token => http.PostAsync(
+                CheckQuestionsPath, JsonContent.Create(new CheckBody(topicId, sessionId), QuizJson.Default.CheckBody), token),
+            QuizJson.Default.CheckResponse,
+            cancellationToken);
+        return outcome is { Result: CallResult.Ok, Value: { } check }
+            ? CallOutcome<CheckQuestions>.Ok(new CheckQuestions(check.TopicId, check.Status == Ready, check.Status == Ready ? check.Questions : []))
+            : new CallOutcome<CheckQuestions>(outcome.Result, TraceId: outcome.TraceId);
+    }
 
     public Task<CallOutcome<AskedQuestion>> AskAsync(Guid topicId, CancellationToken cancellationToken = default) =>
         CallAsync(
@@ -84,6 +102,12 @@ public sealed class HttpQuiz(HttpClient http) : IQuiz, IBlockQuiz
     {
         AskedQuestion question => Shows(question.Text, question.Options),
         BlockQuiz quiz => quiz.Questions is { Count: > 0 } questions && questions.All(question => question is not null && Shows(question.Text, question.Options)),
+        CheckResponse check => check.Status switch
+        {
+            Ready => check.Questions is { Count: > 0 } questions && questions.All(question => question is not null && Shows(question.Text, question.Options)),
+            NotReady => true,
+            _ => false,
+        },
         GradedAnswer graded => (graded.Option is { } option ? option >= 0
                 : graded.Options is { Count: > 0 } options ? options.All(chosen => chosen >= 0)
                 : graded.Revealed)
@@ -106,6 +130,10 @@ internal sealed record RevealBody(bool ShowSolution, int ResponseTimeMs);
 
 internal sealed record QuizBody(Guid TopicId, Guid BlockId, int Size);
 
+internal sealed record CheckBody(Guid TopicId, Guid? SessionId);
+
+internal sealed record CheckResponse(Guid TopicId, string Status, IReadOnlyList<AskedQuestion> Questions);
+
 // Source-generated for the trimmed browser app. An answer without the fields that make a question or a grade fails.
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, RespectRequiredConstructorParameters = true)]
 [JsonSerializable(typeof(AskBody))]
@@ -116,4 +144,6 @@ internal sealed record QuizBody(Guid TopicId, Guid BlockId, int Size);
 [JsonSerializable(typeof(GradedAnswer))]
 [JsonSerializable(typeof(QuizBody))]
 [JsonSerializable(typeof(BlockQuiz))]
+[JsonSerializable(typeof(CheckBody))]
+[JsonSerializable(typeof(CheckResponse))]
 internal sealed partial class QuizJson : JsonSerializerContext;

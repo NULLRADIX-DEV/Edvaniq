@@ -4,7 +4,14 @@
 @inject ILearningMaterial Material
 @inject IServiceProvider Services
 
-<h1>@(topicName is null ? "Zusammenfassung" : $"Zusammenfassung zu „{topicName}“")</h1>
+@if (Embedded)
+{
+    <h2>@Heading</h2>
+}
+else
+{
+    <h1>@Heading</h1>
+}
 
 @* Real buttons, so Tab reaches each and Enter or Space picks it. The pressed one is the length shown. *@
 <div class="summary-lengths" role="group" aria-label="@FeedbackTexts.Summary.LengthLabel">
@@ -76,7 +83,7 @@
     case ViewState.LoadFailed:
         <StateActions ActionText="@FeedbackTexts.Connection.Retry" OnAction="() => RequestAsync(selected)" />
         break;
-    case ViewState.NotFound:
+    case ViewState.NotFound when !Embedded:
         <StateActions Href="themen" LinkText="@FeedbackTexts.Summary.BackToTopics" />
         break;
     case ViewState.NoMaterial:
@@ -95,7 +102,14 @@
             <AiNote WithoutMaterial="WithoutMaterial(Current.Sources)" FromDemo="FromDemo(Current.Sources)" />
             @if (Current.Sources.Count > 0)
             {
-                <h2 class="summary-sources-heading">@(Current.Sources.Count == 1 ? FeedbackTexts.Sources.Heading : FeedbackTexts.Sources.HeadingMany)</h2>
+                @if (Embedded)
+                {
+                    <h3 class="summary-sources-heading">@SourcesHeading</h3>
+                }
+                else
+                {
+                    <h2 class="summary-sources-heading">@SourcesHeading</h2>
+                }
                 <ul class="summary-sources">
                     @foreach (var source in Current.Sources)
                     {
@@ -121,6 +135,15 @@
     [Parameter]
     public Guid TopicId { get; set; }
 
+    // Inside a page with its own h1, like the new topic unit (#358): the headings go one level down and the way back to
+    // the topics is the page's.
+    [Parameter]
+    public bool Embedded { get; set; }
+
+    // Whenever what the view shows changes in a way a caller cares about. Only called when someone listens.
+    [Parameter]
+    public EventCallback<SummaryState> OnStateChanged { get; set; }
+
     private readonly CancellationTokenSource life = new();
     private DocumentLookup documents = default!;
     private CancellationTokenSource? poll;
@@ -139,6 +162,8 @@
     // A call for the selected length that brought no summary.
     private CallOutcome<TopicSummary>? problem;
 
+    private SummaryState? reported;
+
     private enum ViewState
     {
         Loading,
@@ -154,6 +179,18 @@
     }
 
     private TopicSummary? Current => summaries.GetValueOrDefault(selected);
+
+    private string Heading => topicName is null ? "Zusammenfassung" : $"Zusammenfassung zu „{topicName}“";
+
+    private string SourcesHeading => Current!.Sources.Count == 1 ? FeedbackTexts.Sources.Heading : FeedbackTexts.Sources.HeadingMany;
+
+    private SummaryState Reported => State switch
+    {
+        ViewState.Loading or ViewState.Writing => SummaryState.Pending,
+        ViewState.Ready => SummaryState.Ready,
+        ViewState.NotFound => SummaryState.Gone,
+        _ => SummaryState.Unavailable,
+    };
 
     private ViewState State => this switch
     {
@@ -184,6 +221,17 @@
 
     private static bool FromDemo(IReadOnlyList<SummarySource> sources) =>
         sources.Any(source => DocumentOrigins.IsDemo(source.Origin));
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!OnStateChanged.HasDelegate || reported == Reported)
+        {
+            return;
+        }
+
+        reported = Reported;
+        await OnStateChanged.InvokeAsync(reported.Value);
+    }
 
     protected override async Task OnParametersSetAsync()
     {

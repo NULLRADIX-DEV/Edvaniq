@@ -10,7 +10,7 @@ namespace Edvaniq.Web;
 // The web host asks Identity for the user's token (password grant, docs/tokens.md) with its own client secret and keeps
 // the token in the session cookie. The browser only learns how it went, as a problem with a code: 204 signed in, 401
 // invalid_credentials (the same for a wrong login and a wrong password, nobody learns whether an account exists), 403
-// unconfirmed or awaiting_approval (only after the right password), 429 too_many_attempts with Retry-After, 502 when
+// unconfirmed or awaiting_approval (only after the right password), 429 locked with Retry-After (#252), 502 when
 // Identity gave no usable answer. Neither password nor token gets into a log.
 internal static class WebLogin
 {
@@ -51,16 +51,25 @@ internal static class WebLogin
                 return Refused(
                     StatusCodes.Status403Forbidden, "unconfirmed", "Bestätige zuerst deine E-Mail-Adresse mit dem Link aus unserer Mail.");
             case LoginOutcome.AwaitingApproval:
-                return Refused(StatusCodes.Status403Forbidden, "awaiting_approval", "Dein Konto muss noch freigegeben werden.");
+                return Refused(
+                    StatusCodes.Status403Forbidden,
+                    "awaiting_approval",
+                    "Für alle unter 18 brauchen wir die Zustimmung deiner Eltern. Sobald sie bei uns ist, schalten wir dein Konto frei.");
             case LoginOutcome.TooManyAttempts:
                 context.Response.Headers.RetryAfter = ((int)Math.Ceiling(result.Lifetime.TotalSeconds)).ToString(
                     System.Globalization.CultureInfo.InvariantCulture);
                 return Refused(
-                    StatusCodes.Status429TooManyRequests, "too_many_attempts", "Zu viele Versuche. Warte kurz und versuch es dann noch einmal.");
+                    StatusCodes.Status429TooManyRequests,
+                    "locked",
+                    $"Zu viele Fehlversuche. Versuch es in {Minutes(result.Lifetime)} noch einmal.");
             default:
                 return Results.StatusCode(StatusCodes.Status502BadGateway);
         }
     }
+
+    private static string Minutes(TimeSpan wait) => Math.Max(1, (int)Math.Ceiling(wait.TotalMinutes)) is var minutes and > 1
+        ? $"{minutes} Minuten"
+        : "einer Minute";
 
     private static IResult Refused(int status, string code, string title) =>
         TypedResults.Problem(statusCode: status, title: title, extensions: new Dictionary<string, object?> { ["code"] = code });
@@ -79,6 +88,7 @@ internal enum LoginOutcome
     // The right password, but a minor's account waits for the operator (#256).
     AwaitingApproval,
 
+    // Identity locked the login after too many failures (#252).
     TooManyAttempts,
     Unavailable,
 }

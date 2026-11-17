@@ -1,0 +1,103 @@
+@using System.Globalization
+@using Microsoft.JSInterop
+
+@* The questions of a QuestionRun one after another: progress, the card and the way on. Loading, a status region and the
+   end belong to the caller, who learns from OnMoved that the user went on and from Run.IsDone that it's over. A
+   question of a type the app can't show only gets the button here, the caller says why in its status region. *@
+
+@if (!Run.IsDone)
+{
+    <p class="block-quiz-progress" id="block-quiz-progress" tabindex="-1" @ref="progressText">@ProgressText</p>
+    <progress class="block-quiz-bar" max="@Run.Count" value="@(Run.Index + 1)" aria-labelledby="block-quiz-progress"></progress>
+    @if (Run.Current.IsKnownType)
+    {
+        <QuestionCard Question="Run.Current" Round="Run.Index" TopicId="TopicId" Documents="Documents" FocusOnShow="moved"
+                      OnGraded="Graded" OnGone="OnGone">
+            <Next>
+                <div class="quiz-actions">
+                    <button type="button" class="button" @onclick="MoveOn">@(Run.IsLast ? LastText : FeedbackTexts.BlockQuiz.Next)</button>
+                </div>
+            </Next>
+        </QuestionCard>
+    }
+    else
+    {
+        <div class="quiz-actions">
+            <button type="button" class="button" @onclick="MoveOn">@(Run.IsLast ? LastText : FeedbackTexts.BlockQuiz.Skip)</button>
+        </div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public QuestionRun Run { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public Guid TopicId { get; set; }
+
+    [Parameter, EditorRequired]
+    public DocumentLookup Documents { get; set; } = default!;
+
+    // Whether the first question shown takes the focus. Never on the first load of a page, after the user did something.
+    [Parameter]
+    public bool FocusOnShow { get; set; }
+
+    // The button below the last question.
+    [Parameter]
+    public string LastText { get; set; } = FeedbackTexts.BlockQuiz.ToResult;
+
+    [Parameter]
+    public EventCallback OnMoved { get; set; }
+
+    [Parameter]
+    public EventCallback OnGone { get; set; }
+
+    private QuestionRun? shown;
+    private bool moved;
+    private bool focusProgress;
+    private ElementReference progressText;
+
+    private string ProgressText =>
+        string.Format(CultureInfo.InvariantCulture, FeedbackTexts.BlockQuiz.Progress, Run.Index + 1, Run.Count);
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(shown, Run))
+        {
+            return;
+        }
+
+        // Another run: the card puts the focus on its question, one the app can't show has only the progress to land on.
+        shown = Run;
+        moved = FocusOnShow;
+        focusProgress = FocusOnShow && !Run.IsDone && !Run.Current.IsKnownType;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!focusProgress)
+        {
+            return;
+        }
+
+        focusProgress = false;
+        try
+        {
+            await progressText.FocusAsync();
+        }
+        catch (JSException)
+        {
+            // The element went away between render and focus, nothing to do.
+        }
+    }
+
+    private void Graded(GradedAnswer graded) => Run.Grade(graded.Correct);
+
+    private async Task MoveOn()
+    {
+        Run.MoveOn();
+        moved = true;
+        focusProgress = !Run.IsDone && !Run.Current.IsKnownType;
+        await OnMoved.InvokeAsync();
+    }
+}

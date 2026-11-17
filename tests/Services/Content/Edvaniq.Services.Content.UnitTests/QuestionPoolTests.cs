@@ -24,6 +24,15 @@ public class QuestionPoolTests
     public void FullPool_WantsNoTopUp() =>
         Assert.False(Pool(QuestionPool.MinQuestions).WantsTopUp);
 
+    // A pool without a target of its own is meant to have MaxQuestions and is short just below MinQuestions.
+    [Fact]
+    public void PoolWithoutTarget_IsShortBelowMinQuestions()
+    {
+        var pool = Pool(QuestionPool.MinQuestions - 1);
+
+        Assert.Equal((QuestionPool.MaxQuestions, true), (pool.Goal, pool.WantsTopUp));
+    }
+
     [Fact]
     public void TopUp_AddsTheNewKeys_AndEndsTheWait()
     {

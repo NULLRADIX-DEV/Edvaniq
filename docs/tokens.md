@@ -55,7 +55,7 @@ Eine erfolgreiche Antwort ist `200` mit `access_token`, `token_type` (`Bearer`) 
 | 400 | `unauthorized_client` | der Client darf keinen Login anfragen |
 | 400 | `invalid_grant` | Name, Adresse oder Passwort falsch. Ob es das Konto gibt, sagt die Antwort nicht. |
 | 400 | `invalid_grant` mit `reason` | das Passwort stimmt, aber das Konto darf sich noch nicht anmelden: `unconfirmed` (Adresse nicht bestätigt) oder `awaiting_approval` (wartet auf die Freigabe). Nur mit dem richtigen Passwort kommt `reason` mit, sonst wüsste jeder, dass es die Adresse gibt. |
-| 429 | `too_many_attempts` | zu viele Versuche für dieses Konto in kurzer Zeit, `Retry-After` nennt die Wartezeit in Sekunden |
+| 429 | `locked` | die Anmeldung ist nach zu vielen Fehlversuchen gesperrt, auch mit dem richtigen Passwort, `Retry-After` nennt die Wartezeit in Sekunden |
 
 Der Browser meldet sich über den Web-Host an: `POST /session/login` mit `{"name": "…", "password": "…"}`, wobei `name` ein Teamname oder eine E-Mail-Adresse ist. Der Web-Host übersetzt die Antwort von Identity in ein Problem mit einem `code`, den Satz für den Nutzer trägt `title`:
 
@@ -66,8 +66,10 @@ Der Browser meldet sich über den Web-Host an: `POST /session/login` mit `{"name
 | 401 | `invalid_credentials` | Anmeldename oder Passwort falsch, gleich für eine unbekannte Adresse |
 | 403 | `unconfirmed` | Adresse noch nicht bestätigt, nur nach dem richtigen Passwort |
 | 403 | `awaiting_approval` | das Konto wartet auf die Freigabe, nur nach dem richtigen Passwort |
-| 429 | `too_many_attempts` | zu viele Versuche, `Retry-After` nennt die Wartezeit. Die Grenze des Web-Hosts je Client-Adresse antwortet ebenfalls mit 429 und `Retry-After`, ohne `code`. |
+| 429 | `locked` | die Anmeldung ist gesperrt, `Retry-After` nennt die Wartezeit. Die Grenze des Web-Hosts je Client-Adresse antwortet ebenfalls mit 429 und `Retry-After`, ohne `code`. |
 | 502 | | Identity hat keine brauchbare Antwort gegeben |
+
+Nach 5 Fehlversuchen innerhalb von 15 Minuten sperrt Identity die Anmeldung für 15 Minuten (#252). Gezählt wird je Anmeldename bzw. Adresse, gleich ob es dazu ein Konto gibt, die Sperre verrät also nichts über ein Konto. Während der Sperre scheitert auch das richtige Passwort. Danach geht die Anmeldung von selbst wieder, und eine erfolgreiche Anmeldung setzt den Zähler zurück. Die Sperre lebt nur im Speicher von Identity, ein Neustart hebt sie auf.
 
 ## Kontoarten
 
@@ -106,13 +108,14 @@ dotnet Edvaniq.Services.Identity.Api.dll account set <name> --test-double < pass
 
 Mit `--test-double` ist das Konto für automatische Tests markiert, die Ausgabe endet dann mit `--test-double`. Seine Tokens tragen `test_double: true`. Content merkt sich das an jedem Dokument, das mit so einem Token eingefügt oder hochgeladen wird, und der Worker analysiert es mit der simulierten KI statt mit dem eingestellten Anbieter. So läuft ein Test gegen das ausgelieferte System ohne Kosten und mit festen Antworten. Setzen kann die Markierung nur dieser Befehl, keine Anfrage und kein Feld im Body. Ein `account set` ohne die Option nimmt sie wieder weg, schon eingefügte Dokumente behalten ihre.
 
-## Teamkonto löschen
+## Konto löschen
 
 ```bash
-dotnet Edvaniq.Services.Identity.Api.dll account delete <name>
+dotnet Edvaniq.Services.Identity.Api.dll account delete <name oder email>
 ```
 
-Der Befehl entfernt das Konto und schickt im selben Speichern `UserDeleted` mit der ID des Kontos, also dem `sub` seiner Tokens. Daraufhin entfernt jeder Service alle Daten des Nutzers ([Nutzer löschen](service-internals.md#nutzer-löschen)). Gesendet wird über die Outbox: Der Befehl selbst braucht keinen Broker, die laufende Identity-Api schickt das Ereignis. Er schreibt nur `deleted <name>` und endet mit 0. Gibt es den Namen nicht, schreibt er `no account <name>`, schickt nichts und endet ebenfalls mit 0, ein zweiter Lauf ist also harmlos. Bei einem anderen Fehler endet er mit 1.
+Der Befehl entfernt ein Teamkonto über seinen Namen oder ein Nutzerkonto über seine Adresse (mit `@`, wie bei der Anmeldung), samt seinen Mails und Links, auf Anfrage eines Nutzers also auch dessen Konto. Er und schickt im selben Speichern `UserDeleted` mit der ID des Kontos, also dem `sub` seiner Tokens. Daraufhin entfernt jeder Service alle Daten des Nutzers ([Nutzer löschen](service-internals.md#nutzer-löschen)). Gesendet wird über die Outbox: Der Befehl selbst braucht keinen Broker, die laufende Identity-Api schickt das Ereignis. Er schreibt nur `deleted <name>` und endet mit 0. Gibt es den Namen nicht, schreibt er `no account <name>`, schickt nichts und endet ebenfalls mit 0, ein zweiter Lauf ist also harmlos. Bei einem anderen Fehler endet er mit 1.
+
 ## Einladungscodes
 
 Registrieren kann sich nur, wer einen Einladungscode hat (#249). Die Codes verwaltet der Betreiber mit einem Befehl der Api, es gibt dafür keinen Weg über HTTP:
@@ -143,7 +146,9 @@ Identity prüft zuerst alles, was der Nutzer eingegeben hat, und löst erst dana
 
 Die Antwort ist `202` mit `{"mailDelayed": false}`, gleich, ob es die Adresse schon gibt oder nicht, und sie dauert in beiden Fällen gleich lang, weil das Passwort immer gehasht wird. Gibt es ein bestätigtes Konto mit der Adresse, verbraucht die Registrierung den Code trotzdem und schickt an die Adresse eine Mail, dass sie schon ein Konto hat. So verrät weder die Antwort noch ein zweiter Versuch mit demselben Code, wer registriert ist. Ein noch unbestätigtes Konto mit der Adresse ersetzt die neue Registrierung, sonst könnte jemand eine fremde Adresse belegen. `mailDelayed` ist `true`, wenn Mails gerade länger warten als sonst (siehe System-Mails). Ein neues Konto ist unbestätigt und kann sich erst nach der Bestätigung seiner Adresse anmelden.
 
-Eine Ablehnung ist ein Problem mit Status 400, dem Satz für den Nutzer als `title` und einem `code`: `invite_missing`, `invite_invalid`, `invite_redeemed`, `invite_revoked`, `email_invalid`, `password_rules`, `pseudonym_invalid` oder `birth_year_invalid`. Zu viele Registrierungen von einer Client-Adresse beantwortet der Web-Host mit 429 und `Retry-After`. Die Grenze ist hoch genug für eine Schulklasse hinter einem gemeinsamen Anschluss, der eigentliche Schutz ist der Einladungscode.
+Eine Ablehnung ist ein Problem mit Status 400, dem Satz für den Nutzer als `title` und einem `code`: `consent_missing`, `consent_outdated`, `invite_missing`, `invite_invalid`, `invite_redeemed`, `invite_revoked`, `email_invalid`, `password_rules`, `pseudonym_invalid` oder `birth_year_invalid`. Zu viele Registrierungen von einer Client-Adresse beantwortet der Web-Host mit 429 und `Retry-After`. Die Grenze ist hoch genug für eine Schulklasse hinter einem gemeinsamen Anschluss, der eigentliche Schutz ist der Einladungscode.
+
+Zur Registrierung gehört die Zustimmung zu Nutzungsbedingungen und Datenschutzerklärung in ihrer aktuellen Fassung (#261): `acceptedTermsVersion` und `acceptedPrivacyVersion` müssen genau die Versionen nennen, die `GET /api/identity/legal-versions` liefert (`{"termsVersion": "…", "privacyVersion": "…"}`, öffentlich, darf ein paar Minuten im Cache liegen). Fehlt eine, antwortet Identity mit `consent_missing`, ist eine veraltet, mit `consent_outdated`, beides bevor der Einladungscode eingelöst wird. Am Konto stehen danach beide Versionen und der Zeitpunkt. Den Nachweis liest der Betreiber mit `account consent <email>`, nur auf der Konsole. Bis die Rechtstexte selbst versioniert in der App stehen (#260), kommen die Versionen aus der Konfiguration (`Legal:TermsVersion`, `Legal:PrivacyVersion`).
 
 ## Bestätigung der Adresse
 
@@ -162,3 +167,17 @@ dotnet Edvaniq.Services.Identity.Api.dll account confirm <email>
 ```
 
 Der Befehl schreibt `confirmed` oder, wenn es kein unbestätigtes Konto mit der Adresse gibt, `no account`, sonst nichts.
+
+## Freigabe Minderjähriger
+
+Wer laut Geburtsjahr minderjährig sein könnte, braucht die schriftliche Einwilligung der Eltern. Die Regel nimmt nur das Geburtsjahr und entscheidet im Zweifel für minderjährig: Volljährig ist ein Konto erst, wenn das Geburtsjahr mindestens 19 Jahre zurückliegt. Ein volljähriges Konto ist nach der Bestätigung sofort aktiv, ein minderjähriges wartet. Bei der Anmeldung bekommt es `awaiting_approval` mit einem Hinweis, wie es weitergeht.
+
+Ist die Einwilligung da, gibt der Betreiber das Konto frei. Edvaniq speichert davon nur das Datum der Freigabe, nicht die Einwilligung selbst:
+
+```bash
+dotnet Edvaniq.Services.Identity.Api.dll account pending
+dotnet Edvaniq.Services.Identity.Api.dll account approve <email>
+dotnet Edvaniq.Services.Identity.Api.dll account revoke <email>
+```
+
+`account pending` listet die wartenden Konten mit Adresse, Geburtsjahr und Datum der Bestätigung, die Adresse nur auf der Konsole, nie im Log. `account approve` gibt ein wartendes Konto frei und schreibt `approved`. `account revoke` nimmt eine Freigabe zurück, das Konto wartet dann wieder, und schreibt `revoked`. Gibt es kein passendes Konto, schreiben beide `no account`. Ein Token, das vor dem Widerruf ausgestellt wurde, gilt bis zu seinem Ablauf weiter, höchstens eine Stunde.
