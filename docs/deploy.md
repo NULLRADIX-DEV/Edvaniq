@@ -6,6 +6,8 @@ Ein Deploy bringt alle Prozesse eines Commits auf `main` gemeinsam auf den Serve
 
 Du brauchst in der Org `NULLRADIX-DEV` mindestens die Rolle „Write“ im Repo, sonst fehlt in Actions der Knopf „Run workflow“. Ausrollen lässt sich nur ein Commit, der auf `main` liegt. Das prüft der Workflow selbst, und das Environment `production` gibt seine Schlüssel nur an Läufe von `main` heraus.
 
+Wer Server-Zugang hat, findet Benutzer, Verzeichnis und Port von Edvaniq im privaten Betriebshandbuch.
+
 ## Einen Commit ausrollen
 
 1. Den Pull Request auf `main` mergen.
