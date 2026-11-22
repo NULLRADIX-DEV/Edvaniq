@@ -59,6 +59,7 @@ public static class MauiProgram
 		builder.Services.AddScoped<ILearningGoals>(services => new HttpLearningGoals(Watched(services)));
 		builder.Services.AddScoped<ITopicEntries>(services => new HttpTopicEntries(Watched(services)));
 		builder.Services.AddScoped<IDailyBudget>(services => new HttpDailyBudget(Watched(services)));
+		builder.Services.AddScoped<IPasswordChange>(services => new HttpPasswordChange(Watched(services)));
 		builder.Services.AddScoped<ILearningProgress>(services => new HttpLearningProgress(Watched(services)));
 		builder.Services.AddScoped<ISessionResults>(services => new HttpSessionResults(Watched(services)));
 

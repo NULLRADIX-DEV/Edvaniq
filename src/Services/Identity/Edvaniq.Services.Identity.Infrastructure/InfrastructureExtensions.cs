@@ -28,6 +28,7 @@ public static class InfrastructureExtensions
         builder.Services.AddScoped<IAccounts, Accounts>();
         builder.Services.AddScoped<AccountService>();
         builder.Services.AddScoped<AccountDeletion>();
+        builder.Services.AddScoped<PasswordChange>();
         builder.Services.AddScoped<IInviteCodes, InviteCodes>();
         builder.Services.AddScoped<InviteService>();
         builder.Services.AddScoped<IIdentityTransactions, IdentityTransactions>();

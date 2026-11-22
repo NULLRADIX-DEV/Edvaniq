@@ -5,8 +5,8 @@ using Microsoft.Extensions.Options;
 
 namespace Edvaniq.Gateway;
 
-// Calls that cost AI, answers and session steps are limited per account, the sub of the checked token, so one account
-// can't flood a service or the AI bill. A route opts in with RateLimiterPolicy in ReverseProxy, the numbers come from
+// Calls that cost AI, answers, session steps and password changes are limited per account, the sub of the checked token,
+// so one account can't flood a service or the AI bill. A route opts in with RateLimiterPolicy in ReverseProxy, the numbers come from
 // RateLimits. The count lives in this process and starts empty after a restart, there is one gateway. Both clients come
 // through here, the web host and the app.
 public static class AccountRateLimits
@@ -19,7 +19,9 @@ public static class AccountRateLimits
 
     public const string Sessions = "sessions";
 
-    public static readonly IReadOnlyList<string> Policies = [Ai, Answers, Sessions];
+    public const string Password = "password";
+
+    public static readonly IReadOnlyList<string> Policies = [Ai, Answers, Sessions, Password];
 
     // The token handler keeps "sub" as it is (AddTokenValidation).
     private const string AccountClaim = "sub";

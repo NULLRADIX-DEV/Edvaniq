@@ -29,6 +29,7 @@ internal static class TokenEndpoints
         builder.Services.AddSingleton<SigningKey>();
         builder.Services.AddSingleton<TokenIssuer>();
         builder.Services.AddSingleton<LoginLock>();
+        builder.Services.AddSingleton<ILoginAttempts>(services => services.GetRequiredService<LoginLock>());
         return builder;
     }
 

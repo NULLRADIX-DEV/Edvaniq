@@ -90,6 +90,23 @@ Ein Endpunkt, der ein internes Token annehmen soll, sagt das mit `RequireInterna
 
 Identity speichert ein Passwort nur als Hash, PBKDF2 mit HMAC-SHA256 und eigenem Salt je Konto. Der Hash nennt Verfahren und Rundenzahl, so kann eine spätere Version beides erhöhen und alte Hashes trotzdem prüfen. Ein Passwort hat 12 bis 256 Zeichen. Weder Passwort noch Hash noch Token stehen je im Log, das prüfen die `LoggingTests` von Identity.
 
+## Passwort ändern
+
+Wer angemeldet ist, ändert sein Passwort mit `POST /accounts/password` und dem JSON `{ "currentPassword": "…", "newPassword": "…" }`, bei Teamkonten wie bei Nutzerkonten. Der Endpunkt nimmt nur das Token eines Nutzers. Das Token eines Clients bekommt 403, ein fehlendes oder ungültiges 401. Das Konto steht allein im `sub` des Tokens, die Anfrage nennt nie ein Konto. Identity prüft das Token dafür selbst mit dem öffentlichen Teil seines Signierschlüssels, ohne Anfrage an sich selbst. Alle anderen Endpunkte von Identity bleiben, wie sie sind: offen oder nur für interne Tokens.
+
+Das aktuelle Passwort ist immer nötig, ein gestohlenes Token allein reicht nicht. Das neue Passwort folgt denselben Regeln wie bei der Registrierung ([Passwörter](#passwörter)), mit denselben Sätzen. Bei Erfolg antwortet Identity mit 204 und ersetzt den Hash. Sonst antwortet es mit einem Problem, dessen Titel der Satz für den Nutzer ist:
+
+| Status | `code` | Bedeutung |
+|---|---|---|
+| 400 | `current_password_invalid` | das aktuelle Passwort stimmt nicht, der Hash bleibt, wie er war |
+| 400 | `password_rules` | das neue Passwort ist zu kurz oder zu lang, der Hash bleibt, wie er war |
+| 404 | `account_not_found` | das Konto aus dem Token gibt es nicht mehr |
+| 429 | `locked` | die Anmeldung des Kontos ist gesperrt, `Retry-After` nennt die Wartezeit |
+
+Ein falsches aktuelles Passwort zählt wie ein falsches Passwort bei der Anmeldung ([Sperre nach Fehlversuchen](#token-holen)), und zwar im selben Zähler: Wer über eine gekaperte Sitzung Passwörter durchprobiert, sperrt damit auch die Anmeldung. Ist sie gesperrt, antwortet der Endpunkt mit 429, ohne das Passwort zu prüfen, auch bei einem richtigen. Eine erfolgreiche Änderung setzt den Zähler nicht zurück. Zusätzlich begrenzt das Gateway den Endpunkt je Konto, der Web-Host leitet ihn nur mit angemeldeter Sitzung und dem Token des Nutzers weiter.
+
+Laufende Sitzungen bleiben gültig, bis ihr Token abläuft ([Gültigkeit](#gültigkeit)). Eine Änderung meldet andere Sitzungen nicht ab. Weder das alte noch das neue Passwort, noch ein Hash oder ein Token stehen im Log, das prüfen die `LoggingTests` von Identity.
+
 ## Teamkonto anlegen
 
 Der Betreiber legt Teamkonten mit einem Befehl der Api an, so wie er auch die Migrationen startet. Es wird nichts von Hand in die Datenbank geschrieben.

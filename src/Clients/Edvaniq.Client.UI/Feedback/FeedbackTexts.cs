@@ -676,6 +676,37 @@ public static class FeedbackTexts
             string.Format(System.Globalization.CultureInfo.InvariantCulture, Saved, minutes);
     }
 
+    // Changing the password on the settings page (#254). Identity's sentences for a wrong current password and for the
+    // rules of the new one come from the problem and show at their field.
+    public static class Password
+    {
+        public const string Heading = "Passwort ändern";
+
+        public const string CurrentLabel = "Aktuelles Passwort";
+
+        public const string NewLabel = "Neues Passwort";
+
+        public const string NewHint = "Mindestens 12 und höchstens 256 Zeichen.";
+
+        public const string RepeatLabel = "Neues Passwort wiederholen";
+
+        public const string CurrentMissing = "Gib dein aktuelles Passwort ein.";
+
+        public const string NewMissing = "Gib ein neues Passwort ein.";
+
+        public const string Mismatch = "Die beiden neuen Passwörter sind nicht gleich.";
+
+        public const string Save = "Passwort ändern";
+
+        public const string Saving = "Wird geändert …";
+
+        public const string Changed = "Dein Passwort ist geändert.";
+
+        public const string Limited = "Zu viele Versuche. Warte einen Moment und versuch es dann noch einmal.";
+
+        public const string NotThrough = "Dein Passwort wurde nicht geändert. Edvaniq ist gerade nicht erreichbar. Versuch es gleich noch einmal.";
+    }
+
     // The overview of the learning goals.
     public static class GoalList
     {

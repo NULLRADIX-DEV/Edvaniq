@@ -8,12 +8,17 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Edvaniq.Services.Identity.IntegrationTests;
 
-// #271: Identity has no endpoint with a user's token yet. Discovery, key set and token endpoint are open to anyone by
-// design and hold no user's data, so the isolation check leaves them out. Every endpoint added later (the full build of
-// Identity, #244) fails the check until it is listed, and with a seed of its own it gets the same test as every service.
+// #271: Discovery, key set, token endpoint and registration are open to anyone by design and hold no user's data, so the
+// isolation check leaves them out. The one endpoint with a user's token (#254) changes only the account of its subject.
+// Every endpoint added later fails the check until it is listed, and with a seed of its own it gets the same test as
+// every service.
 public sealed class IsolationTests
 {
-    internal static IsolationCheck Check() => new();
+    internal static IsolationCheck Check() => new IsolationCheck().Exempt(
+        "POST",
+        "/accounts/password",
+        "Changes the password of the account the token names, the request names no account.",
+        nameof(PasswordChangeTests.Subject_DecidesTheAccount_NotTheBody));
 
     [Fact]
     public async Task EveryEndpoint_IsInTheCheck()

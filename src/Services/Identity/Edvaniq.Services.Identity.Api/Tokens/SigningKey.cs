@@ -43,10 +43,16 @@ internal sealed class SigningKey : IDisposable
 
     public PublicKey PublicKey { get; }
 
+    // The public keys as validation keys, for the check of a token in this process (no request to the own key set).
+    public IReadOnlyList<SecurityKey> ValidationKeys => [.. PublicKeys.Select(ValidationKeyOf)];
+
     // What the key set publishes: the key, and during a change the previous one after it.
     public IReadOnlyList<PublicKey> PublicKeys { get; }
 
     public SigningCredentials Credentials { get; }
+
+    private static JsonWebKey ValidationKeyOf(PublicKey key) =>
+        new() { Kty = key.Kty, Crv = key.Crv, X = key.X, Y = key.Y, Kid = key.Kid, Use = key.Use, Alg = key.Alg };
 
     public static PublicKey PublicKeyOf(ECDsa key)
     {
