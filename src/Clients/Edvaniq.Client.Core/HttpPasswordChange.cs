@@ -15,6 +15,10 @@ public sealed class HttpPasswordChange(HttpClient http) : IPasswordChange
     private const string CurrentInvalid = "current_password_invalid";
     private const string PasswordRules = "password_rules";
 
+    // Ours, for a refusal whose title is no sentence for the user.
+    private const string CurrentInvalidSentence = "Dein aktuelles Passwort stimmt nicht.";
+    private const string PasswordRulesSentence = "Dein neues Passwort braucht mindestens 12 und höchstens 256 Zeichen.";
+
     public Task<CallOutcome<bool>> ChangeAsync(string currentPassword, string newPassword, CancellationToken cancellationToken = default) =>
         HostCall.GuardAsync(
             async () =>
@@ -32,16 +36,21 @@ public sealed class HttpPasswordChange(HttpClient http) : IPasswordChange
                             CallResult.Limited, Messages: await ProblemTitle.ReadAsync(response, cancellationToken) is { } wait ? [wait] : []);
                     case HttpStatusCode.BadRequest:
                         var problem = await ReadAsync(response, cancellationToken);
-                        var field = problem?.Code switch
+                        // A known refusal whose title is no sentence still belongs at its field, with our own sentence.
+                        (string Field, string Fallback)? refusal = problem?.Code switch
                         {
-                            CurrentInvalid => PasswordChangeFields.Current,
-                            PasswordRules => PasswordChangeFields.New,
+                            CurrentInvalid => (PasswordChangeFields.Current, CurrentInvalidSentence),
+                            PasswordRules => (PasswordChangeFields.New, PasswordRulesSentence),
                             _ => null,
                         };
-                        return field is not null && ProblemTitle.Sentence(problem?.Title) is { } sentence
-                            ? new CallOutcome<bool>(
-                                CallResult.Rejected, Messages: [sentence], FieldErrors: new Dictionary<string, string> { [field] = sentence })
-                            : CallOutcome<bool>.Failed(ProblemTrace.Check(problem?.TraceId));
+                        if (refusal is not { } known)
+                        {
+                            return CallOutcome<bool>.Failed(ProblemTrace.Check(problem?.TraceId));
+                        }
+
+                        var sentence = ProblemTitle.Sentence(problem?.Title) ?? known.Fallback;
+                        return new CallOutcome<bool>(
+                            CallResult.Rejected, Messages: [sentence], FieldErrors: new Dictionary<string, string> { [known.Field] = sentence });
                     case HttpStatusCode.NotFound:
                         return new CallOutcome<bool>(CallResult.NotFound);
                     default:

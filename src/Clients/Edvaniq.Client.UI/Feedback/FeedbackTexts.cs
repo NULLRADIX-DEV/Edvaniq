@@ -705,6 +705,8 @@ public static class FeedbackTexts
         public const string Limited = "Zu viele Versuche. Warte einen Moment und versuch es dann noch einmal.";
 
         public const string NotThrough = "Dein Passwort wurde nicht geändert. Edvaniq ist gerade nicht erreichbar. Versuch es gleich noch einmal.";
+
+        public const string AccountGone = "Dein Passwort wurde nicht geändert. Dieses Konto gibt es nicht mehr.";
     }
 
     // The overview of the learning goals.

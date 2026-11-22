@@ -52,7 +52,7 @@ internal static class AccountEndpoints
             case PasswordChangeOutcome.Changed:
                 return TypedResults.NoContent();
             case PasswordChangeOutcome.CurrentInvalid:
-                return Refused(PasswordChange.CurrentInvalidCode, PasswordChange.CurrentInvalidTitle);
+                return Refused(PasswordChange.CurrentInvalidCode, result.Detail ?? PasswordChange.CurrentInvalidTitle);
             case PasswordChangeOutcome.RulesViolated:
                 return Refused(PasswordPolicy.Code, result.Detail!);
             case PasswordChangeOutcome.Locked:

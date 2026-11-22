@@ -40,20 +40,33 @@ public sealed class PasswordChangeTests
         Assert.True(PasswordHasher.Verify(Next, account.PasswordHash));
     }
 
+    [Fact]
+    public async Task WrongCurrentPassword_IsRefused_KeepsTheHash_AndCountsAsFailure()
+    {
+        var account = AddTeam("ben");
+        var before = account.PasswordHash;
+
+        var result = await ChangeAsync(account, "a wrong password", Next);
+
+        Assert.Equal((PasswordChangeOutcome.CurrentInvalid, "Dein aktuelles Passwort stimmt nicht."), (result.Outcome, result.Detail));
+        Assert.Equal(before, account.PasswordHash);
+        Assert.Equal(["ben"], attempts.Failures);
+    }
+
+    // No password is no guess: a client sending the wrong field must not lock the login.
     [Theory]
-    [InlineData("a wrong password")]
     [InlineData("")]
     [InlineData(null)]
-    public async Task WrongCurrentPassword_IsRefused_KeepsTheHash_AndCountsAsFailure(string? current)
+    public async Task MissingCurrentPassword_IsRefused_KeepsTheHash_AndDoesNotCount(string? current)
     {
         var account = AddTeam("ben");
         var before = account.PasswordHash;
 
         var result = await ChangeAsync(account, current, Next);
 
-        Assert.Equal((PasswordChangeOutcome.CurrentInvalid, "Dein aktuelles Passwort stimmt nicht."), (result.Outcome, result.Detail));
+        Assert.Equal((PasswordChangeOutcome.CurrentInvalid, "Gib dein aktuelles Passwort ein."), (result.Outcome, result.Detail));
         Assert.Equal(before, account.PasswordHash);
-        Assert.Equal(["ben"], attempts.Failures);
+        Assert.Empty(attempts.Failures);
     }
 
     [Fact]

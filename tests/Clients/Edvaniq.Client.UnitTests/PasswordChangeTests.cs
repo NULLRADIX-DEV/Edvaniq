@@ -164,6 +164,21 @@ public sealed class PasswordChangeTests : BunitContext
         Assert.Equal("the old password", page.Find("#password-current").GetAttribute("value"));
     }
 
+    // The account was deleted while the session still runs: that is no outage, and retrying won't help.
+    [Fact]
+    public void AccountGone_SaysSo_InsteadOfAnOutage()
+    {
+        passwords.Answer(new CallOutcome<bool>(CallResult.NotFound));
+        var page = Render<Settings>();
+
+        Fill(page, "the old password", "the new password", "the new password");
+        Submit(page);
+
+        var alert = page.Find(".password-form [role=alert]").TextContent;
+        Assert.Contains(FeedbackTexts.Password.AccountGone, alert);
+        Assert.DoesNotContain(FeedbackTexts.Password.NotThrough, alert);
+    }
+
     // The next try starts clean: neither an old error nor an old hint stays.
     [Fact]
     public void NextTry_RemovesWhatWentWrongBefore()

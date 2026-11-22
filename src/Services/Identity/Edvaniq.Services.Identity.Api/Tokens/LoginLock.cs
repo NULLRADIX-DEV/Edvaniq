@@ -78,7 +78,8 @@ internal sealed class LoginLock(TimeProvider time) : ILoginAttempts
         }
     }
 
-    // The login went through, or its password was set anew: it counts from zero.
+    // The login went through: it counts from zero. A changed password deliberately keeps the count (docs/tokens.md,
+    // "Passwort ändern"), so a stolen session can't wipe its own wrong guesses.
     public void Clear(string? login) => logins.TryRemove(KeyOf(login), out _);
 
     // A name can't contain "@" or ":", so the two kinds never share a key. Logins that are no valid ones share one.

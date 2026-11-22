@@ -20,6 +20,8 @@ public sealed class PasswordChange(IAccounts accounts, ILoginAttempts attempts)
 
     public const string CurrentInvalidTitle = "Dein aktuelles Passwort stimmt nicht.";
 
+    public const string CurrentMissingTitle = "Gib dein aktuelles Passwort ein.";
+
     // A wrong current password counts like a wrong password at the login, under the same key. A locked login says no
     // before the password is looked at, also to the right one. A success does not reset the count.
     public async Task<PasswordChangeResult> ChangeAsync(
@@ -31,6 +33,12 @@ public sealed class PasswordChange(IAccounts accounts, ILoginAttempts attempts)
             return new PasswordChangeResult(PasswordChangeOutcome.AccountNotFound);
         }
 
+        // No password is no guess, so it doesn't count: a client sending the wrong field must not lock the login.
+        if (string.IsNullOrEmpty(currentPassword))
+        {
+            return new PasswordChangeResult(PasswordChangeOutcome.CurrentInvalid, CurrentMissingTitle);
+        }
+
         var login = account.Kind == AccountKind.User ? account.Email : account.Name;
         if (attempts.IsLocked(login, out var retryAfter))
         {
@@ -38,7 +46,7 @@ public sealed class PasswordChange(IAccounts accounts, ILoginAttempts attempts)
         }
 
         // A password beyond the limit can't be the current one, no need to spend a hash on it.
-        if (currentPassword is not { Length: > 0 and <= PasswordHasher.MaximumLength }
+        if (currentPassword.Length > PasswordHasher.MaximumLength
             || !PasswordHasher.Verify(currentPassword, account.PasswordHash))
         {
             attempts.Failed(login);
