@@ -19,6 +19,7 @@ public sealed class DailyBudgetTests : BunitContext
     public DailyBudgetTests()
     {
         Services.AddSingleton<IDailyBudget>(budget);
+        Services.AddSingleton<IPasswordChange>(new FakePasswordChange());
         JSInterop.Mode = JSRuntimeMode.Loose;
         SetRendererInfo(new RendererInfo("WebAssembly", isInteractive: true));
     }
@@ -150,7 +151,7 @@ public sealed class DailyBudgetTests : BunitContext
         var page = Render<Settings>();
 
         Assert.Contains(FeedbackTexts.Budget.LoadFailed, page.Find("[role=status]").TextContent);
-        Assert.Empty(page.FindAll("form"));
+        Assert.Empty(page.FindAll(".budget-form"));
 
         page.Find(".state-actions button").Click();
 

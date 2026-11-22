@@ -45,7 +45,7 @@ public sealed class Registration(
     public const string InviteRedeemed = "invite_redeemed";
     public const string InviteRevoked = "invite_revoked";
     public const string EmailInvalid = "email_invalid";
-    public const string PasswordRules = "password_rules";
+    public const string PasswordRules = PasswordPolicy.Code;
     public const string PseudonymInvalid = "pseudonym_invalid";
     public const string ConsentMissing = "consent_missing";
     public const string ConsentOutdated = "consent_outdated";
@@ -133,14 +133,9 @@ public sealed class Registration(
             return Refuse(EmailInvalid, "Das ist keine gültige E-Mail-Adresse.");
         }
 
-        if (request.Password is not { } password || password.Length < PasswordHasher.MinimumLength)
+        if (PasswordPolicy.Violation(request.Password) is { } passwordProblem)
         {
-            return Refuse(PasswordRules, $"Dein Passwort braucht mindestens {PasswordHasher.MinimumLength} Zeichen.");
-        }
-
-        if (password.Length > PasswordHasher.MaximumLength)
-        {
-            return Refuse(PasswordRules, $"Dein Passwort darf höchstens {PasswordHasher.MaximumLength} Zeichen haben.");
+            return Refuse(PasswordRules, passwordProblem);
         }
 
         if (AccountProfile.NormalizePseudonym(request.Pseudonym) is null)

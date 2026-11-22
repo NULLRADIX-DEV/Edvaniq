@@ -135,6 +135,30 @@ public sealed partial class RateLimitTests
         }
     }
 
+    // #254: ten changes of the password a minute per account, the next one is turned away without reaching Identity.
+    [Fact]
+    public async Task PasswordChange_IsLimitedPerAccount_ByAppsettings()
+    {
+        await using var identity = await StubService.StartAsync("identity-stub");
+        await using var gateway = new GatewayFactory("http://127.0.0.1:9", identityAddress: identity.Address);
+        using var alice = ClientFor(gateway, $"alice-{Guid.NewGuid():N}");
+        using var bob = ClientFor(gateway, $"bob-{Guid.NewGuid():N}");
+
+        for (var call = 0; call < 10; call++)
+        {
+            using var allowed = await SendAsync(alice, "POST", "/identity/accounts/password");
+            Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        }
+
+        using var refused = await SendAsync(alice, "POST", "/identity/accounts/password");
+        using var other = await SendAsync(bob, "POST", "/identity/accounts/password");
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
+        Assert.InRange(refused.Headers.RetryAfter?.Delta ?? TimeSpan.Zero, TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(1));
+        Assert.Equal(HttpStatusCode.OK, other.StatusCode);
+        Assert.Equal(11, identity.Requests);
+    }
+
     [Theory]
     [InlineData("0")]
     [InlineData("-5")]

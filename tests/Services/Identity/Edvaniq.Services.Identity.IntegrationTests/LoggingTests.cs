@@ -78,6 +78,45 @@ public sealed partial class LoggingTests(IdentityDatabase database) : IClassFixt
         Assert.Empty(identity.Logs.Containing(password, newPassword, wrongPassword, hash, hash.Split('$')[^1], token, identity.ClientSecret));
     }
 
+    // #254: the change of a password, with a wrong current one, a locked one and the right one. Neither the old nor the
+    // new password, nor a hash or the token that asks for it, gets into the log.
+    [Fact]
+    public async Task PasswordChange_LogsNoPasswordHashOrToken()
+    {
+        var cancel = TestContext.Current.CancellationToken;
+        var password = Convert.ToBase64String(RandomNumberGenerator.GetBytes(18));
+        var newPassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(18));
+        var wrongPassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(18));
+        var rejectedPassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(18));
+        await using var identity = new IdentityFactory(
+            new Dictionary<string, string?> { [WebHostDefaults.EnvironmentKey] = Environments.Production },
+            connectionString: database.ConnectionString);
+        await identity.SetAccountAsync("changer", password);
+        using var login = await identity.LoginAsync("changer", password);
+        var token = (await login.Content.ReadFromJsonAsync<Dictionary<string, object>>(cancel))!["access_token"].ToString()!;
+        var client = identity.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        using var changed = await client.PostAsJsonAsync("/accounts/password", new { currentPassword = password, newPassword }, cancel);
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            using var wrong = await client.PostAsJsonAsync("/accounts/password", new { currentPassword = wrongPassword, newPassword = rejectedPassword }, cancel);
+        }
+
+        string hash;
+        using (var scope = identity.Services.CreateScope())
+        {
+            hash = await scope.ServiceProvider.GetRequiredService<IdentityDbContext>().Accounts
+                .Where(account => account.Name == "changer")
+                .Select(account => account.PasswordHash)
+                .SingleAsync(cancel);
+        }
+
+        Assert.Equal(HttpStatusCode.NoContent, changed.StatusCode);
+        Assert.NotEmpty(identity.Logs.Entries);
+        identity.Logs.AssertNone(password, newPassword, wrongPassword, rejectedPassword, hash, hash.Split('$')[^1], token, identity.ClientSecret);
+    }
+
     // #314: the way of a new person, from the invite code over the mail with the link to the first login by address.
     // Nothing they typed or got gets into the log: address, password, pseudonym, year of birth, code, link and token.
     [Fact]

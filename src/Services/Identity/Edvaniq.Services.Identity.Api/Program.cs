@@ -6,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddTokenIssuer();
+builder.AddUserTokenCheck();
 builder.AddInfrastructure();
 
 var app = builder.Build();
@@ -36,6 +37,8 @@ if (InviteCommand.Matches(args))
 }
 
 app.MapDefaultEndpoints();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapTokenEndpoints();
 app.MapAccountEndpoints();
 

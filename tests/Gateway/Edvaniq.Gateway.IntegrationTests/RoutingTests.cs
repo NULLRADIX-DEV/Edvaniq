@@ -70,6 +70,42 @@ public sealed class RoutingTests
         Assert.Equal(new Echo("identity-stub", "POST", "/connect/token", Authorization: "", Cookie: ""), echo);
     }
 
+    // #254: changing the password is the one route of Identity that needs a token. It arrives as the caller sent it, the
+    // body unchanged, and Identity knows the account from the subject.
+    [Fact]
+    public async Task IdentityPasswordRoute_ReachesIdentity_WithoutPrefix_WithTheToken()
+    {
+        await using var identity = await StubService.StartAsync("identity-stub");
+        await using var gateway = new GatewayFactory("http://127.0.0.1:9", identityAddress: identity.Address);
+        using var client = AuthorizedClient(gateway);
+
+        using var response = await client.PostAsJsonAsync(
+            "/identity/accounts/password", new { currentPassword = "a", newPassword = "b" }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var echo = await response.Content.ReadFromJsonAsync<Echo>(TestContext.Current.CancellationToken);
+        Assert.Equal(new Echo("identity-stub", "POST", "/accounts/password", $"Bearer {Token}", Cookie: ""), echo);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not-a-token")]
+    public async Task IdentityPasswordRoute_WithoutAValidToken_IsUnauthorizedProblem_AndNothingIsForwarded(string? token)
+    {
+        await using var identity = await StubService.StartAsync("identity-stub");
+        await using var gateway = new GatewayFactory("http://127.0.0.1:9", identityAddress: identity.Address);
+        using var client = gateway.CreateClient();
+        if (token is not null)
+        {
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        using var response = await client.PostAsync("/identity/accounts/password", content: null, TestContext.Current.CancellationToken);
+
+        await AssertProblemAsync(response, HttpStatusCode.Unauthorized, "This path needs a valid token.");
+        Assert.Equal(0, identity.Requests);
+    }
+
     // Only the token endpoint is open to the outside. Discovery and key set are for the services, which ask Identity
     // directly.
     [Theory]

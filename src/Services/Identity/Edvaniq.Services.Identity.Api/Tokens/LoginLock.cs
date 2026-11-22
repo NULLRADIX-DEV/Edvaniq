@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 
+using Edvaniq.Services.Identity.Application;
 using Edvaniq.Services.Identity.Domain;
 
 namespace Edvaniq.Services.Identity.Api.Tokens;
@@ -9,7 +10,7 @@ namespace Edvaniq.Services.Identity.Api.Tokens;
 // normalized login, an address only by its fingerprint, and the same way for a login no account has: whether an account
 // exists makes no difference. Kept in memory only, so nothing about failed logins lies in the database; a restart lifts
 // every lock. The limit per caller is the web host's, Identity only sees the gateway.
-internal sealed class LoginLock(TimeProvider time)
+internal sealed class LoginLock(TimeProvider time) : ILoginAttempts
 {
     public const int MaxFailures = 5;
 
