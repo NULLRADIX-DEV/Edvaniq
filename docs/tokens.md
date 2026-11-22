@@ -98,7 +98,7 @@ Das aktuelle Passwort ist immer nötig, ein gestohlenes Token allein reicht nich
 
 | Status | `code` | Bedeutung |
 |---|---|---|
-| 400 | `current_password_invalid` | das aktuelle Passwort stimmt nicht, der Hash bleibt, wie er war |
+| 400 | `current_password_invalid` | das aktuelle Passwort stimmt nicht oder fehlt, der Hash bleibt, wie er war; ein fehlendes zählt nicht als Fehlversuch |
 | 400 | `password_rules` | das neue Passwort ist zu kurz oder zu lang, der Hash bleibt, wie er war |
 | 404 | `account_not_found` | das Konto aus dem Token gibt es nicht mehr |
 | 429 | `locked` | die Anmeldung des Kontos ist gesperrt, `Retry-After` nennt die Wartezeit |

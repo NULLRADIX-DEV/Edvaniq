@@ -80,7 +80,6 @@ public sealed class PasswordChangeTests(IdentityDatabase database) : IClassFixtu
 
     [Theory]
     [InlineData("a wrong password")]
-    [InlineData("")]
     public async Task WrongCurrentPassword_IsCurrentPasswordInvalid_AndKeepsTheHash(string current)
     {
         await using var identity = new IdentityFactory(connectionString: database.ConnectionString);
@@ -112,7 +111,7 @@ public sealed class PasswordChangeTests(IdentityDatabase database) : IClassFixtu
     }
 
     [Fact]
-    public async Task EmptyBody_IsAWrongPassword()
+    public async Task EmptyBody_AsksForTheCurrentPassword()
     {
         await using var identity = new IdentityFactory(connectionString: database.ConnectionString);
         await CreateAccountAsync(identity, "empty");
@@ -120,7 +119,7 @@ public sealed class PasswordChangeTests(IdentityDatabase database) : IClassFixtu
 
         using var response = await client.PostAsJsonAsync(Path, new { }, TestContext.Current.CancellationToken);
 
-        await AssertProblemAsync(response, HttpStatusCode.BadRequest, "current_password_invalid", "Dein aktuelles Passwort stimmt nicht.");
+        await AssertProblemAsync(response, HttpStatusCode.BadRequest, "current_password_invalid", "Gib dein aktuelles Passwort ein.");
     }
 
     // MaxFailures wrong current passwords lock the change, even with the right one, and the login of the account with it:

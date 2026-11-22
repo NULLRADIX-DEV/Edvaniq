@@ -39,10 +39,24 @@ public sealed class HttpPasswordChangeTests
         Assert.Equal(new Dictionary<string, string> { [field] = title }, outcome.FieldErrors);
     }
 
-    // A 400 that is none of the two refusals, or has no sentence, is no message for a field.
+    // One of the two refusals whose title is no sentence for the user still belongs at its field, with our own sentence.
+    [Theory]
+    [InlineData("current_password_invalid", 0, PasswordChangeFields.Current, "Dein aktuelles Passwort stimmt nicht.")]
+    [InlineData("password_rules", 301, PasswordChangeFields.New, "Dein neues Passwort braucht mindestens 12 und höchstens 256 Zeichen.")]
+    public async Task Refusal_WithoutASentence_IsOurSentence_AtItsField(string code, int titleLength, string field, string sentence)
+    {
+        var title = new string('x', titleLength);
+        var passwords = Passwords([], [], Problem(HttpStatusCode.BadRequest, $$"""{"status":400,"title":"{{title}}","code":"{{code}}","traceId":"{{TraceId}}"}"""));
+
+        var outcome = await passwords.ChangeAsync("a", "b", TestContext.Current.CancellationToken);
+
+        Assert.Equal(CallResult.Rejected, outcome.Result);
+        Assert.Equal(new Dictionary<string, string> { [field] = sentence }, outcome.FieldErrors);
+    }
+
+    // A 400 that is none of the two refusals is no message for a field.
     [Theory]
     [InlineData("""{"status":400,"title":"Bad Request","code":"something_else","traceId":"4bf92f3577b34da6a3ce929d0e0e4736"}""")]
-    [InlineData("""{"status":400,"title":"","code":"password_rules","traceId":"4bf92f3577b34da6a3ce929d0e0e4736"}""")]
     [InlineData("""{"status":400,"title":"Bad Request","traceId":"4bf92f3577b34da6a3ce929d0e0e4736"}""")]
     public async Task OtherBadRequest_DidNotGetThrough_WithTheTrace(string body)
     {
